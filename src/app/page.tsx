@@ -89,6 +89,18 @@ type WeeklyIndividualTrend = {
   totalTickets: number
 }
 
+type MonthlyPodiumResult = {
+  analystId: string
+  analystName: string
+  averageCsat: number
+  totalReviews: number
+  totalTickets: number
+  reviewPercentage: number
+  individualGoal: number
+  eligible: boolean
+  reasons: string[]
+}
+
 type ActiveTab = 'dashboard' | 'analysts' | 'goals' | 'entries'
 
 const initialIndividualForm: IndividualForm = {
@@ -658,6 +670,8 @@ export default function Home() {
             goalsCount={goals.length}
             averageCsat={averageCsat}
             latestTeamPerformance={latestTeamPerformance}
+            analysts={analysts}
+            goals={goals}
             individualMetrics={individualMetrics}
             teamMetrics={teamMetrics}
             loading={loading}
@@ -720,6 +734,8 @@ function DashboardView({
   goalsCount,
   averageCsat,
   latestTeamPerformance,
+  analysts,
+  goals,
   individualMetrics,
   teamMetrics,
   loading,
@@ -728,6 +744,8 @@ function DashboardView({
   goalsCount: number
   averageCsat: number
   latestTeamPerformance: number
+  analysts: Analyst[]
+  goals: Goal[]
   individualMetrics: IndividualMetric[]
   teamMetrics: TeamMetric[]
   loading: boolean
@@ -742,6 +760,11 @@ function DashboardView({
     }))
   const latestIndividualMetrics = individualMetrics.slice(0, 8)
   const latestTeamMetrics = teamMetrics.slice(0, 6)
+  const podiumCsatGoal = getGoalValue(goals, 'podium_csat_minimum', 90)
+  const reviewGoal = getGoalValue(goals, 'review_percentage', 25)
+  const monthlyPodium = buildMonthlyPodium(individualMetrics, analysts, podiumCsatGoal, reviewGoal)
+  const podiumWinners = monthlyPodium.filter((item) => item.eligible).slice(0, 3)
+  const currentMonthLabel = getCurrentMonthLabel()
 
   return (
     <div className="mt-8 space-y-7">
@@ -779,6 +802,77 @@ function DashboardView({
             points={teamPerformanceTrend}
             suffix="%"
           />
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="section-title">Podio do mes</h2>
+            <p className="section-subtitle">
+              Ranking de {currentMonthLabel}: CSAT minimo {podiumCsatGoal}%, avaliacoes {reviewGoal}% e atendimentos dentro da media da equipe.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          {[0, 1, 2].map((index) => {
+            const winner = podiumWinners[index]
+
+            return (
+              <div key={index} className="rounded-lg bg-slate-900 p-5">
+                <p className="text-sm text-slate-400">{index + 1}o lugar</p>
+                {winner ? (
+                  <>
+                    <h3 className="mt-2 text-xl font-bold">{winner.analystName}</h3>
+                    <p className="mt-3 text-3xl font-bold text-cyan-300">{winner.averageCsat}%</p>
+                    <p className="mt-2 text-sm text-slate-400">
+                      {winner.reviewPercentage}% avaliacoes | {winner.totalTickets} atendimentos
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-5 text-sm text-slate-500">Aguardando elegivel</p>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="mt-6 overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="text-slate-400">
+              <tr>
+                <th className="pb-3 pr-4 font-medium">Analista</th>
+                <th className="pb-3 pr-4 font-medium">CSAT mes</th>
+                <th className="pb-3 pr-4 font-medium">Avaliacoes</th>
+                <th className="pb-3 pr-4 font-medium">Atendimentos</th>
+                <th className="pb-3 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              {monthlyPodium.map((item) => (
+                <tr key={item.analystId}>
+                  <td className="py-3 pr-4">{item.analystName}</td>
+                  <td className="py-3 pr-4">
+                    {item.averageCsat}% <span className="text-slate-500">/ meta {item.individualGoal}%</span>
+                  </td>
+                  <td className="py-3 pr-4">{item.reviewPercentage}%</td>
+                  <td className="py-3 pr-4">{item.totalTickets}</td>
+                  <td className="py-3">
+                    {item.eligible ? (
+                      <span className="text-emerald-300">Elegivel</span>
+                    ) : (
+                      <span className="text-slate-400">{item.reasons.join(', ')}</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {!monthlyPodium.length && (
+            <EmptyState text="Ainda nao ha lancamentos individuais no mes atual." />
+          )}
         </div>
       </section>
 
@@ -1710,6 +1804,119 @@ function aggregateIndividualByWeek(metrics: IndividualMetric[]): WeeklyIndividua
       totalReviews: week.totalReviews,
       totalTickets: week.totalTickets,
     }))
+}
+
+function buildMonthlyPodium(
+  metrics: IndividualMetric[],
+  analysts: Analyst[],
+  podiumCsatGoal: number,
+  reviewGoal: number,
+): MonthlyPodiumResult[] {
+  const activeAnalysts = analysts.filter((analyst) => analyst.active)
+  const activeAnalystIds = new Set(activeAnalysts.map((analyst) => analyst.id))
+  const currentMonthKey = getCurrentMonthKey()
+  const monthlyMetrics = metrics.filter(
+    (metric) => activeAnalystIds.has(metric.analyst_id) && metric.week_start.startsWith(currentMonthKey),
+  )
+  const grouped = new Map<
+    string,
+    {
+      csatWeightedTotal: number
+      csatSimpleTotal: number
+      csatSimpleCount: number
+      totalReviews: number
+      totalTickets: number
+    }
+  >()
+
+  monthlyMetrics.forEach((metric) => {
+    const current = grouped.get(metric.analyst_id) ?? {
+      csatWeightedTotal: 0,
+      csatSimpleTotal: 0,
+      csatSimpleCount: 0,
+      totalReviews: 0,
+      totalTickets: 0,
+    }
+    const totalReviews = Number(metric.total_reviews)
+    const csat = Number(metric.csat)
+
+    current.csatWeightedTotal += csat * totalReviews
+    current.csatSimpleTotal += csat
+    current.csatSimpleCount += 1
+    current.totalReviews += totalReviews
+    current.totalTickets += Number(metric.total_tickets)
+    grouped.set(metric.analyst_id, current)
+  })
+
+  const analystsWithMetrics = activeAnalysts
+    .map((analyst) => {
+      const metric = grouped.get(analyst.id)
+      if (!metric) return null
+
+      const averageTickets =
+        grouped.size > 0
+          ? [...grouped.values()].reduce((sum, item) => sum + item.totalTickets, 0) / grouped.size
+          : 0
+      const averageCsat =
+        metric.totalReviews > 0
+          ? metric.csatWeightedTotal / metric.totalReviews
+          : metric.csatSimpleTotal / metric.csatSimpleCount
+      const reviewPercentage =
+        metric.totalTickets > 0 ? (metric.totalReviews / metric.totalTickets) * 100 : 0
+      const individualGoal = Number(analyst.csat_goal)
+      const reasons: string[] = []
+
+      if (averageCsat < individualGoal) reasons.push('abaixo da meta individual')
+      if (averageCsat < podiumCsatGoal) reasons.push('abaixo do podio')
+      if (reviewPercentage < reviewGoal) reasons.push('avaliacoes abaixo da meta')
+      if (metric.totalTickets < averageTickets) reasons.push('atendimentos abaixo da media')
+
+      return {
+        analystId: analyst.id,
+        analystName: analyst.name,
+        averageCsat: round(averageCsat),
+        totalReviews: metric.totalReviews,
+        totalTickets: metric.totalTickets,
+        reviewPercentage: round(reviewPercentage),
+        individualGoal,
+        eligible: reasons.length === 0,
+        reasons,
+      }
+    })
+    .filter((item): item is MonthlyPodiumResult => Boolean(item))
+
+  return analystsWithMetrics.sort((a, b) => {
+    if (a.eligible !== b.eligible) return a.eligible ? -1 : 1
+    if (b.averageCsat !== a.averageCsat) return b.averageCsat - a.averageCsat
+    if (b.reviewPercentage !== a.reviewPercentage) return b.reviewPercentage - a.reviewPercentage
+    if (b.totalTickets !== a.totalTickets) return b.totalTickets - a.totalTickets
+    return a.analystName.localeCompare(b.analystName)
+  })
+}
+
+function getGoalValue(goals: Goal[], key: string, fallback: number) {
+  const normalizedKey = key.toLowerCase()
+  const goal = goals.find((item) => item.active && item.key.toLowerCase() === normalizedKey)
+
+  if (goal) return Number(goal.value)
+
+  const labelSearch = normalizedKey.includes('review') ? 'avalia' : 'podio'
+  const matchingLabel = goals.find(
+    (item) => item.active && item.label.toLowerCase().includes(labelSearch),
+  )
+
+  return matchingLabel ? Number(matchingLabel.value) : fallback
+}
+
+function getCurrentMonthKey() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+function getCurrentMonthLabel() {
+  const now = new Date()
+  const month = now.toLocaleDateString('pt-BR', { month: 'long' })
+  return `${month} de ${now.getFullYear()}`
 }
 
 function getPointPosition(value: number, index: number, points: ChartPoint[]) {
