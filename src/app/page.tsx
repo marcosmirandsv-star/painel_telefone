@@ -31,6 +31,7 @@ type IndividualMetric = {
   negative_reviews: number
   review_percentage: number
   total_tickets: number
+  evidence_url: string | null
   notes: string | null
   analysts?:
     | {
@@ -50,12 +51,35 @@ type TeamMetric = {
   abandoned_calls: number
   total_calls: number
   performance_percentage: number
+  evidence_url: string | null
   notes: string | null
+}
+
+type IndividualForm = {
+  analystId: string
+  weekStart: string
+  weekEnd: string
+  csat: string
+  positiveReviews: string
+  negativeReviews: string
+  totalTickets: string
+  notes: string
+  evidenceFile: File | null
+}
+
+type TeamForm = {
+  weekStart: string
+  weekEnd: string
+  answeredCalls: string
+  abandonedCalls: string
+  totalCalls: string
+  notes: string
+  evidenceFile: File | null
 }
 
 type ActiveTab = 'dashboard' | 'analysts' | 'goals' | 'entries'
 
-const initialIndividualForm = {
+const initialIndividualForm: IndividualForm = {
   analystId: '',
   weekStart: '',
   weekEnd: '',
@@ -64,15 +88,17 @@ const initialIndividualForm = {
   negativeReviews: '',
   totalTickets: '',
   notes: '',
+  evidenceFile: null,
 }
 
-const initialTeamForm = {
+const initialTeamForm: TeamForm = {
   weekStart: '',
   weekEnd: '',
   answeredCalls: '',
   abandonedCalls: '',
   totalCalls: '',
   notes: '',
+  evidenceFile: null,
 }
 
 const initialAnalystForm = {
@@ -130,12 +156,12 @@ export default function Home() {
       supabase.from('analysts').select('id, name, active, csat_goal').order('name'),
       supabase
         .from('weekly_individual_metrics')
-        .select('id, analyst_id, week_start, week_end, csat, total_reviews, positive_reviews, negative_reviews, review_percentage, total_tickets, notes, analysts(name)')
+        .select('id, analyst_id, week_start, week_end, csat, total_reviews, positive_reviews, negative_reviews, review_percentage, total_tickets, evidence_url, notes, analysts(name)')
         .order('week_start', { ascending: false })
         .limit(8),
       supabase
         .from('weekly_team_metrics')
-        .select('id, week_start, week_end, answered_calls, abandoned_calls, total_calls, performance_percentage, notes')
+        .select('id, week_start, week_end, answered_calls, abandoned_calls, total_calls, performance_percentage, evidence_url, notes')
         .order('week_start', { ascending: false })
         .limit(6),
     ])
@@ -371,39 +397,66 @@ export default function Home() {
     setEditingGoalId(null)
   }
 
+  async function uploadEvidence(file: File | null, folder: string) {
+    if (!file) return null
+
+    const extension = file.name.split('.').pop() || 'arquivo'
+    const safeName = file.name
+      .replace(/\.[^/.]+$/, '')
+      .replace(/[^a-zA-Z0-9-_]/g, '-')
+      .slice(0, 60)
+    const path = `${folder}/${user?.id ?? 'usuario'}/${Date.now()}-${safeName}.${extension}`
+
+    const { error } = await supabase.storage.from('evidencias').upload(path, file, {
+      cacheControl: '3600',
+      upsert: false,
+    })
+
+    if (error) throw new Error(error.message)
+
+    const { data } = supabase.storage.from('evidencias').getPublicUrl(path)
+    return data.publicUrl
+  }
+
   async function handleIndividualSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setSaving(true)
     setMessage('')
 
-    const positiveReviews = toNumber(individualForm.positiveReviews)
-    const negativeReviews = toNumber(individualForm.negativeReviews)
-    const totalReviews = positiveReviews + negativeReviews
-    const totalTickets = toNumber(individualForm.totalTickets)
-    const reviewPercentage = totalTickets ? round((totalReviews / totalTickets) * 100) : 0
+    try {
+      const positiveReviews = toNumber(individualForm.positiveReviews)
+      const negativeReviews = toNumber(individualForm.negativeReviews)
+      const totalReviews = positiveReviews + negativeReviews
+      const totalTickets = toNumber(individualForm.totalTickets)
+      const reviewPercentage = totalTickets ? round((totalReviews / totalTickets) * 100) : 0
+      const evidenceUrl = await uploadEvidence(individualForm.evidenceFile, 'individual')
 
-    const { error } = await supabase.from('weekly_individual_metrics').insert({
-      analyst_id: individualForm.analystId,
-      week_start: individualForm.weekStart,
-      week_end: individualForm.weekEnd,
-      csat: toNumber(individualForm.csat),
-      total_reviews: totalReviews,
-      positive_reviews: positiveReviews,
-      negative_reviews: negativeReviews,
-      review_percentage: reviewPercentage,
-      total_tickets: totalTickets,
-      notes: individualForm.notes || null,
-      created_by: user?.id,
-    })
+      const { error } = await supabase.from('weekly_individual_metrics').insert({
+        analyst_id: individualForm.analystId,
+        week_start: individualForm.weekStart,
+        week_end: individualForm.weekEnd,
+        csat: toNumber(individualForm.csat),
+        total_reviews: totalReviews,
+        positive_reviews: positiveReviews,
+        negative_reviews: negativeReviews,
+        review_percentage: reviewPercentage,
+        total_tickets: totalTickets,
+        evidence_url: evidenceUrl,
+        notes: individualForm.notes || null,
+        created_by: user?.id,
+      })
 
-    if (error) setMessage(error.message)
-    else {
-      setMessage('Lancamento individual salvo com sucesso.')
-      setIndividualForm({ ...initialIndividualForm, analystId: analysts[0]?.id || '' })
-      await loadData()
+      if (error) setMessage(error.message)
+      else {
+        setMessage('Lancamento individual salvo com sucesso.')
+        setIndividualForm({ ...initialIndividualForm, analystId: activeAnalysts[0]?.id || '' })
+        await loadData()
+      }
+    } catch (error) {
+      setMessage(`Nao foi possivel salvar a evidencia ou o lancamento: ${getErrorMessage(error)}`)
+    } finally {
+      setSaving(false)
     }
-
-    setSaving(false)
   }
 
   async function handleTeamSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -411,32 +464,38 @@ export default function Home() {
     setSaving(true)
     setMessage('')
 
-    const answeredCalls = toNumber(teamForm.answeredCalls)
-    const abandonedCalls = toNumber(teamForm.abandonedCalls)
-    const totalCalls = toNumber(teamForm.totalCalls)
-    const performancePercentage = answeredCalls
-      ? round((abandonedCalls / answeredCalls) * 100)
-      : 0
+    try {
+      const answeredCalls = toNumber(teamForm.answeredCalls)
+      const abandonedCalls = toNumber(teamForm.abandonedCalls)
+      const totalCalls = toNumber(teamForm.totalCalls)
+      const performancePercentage = answeredCalls
+        ? round((abandonedCalls / answeredCalls) * 100)
+        : 0
+      const evidenceUrl = await uploadEvidence(teamForm.evidenceFile, 'equipe')
 
-    const { error } = await supabase.from('weekly_team_metrics').insert({
-      week_start: teamForm.weekStart,
-      week_end: teamForm.weekEnd,
-      answered_calls: answeredCalls,
-      abandoned_calls: abandonedCalls,
-      total_calls: totalCalls,
-      performance_percentage: performancePercentage,
-      notes: teamForm.notes || null,
-      created_by: user?.id,
-    })
+      const { error } = await supabase.from('weekly_team_metrics').insert({
+        week_start: teamForm.weekStart,
+        week_end: teamForm.weekEnd,
+        answered_calls: answeredCalls,
+        abandoned_calls: abandonedCalls,
+        total_calls: totalCalls,
+        performance_percentage: performancePercentage,
+        evidence_url: evidenceUrl,
+        notes: teamForm.notes || null,
+        created_by: user?.id,
+      })
 
-    if (error) setMessage(error.message)
-    else {
-      setMessage('Performance da equipe salva com sucesso.')
-      setTeamForm(initialTeamForm)
-      await loadData()
+      if (error) setMessage(error.message)
+      else {
+        setMessage('Performance da equipe salva com sucesso.')
+        setTeamForm(initialTeamForm)
+        await loadData()
+      }
+    } catch (error) {
+      setMessage(`Nao foi possivel salvar a evidencia ou a performance: ${getErrorMessage(error)}`)
+    } finally {
+      setSaving(false)
     }
-
-    setSaving(false)
   }
 
   if (!user) {
@@ -619,7 +678,8 @@ function DashboardView({
                   <th className="pb-3 pr-4 font-medium">Semana</th>
                   <th className="pb-3 pr-4 font-medium">CSAT</th>
                   <th className="pb-3 pr-4 font-medium">Avaliacoes</th>
-                  <th className="pb-3 font-medium">Atendimentos</th>
+                  <th className="pb-3 pr-4 font-medium">Atendimentos</th>
+                  <th className="pb-3 font-medium">Evidencia</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/10">
@@ -629,7 +689,10 @@ function DashboardView({
                     <td className="py-3 pr-4">{formatWeek(metric.week_start, metric.week_end)}</td>
                     <td className="py-3 pr-4">{metric.csat}%</td>
                     <td className="py-3 pr-4">{metric.total_reviews}</td>
-                    <td className="py-3">{metric.total_tickets}</td>
+                    <td className="py-3 pr-4">{metric.total_tickets}</td>
+                    <td className="py-3">
+                      <EvidenceLink url={metric.evidence_url} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -656,7 +719,10 @@ function DashboardView({
             {teamMetrics.map((metric) => (
               <div key={metric.id} className="list-row">
                 <span>{formatWeek(metric.week_start, metric.week_end)}</span>
-                <strong>{metric.performance_percentage}%</strong>
+                <span className="flex items-center gap-4">
+                  <EvidenceLink url={metric.evidence_url} />
+                  <strong>{metric.performance_percentage}%</strong>
+                </span>
               </div>
             ))}
           </div>
@@ -804,6 +870,20 @@ function EntriesView({
             />
           </Field>
 
+          <Field label="Evidencia do 55PBX (print ou PDF)">
+            <input
+              accept="image/png,image/jpeg,image/webp,application/pdf"
+              className="form-input"
+              type="file"
+              onChange={(event) =>
+                onIndividualChange({
+                  ...individualForm,
+                  evidenceFile: event.target.files?.[0] ?? null,
+                })
+              }
+            />
+          </Field>
+
           <button className="primary-button" disabled={saving} type="submit">
             {saving ? 'Salvando...' : 'Salvar lancamento individual'}
           </button>
@@ -875,6 +955,20 @@ function EntriesView({
               className="form-input min-h-24"
               value={teamForm.notes}
               onChange={(event) => onTeamChange({ ...teamForm, notes: event.target.value })}
+            />
+          </Field>
+
+          <Field label="Evidencia do 55PBX (print ou PDF)">
+            <input
+              accept="image/png,image/jpeg,image/webp,application/pdf"
+              className="form-input"
+              type="file"
+              onChange={(event) =>
+                onTeamChange({
+                  ...teamForm,
+                  evidenceFile: event.target.files?.[0] ?? null,
+                })
+              }
             />
           </Field>
 
@@ -1207,6 +1301,16 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function Feedback({ message }: { message: string }) {
   return <p className="mt-5 rounded-md bg-slate-900 p-3 text-sm text-slate-300">{message}</p>
+}
+
+function EvidenceLink({ url }: { url: string | null }) {
+  if (!url) return <span className="text-slate-500">Sem arquivo</span>
+
+  return (
+    <a className="text-cyan-300 hover:text-cyan-200" href={url} rel="noreferrer" target="_blank">
+      Abrir
+    </a>
+  )
 }
 
 function EmptyState({ text }: { text: string }) {
