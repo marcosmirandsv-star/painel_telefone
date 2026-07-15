@@ -16,6 +16,7 @@ type Analyst = {
   id: string
   name: string
   active: boolean
+  csat_goal: number
 }
 
 type IndividualMetric = {
@@ -73,6 +74,11 @@ const initialTeamForm = {
   notes: '',
 }
 
+const initialAnalystForm = {
+  name: '',
+  csatGoal: '86',
+}
+
 export default function Home() {
   const [user, setUser] = useState<User | null>(null)
   const [email, setEmail] = useState('')
@@ -84,6 +90,8 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard')
   const [individualForm, setIndividualForm] = useState(initialIndividualForm)
   const [teamForm, setTeamForm] = useState(initialTeamForm)
+  const [analystForm, setAnalystForm] = useState(initialAnalystForm)
+  const [editingAnalystId, setEditingAnalystId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
@@ -109,7 +117,7 @@ export default function Home() {
 
     const [goalsResult, analystsResult, individualResult, teamResult] = await Promise.all([
       supabase.from('goals').select('id, key, label, value, unit').order('label'),
-      supabase.from('analysts').select('id, name, active').order('name'),
+      supabase.from('analysts').select('id, name, active, csat_goal').order('name'),
       supabase
         .from('weekly_individual_metrics')
         .select('id, analyst_id, week_start, week_end, csat, total_reviews, positive_reviews, negative_reviews, review_percentage, total_tickets, notes, analysts(name)')
@@ -127,8 +135,9 @@ export default function Home() {
 
     if (analystsResult.error) setMessage(analystsResult.error.message)
     else {
-      const activeAnalysts = (analystsResult.data ?? []).filter((analyst) => analyst.active)
-      setAnalysts(activeAnalysts)
+      const loadedAnalysts = analystsResult.data ?? []
+      const activeAnalysts = loadedAnalysts.filter((analyst) => analyst.active)
+      setAnalysts(loadedAnalysts)
       setIndividualForm((current) => ({
         ...current,
         analystId: current.analystId || activeAnalysts[0]?.id || '',
@@ -145,6 +154,10 @@ export default function Home() {
   }
 
   const latestTeamPerformance = teamMetrics[0]?.performance_percentage ?? 0
+  const activeAnalysts = useMemo(
+    () => analysts.filter((analyst) => analyst.active),
+    [analysts],
+  )
   const averageCsat = useMemo(() => {
     if (!individualMetrics.length) return 0
     const total = individualMetrics.reduce((sum, metric) => sum + Number(metric.csat), 0)
@@ -176,6 +189,85 @@ export default function Home() {
     setAnalysts([])
     setIndividualMetrics([])
     setTeamMetrics([])
+  }
+
+  async function handleAnalystSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setSaving(true)
+    setMessage('')
+
+    const payload = {
+      name: analystForm.name.trim(),
+      csat_goal: toNumber(analystForm.csatGoal),
+    }
+
+    const result = editingAnalystId
+      ? await supabase.from('analysts').update(payload).eq('id', editingAnalystId)
+      : await supabase.from('analysts').insert({ ...payload, active: true })
+
+    if (result.error) setMessage(result.error.message)
+    else {
+      setMessage(editingAnalystId ? 'Analista atualizado com sucesso.' : 'Analista incluido com sucesso.')
+      setAnalystForm(initialAnalystForm)
+      setEditingAnalystId(null)
+      await loadData()
+    }
+
+    setSaving(false)
+  }
+
+  async function handleEditAnalyst(analyst: Analyst) {
+    setAnalystForm({
+      name: analyst.name,
+      csatGoal: String(analyst.csat_goal),
+    })
+    setEditingAnalystId(analyst.id)
+  }
+
+  function handleCancelAnalystEdit() {
+    setAnalystForm(initialAnalystForm)
+    setEditingAnalystId(null)
+  }
+
+  async function handleToggleAnalyst(analyst: Analyst) {
+    setSaving(true)
+    setMessage('')
+
+    const { error } = await supabase
+      .from('analysts')
+      .update({ active: !analyst.active })
+      .eq('id', analyst.id)
+
+    if (error) setMessage(error.message)
+    else {
+      setMessage(analyst.active ? 'Analista inativado com sucesso.' : 'Analista reativado com sucesso.')
+      await loadData()
+    }
+
+    setSaving(false)
+  }
+
+  async function handleDeleteAnalyst(analyst: Analyst) {
+    const confirmed = window.confirm(
+      `Excluir ${analyst.name}? Se ele tiver historico de lancamentos, prefira inativar para preservar os relatorios.`,
+    )
+
+    if (!confirmed) return
+
+    setSaving(true)
+    setMessage('')
+
+    const { error } = await supabase.from('analysts').delete().eq('id', analyst.id)
+
+    if (error) {
+      setMessage('Nao foi possivel excluir. Se existir historico, use Inativar para preservar os dados.')
+    } else {
+      setMessage('Analista excluido com sucesso.')
+      if (editingAnalystId === analyst.id) handleCancelAnalystEdit()
+      await loadData()
+    }
+
+    setSaving(false)
   }
 
   async function handleIndividualSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -221,8 +313,8 @@ export default function Home() {
     const answeredCalls = toNumber(teamForm.answeredCalls)
     const abandonedCalls = toNumber(teamForm.abandonedCalls)
     const totalCalls = toNumber(teamForm.totalCalls)
-    const performancePercentage = totalCalls
-      ? round(((answeredCalls - abandonedCalls) / totalCalls) * 100)
+    const performancePercentage = answeredCalls
+      ? round((abandonedCalls / answeredCalls) * 100)
       : 0
 
     const { error } = await supabase.from('weekly_team_metrics').insert({
@@ -328,7 +420,7 @@ export default function Home() {
 
         {activeTab === 'dashboard' && (
           <DashboardView
-            analystsCount={analysts.length}
+            analystsCount={activeAnalysts.length}
             goalsCount={goals.length}
             averageCsat={averageCsat}
             latestTeamPerformance={latestTeamPerformance}
@@ -340,7 +432,7 @@ export default function Home() {
 
         {activeTab === 'entries' && (
           <EntriesView
-            analysts={analysts}
+            analysts={activeAnalysts}
             individualForm={individualForm}
             teamForm={teamForm}
             saving={saving}
@@ -351,7 +443,20 @@ export default function Home() {
           />
         )}
 
-        {activeTab === 'analysts' && <AnalystsView analysts={analysts} />}
+        {activeTab === 'analysts' && (
+          <AnalystsView
+            analysts={analysts}
+            analystForm={analystForm}
+            editingAnalystId={editingAnalystId}
+            saving={saving}
+            onAnalystChange={setAnalystForm}
+            onAnalystSubmit={handleAnalystSubmit}
+            onCancelEdit={handleCancelAnalystEdit}
+            onEditAnalyst={handleEditAnalyst}
+            onToggleAnalyst={handleToggleAnalyst}
+            onDeleteAnalyst={handleDeleteAnalyst}
+          />
+        )}
 
         {activeTab === 'goals' && <GoalsView goals={goals} />}
       </section>
@@ -596,7 +701,7 @@ function EntriesView({
       <section className="panel">
         <h2 className="section-title">Performance da equipe</h2>
         <p className="section-subtitle">
-          Formula inicial: (atendidas - abandonadas) / total de ligacoes x 100.
+          Formula atual: ligacoes abandonadas / ligacoes atendidas x 100.
         </p>
 
         <form className="mt-5 grid gap-4" onSubmit={onTeamSubmit}>
@@ -670,20 +775,140 @@ function EntriesView({
   )
 }
 
-function AnalystsView({ analysts }: { analysts: Analyst[] }) {
+function AnalystsView({
+  analysts,
+  analystForm,
+  editingAnalystId,
+  saving,
+  onAnalystChange,
+  onAnalystSubmit,
+  onCancelEdit,
+  onEditAnalyst,
+  onToggleAnalyst,
+  onDeleteAnalyst,
+}: {
+  analysts: Analyst[]
+  analystForm: typeof initialAnalystForm
+  editingAnalystId: string | null
+  saving: boolean
+  onAnalystChange: (form: typeof initialAnalystForm) => void
+  onAnalystSubmit: (event: React.FormEvent<HTMLFormElement>) => void
+  onCancelEdit: () => void
+  onEditAnalyst: (analyst: Analyst) => void
+  onToggleAnalyst: (analyst: Analyst) => void
+  onDeleteAnalyst: (analyst: Analyst) => void
+}) {
   return (
-    <section className="panel mt-8">
-      <h2 className="section-title">Analistas</h2>
-      <p className="section-subtitle">Cadastro inicial ativo para operacao.</p>
-      <div className="mt-5 grid gap-3 md:grid-cols-2">
-        {analysts.map((analyst) => (
-          <div key={analyst.id} className="list-row">
-            <span>{analyst.name}</span>
-            <span className="text-sm text-emerald-300">Ativo</span>
+    <div className="mt-8 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+      <section className="panel">
+        <h2 className="section-title">
+          {editingAnalystId ? 'Editar analista' : 'Incluir analista'}
+        </h2>
+        <p className="section-subtitle">
+          Defina o nome e a meta de CSAT individual conforme o perfil da empresa.
+        </p>
+
+        <form className="mt-5 grid gap-4" onSubmit={onAnalystSubmit}>
+          <Field label="Nome do analista">
+            <input
+              className="form-input"
+              value={analystForm.name}
+              onChange={(event) =>
+                onAnalystChange({ ...analystForm, name: event.target.value })
+              }
+              required
+            />
+          </Field>
+
+          <Field label="Meta CSAT individual (%)">
+            <input
+              className="form-input"
+              min="0"
+              max="100"
+              step="0.01"
+              type="number"
+              value={analystForm.csatGoal}
+              onChange={(event) =>
+                onAnalystChange({ ...analystForm, csatGoal: event.target.value })
+              }
+              required
+            />
+          </Field>
+
+          <div className="flex flex-wrap gap-3">
+            <button className="primary-button" disabled={saving} type="submit">
+              {saving ? 'Salvando...' : editingAnalystId ? 'Salvar alteracoes' : 'Incluir analista'}
+            </button>
+
+            {editingAnalystId && (
+              <button className="secondary-button" type="button" onClick={onCancelEdit}>
+                Cancelar
+              </button>
+            )}
           </div>
-        ))}
-      </div>
-    </section>
+        </form>
+      </section>
+
+      <section className="panel">
+        <h2 className="section-title">Analistas cadastrados</h2>
+        <p className="section-subtitle">
+          Inative para preservar historico. Exclua apenas cadastros criados por engano.
+        </p>
+
+        <div className="mt-5 overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="text-slate-400">
+              <tr>
+                <th className="pb-3 pr-4 font-medium">Nome</th>
+                <th className="pb-3 pr-4 font-medium">Meta CSAT</th>
+                <th className="pb-3 pr-4 font-medium">Status</th>
+                <th className="pb-3 font-medium">Acoes</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              {analysts.map((analyst) => (
+                <tr key={analyst.id}>
+                  <td className="py-3 pr-4">{analyst.name}</td>
+                  <td className="py-3 pr-4">{analyst.csat_goal}%</td>
+                  <td className="py-3 pr-4">
+                    <span className={analyst.active ? 'text-emerald-300' : 'text-slate-400'}>
+                      {analyst.active ? 'Ativo' : 'Inativo'}
+                    </span>
+                  </td>
+                  <td className="py-3">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        className="small-button"
+                        type="button"
+                        onClick={() => onEditAnalyst(analyst)}
+                      >
+                        Editar
+                      </button>
+                      <button
+                        className="small-button"
+                        type="button"
+                        onClick={() => onToggleAnalyst(analyst)}
+                      >
+                        {analyst.active ? 'Inativar' : 'Reativar'}
+                      </button>
+                      <button
+                        className="danger-button"
+                        type="button"
+                        onClick={() => onDeleteAnalyst(analyst)}
+                      >
+                        Excluir
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {!analysts.length && <EmptyState text="Nenhum analista cadastrado." />}
+        </div>
+      </section>
+    </div>
   )
 }
 

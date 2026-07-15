@@ -84,15 +84,29 @@ button:disabled {
 
 .secondary-button,
 .tab-button,
-.tab-button-active {
+.tab-button-active,
+.small-button,
+.danger-button {
   border-radius: 6px;
   border: 1px solid rgb(255 255 255 / 0.1);
   padding: 10px 14px;
 }
 
 .secondary-button,
-.tab-button {
+.tab-button,
+.small-button {
   color: rgb(203 213 225);
+}
+
+.small-button,
+.danger-button {
+  font-size: 0.8125rem;
+  padding: 8px 10px;
+}
+
+.danger-button {
+  border-color: rgb(248 113 113 / 0.4);
+  color: rgb(252 165 165);
 }
 
 .tab-button-active {
