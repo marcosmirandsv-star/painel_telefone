@@ -77,6 +77,18 @@ type TeamForm = {
   evidenceFile: File | null
 }
 
+type ChartPoint = {
+  label: string
+  value: number
+}
+
+type WeeklyIndividualTrend = {
+  label: string
+  csat: number
+  totalReviews: number
+  totalTickets: number
+}
+
 type ActiveTab = 'dashboard' | 'analysts' | 'goals' | 'entries'
 
 const initialIndividualForm: IndividualForm = {
@@ -158,12 +170,12 @@ export default function Home() {
         .from('weekly_individual_metrics')
         .select('id, analyst_id, week_start, week_end, csat, total_reviews, positive_reviews, negative_reviews, review_percentage, total_tickets, evidence_url, notes, analysts(name)')
         .order('week_start', { ascending: false })
-        .limit(8),
+        .limit(52),
       supabase
         .from('weekly_team_metrics')
         .select('id, week_start, week_end, answered_calls, abandoned_calls, total_calls, performance_percentage, evidence_url, notes')
         .order('week_start', { ascending: false })
-        .limit(6),
+        .limit(52),
     ])
 
     if (goalsResult.error) setMessage(goalsResult.error.message)
@@ -720,6 +732,17 @@ function DashboardView({
   teamMetrics: TeamMetric[]
   loading: boolean
 }) {
+  const weeklyIndividualTrend = aggregateIndividualByWeek(individualMetrics).slice(-8)
+  const teamPerformanceTrend = [...teamMetrics]
+    .sort((a, b) => a.week_start.localeCompare(b.week_start))
+    .slice(-8)
+    .map((metric) => ({
+      label: formatShortDate(metric.week_start),
+      value: Number(metric.performance_percentage),
+    }))
+  const latestIndividualMetrics = individualMetrics.slice(0, 8)
+  const latestTeamMetrics = teamMetrics.slice(0, 6)
+
   return (
     <div className="mt-8 space-y-7">
       <div className="grid gap-4 md:grid-cols-4">
@@ -728,6 +751,36 @@ function DashboardView({
         <MetricCard label="Metas" value={loading ? '...' : goalsCount} />
         <MetricCard label="CSAT medio recente" value={`${averageCsat || 0}%`} />
       </div>
+
+      <section className="panel">
+        <h2 className="section-title">Variacoes recentes</h2>
+        <p className="section-subtitle">
+          Evolucao calculada a partir dos lancamentos semanais cadastrados.
+        </p>
+
+        <div className="mt-6 grid gap-6 xl:grid-cols-3">
+          <TrendLineChart
+            label="CSAT medio semanal"
+            points={weeklyIndividualTrend.map((item) => ({
+              label: item.label,
+              value: item.csat,
+            }))}
+            suffix="%"
+          />
+          <BarTrend
+            label="Avaliacoes por semana"
+            points={weeklyIndividualTrend.map((item) => ({
+              label: item.label,
+              value: item.totalReviews,
+            }))}
+          />
+          <TrendLineChart
+            label="Performance da equipe"
+            points={teamPerformanceTrend}
+            suffix="%"
+          />
+        </div>
+      </section>
 
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <section className="panel">
@@ -751,7 +804,7 @@ function DashboardView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/10">
-                {individualMetrics.map((metric) => (
+                {latestIndividualMetrics.map((metric) => (
                   <tr key={metric.id}>
                     <td className="py-3 pr-4">{getAnalystName(metric.analysts)}</td>
                     <td className="py-3 pr-4">{formatWeek(metric.week_start, metric.week_end)}</td>
@@ -784,7 +837,7 @@ function DashboardView({
           </div>
 
           <div className="mt-5 space-y-3">
-            {teamMetrics.map((metric) => (
+            {latestTeamMetrics.map((metric) => (
               <div key={metric.id} className="list-row">
                 <span>{formatWeek(metric.week_start, metric.week_end)}</span>
                 <span className="flex items-center gap-4">
@@ -1477,6 +1530,86 @@ function MetricCard({
   )
 }
 
+function TrendLineChart({
+  label,
+  points,
+  suffix = '',
+}: {
+  label: string
+  points: ChartPoint[]
+  suffix?: string
+}) {
+  const path = buildLinePath(points)
+  const latest = points.at(-1)?.value ?? 0
+
+  return (
+    <div className="rounded-lg bg-slate-900 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm text-slate-400">{label}</p>
+          <p className="mt-1 text-2xl font-semibold">
+            {latest}
+            {suffix}
+          </p>
+        </div>
+      </div>
+
+      {points.length ? (
+        <svg className="mt-4 h-36 w-full" role="img" viewBox="0 0 320 130">
+          <title>{label}</title>
+          <path d="M20 110 H310" stroke="rgb(51 65 85)" strokeWidth="1" />
+          <path d="M20 15 V110" stroke="rgb(51 65 85)" strokeWidth="1" />
+          <path d={path} fill="none" stroke="rgb(103 232 249)" strokeWidth="3" />
+          {points.map((point, index) => {
+            const { x, y } = getPointPosition(point.value, index, points)
+            return (
+              <g key={`${point.label}-${index}`}>
+                <circle cx={x} cy={y} fill="rgb(103 232 249)" r="4" />
+                <text fill="rgb(203 213 225)" fontSize="10" textAnchor="middle" x={x} y="126">
+                  {point.label}
+                </text>
+              </g>
+            )
+          })}
+        </svg>
+      ) : (
+        <EmptyState text="Sem dados suficientes para o grafico." />
+      )}
+    </div>
+  )
+}
+
+function BarTrend({
+  label,
+  points,
+}: {
+  label: string
+  points: ChartPoint[]
+}) {
+  const maxValue = Math.max(...points.map((point) => point.value), 1)
+
+  return (
+    <div className="rounded-lg bg-slate-900 p-4">
+      <p className="text-sm text-slate-400">{label}</p>
+      <div className="mt-4 space-y-3">
+        {points.map((point) => (
+          <div key={point.label} className="grid grid-cols-[72px_1fr_42px] items-center gap-3 text-sm">
+            <span className="text-slate-400">{point.label}</span>
+            <div className="h-3 rounded-full bg-slate-800">
+              <div
+                className="h-3 rounded-full bg-cyan-300"
+                style={{ width: `${Math.max((point.value / maxValue) * 100, 4)}%` }}
+              />
+            </div>
+            <strong className="text-right">{point.value}</strong>
+          </div>
+        ))}
+        {!points.length && <EmptyState text="Sem dados suficientes para o grafico." />}
+      </div>
+    </div>
+  )
+}
+
 function TabButton({
   active,
   children,
@@ -1533,6 +1666,72 @@ function formatDate(value: string) {
   if (!value) return '-'
   const [year, month, day] = value.split('-')
   return `${day}/${month}/${year}`
+}
+
+function formatShortDate(value: string) {
+  if (!value) return '-'
+  const [, month, day] = value.split('-')
+  return `${day}/${month}`
+}
+
+function aggregateIndividualByWeek(metrics: IndividualMetric[]): WeeklyIndividualTrend[] {
+  const grouped = new Map<
+    string,
+    {
+      weekStart: string
+      csatTotal: number
+      count: number
+      totalReviews: number
+      totalTickets: number
+    }
+  >()
+
+  metrics.forEach((metric) => {
+    const current = grouped.get(metric.week_start) ?? {
+      weekStart: metric.week_start,
+      csatTotal: 0,
+      count: 0,
+      totalReviews: 0,
+      totalTickets: 0,
+    }
+
+    current.csatTotal += Number(metric.csat)
+    current.count += 1
+    current.totalReviews += Number(metric.total_reviews)
+    current.totalTickets += Number(metric.total_tickets)
+    grouped.set(metric.week_start, current)
+  })
+
+  return [...grouped.values()]
+    .sort((a, b) => a.weekStart.localeCompare(b.weekStart))
+    .map((week) => ({
+      label: formatShortDate(week.weekStart),
+      csat: round(week.csatTotal / week.count),
+      totalReviews: week.totalReviews,
+      totalTickets: week.totalTickets,
+    }))
+}
+
+function getPointPosition(value: number, index: number, points: ChartPoint[]) {
+  const values = points.map((point) => point.value)
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const range = max - min || 1
+  const x = points.length === 1 ? 165 : 20 + (index / (points.length - 1)) * 290
+  const y = 110 - ((value - min) / range) * 88
+
+  return { x, y }
+}
+
+function buildLinePath(points: ChartPoint[]) {
+  if (!points.length) return ''
+
+  return points
+    .map((point, index) => {
+      const { x, y } = getPointPosition(point.value, index, points)
+      return `${index === 0 ? 'M' : 'L'} ${x} ${y}`
+    })
+    .join(' ')
 }
 
 function toNumber(value: string) {
