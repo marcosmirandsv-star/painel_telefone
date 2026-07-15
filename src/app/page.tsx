@@ -10,6 +10,7 @@ type Goal = {
   label: string
   value: number
   unit: string
+  active: boolean
 }
 
 type Analyst = {
@@ -79,6 +80,13 @@ const initialAnalystForm = {
   csatGoal: '86',
 }
 
+const initialGoalForm = {
+  label: '',
+  value: '',
+  unit: 'percent',
+  active: true,
+}
+
 export default function Home() {
   const [user, setUser] = useState<User | null>(null)
   const [email, setEmail] = useState('')
@@ -91,7 +99,9 @@ export default function Home() {
   const [individualForm, setIndividualForm] = useState(initialIndividualForm)
   const [teamForm, setTeamForm] = useState(initialTeamForm)
   const [analystForm, setAnalystForm] = useState(initialAnalystForm)
+  const [goalForm, setGoalForm] = useState(initialGoalForm)
   const [editingAnalystId, setEditingAnalystId] = useState<string | null>(null)
+  const [editingGoalId, setEditingGoalId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
@@ -116,7 +126,7 @@ export default function Home() {
     setMessage('')
 
     const [goalsResult, analystsResult, individualResult, teamResult] = await Promise.all([
-      supabase.from('goals').select('id, key, label, value, unit').order('label'),
+      supabase.from('goals').select('id, key, label, value, unit, active').order('label'),
       supabase.from('analysts').select('id, name, active, csat_goal').order('name'),
       supabase
         .from('weekly_individual_metrics')
@@ -131,7 +141,7 @@ export default function Home() {
     ])
 
     if (goalsResult.error) setMessage(goalsResult.error.message)
-    else setGoals(goalsResult.data ?? [])
+    else setGoals((goalsResult.data ?? []).filter((goal) => goal.key !== 'individual_csat'))
 
     if (analystsResult.error) setMessage(analystsResult.error.message)
     else {
@@ -307,6 +317,58 @@ export default function Home() {
     } finally {
       setSaving(false)
     }
+  }
+
+  async function handleGoalSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!editingGoalId) return
+
+    setSaving(true)
+    setMessage('')
+
+    try {
+      const result = await withTimeout(
+        supabase
+          .from('goals')
+          .update({
+            label: goalForm.label.trim(),
+            value: toNumber(goalForm.value),
+            unit: goalForm.unit.trim() || 'percent',
+            active: goalForm.active,
+          })
+          .eq('id', editingGoalId)
+          .select('id, key, label, value, unit, active')
+          .single(),
+        'O Supabase demorou para atualizar a meta. Tente novamente.',
+      )
+
+      if (result.error) setMessage(result.error.message)
+      else {
+        setMessage('Meta atualizada com sucesso.')
+        setGoals((current) => upsertGoal(current, result.data as Goal))
+        setGoalForm(initialGoalForm)
+        setEditingGoalId(null)
+      }
+    } catch (error) {
+      setMessage(getErrorMessage(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function handleEditGoal(goal: Goal) {
+    setGoalForm({
+      label: goal.label,
+      value: String(goal.value),
+      unit: goal.unit,
+      active: goal.active,
+    })
+    setEditingGoalId(goal.id)
+  }
+
+  function handleCancelGoalEdit() {
+    setGoalForm(initialGoalForm)
+    setEditingGoalId(null)
   }
 
   async function handleIndividualSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -497,7 +559,18 @@ export default function Home() {
           />
         )}
 
-        {activeTab === 'goals' && <GoalsView goals={goals} />}
+        {activeTab === 'goals' && (
+          <GoalsView
+            goals={goals}
+            goalForm={goalForm}
+            editingGoalId={editingGoalId}
+            saving={saving}
+            onGoalChange={setGoalForm}
+            onGoalSubmit={handleGoalSubmit}
+            onEditGoal={handleEditGoal}
+            onCancelEdit={handleCancelGoalEdit}
+          />
+        )}
       </section>
     </main>
   )
@@ -951,23 +1024,140 @@ function AnalystsView({
   )
 }
 
-function GoalsView({ goals }: { goals: Goal[] }) {
+function GoalsView({
+  goals,
+  goalForm,
+  editingGoalId,
+  saving,
+  onGoalChange,
+  onGoalSubmit,
+  onEditGoal,
+  onCancelEdit,
+}: {
+  goals: Goal[]
+  goalForm: typeof initialGoalForm
+  editingGoalId: string | null
+  saving: boolean
+  onGoalChange: (form: typeof initialGoalForm) => void
+  onGoalSubmit: (event: React.FormEvent<HTMLFormElement>) => void
+  onEditGoal: (goal: Goal) => void
+  onCancelEdit: () => void
+}) {
   return (
-    <section className="panel mt-8">
-      <h2 className="section-title">Metas configuradas</h2>
-      <p className="section-subtitle">Esses valores vem do banco e poderao ser editados em tela.</p>
-      <div className="mt-5 grid gap-3 md:grid-cols-2">
-        {goals.map((goal) => (
-          <div key={goal.id} className="list-row">
-            <span>{goal.label}</span>
-            <strong>
-              {goal.value}
-              {goal.unit === 'percent' ? '%' : ''}
-            </strong>
+    <div className="mt-8 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+      <section className="panel">
+        <h2 className="section-title">
+          {editingGoalId ? 'Editar meta' : 'Selecione uma meta'}
+        </h2>
+        <p className="section-subtitle">
+          Ajuste metas gerais da operacao sem alterar codigo ou rodar query.
+        </p>
+
+        <form className="mt-5 grid gap-4" onSubmit={onGoalSubmit}>
+          <Field label="Nome da meta">
+            <input
+              className="form-input"
+              disabled={!editingGoalId}
+              value={goalForm.label}
+              onChange={(event) => onGoalChange({ ...goalForm, label: event.target.value })}
+              required
+            />
+          </Field>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Valor">
+              <input
+                className="form-input"
+                disabled={!editingGoalId}
+                min="0"
+                step="0.01"
+                type="number"
+                value={goalForm.value}
+                onChange={(event) => onGoalChange({ ...goalForm, value: event.target.value })}
+                required
+              />
+            </Field>
+
+            <Field label="Unidade">
+              <select
+                className="form-input"
+                disabled={!editingGoalId}
+                value={goalForm.unit}
+                onChange={(event) => onGoalChange({ ...goalForm, unit: event.target.value })}
+              >
+                <option value="percent">Percentual</option>
+                <option value="number">Numero</option>
+              </select>
+            </Field>
           </div>
-        ))}
-      </div>
-    </section>
+
+          <label className="flex items-center gap-3 text-sm text-slate-300">
+            <input
+              checked={goalForm.active}
+              disabled={!editingGoalId}
+              type="checkbox"
+              onChange={(event) => onGoalChange({ ...goalForm, active: event.target.checked })}
+            />
+            Meta ativa
+          </label>
+
+          <div className="flex flex-wrap gap-3">
+            <button className="primary-button" disabled={!editingGoalId || saving} type="submit">
+              {saving ? 'Salvando...' : 'Salvar meta'}
+            </button>
+
+            {editingGoalId && (
+              <button className="secondary-button" type="button" onClick={onCancelEdit}>
+                Cancelar
+              </button>
+            )}
+          </div>
+        </form>
+      </section>
+
+      <section className="panel">
+        <h2 className="section-title">Metas configuradas</h2>
+        <p className="section-subtitle">
+          O CSAT individual fica no cadastro de cada analista; aqui ficam metas da operacao.
+        </p>
+
+        <div className="mt-5 overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="text-slate-400">
+              <tr>
+                <th className="pb-3 pr-4 font-medium">Meta</th>
+                <th className="pb-3 pr-4 font-medium">Valor</th>
+                <th className="pb-3 pr-4 font-medium">Status</th>
+                <th className="pb-3 font-medium">Acao</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              {goals.map((goal) => (
+                <tr key={goal.id}>
+                  <td className="py-3 pr-4">{goal.label}</td>
+                  <td className="py-3 pr-4">
+                    {goal.value}
+                    {goal.unit === 'percent' ? '%' : ''}
+                  </td>
+                  <td className="py-3 pr-4">
+                    <span className={goal.active ? 'text-emerald-300' : 'text-slate-400'}>
+                      {goal.active ? 'Ativa' : 'Inativa'}
+                    </span>
+                  </td>
+                  <td className="py-3">
+                    <button className="small-button" type="button" onClick={() => onEditGoal(goal)}>
+                      Editar
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {!goals.length && <EmptyState text="Nenhuma meta cadastrada." />}
+        </div>
+      </section>
+    </div>
   )
 }
 
@@ -1054,6 +1244,12 @@ function upsertAnalyst(analysts: Analyst[], updatedAnalyst: Analyst) {
   return analysts.map((analyst) =>
     analyst.id === updatedAnalyst.id ? updatedAnalyst : analyst,
   )
+}
+
+function upsertGoal(goals: Goal[], updatedGoal: Goal) {
+  return goals
+    .map((goal) => (goal.id === updatedGoal.id ? updatedGoal : goal))
+    .sort((a, b) => a.label.localeCompare(b.label))
 }
 
 function withTimeout<T>(promise: PromiseLike<T>, message: string, timeoutMs = 10000) {
