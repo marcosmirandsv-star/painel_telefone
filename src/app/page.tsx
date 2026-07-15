@@ -194,6 +194,11 @@ export default function Home() {
     () => analysts.filter((analyst) => analyst.active),
     [analysts],
   )
+  const selectedAnalyst = useMemo(
+    () => analysts.find((analyst) => analyst.id === individualForm.analystId) ?? null,
+    [analysts, individualForm.analystId],
+  )
+  const podiumCsatGoal = goals.find((goal) => goal.key === 'podium_csat_minimum')?.value ?? 90
   const averageCsat = useMemo(() => {
     if (!individualMetrics.length) return 0
     const total = individualMetrics.reduce((sum, metric) => sum + Number(metric.csat), 0)
@@ -498,6 +503,63 @@ export default function Home() {
     }
   }
 
+  async function handleDeleteIndividualMetric(metric: IndividualMetric) {
+    const analystName = getAnalystName(metric.analysts)
+    const confirmed = window.confirm(
+      `Excluir o lancamento individual de ${analystName} da semana ${formatWeek(metric.week_start, metric.week_end)}?`,
+    )
+
+    if (!confirmed) return
+
+    setSaving(true)
+    setMessage('')
+
+    try {
+      const { error } = await withTimeout(
+        supabase.from('weekly_individual_metrics').delete().eq('id', metric.id),
+        'O Supabase demorou para excluir o lancamento. Tente novamente.',
+      )
+
+      if (error) setMessage(error.message)
+      else {
+        setMessage('Lancamento individual excluido com sucesso.')
+        setIndividualMetrics((current) => current.filter((item) => item.id !== metric.id))
+      }
+    } catch (error) {
+      setMessage(getErrorMessage(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDeleteTeamMetric(metric: TeamMetric) {
+    const confirmed = window.confirm(
+      `Excluir a performance da equipe da semana ${formatWeek(metric.week_start, metric.week_end)}?`,
+    )
+
+    if (!confirmed) return
+
+    setSaving(true)
+    setMessage('')
+
+    try {
+      const { error } = await withTimeout(
+        supabase.from('weekly_team_metrics').delete().eq('id', metric.id),
+        'O Supabase demorou para excluir a performance. Tente novamente.',
+      )
+
+      if (error) setMessage(error.message)
+      else {
+        setMessage('Performance da equipe excluida com sucesso.')
+        setTeamMetrics((current) => current.filter((item) => item.id !== metric.id))
+      }
+    } catch (error) {
+      setMessage(getErrorMessage(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   if (!user) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-white">
@@ -593,6 +655,10 @@ export default function Home() {
         {activeTab === 'entries' && (
           <EntriesView
             analysts={activeAnalysts}
+            selectedAnalyst={selectedAnalyst}
+            podiumCsatGoal={podiumCsatGoal}
+            individualMetrics={individualMetrics}
+            teamMetrics={teamMetrics}
             individualForm={individualForm}
             teamForm={teamForm}
             saving={saving}
@@ -600,6 +666,8 @@ export default function Home() {
             onTeamChange={setTeamForm}
             onIndividualSubmit={handleIndividualSubmit}
             onTeamSubmit={handleTeamSubmit}
+            onDeleteIndividualMetric={handleDeleteIndividualMetric}
+            onDeleteTeamMetric={handleDeleteTeamMetric}
           />
         )}
 
@@ -736,6 +804,10 @@ function DashboardView({
 
 function EntriesView({
   analysts,
+  selectedAnalyst,
+  podiumCsatGoal,
+  individualMetrics,
+  teamMetrics,
   individualForm,
   teamForm,
   saving,
@@ -743,8 +815,14 @@ function EntriesView({
   onTeamChange,
   onIndividualSubmit,
   onTeamSubmit,
+  onDeleteIndividualMetric,
+  onDeleteTeamMetric,
 }: {
   analysts: Analyst[]
+  selectedAnalyst: Analyst | null
+  podiumCsatGoal: number
+  individualMetrics: IndividualMetric[]
+  teamMetrics: TeamMetric[]
   individualForm: typeof initialIndividualForm
   teamForm: typeof initialTeamForm
   saving: boolean
@@ -752,13 +830,16 @@ function EntriesView({
   onTeamChange: (form: typeof initialTeamForm) => void
   onIndividualSubmit: (event: React.FormEvent<HTMLFormElement>) => void
   onTeamSubmit: (event: React.FormEvent<HTMLFormElement>) => void
+  onDeleteIndividualMetric: (metric: IndividualMetric) => void
+  onDeleteTeamMetric: (metric: TeamMetric) => void
 }) {
   return (
-    <div className="mt-8 grid gap-6 xl:grid-cols-2">
-      <section className="panel">
+    <div className="mt-8 space-y-6">
+      <div className="grid gap-6 xl:grid-cols-2">
+        <section className="panel">
         <h2 className="section-title">Lancamento individual</h2>
         <p className="section-subtitle">
-          Registre CSAT, avaliacoes e atendimentos da semana anterior.
+          Registre resultado real, avaliacoes e atendimentos da semana anterior.
         </p>
 
         <form className="mt-5 grid gap-4" onSubmit={onIndividualSubmit}>
@@ -778,6 +859,12 @@ function EntriesView({
               ))}
             </select>
           </Field>
+
+          <div className="rounded-md bg-slate-900 p-3 text-sm text-slate-300">
+            Meta individual: <strong>{selectedAnalyst?.csat_goal ?? 0}%</strong>
+            <span className="mx-2 text-slate-600">|</span>
+            Minimo para podio: <strong>{podiumCsatGoal}%</strong>
+          </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Inicio da semana">
@@ -805,7 +892,7 @@ function EntriesView({
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="CSAT (%)">
+            <Field label="CSAT realizado na semana (%)">
               <input
                 className="form-input"
                 min="0"
@@ -888,9 +975,9 @@ function EntriesView({
             {saving ? 'Salvando...' : 'Salvar lancamento individual'}
           </button>
         </form>
-      </section>
+        </section>
 
-      <section className="panel">
+        <section className="panel">
         <h2 className="section-title">Performance da equipe</h2>
         <p className="section-subtitle">
           Formula atual: ligacoes abandonadas / ligacoes atendidas x 100.
@@ -976,8 +1063,124 @@ function EntriesView({
             {saving ? 'Salvando...' : 'Salvar performance da equipe'}
           </button>
         </form>
-      </section>
+        </section>
+      </div>
+
+      <EntriesHistory
+        individualMetrics={individualMetrics}
+        teamMetrics={teamMetrics}
+        saving={saving}
+        onDeleteIndividualMetric={onDeleteIndividualMetric}
+        onDeleteTeamMetric={onDeleteTeamMetric}
+      />
     </div>
+  )
+}
+
+function EntriesHistory({
+  individualMetrics,
+  teamMetrics,
+  saving,
+  onDeleteIndividualMetric,
+  onDeleteTeamMetric,
+}: {
+  individualMetrics: IndividualMetric[]
+  teamMetrics: TeamMetric[]
+  saving: boolean
+  onDeleteIndividualMetric: (metric: IndividualMetric) => void
+  onDeleteTeamMetric: (metric: TeamMetric) => void
+}) {
+  return (
+    <section className="panel">
+      <h2 className="section-title">Historico de lancamentos</h2>
+      <p className="section-subtitle">
+        Use Excluir para remover lancamentos de teste ou registros feitos por engano.
+      </p>
+
+      <div className="mt-6 grid gap-6 xl:grid-cols-2">
+        <div>
+          <h3 className="font-semibold">Individuais</h3>
+          <div className="mt-3 overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="text-slate-400">
+                <tr>
+                  <th className="pb-3 pr-4 font-medium">Analista</th>
+                  <th className="pb-3 pr-4 font-medium">Semana</th>
+                  <th className="pb-3 pr-4 font-medium">CSAT</th>
+                  <th className="pb-3 pr-4 font-medium">Evidencia</th>
+                  <th className="pb-3 font-medium">Acao</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/10">
+                {individualMetrics.map((metric) => (
+                  <tr key={metric.id}>
+                    <td className="py-3 pr-4">{getAnalystName(metric.analysts)}</td>
+                    <td className="py-3 pr-4">{formatWeek(metric.week_start, metric.week_end)}</td>
+                    <td className="py-3 pr-4">{metric.csat}%</td>
+                    <td className="py-3 pr-4">
+                      <EvidenceLink url={metric.evidence_url} />
+                    </td>
+                    <td className="py-3">
+                      <button
+                        className="danger-button"
+                        disabled={saving}
+                        type="button"
+                        onClick={() => onDeleteIndividualMetric(metric)}
+                      >
+                        Excluir
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {!individualMetrics.length && (
+              <EmptyState text="Nenhum lancamento individual registrado." />
+            )}
+          </div>
+        </div>
+
+        <div>
+          <h3 className="font-semibold">Equipe</h3>
+          <div className="mt-3 overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="text-slate-400">
+                <tr>
+                  <th className="pb-3 pr-4 font-medium">Semana</th>
+                  <th className="pb-3 pr-4 font-medium">Performance</th>
+                  <th className="pb-3 pr-4 font-medium">Evidencia</th>
+                  <th className="pb-3 font-medium">Acao</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/10">
+                {teamMetrics.map((metric) => (
+                  <tr key={metric.id}>
+                    <td className="py-3 pr-4">{formatWeek(metric.week_start, metric.week_end)}</td>
+                    <td className="py-3 pr-4">{metric.performance_percentage}%</td>
+                    <td className="py-3 pr-4">
+                      <EvidenceLink url={metric.evidence_url} />
+                    </td>
+                    <td className="py-3">
+                      <button
+                        className="danger-button"
+                        disabled={saving}
+                        type="button"
+                        onClick={() => onDeleteTeamMetric(metric)}
+                      >
+                        Excluir
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {!teamMetrics.length && <EmptyState text="Nenhuma performance de equipe registrada." />}
+          </div>
+        </div>
+      </div>
+    </section>
   )
 }
 
