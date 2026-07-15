@@ -196,24 +196,43 @@ export default function Home() {
     setSaving(true)
     setMessage('')
 
-    const payload = {
-      name: analystForm.name.trim(),
-      csat_goal: toNumber(analystForm.csatGoal),
+    try {
+      const payload = {
+        name: analystForm.name.trim(),
+        csat_goal: toNumber(analystForm.csatGoal),
+      }
+
+      const result = editingAnalystId
+        ? await withTimeout(
+            supabase
+              .from('analysts')
+              .update(payload)
+              .eq('id', editingAnalystId)
+              .select('id, name, active, csat_goal')
+              .single(),
+            'O Supabase demorou para atualizar o analista. Tente novamente.',
+          )
+        : await withTimeout(
+            supabase
+              .from('analysts')
+              .insert({ ...payload, active: true })
+              .select('id, name, active, csat_goal')
+              .single(),
+            'O Supabase demorou para incluir o analista. Tente novamente.',
+          )
+
+      if (result.error) setMessage(result.error.message)
+      else {
+        setMessage(editingAnalystId ? 'Analista atualizado com sucesso.' : 'Analista incluido com sucesso.')
+        setAnalysts((current) => upsertAnalyst(current, result.data as Analyst))
+        setAnalystForm(initialAnalystForm)
+        setEditingAnalystId(null)
+      }
+    } catch (error) {
+      setMessage(getErrorMessage(error))
+    } finally {
+      setSaving(false)
     }
-
-    const result = editingAnalystId
-      ? await supabase.from('analysts').update(payload).eq('id', editingAnalystId)
-      : await supabase.from('analysts').insert({ ...payload, active: true })
-
-    if (result.error) setMessage(result.error.message)
-    else {
-      setMessage(editingAnalystId ? 'Analista atualizado com sucesso.' : 'Analista incluido com sucesso.')
-      setAnalystForm(initialAnalystForm)
-      setEditingAnalystId(null)
-      await loadData()
-    }
-
-    setSaving(false)
   }
 
   async function handleEditAnalyst(analyst: Analyst) {
@@ -233,18 +252,31 @@ export default function Home() {
     setSaving(true)
     setMessage('')
 
-    const { error } = await supabase
-      .from('analysts')
-      .update({ active: !analyst.active })
-      .eq('id', analyst.id)
+    try {
+      const { error } = await withTimeout(
+        supabase
+          .from('analysts')
+          .update({ active: !analyst.active })
+          .eq('id', analyst.id)
+          .select('id, name, active, csat_goal')
+          .single(),
+        'O Supabase demorou para alterar o status do analista. Tente novamente.',
+      )
 
-    if (error) setMessage(error.message)
-    else {
-      setMessage(analyst.active ? 'Analista inativado com sucesso.' : 'Analista reativado com sucesso.')
-      await loadData()
+      if (error) setMessage(error.message)
+      else {
+        setMessage(analyst.active ? 'Analista inativado com sucesso.' : 'Analista reativado com sucesso.')
+        setAnalysts((current) =>
+          current.map((item) =>
+            item.id === analyst.id ? { ...item, active: !analyst.active } : item,
+          ),
+        )
+      }
+    } catch (error) {
+      setMessage(getErrorMessage(error))
+    } finally {
+      setSaving(false)
     }
-
-    setSaving(false)
   }
 
   async function handleDeleteAnalyst(analyst: Analyst) {
@@ -257,17 +289,24 @@ export default function Home() {
     setSaving(true)
     setMessage('')
 
-    const { error } = await supabase.from('analysts').delete().eq('id', analyst.id)
+    try {
+      const { error } = await withTimeout(
+        supabase.from('analysts').delete().eq('id', analyst.id),
+        'O Supabase demorou para excluir o analista. Tente novamente.',
+      )
 
-    if (error) {
-      setMessage('Nao foi possivel excluir. Se existir historico, use Inativar para preservar os dados.')
-    } else {
-      setMessage('Analista excluido com sucesso.')
-      if (editingAnalystId === analyst.id) handleCancelAnalystEdit()
-      await loadData()
+      if (error) {
+        setMessage('Nao foi possivel excluir. Se existir historico, use Inativar para preservar os dados.')
+      } else {
+        setMessage('Analista excluido com sucesso.')
+        if (editingAnalystId === analyst.id) handleCancelAnalystEdit()
+        setAnalysts((current) => current.filter((item) => item.id !== analyst.id))
+      }
+    } catch (error) {
+      setMessage(getErrorMessage(error))
+    } finally {
+      setSaving(false)
     }
-
-    setSaving(false)
   }
 
   async function handleIndividualSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -1005,4 +1044,28 @@ function toNumber(value: string) {
 
 function round(value: number) {
   return Math.round(value * 100) / 100
+}
+
+function upsertAnalyst(analysts: Analyst[], updatedAnalyst: Analyst) {
+  const exists = analysts.some((analyst) => analyst.id === updatedAnalyst.id)
+
+  if (!exists) return [...analysts, updatedAnalyst].sort((a, b) => a.name.localeCompare(b.name))
+
+  return analysts.map((analyst) =>
+    analyst.id === updatedAnalyst.id ? updatedAnalyst : analyst,
+  )
+}
+
+function withTimeout<T>(promise: PromiseLike<T>, message: string, timeoutMs = 10000) {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => reject(new Error(message)), timeoutMs)
+    }),
+  ])
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message
+  return 'Nao foi possivel concluir a acao. Tente novamente.'
 }
