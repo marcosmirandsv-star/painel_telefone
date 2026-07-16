@@ -1500,7 +1500,7 @@ function ReportsView({
       <section className="panel">
         <h2 className="section-title">Relatorio mensal SARE</h2>
         <p className="section-subtitle">
-          Estrutura obrigatoria do prompt original: Situacao, Acao, Resultado e Evolucao.
+          Estrutura correta: Situacao, Acao, Resultado e Evolucao.
         </p>
 
         {selectedAnalyst && analystResult ? (
