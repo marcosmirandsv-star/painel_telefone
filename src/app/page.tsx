@@ -1004,6 +1004,18 @@ function DashboardView({
     setPeriodFilter(createPeriodFilter(mode))
   }
   const isAnalystDashboard = role === 'analyst'
+  const analystProfile = isAnalystDashboard ? analysts[0] ?? null : null
+  const analystResult = isAnalystDashboard ? periodPodium[0] ?? null : null
+  const analystStatusText = analystResult
+    ? analystResult.eligible
+      ? 'Elegivel para o podio'
+      : 'Fora do podio neste periodo'
+    : 'Sem lancamento no periodo'
+  const analystFocusText = analystResult
+    ? analystResult.eligible
+      ? 'Manter CSAT, volume e percentual de avaliacoes ate o fechamento.'
+      : analystResult.reasons.join(', ')
+    : 'Selecione outro periodo ou aguarde o lancamento semanal.'
 
   return (
     <div className="mt-8 space-y-7">
@@ -1012,7 +1024,9 @@ function DashboardView({
           <div>
             <h2 className="section-title">Periodo de analise</h2>
             <p className="section-subtitle">
-              Os cards, graficos, podio e insights abaixo seguem este filtro.
+              {isAnalystDashboard
+                ? 'Sua performance, graficos e elegibilidade seguem este filtro.'
+                : 'Os cards, graficos, podio e insights abaixo seguem este filtro.'}
             </p>
           </div>
 
@@ -1055,24 +1069,36 @@ function DashboardView({
       </section>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <MetricCard label="Status" value="Supabase conectado" tone="success" />
-        <MetricCard
-          label={isAnalystDashboard ? 'Perfil' : 'Analistas ativos'}
-          value={loading ? '...' : isAnalystDashboard ? 'Analista' : analystsCount}
-        />
-        <MetricCard label="CSAT do periodo" value={`${periodAverageCsat || 0}%`} />
-        <MetricCard label="Performance equipe" value={`${periodTeamPerformance || 0}%`} />
+        {isAnalystDashboard ? (
+          <>
+            <MetricCard label="Perfil" value="Analista" tone="success" />
+            <MetricCard label="Analista" value={analystProfile?.name ?? 'Nao vinculado'} />
+            <MetricCard label="Meu CSAT" value={`${analystResult?.averageCsat ?? 0}%`} />
+            <MetricCard label="Meta individual" value={`${analystProfile?.csat_goal ?? 0}%`} />
+          </>
+        ) : (
+          <>
+            <MetricCard label="Status" value="Supabase conectado" tone="success" />
+            <MetricCard label="Analistas ativos" value={loading ? '...' : analystsCount} />
+            <MetricCard label="CSAT do periodo" value={`${periodAverageCsat || 0}%`} />
+            <MetricCard label="Performance equipe" value={`${periodTeamPerformance || 0}%`} />
+          </>
+        )}
       </div>
 
       <section className="panel">
-        <h2 className="section-title">Variacoes recentes</h2>
+        <h2 className="section-title">
+          {isAnalystDashboard ? 'Minha evolucao recente' : 'Variacoes recentes'}
+        </h2>
         <p className="section-subtitle">
-          Evolucao calculada dentro de {periodLabel}.
+          {isAnalystDashboard
+            ? `Seu comportamento dentro de ${periodLabel}.`
+            : `Evolucao calculada dentro de ${periodLabel}.`}
         </p>
 
         <div className="mt-6 grid gap-6 xl:grid-cols-3">
           <TrendLineChart
-            label="CSAT medio semanal"
+            label={isAnalystDashboard ? 'Meu CSAT semanal' : 'CSAT medio semanal'}
             points={weeklyIndividualTrend.map((item) => ({
               label: item.label,
               value: item.csat,
@@ -1080,7 +1106,7 @@ function DashboardView({
             suffix="%"
           />
           <BarTrend
-            label="Avaliacoes por semana"
+            label={isAnalystDashboard ? 'Minhas avaliacoes por semana' : 'Avaliacoes por semana'}
             points={weeklyIndividualTrend.map((item) => ({
               label: item.label,
               value: item.totalReviews,
@@ -1097,7 +1123,9 @@ function DashboardView({
       <section className="panel">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h2 className="section-title">Podio do periodo</h2>
+            <h2 className="section-title">
+              {isAnalystDashboard ? 'Minha elegibilidade' : 'Podio do periodo'}
+            </h2>
             <p className="section-subtitle">
               {isAnalystDashboard
                 ? `Sua leitura no periodo ${periodLabel}: CSAT minimo ${podiumCsatGoal}%, avaliacoes ${reviewGoal}% e atendimentos dentro da media.`
@@ -1106,120 +1134,192 @@ function DashboardView({
           </div>
         </div>
 
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
-          {[0, 1, 2].map((index) => {
-            const winner = podiumWinners[index]
+        {isAnalystDashboard ? (
+          <div className="mt-6 grid gap-4 lg:grid-cols-3">
+            <div className="rounded-lg bg-slate-900 p-5">
+              <p className="text-sm text-slate-400">Status do periodo</p>
+              <h3 className={`mt-2 text-2xl font-bold ${analystResult?.eligible ? 'text-emerald-300' : 'text-cyan-300'}`}>
+                {analystStatusText}
+              </h3>
+              <p className="mt-3 text-sm text-slate-400">{analystFocusText}</p>
+            </div>
 
-            return (
-              <div key={index} className="rounded-lg bg-slate-900 p-5">
-                <p className="text-sm text-slate-400">{index + 1}o lugar</p>
-                {winner ? (
-                  <>
-                    <h3 className="mt-2 text-xl font-bold">{winner.analystName}</h3>
-                    <p className="mt-3 text-3xl font-bold text-cyan-300">{winner.averageCsat}%</p>
-                    <p className="mt-2 text-sm text-slate-400">
-                      {winner.reviewPercentage}% avaliacoes | {winner.totalTickets} atendimentos
-                    </p>
-                  </>
-                ) : (
-                  <p className="mt-5 text-sm text-slate-500">Aguardando elegivel</p>
-                )}
-              </div>
-            )
-          })}
-        </div>
+            <div className="rounded-lg bg-slate-900 p-5">
+              <p className="text-sm text-slate-400">CSAT e avaliacoes</p>
+              <p className="mt-2 text-3xl font-bold text-cyan-300">
+                {analystResult?.averageCsat ?? 0}%
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                {analystResult?.reviewPercentage ?? 0}% avaliacoes | meta {reviewGoal}%
+              </p>
+            </div>
 
-        <div className="mt-6 overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="text-slate-400">
-              <tr>
-                <th className="pb-3 pr-4 font-medium">Analista</th>
-                <th className="pb-3 pr-4 font-medium">CSAT periodo</th>
-                <th className="pb-3 pr-4 font-medium">Avaliacoes</th>
-                <th className="pb-3 pr-4 font-medium">Atendimentos</th>
-                <th className="pb-3 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/10">
-              {periodPodium.map((item) => (
-                <tr key={item.analystId}>
-                  <td className="py-3 pr-4">{item.analystName}</td>
-                  <td className="py-3 pr-4">
-                    {item.averageCsat}% <span className="text-slate-500">/ meta {item.individualGoal}%</span>
-                  </td>
-                  <td className="py-3 pr-4">{item.reviewPercentage}%</td>
-                  <td className="py-3 pr-4">{item.totalTickets}</td>
-                  <td className="py-3">
-                    {item.eligible ? (
-                      <span className="text-emerald-300">Elegivel</span>
+            <div className="rounded-lg bg-slate-900 p-5">
+              <p className="text-sm text-slate-400">Atendimentos no periodo</p>
+              <p className="mt-2 text-3xl font-bold">{analystResult?.totalTickets ?? 0}</p>
+              <p className="mt-2 text-sm text-slate-400">
+                A meta de podio considera volume dentro da media da equipe.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
+              {[0, 1, 2].map((index) => {
+                const winner = podiumWinners[index]
+
+                return (
+                  <div key={index} className="rounded-lg bg-slate-900 p-5">
+                    <p className="text-sm text-slate-400">{index + 1}o lugar</p>
+                    {winner ? (
+                      <>
+                        <h3 className="mt-2 text-xl font-bold">{winner.analystName}</h3>
+                        <p className="mt-3 text-3xl font-bold text-cyan-300">{winner.averageCsat}%</p>
+                        <p className="mt-2 text-sm text-slate-400">
+                          {winner.reviewPercentage}% avaliacoes | {winner.totalTickets} atendimentos
+                        </p>
+                      </>
                     ) : (
-                      <span className="text-slate-400">{item.reasons.join(', ')}</span>
+                      <p className="mt-5 text-sm text-slate-500">Aguardando elegivel</p>
                     )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                )
+              })}
+            </div>
 
-          {!periodPodium.length && (
-            <EmptyState text="Ainda nao ha lancamentos individuais no periodo selecionado." />
+            <div className="mt-6 overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="text-slate-400">
+                  <tr>
+                    <th className="pb-3 pr-4 font-medium">Analista</th>
+                    <th className="pb-3 pr-4 font-medium">CSAT periodo</th>
+                    <th className="pb-3 pr-4 font-medium">Avaliacoes</th>
+                    <th className="pb-3 pr-4 font-medium">Atendimentos</th>
+                    <th className="pb-3 font-medium">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/10">
+                  {periodPodium.map((item) => (
+                    <tr key={item.analystId}>
+                      <td className="py-3 pr-4">{item.analystName}</td>
+                      <td className="py-3 pr-4">
+                        {item.averageCsat}% <span className="text-slate-500">/ meta {item.individualGoal}%</span>
+                      </td>
+                      <td className="py-3 pr-4">{item.reviewPercentage}%</td>
+                      <td className="py-3 pr-4">{item.totalTickets}</td>
+                      <td className="py-3">
+                        {item.eligible ? (
+                          <span className="text-emerald-300">Elegivel</span>
+                        ) : (
+                          <span className="text-slate-400">{item.reasons.join(', ')}</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {!periodPodium.length && (
+                <EmptyState text="Ainda nao ha lancamentos individuais no periodo selecionado." />
+              )}
+            </div>
+          </>
           )}
-        </div>
       </section>
 
       <section className="panel">
-        <h2 className="section-title">Insights do periodo</h2>
+        <h2 className="section-title">
+          {isAnalystDashboard ? 'Meus insights do periodo' : 'Insights do periodo'}
+        </h2>
         <p className="section-subtitle">
-          Leitura rapida para entender desempenho, riscos e prioridades sem abrir historico de lancamentos.
+          {isAnalystDashboard
+            ? 'Leitura rapida para acompanhar seu desempenho sem abrir historico de lancamentos.'
+            : 'Leitura rapida para entender desempenho, riscos e prioridades sem abrir historico de lancamentos.'}
         </p>
 
-        <div className="mt-6 grid gap-4 lg:grid-cols-3">
-          <div className="rounded-lg bg-slate-900 p-5">
-            <p className="text-sm text-slate-400">Melhor leitura</p>
-            {bestPerformer ? (
-              <>
-                <h3 className="mt-2 text-xl font-bold">{bestPerformer.analystName}</h3>
-                <p className="mt-2 text-3xl font-bold text-cyan-300">{bestPerformer.averageCsat}%</p>
-                <p className="mt-2 text-sm text-slate-400">
-                  {bestPerformer.reviewPercentage}% avaliacoes no periodo
-                </p>
-              </>
-            ) : (
-              <p className="mt-4 text-sm text-slate-500">Aguardando dados do periodo.</p>
-            )}
-          </div>
-
-          <div className="rounded-lg bg-slate-900 p-5">
-            <p className="text-sm text-slate-400">Atencao necessaria</p>
-            {attentionList.length ? (
-              <div className="mt-4 space-y-3">
-                {attentionList.map((item) => (
-                  <div key={item.analystId} className="border-b border-white/10 pb-3 last:border-0 last:pb-0">
-                    <p className="font-semibold">{item.analystName}</p>
-                    <p className="mt-1 text-sm text-slate-400">{item.reasons.join(', ')}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-4 text-sm text-emerald-300">
-                Nenhum alerta critico entre os analistas com lancamento.
+        {isAnalystDashboard ? (
+          <div className="mt-6 grid gap-4 lg:grid-cols-3">
+            <div className="rounded-lg bg-slate-900 p-5">
+              <p className="text-sm text-slate-400">Ponto forte</p>
+              <p className="mt-2 text-xl font-bold">
+                {analystResult && analystResult.averageCsat >= analystResult.individualGoal
+                  ? 'CSAT dentro da meta individual'
+                  : 'Acompanhar CSAT individual'}
               </p>
-            )}
-          </div>
+              <p className="mt-2 text-sm text-slate-400">
+                Resultado atual: {analystResult?.averageCsat ?? 0}% / meta {analystProfile?.csat_goal ?? 0}%.
+              </p>
+            </div>
 
-          <div className="rounded-lg bg-slate-900 p-5">
-            <p className="text-sm text-slate-400">Saude da equipe</p>
-            <p className="mt-2 text-3xl font-bold text-emerald-300">
-              {periodTeamPerformance || 0}%
-            </p>
-            <p className="mt-2 text-sm text-slate-400">
-              Meta de referencia: {teamPerformanceGoal}%
-            </p>
-            <p className="mt-4 text-sm text-slate-300">
-              {eligibleCount} de {periodPodium.length} analistas estao elegiveis para o podio.
-            </p>
+            <div className="rounded-lg bg-slate-900 p-5">
+              <p className="text-sm text-slate-400">Ponto de atencao</p>
+              <p className="mt-2 text-xl font-bold">
+                {analystResult ? analystFocusText : 'Sem dados no periodo'}
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                Use os filtros acima para comparar semana, mes, ano ou periodo personalizado.
+              </p>
+            </div>
+
+            <div className="rounded-lg bg-slate-900 p-5">
+              <p className="text-sm text-slate-400">Equipe no periodo</p>
+              <p className="mt-2 text-3xl font-bold text-emerald-300">
+                {periodTeamPerformance || 0}%
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                Referencia geral da operacao: {teamPerformanceGoal}%.
+              </p>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="mt-6 grid gap-4 lg:grid-cols-3">
+            <div className="rounded-lg bg-slate-900 p-5">
+              <p className="text-sm text-slate-400">Melhor leitura</p>
+              {bestPerformer ? (
+                <>
+                  <h3 className="mt-2 text-xl font-bold">{bestPerformer.analystName}</h3>
+                  <p className="mt-2 text-3xl font-bold text-cyan-300">{bestPerformer.averageCsat}%</p>
+                  <p className="mt-2 text-sm text-slate-400">
+                    {bestPerformer.reviewPercentage}% avaliacoes no periodo
+                  </p>
+                </>
+              ) : (
+                <p className="mt-4 text-sm text-slate-500">Aguardando dados do periodo.</p>
+              )}
+            </div>
+
+            <div className="rounded-lg bg-slate-900 p-5">
+              <p className="text-sm text-slate-400">Atencao necessaria</p>
+              {attentionList.length ? (
+                <div className="mt-4 space-y-3">
+                  {attentionList.map((item) => (
+                    <div key={item.analystId} className="border-b border-white/10 pb-3 last:border-0 last:pb-0">
+                      <p className="font-semibold">{item.analystName}</p>
+                      <p className="mt-1 text-sm text-slate-400">{item.reasons.join(', ')}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-4 text-sm text-emerald-300">
+                  Nenhum alerta critico entre os analistas com lancamento.
+                </p>
+              )}
+            </div>
+
+            <div className="rounded-lg bg-slate-900 p-5">
+              <p className="text-sm text-slate-400">Saude da equipe</p>
+              <p className="mt-2 text-3xl font-bold text-emerald-300">
+                {periodTeamPerformance || 0}%
+              </p>
+              <p className="mt-2 text-sm text-slate-400">
+                Meta de referencia: {teamPerformanceGoal}%
+              </p>
+              <p className="mt-4 text-sm text-slate-300">
+                {eligibleCount} de {periodPodium.length} analistas estao elegiveis para o podio.
+              </p>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   )
