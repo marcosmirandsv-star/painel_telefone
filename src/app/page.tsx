@@ -1364,6 +1364,7 @@ function ReportsView({
 }) {
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>(() => createPeriodFilter('month'))
   const [selectedAnalystId, setSelectedAnalystId] = useState('')
+  const [exportMessage, setExportMessage] = useState('')
   const isManagementUser = role !== 'analyst'
   const reportAnalysts = useMemo(
     () => (analysts.length ? analysts : buildAnalystsFromMetrics(individualMetrics)),
@@ -1453,40 +1454,49 @@ function ReportsView({
   }
 
   function handleExportWordReport() {
-    if (!selectedAnalyst || !analystResult) return
+    if (!selectedAnalyst || !analystResult) {
+      setExportMessage('Selecione um analista e um periodo com lancamento antes de exportar.')
+      return
+    }
 
-    exportWordReport({
-      analystName: selectedAnalyst.name,
-      periodLabel,
-      expected: {
-        csat: podiumCsatGoal,
-        loss: 3,
-        review: reviewGoal,
-      },
-      achieved: {
-        csat: analystResult.averageCsat,
-        loss: teamLossPercentage,
-        reviewPercentage: analystResult.reviewPercentage,
-        reviewCount,
-        answeredTickets,
-        averageTickets:
-          podium.length > 0
-            ? round(podium.reduce((sum, item) => sum + item.totalTickets, 0) / podium.length)
-            : 0,
-        rankingPosition: selectedRankingPosition,
-        teamPerformance,
-        teamAnsweredCalls,
-        teamAbandonedCalls,
-        teamTotalCalls,
-      },
-      sare: {
-        situation: situationText,
-        action: actionText,
-        result: resultText,
-        evolution: evolutionText,
-      },
-      weeklyEvolution,
-    })
+    try {
+      const fileName = exportWordReport({
+        analystName: selectedAnalyst.name,
+        periodLabel,
+        expected: {
+          csat: podiumCsatGoal,
+          loss: 3,
+          review: reviewGoal,
+        },
+        achieved: {
+          csat: analystResult.averageCsat,
+          loss: teamLossPercentage,
+          reviewPercentage: analystResult.reviewPercentage,
+          reviewCount,
+          answeredTickets,
+          averageTickets:
+            podium.length > 0
+              ? round(podium.reduce((sum, item) => sum + item.totalTickets, 0) / podium.length)
+              : 0,
+          rankingPosition: selectedRankingPosition,
+          teamPerformance,
+          teamAnsweredCalls,
+          teamAbandonedCalls,
+          teamTotalCalls,
+        },
+        sare: {
+          situation: situationText,
+          action: actionText,
+          result: resultText,
+          evolution: evolutionText,
+        },
+        weeklyEvolution,
+      })
+
+      setExportMessage(`Relatorio gerado: ${fileName}. Verifique a pasta Downloads.`)
+    } catch {
+      setExportMessage('Nao foi possivel gerar o arquivo. Tente novamente ou use outro navegador.')
+    }
   }
 
   return (
@@ -1573,6 +1583,7 @@ function ReportsView({
         >
           Exportar relatorio Word
         </button>
+        {exportMessage && <Feedback message={exportMessage} />}
 
         {selectedAnalyst && analystResult ? (
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
@@ -2681,6 +2692,39 @@ function exportWordReport({
   weeklyEvolution: WeeklyIndividualTrend[]
 }) {
   const safeName = escapeHtml(analystName)
+  const firstEvolution = weeklyEvolution[0] ?? null
+  const lastEvolution = weeklyEvolution.at(-1) ?? null
+  const bestEvolution = weeklyEvolution.reduce<WeeklyIndividualTrend | null>(
+    (best, item) => (!best || item.csat > best.csat ? item : best),
+    null,
+  )
+  const worstEvolution = weeklyEvolution.reduce<WeeklyIndividualTrend | null>(
+    (worst, item) => (!worst || item.csat < worst.csat ? item : worst),
+    null,
+  )
+  const csatDelta = firstEvolution && lastEvolution ? round(lastEvolution.csat - firstEvolution.csat) : 0
+  const reviewDelta =
+    firstEvolution && lastEvolution ? lastEvolution.totalReviews - firstEvolution.totalReviews : 0
+  const evolutionBars = weeklyEvolution.length
+    ? weeklyEvolution
+        .map((item, index) => {
+          const previous = weeklyEvolution[index - 1]
+          const delta = previous ? round(item.csat - previous.csat) : 0
+          const color = delta > 0 ? '#059669' : delta < 0 ? '#dc2626' : '#64748b'
+          const width = Math.max(8, Math.min(100, item.csat))
+
+          return `
+            <div class="evolution-row">
+              <div class="evolution-label">${escapeHtml(item.label)}</div>
+              <div class="evolution-track">
+                <div class="evolution-bar" style="width:${width}%; background:${color};"></div>
+              </div>
+              <div class="evolution-value">${item.csat}% <span class="muted">${formatDelta(delta, ' p.p.')}</span></div>
+            </div>
+          `
+        })
+        .join('')
+    : '<p class="muted">Sem dados de evolucao no periodo.</p>'
   const evolutionRows = weeklyEvolution.length
     ? weeklyEvolution
         .map(
@@ -2714,6 +2758,17 @@ function exportWordReport({
           .subtitle { color: #475569; margin-bottom: 18px; }
           .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
           .box { border: 1px solid #cbd5e1; padding: 12px; margin-bottom: 12px; }
+          .insight-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0 18px; }
+          .insight { background: #f8fafc; border: 1px solid #cbd5e1; padding: 10px; }
+          .insight-label { color: #475569; font-size: 10px; margin-bottom: 5px; }
+          .insight-value { font-size: 18px; font-weight: bold; }
+          .positive { color: #059669; }
+          .negative { color: #dc2626; }
+          .evolution-row { display: grid; grid-template-columns: 70px 1fr 110px; gap: 10px; align-items: center; margin: 8px 0; }
+          .evolution-label { font-size: 11px; font-weight: bold; }
+          .evolution-track { background: #e2e8f0; height: 16px; border-radius: 2px; overflow: hidden; }
+          .evolution-bar { height: 16px; }
+          .evolution-value { font-size: 11px; font-weight: bold; }
           .muted { color: #475569; }
         </style>
       </head>
@@ -2731,7 +2786,6 @@ function exportWordReport({
           <div class="box">
             <h2>Atingido</h2>
             <p>CSAT: ${achieved.csat}%</p>
-            <p>Ligacoes perdidas: ${achieved.loss}% (${achieved.teamAbandonedCalls} de ${achieved.teamTotalCalls})</p>
             <p>Avaliacoes: ${achieved.reviewPercentage}% (${achieved.reviewCount} respondidas)</p>
             <p>Atendimentos: ${achieved.answeredTickets}</p>
             <p>Media por colaborador: ${achieved.averageTickets}</p>
@@ -2740,7 +2794,27 @@ function exportWordReport({
         </div>
 
         <h2>Graficos e evolucao</h2>
-        <p class="muted">Tabela-base para graficos de evolucao mensal e performance.</p>
+        <p class="muted">Leitura visual para identificar rapidamente melhora, queda ou estabilidade.</p>
+        <div class="insight-grid">
+          <div class="insight">
+            <div class="insight-label">CSAT atual</div>
+            <div class="insight-value">${achieved.csat}%</div>
+          </div>
+          <div class="insight">
+            <div class="insight-label">Variacao no periodo</div>
+            <div class="insight-value ${csatDelta >= 0 ? 'positive' : 'negative'}">${formatDelta(csatDelta, ' p.p.')}</div>
+          </div>
+          <div class="insight">
+            <div class="insight-label">Melhor semana</div>
+            <div class="insight-value">${bestEvolution ? `${bestEvolution.label} - ${bestEvolution.csat}%` : '-'}</div>
+          </div>
+          <div class="insight">
+            <div class="insight-label">Avaliacoes</div>
+            <div class="insight-value ${reviewDelta >= 0 ? 'positive' : 'negative'}">${formatDelta(reviewDelta)}</div>
+          </div>
+        </div>
+        ${evolutionBars}
+        <p class="muted">Menor ponto do periodo: ${worstEvolution ? `${worstEvolution.label} - ${worstEvolution.csat}%` : '-'}.</p>
         <table>
           <thead>
             <tr>
@@ -2752,8 +2826,9 @@ function exportWordReport({
           </thead>
           <tbody>${evolutionRows}</tbody>
         </table>
+        <h2>Indicador coletivo informativo</h2>
         <p>Performance da equipe no periodo: ${achieved.teamPerformance}%.</p>
-        <p>Ligacoes atendidas pela equipe: ${achieved.teamAnsweredCalls}. Total processado: ${achieved.teamTotalCalls}.</p>
+        <p>Ligacoes atendidas pela equipe: ${achieved.teamAnsweredCalls}. Total processado: ${achieved.teamTotalCalls}. Ligacoes perdidas: ${achieved.loss}% (${achieved.teamAbandonedCalls} de ${achieved.teamTotalCalls}).</p>
 
         <h2>Analise SARE</h2>
         <h3>S - Situacao</h3>
@@ -2772,13 +2847,20 @@ function exportWordReport({
   })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
+  const fileName = `${slugifyFileName(analystName)}-relatorio-${slugifyFileName(periodLabel)}.doc`
 
   link.href = url
-  link.download = `${slugifyFileName(analystName)}-relatorio-${slugifyFileName(periodLabel)}.doc`
+  link.download = fileName
+  link.style.display = 'none'
   document.body.appendChild(link)
   link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(url)
+
+  window.setTimeout(() => {
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }, 5000)
+
+  return fileName
 }
 
 function escapeHtml(value: string) {
