@@ -119,7 +119,7 @@ type PeriodFilter = {
   end: string
 }
 
-type ActiveTab = 'dashboard' | 'analysts' | 'goals' | 'entries'
+type ActiveTab = 'dashboard' | 'reports' | 'analysts' | 'goals' | 'entries'
 
 const initialIndividualForm: IndividualForm = {
   analystId: '',
@@ -318,7 +318,7 @@ export default function Home() {
 
   useEffect(() => {
     if (isManagementUser) return
-    if (activeTab !== 'dashboard') setActiveTab('dashboard')
+    if (!['dashboard', 'reports'].includes(activeTab)) setActiveTab('dashboard')
   }, [activeTab, isManagementUser])
 
   async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
@@ -350,8 +350,10 @@ export default function Home() {
     setSaving(true)
     setMessage('Enviando e-mail de redefinicao...')
 
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin
+
     const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
-      redirectTo: window.location.origin,
+      redirectTo: appUrl,
     })
 
     setSaving(false)
@@ -883,6 +885,9 @@ export default function Home() {
           <TabButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')}>
             Dashboard
           </TabButton>
+          <TabButton active={activeTab === 'reports'} onClick={() => setActiveTab('reports')}>
+            Relatorios
+          </TabButton>
           {isManagementUser && (
             <>
               <TabButton active={activeTab === 'entries'} onClick={() => setActiveTab('entries')}>
@@ -908,6 +913,16 @@ export default function Home() {
             individualMetrics={visibleIndividualMetrics}
             teamMetrics={teamMetrics}
             loading={loading}
+            role={userRole}
+          />
+        )}
+
+        {activeTab === 'reports' && (
+          <ReportsView
+            analysts={visibleAnalysts}
+            goals={goals}
+            individualMetrics={visibleIndividualMetrics}
+            teamMetrics={teamMetrics}
             role={userRole}
           />
         )}
@@ -1330,6 +1345,243 @@ function DashboardView({
           </div>
         )}
       </section>
+    </div>
+  )
+}
+
+function ReportsView({
+  analysts,
+  goals,
+  individualMetrics,
+  teamMetrics,
+  role,
+}: {
+  analysts: Analyst[]
+  goals: Goal[]
+  individualMetrics: IndividualMetric[]
+  teamMetrics: TeamMetric[]
+  role: UserRole
+}) {
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>(() => createPeriodFilter('month'))
+  const [selectedAnalystId, setSelectedAnalystId] = useState('')
+  const isManagementUser = role !== 'analyst'
+
+  useEffect(() => {
+    if (!analysts.length) return
+    if (!selectedAnalystId || !analysts.some((analyst) => analyst.id === selectedAnalystId)) {
+      setSelectedAnalystId(analysts[0].id)
+    }
+  }, [analysts, selectedAnalystId])
+
+  const selectedAnalyst = analysts.find((analyst) => analyst.id === selectedAnalystId) ?? analysts[0] ?? null
+  const periodLabel = formatPeriodLabel(periodFilter)
+  const previousPeriod = getPreviousPeriod(periodFilter)
+  const podiumCsatGoal = getGoalValue(goals, 'podium_csat_minimum', 90)
+  const reviewGoal = getGoalValue(goals, 'review_percentage', 25)
+  const teamPerformanceGoal = getTeamPerformanceGoal(goals)
+  const periodIndividualMetrics = filterIndividualMetricsByPeriod(individualMetrics, periodFilter)
+  const periodTeamMetrics = filterTeamMetricsByPeriod(teamMetrics, periodFilter)
+  const analystMetrics = selectedAnalyst
+    ? periodIndividualMetrics.filter((metric) => metric.analyst_id === selectedAnalyst.id)
+    : []
+  const previousAnalystMetrics = selectedAnalyst
+    ? filterIndividualMetricsByPeriod(individualMetrics, previousPeriod).filter(
+        (metric) => metric.analyst_id === selectedAnalyst.id,
+      )
+    : []
+  const podium = buildPeriodPodium(periodIndividualMetrics, analysts, podiumCsatGoal, reviewGoal)
+  const analystResult = selectedAnalyst
+    ? podium.find((item) => item.analystId === selectedAnalyst.id) ?? null
+    : null
+  const previousCsat = calculateAverageCsat(previousAnalystMetrics)
+  const csatDelta = analystResult ? round(analystResult.averageCsat - previousCsat) : 0
+  const teamPerformance = calculateTeamPerformance(periodTeamMetrics)
+  const teamStatus =
+    teamPerformance >= teamPerformanceGoal
+      ? 'Operacao dentro da referencia.'
+      : 'Operacao abaixo da referencia definida.'
+  const selectedRankingPosition = analystResult
+    ? podium.findIndex((item) => item.analystId === analystResult.analystId) + 1
+    : 0
+  const strongestResult = podium[0] ?? null
+  const attentionResults = podium.filter((item) => !item.eligible).slice(0, 3)
+  const growthResults = podium
+    .map((item) => {
+      const previous = filterIndividualMetricsByPeriod(individualMetrics, previousPeriod).filter(
+        (metric) => metric.analyst_id === item.analystId,
+      )
+
+      return {
+        ...item,
+        delta: round(item.averageCsat - calculateAverageCsat(previous)),
+      }
+    })
+    .sort((a, b) => b.delta - a.delta)
+  const bestGrowth = growthResults[0] ?? null
+  const riskResults = podium
+    .filter((item) => !item.eligible || item.averageCsat < item.individualGoal + 2)
+    .slice(0, 3)
+
+  function handlePeriodModeChange(mode: PeriodMode) {
+    setPeriodFilter(createPeriodFilter(mode))
+  }
+
+  return (
+    <div className="mt-8 space-y-7">
+      <section className="panel">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h2 className="section-title">Relatorios e IA analitica</h2>
+            <p className="section-subtitle">
+              Primeira camada SARE gerada a partir dos lancamentos do periodo. A API de IA entra na proxima etapa.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {(['week', 'month', 'year', 'custom'] as PeriodMode[]).map((mode) => (
+              <button
+                key={mode}
+                className={periodFilter.mode === mode ? 'tab-button-active' : 'tab-button'}
+                type="button"
+                onClick={() => handlePeriodModeChange(mode)}
+              >
+                {getPeriodModeLabel(mode)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-3">
+          {isManagementUser && (
+            <Field label="Analista">
+              <select
+                className="form-input"
+                value={selectedAnalystId}
+                onChange={(event) => setSelectedAnalystId(event.target.value)}
+              >
+                {analysts.map((analyst) => (
+                  <option key={analyst.id} value={analyst.id}>
+                    {analyst.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+          <Field label="Inicio">
+            <input
+              className="form-input"
+              type="date"
+              value={periodFilter.start}
+              onChange={(event) =>
+                setPeriodFilter({ ...periodFilter, mode: 'custom', start: event.target.value })
+              }
+            />
+          </Field>
+          <Field label="Fim">
+            <input
+              className="form-input"
+              type="date"
+              value={periodFilter.end}
+              onChange={(event) =>
+                setPeriodFilter({ ...periodFilter, mode: 'custom', end: event.target.value })
+              }
+            />
+          </Field>
+        </div>
+      </section>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <MetricCard label="Analista" value={selectedAnalyst?.name ?? 'Sem analista'} />
+        <MetricCard label="CSAT do periodo" value={`${analystResult?.averageCsat ?? 0}%`} />
+        <MetricCard label="Variacao vs periodo anterior" value={formatDelta(csatDelta, '%')} />
+        <MetricCard label="Performance equipe" value={`${teamPerformance}%`} />
+      </div>
+
+      <section className="panel">
+        <h2 className="section-title">Relatorio mensal SARE</h2>
+        <p className="section-subtitle">
+          Estrutura obrigatoria do prompt original: Situacao, Acao, Resultado e Evolucao.
+        </p>
+
+        {selectedAnalyst && analystResult ? (
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            <ReportBlock
+              title="S - Situacao"
+              text={`${selectedAnalyst.name} teve ${analystResult.averageCsat}% de CSAT em ${periodLabel}, com ${analystResult.totalReviews} avaliacoes em ${analystResult.totalTickets} atendimentos. A meta individual e ${analystResult.individualGoal}% e a referencia de podio e ${podiumCsatGoal}%. Em relacao ao periodo anterior, a variacao foi de ${formatDelta(csatDelta, '%')}.`}
+            />
+            <ReportBlock
+              title="A - Acao"
+              text={
+                analystResult.eligible
+                  ? 'Manter as praticas atuais, preservar o volume de avaliacoes e acompanhar qualquer oscilacao semanal antes do fechamento do ciclo.'
+                  : `Priorizar acoes objetivas sobre: ${analystResult.reasons.join(', ')}. A recomendacao inicial e revisar atendimentos de menor satisfacao, reforcar pedido de avaliacao e acompanhar o indicador semanalmente.`
+              }
+            />
+            <ReportBlock
+              title="R - Resultado"
+              text={`${analystResult.eligible ? 'O resultado atual sustenta elegibilidade ao podio.' : 'O resultado atual ainda nao sustenta elegibilidade ao podio.'} O desempenho individual deve ser lido junto da performance da equipe, que fechou em ${teamPerformance}% no periodo. ${teamStatus}`}
+            />
+            <ReportBlock
+              title="E - Evolucao"
+              text={`Proximo ciclo: ${buildDevelopmentFocus(analystResult, csatDelta)} Perguntas sugeridas para 1:1: o que ajudou ou atrapalhou o CSAT no periodo? quais atendimentos merecem revisao? qual acao simples pode aumentar avaliacoes na proxima semana?`}
+            />
+          </div>
+        ) : (
+          <EmptyState text="Ainda nao ha dados suficientes para gerar o SARE deste periodo." />
+        )}
+      </section>
+
+      <section className="panel">
+        <h2 className="section-title">Camadas de IA</h2>
+        <p className="section-subtitle">
+          Leitura inicial automatica. Na proxima etapa, estes blocos podem ser enviados para uma API de IA.
+        </p>
+
+        <div className="mt-6 grid gap-4 xl:grid-cols-3">
+          <div className="rounded-lg bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">IA Coach individual</p>
+            <h3 className="mt-2 text-xl font-bold">{selectedAnalyst?.name ?? 'Analista'}</h3>
+            <ul className="mt-4 space-y-2 text-sm text-slate-300">
+              <li>Ponto forte: {analystResult && analystResult.averageCsat >= analystResult.individualGoal ? 'CSAT dentro da meta individual.' : 'ha espaco para recuperar CSAT individual.'}</li>
+              <li>Tendencia: {getTrendText(csatDelta)}.</li>
+              <li>Plano: {analystResult ? buildDevelopmentFocus(analystResult, csatDelta) : 'aguardar lancamentos do periodo.'}</li>
+            </ul>
+          </div>
+
+          <div className="rounded-lg bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">IA Supervisor equipe</p>
+            {isManagementUser ? (
+              <ul className="mt-4 space-y-2 text-sm text-slate-300">
+                <li>Reconhecimento: {strongestResult ? `${strongestResult.analystName} lidera o periodo com ${strongestResult.averageCsat}%.` : 'aguardando dados.'}</li>
+                <li>Evolucao: {bestGrowth ? `${bestGrowth.analystName} variou ${formatDelta(bestGrowth.delta, '%')} vs periodo anterior.` : 'sem comparativo.'}</li>
+                <li>Acompanhamento: {attentionResults.length ? attentionResults.map((item) => item.analystName).join(', ') : 'sem alertas criticos.'}</li>
+              </ul>
+            ) : (
+              <p className="mt-4 text-sm text-slate-300">
+                Para analistas, esta camada fica resumida. A visao completa da equipe e exclusiva da gestao.
+              </p>
+            )}
+          </div>
+
+          <div className="rounded-lg bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">IA Executiva operacao</p>
+            <ul className="mt-4 space-y-2 text-sm text-slate-300">
+              <li>Performance: {teamPerformance}% no periodo, meta {teamPerformanceGoal}%.</li>
+              <li>Previsao: {teamPerformance >= teamPerformanceGoal ? 'tendencia de fechamento dentro da referencia.' : 'risco de fechamento abaixo da referencia.'}</li>
+              <li>Risco: {riskResults.length ? `${riskResults.length} analista(s) pedem acompanhamento.` : 'nenhum risco individual evidente no periodo.'}</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function ReportBlock({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="rounded-lg bg-slate-900 p-5">
+      <h3 className="text-lg font-bold">{title}</h3>
+      <p className="mt-3 text-sm leading-6 text-slate-300">{text}</p>
     </div>
   )
 }
@@ -2536,6 +2788,63 @@ function getPeriodModeLabel(mode: PeriodMode) {
 function formatPeriodLabel(period: PeriodFilter) {
   if (!period.start || !period.end) return 'todo o historico'
   return `${formatDate(period.start)} a ${formatDate(period.end)}`
+}
+
+function getPreviousPeriod(period: PeriodFilter): PeriodFilter {
+  if (!period.start || !period.end) return period
+
+  const start = new Date(`${period.start}T00:00:00`)
+  const end = new Date(`${period.end}T00:00:00`)
+  const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1)
+  const previousEnd = addDays(start, -1)
+  const previousStart = addDays(previousEnd, -(days - 1))
+
+  return {
+    mode: 'custom',
+    start: toDateInputValue(previousStart),
+    end: toDateInputValue(previousEnd),
+  }
+}
+
+function calculateTeamPerformance(metrics: TeamMetric[]) {
+  if (!metrics.length) return 0
+
+  const answered = metrics.reduce((sum, metric) => sum + Number(metric.answered_calls), 0)
+  const total = metrics.reduce((sum, metric) => sum + Number(metric.total_calls), 0)
+
+  return total ? round((answered / total) * 100) : 0
+}
+
+function formatDelta(value: number, suffix = '') {
+  if (!value) return `0${suffix}`
+
+  return `${value > 0 ? '+' : ''}${value}${suffix}`
+}
+
+function getTrendText(delta: number) {
+  if (delta > 1) return 'crescimento frente ao periodo anterior'
+  if (delta < -1) return 'queda frente ao periodo anterior'
+  return 'estabilidade frente ao periodo anterior'
+}
+
+function buildDevelopmentFocus(result: MonthlyPodiumResult, delta: number) {
+  if (result.eligible && delta >= 0) {
+    return 'manter consistencia, proteger volume de avaliacoes e preparar boas praticas para compartilhar com a equipe.'
+  }
+
+  if (result.reviewPercentage < 25) {
+    return 'aumentar o percentual de avaliacoes, reforcando o convite ao final dos atendimentos e acompanhando o volume semanal.'
+  }
+
+  if (result.averageCsat < result.individualGoal) {
+    return 'revisar atendimentos com menor satisfacao e escolher uma acao objetiva de melhoria para a proxima semana.'
+  }
+
+  if (delta < 0) {
+    return 'investigar a queda recente e comparar os casos do periodo atual com o ciclo anterior.'
+  }
+
+  return 'manter acompanhamento semanal e buscar estabilidade ate o fechamento do ciclo.'
 }
 
 function startOfBusinessWeek(date: Date) {
