@@ -572,8 +572,8 @@ export default function Home() {
       const answeredCalls = toNumber(teamForm.answeredCalls)
       const abandonedCalls = toNumber(teamForm.abandonedCalls)
       const totalCalls = toNumber(teamForm.totalCalls)
-      const performancePercentage = answeredCalls
-        ? round((abandonedCalls / answeredCalls) * 100)
+      const performancePercentage = totalCalls
+        ? round((answeredCalls / totalCalls) * 100)
         : 0
       const evidenceUrl = await uploadEvidence(teamForm.evidenceFile, 'equipe')
 
@@ -1219,7 +1219,7 @@ function EntriesView({
         <section className="panel">
         <h2 className="section-title">Performance da equipe</h2>
         <p className="section-subtitle">
-          Formula atual: ligacoes abandonadas / ligacoes atendidas x 100.
+          Formula atual: ligacoes atendidas / total processado x 100.
         </p>
 
         <form className="mt-5 grid gap-4" onSubmit={onTeamSubmit}>
@@ -1266,7 +1266,7 @@ function EntriesView({
               required
             />
           </Field>
-          <Field label="Total de ligacoes">
+          <Field label="Total processado">
             <input
               className="form-input"
               min="1"
