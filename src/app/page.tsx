@@ -101,6 +101,14 @@ type MonthlyPodiumResult = {
   reasons: string[]
 }
 
+type PeriodMode = 'week' | 'month' | 'year' | 'custom'
+
+type PeriodFilter = {
+  mode: PeriodMode
+  start: string
+  end: string
+}
+
 type ActiveTab = 'dashboard' | 'analysts' | 'goals' | 'entries'
 
 const initialIndividualForm: IndividualForm = {
@@ -237,7 +245,6 @@ export default function Home() {
     setLoading(false)
   }
 
-  const latestTeamPerformance = teamMetrics[0]?.performance_percentage ?? 0
   const activeAnalysts = useMemo(
     () => analysts.filter((analyst) => analyst.active),
     [analysts],
@@ -247,11 +254,6 @@ export default function Home() {
     [analysts, individualForm.analystId],
   )
   const podiumCsatGoal = goals.find((goal) => goal.key === 'podium_csat_minimum')?.value ?? 90
-  const averageCsat = useMemo(() => {
-    if (!individualMetrics.length) return 0
-    const total = individualMetrics.reduce((sum, metric) => sum + Number(metric.csat), 0)
-    return Math.round((total / individualMetrics.length) * 10) / 10
-  }, [individualMetrics])
 
   async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -772,9 +774,6 @@ export default function Home() {
         {activeTab === 'dashboard' && (
           <DashboardView
             analystsCount={activeAnalysts.length}
-            goalsCount={goals.length}
-            averageCsat={averageCsat}
-            latestTeamPerformance={latestTeamPerformance}
             analysts={analysts}
             goals={goals}
             individualMetrics={individualMetrics}
@@ -836,9 +835,6 @@ export default function Home() {
 
 function DashboardView({
   analystsCount,
-  goalsCount,
-  averageCsat,
-  latestTeamPerformance,
   analysts,
   goals,
   individualMetrics,
@@ -846,17 +842,23 @@ function DashboardView({
   loading,
 }: {
   analystsCount: number
-  goalsCount: number
-  averageCsat: number
-  latestTeamPerformance: number
   analysts: Analyst[]
   goals: Goal[]
   individualMetrics: IndividualMetric[]
   teamMetrics: TeamMetric[]
   loading: boolean
 }) {
-  const weeklyIndividualTrend = aggregateIndividualByWeek(individualMetrics).slice(-8)
-  const teamPerformanceTrend = [...teamMetrics]
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>(() => createPeriodFilter('month'))
+  const filteredIndividualMetrics = useMemo(
+    () => filterIndividualMetricsByPeriod(individualMetrics, periodFilter),
+    [individualMetrics, periodFilter],
+  )
+  const filteredTeamMetrics = useMemo(
+    () => filterTeamMetricsByPeriod(teamMetrics, periodFilter),
+    [teamMetrics, periodFilter],
+  )
+  const weeklyIndividualTrend = aggregateIndividualByWeek(filteredIndividualMetrics).slice(-8)
+  const teamPerformanceTrend = [...filteredTeamMetrics]
     .sort((a, b) => a.week_start.localeCompare(b.week_start))
     .slice(-8)
     .map((metric) => ({
@@ -866,26 +868,79 @@ function DashboardView({
   const podiumCsatGoal = getGoalValue(goals, 'podium_csat_minimum', 90)
   const reviewGoal = getGoalValue(goals, 'review_percentage', 25)
   const teamPerformanceGoal = getTeamPerformanceGoal(goals)
-  const monthlyPodium = buildMonthlyPodium(individualMetrics, analysts, podiumCsatGoal, reviewGoal)
-  const podiumWinners = monthlyPodium.filter((item) => item.eligible).slice(0, 3)
-  const bestPerformer = monthlyPodium[0] ?? null
-  const attentionList = monthlyPodium.filter((item) => !item.eligible).slice(0, 3)
-  const eligibleCount = monthlyPodium.filter((item) => item.eligible).length
-  const currentMonthLabel = getCurrentMonthLabel()
+  const periodPodium = buildPeriodPodium(filteredIndividualMetrics, analysts, podiumCsatGoal, reviewGoal)
+  const podiumWinners = periodPodium.filter((item) => item.eligible).slice(0, 3)
+  const bestPerformer = periodPodium[0] ?? null
+  const attentionList = periodPodium.filter((item) => !item.eligible).slice(0, 3)
+  const eligibleCount = periodPodium.filter((item) => item.eligible).length
+  const periodLabel = formatPeriodLabel(periodFilter)
+  const periodAverageCsat = calculateAverageCsat(filteredIndividualMetrics)
+  const periodTeamPerformance = filteredTeamMetrics[0]?.performance_percentage ?? 0
+
+  function handlePeriodModeChange(mode: PeriodMode) {
+    setPeriodFilter(createPeriodFilter(mode))
+  }
 
   return (
     <div className="mt-8 space-y-7">
+      <section className="panel">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h2 className="section-title">Periodo de analise</h2>
+            <p className="section-subtitle">
+              Os cards, graficos, podio e insights abaixo seguem este filtro.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {(['week', 'month', 'year', 'custom'] as PeriodMode[]).map((mode) => (
+              <button
+                key={mode}
+                className={periodFilter.mode === mode ? 'tab-button-active' : 'tab-button'}
+                type="button"
+                onClick={() => handlePeriodModeChange(mode)}
+              >
+                {getPeriodModeLabel(mode)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <Field label="Inicio">
+            <input
+              className="form-input"
+              type="date"
+              value={periodFilter.start}
+              onChange={(event) =>
+                setPeriodFilter({ ...periodFilter, mode: 'custom', start: event.target.value })
+              }
+            />
+          </Field>
+          <Field label="Fim">
+            <input
+              className="form-input"
+              type="date"
+              value={periodFilter.end}
+              onChange={(event) =>
+                setPeriodFilter({ ...periodFilter, mode: 'custom', end: event.target.value })
+              }
+            />
+          </Field>
+        </div>
+      </section>
+
       <div className="grid gap-4 md:grid-cols-4">
         <MetricCard label="Status" value="Supabase conectado" tone="success" />
         <MetricCard label="Analistas ativos" value={loading ? '...' : analystsCount} />
-        <MetricCard label="Metas" value={loading ? '...' : goalsCount} />
-        <MetricCard label="CSAT medio recente" value={`${averageCsat || 0}%`} />
+        <MetricCard label="CSAT do periodo" value={`${periodAverageCsat || 0}%`} />
+        <MetricCard label="Performance equipe" value={`${periodTeamPerformance || 0}%`} />
       </div>
 
       <section className="panel">
         <h2 className="section-title">Variacoes recentes</h2>
         <p className="section-subtitle">
-          Evolucao calculada a partir dos lancamentos semanais cadastrados.
+          Evolucao calculada dentro de {periodLabel}.
         </p>
 
         <div className="mt-6 grid gap-6 xl:grid-cols-3">
@@ -915,9 +970,9 @@ function DashboardView({
       <section className="panel">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h2 className="section-title">Podio do mes</h2>
+            <h2 className="section-title">Podio do periodo</h2>
             <p className="section-subtitle">
-              Ranking de {currentMonthLabel}: CSAT minimo {podiumCsatGoal}%, avaliacoes {reviewGoal}% e atendimentos dentro da media da equipe.
+              Ranking de {periodLabel}: CSAT minimo {podiumCsatGoal}%, avaliacoes {reviewGoal}% e atendimentos dentro da media da equipe.
             </p>
           </div>
         </div>
@@ -950,14 +1005,14 @@ function DashboardView({
             <thead className="text-slate-400">
               <tr>
                 <th className="pb-3 pr-4 font-medium">Analista</th>
-                <th className="pb-3 pr-4 font-medium">CSAT mes</th>
+                <th className="pb-3 pr-4 font-medium">CSAT periodo</th>
                 <th className="pb-3 pr-4 font-medium">Avaliacoes</th>
                 <th className="pb-3 pr-4 font-medium">Atendimentos</th>
                 <th className="pb-3 font-medium">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
-              {monthlyPodium.map((item) => (
+              {periodPodium.map((item) => (
                 <tr key={item.analystId}>
                   <td className="py-3 pr-4">{item.analystName}</td>
                   <td className="py-3 pr-4">
@@ -977,8 +1032,8 @@ function DashboardView({
             </tbody>
           </table>
 
-          {!monthlyPodium.length && (
-            <EmptyState text="Ainda nao ha lancamentos individuais no mes atual." />
+          {!periodPodium.length && (
+            <EmptyState text="Ainda nao ha lancamentos individuais no periodo selecionado." />
           )}
         </div>
       </section>
@@ -1026,13 +1081,13 @@ function DashboardView({
           <div className="rounded-lg bg-slate-900 p-5">
             <p className="text-sm text-slate-400">Saude da equipe</p>
             <p className="mt-2 text-3xl font-bold text-emerald-300">
-              {latestTeamPerformance || 0}%
+              {periodTeamPerformance || 0}%
             </p>
             <p className="mt-2 text-sm text-slate-400">
               Meta de referencia: {teamPerformanceGoal}%
             </p>
             <p className="mt-4 text-sm text-slate-300">
-              {eligibleCount} de {monthlyPodium.length} analistas estao elegiveis para o podio.
+              {eligibleCount} de {periodPodium.length} analistas estao elegiveis para o podio.
             </p>
           </div>
         </div>
@@ -1898,7 +1953,7 @@ function aggregateIndividualByWeek(metrics: IndividualMetric[]): WeeklyIndividua
     }))
 }
 
-function buildMonthlyPodium(
+function buildPeriodPodium(
   metrics: IndividualMetric[],
   analysts: Analyst[],
   podiumCsatGoal: number,
@@ -1906,10 +1961,7 @@ function buildMonthlyPodium(
 ): MonthlyPodiumResult[] {
   const activeAnalysts = analysts.filter((analyst) => analyst.active)
   const activeAnalystIds = new Set(activeAnalysts.map((analyst) => analyst.id))
-  const currentMonthKey = getCurrentMonthKey()
-  const monthlyMetrics = metrics.filter(
-    (metric) => activeAnalystIds.has(metric.analyst_id) && metric.week_start.startsWith(currentMonthKey),
-  )
+  const periodMetrics = metrics.filter((metric) => activeAnalystIds.has(metric.analyst_id))
   const grouped = new Map<
     string,
     {
@@ -1921,7 +1973,7 @@ function buildMonthlyPodium(
     }
   >()
 
-  monthlyMetrics.forEach((metric) => {
+  periodMetrics.forEach((metric) => {
     const current = grouped.get(metric.analyst_id) ?? {
       csatWeightedTotal: 0,
       csatSimpleTotal: 0,
@@ -2017,15 +2069,110 @@ function getTeamPerformanceGoal(goals: Goal[]) {
   return goal ? Number(goal.value) : 96
 }
 
-function getCurrentMonthKey() {
+function createPeriodFilter(mode: PeriodMode): PeriodFilter {
   const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth()
+
+  if (mode === 'week') {
+    const start = startOfBusinessWeek(now)
+    const end = addDays(start, 4)
+
+    return {
+      mode,
+      start: toDateInputValue(start),
+      end: toDateInputValue(end),
+    }
+  }
+
+  if (mode === 'year') {
+    return {
+      mode,
+      start: `${currentYear}-01-01`,
+      end: `${currentYear}-12-31`,
+    }
+  }
+
+  const start = new Date(currentYear, currentMonth, 1)
+  const end = new Date(currentYear, currentMonth + 1, 0)
+
+  return {
+    mode,
+    start: toDateInputValue(start),
+    end: toDateInputValue(end),
+  }
 }
 
-function getCurrentMonthLabel() {
-  const now = new Date()
-  const month = now.toLocaleDateString('pt-BR', { month: 'long' })
-  return `${month} de ${now.getFullYear()}`
+function filterIndividualMetricsByPeriod(metrics: IndividualMetric[], period: PeriodFilter) {
+  return metrics.filter((metric) => isMetricInPeriod(metric.week_start, metric.week_end, period))
+}
+
+function filterTeamMetricsByPeriod(metrics: TeamMetric[], period: PeriodFilter) {
+  return metrics.filter((metric) => isMetricInPeriod(metric.week_start, metric.week_end, period))
+}
+
+function isMetricInPeriod(weekStart: string, weekEnd: string, period: PeriodFilter) {
+  if (!period.start || !period.end) return true
+
+  return weekStart <= period.end && weekEnd >= period.start
+}
+
+function calculateAverageCsat(metrics: IndividualMetric[]) {
+  if (!metrics.length) return 0
+
+  const reviewTotal = metrics.reduce((sum, metric) => sum + Number(metric.total_reviews), 0)
+
+  if (reviewTotal > 0) {
+    const weightedTotal = metrics.reduce(
+      (sum, metric) => sum + Number(metric.csat) * Number(metric.total_reviews),
+      0,
+    )
+
+    return round(weightedTotal / reviewTotal)
+  }
+
+  const total = metrics.reduce((sum, metric) => sum + Number(metric.csat), 0)
+  return round(total / metrics.length)
+}
+
+function getPeriodModeLabel(mode: PeriodMode) {
+  const labels: Record<PeriodMode, string> = {
+    week: 'Semana',
+    month: 'Mes',
+    year: 'Ano',
+    custom: 'Personalizado',
+  }
+
+  return labels[mode]
+}
+
+function formatPeriodLabel(period: PeriodFilter) {
+  if (!period.start || !period.end) return 'todo o historico'
+  return `${formatDate(period.start)} a ${formatDate(period.end)}`
+}
+
+function startOfBusinessWeek(date: Date) {
+  const start = new Date(date)
+  const day = start.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  start.setDate(start.getDate() + diff)
+
+  return start
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date)
+  next.setDate(next.getDate() + days)
+
+  return next
+}
+
+function toDateInputValue(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
 }
 
 function getPointPosition(value: number, index: number, points: ChartPoint[]) {
