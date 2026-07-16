@@ -220,31 +220,25 @@ export default function Home() {
     setLoading(true)
     setMessage('')
 
-    const [profileResult, goalsResult, analystsResult, individualResult, teamResult] = await Promise.all([
+    const [profileResult, goalsResult, analystsResult] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(),
       supabase.from('goals').select('id, key, label, value, unit, active').order('label'),
       supabase.from('analysts').select('id, name, active, csat_goal').order('name'),
-      supabase
-        .from('weekly_individual_metrics')
-        .select('id, analyst_id, week_start, week_end, csat, total_reviews, positive_reviews, negative_reviews, review_percentage, total_tickets, evidence_url, notes, analysts(name)')
-        .order('week_start', { ascending: false })
-        .limit(52),
-      supabase
-        .from('weekly_team_metrics')
-        .select('id, week_start, week_end, answered_calls, abandoned_calls, total_calls, performance_percentage, evidence_url, notes')
-        .order('week_start', { ascending: false })
-        .limit(52),
     ])
 
+    const loadedProfile = (profileResult.data as UserProfile | null) ?? null
+    const loadedAnalysts = analystsResult.data ?? []
+    const loadedRole = normalizeUserRole(loadedProfile?.role)
+    const loadedProfileAnalyst = findProfileAnalyst(loadedProfile, loadedAnalysts, user.email ?? '')
+
     if (profileResult.error) setMessage(getSupabaseMessage(profileResult.error.message))
-    else setProfile((profileResult.data as UserProfile | null) ?? null)
+    else setProfile(loadedProfile)
 
     if (goalsResult.error) setMessage(getSupabaseMessage(goalsResult.error.message))
     else setGoals((goalsResult.data ?? []).filter((goal) => goal.key !== 'individual_csat'))
 
     if (analystsResult.error) setMessage(getSupabaseMessage(analystsResult.error.message))
     else {
-      const loadedAnalysts = analystsResult.data ?? []
       const activeAnalysts = loadedAnalysts.filter((analyst) => analyst.active)
       setAnalysts(loadedAnalysts)
       setIndividualForm((current) => ({
@@ -252,6 +246,26 @@ export default function Home() {
         analystId: current.analystId || activeAnalysts[0]?.id || '',
       }))
     }
+
+    let individualQuery = supabase
+      .from('weekly_individual_metrics')
+      .select('id, analyst_id, week_start, week_end, csat, total_reviews, positive_reviews, negative_reviews, review_percentage, total_tickets, evidence_url, notes, analysts(name)')
+      .order('week_start', { ascending: false })
+      .limit(52)
+
+    if (loadedRole === 'analyst') {
+      if (loadedProfileAnalyst) individualQuery = individualQuery.eq('analyst_id', loadedProfileAnalyst.id)
+      else individualQuery = individualQuery.eq('analyst_id', '00000000-0000-0000-0000-000000000000')
+    }
+
+    const [individualResult, teamResult] = await Promise.all([
+      individualQuery,
+      supabase
+        .from('weekly_team_metrics')
+        .select('id, week_start, week_end, answered_calls, abandoned_calls, total_calls, performance_percentage, evidence_url, notes')
+        .order('week_start', { ascending: false })
+        .limit(52),
+    ])
 
     if (individualResult.error) setMessage(getSupabaseMessage(individualResult.error.message))
     else setIndividualMetrics((individualResult.data ?? []) as IndividualMetric[])
