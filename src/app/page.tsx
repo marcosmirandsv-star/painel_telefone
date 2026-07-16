@@ -1365,15 +1365,20 @@ function ReportsView({
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>(() => createPeriodFilter('month'))
   const [selectedAnalystId, setSelectedAnalystId] = useState('')
   const isManagementUser = role !== 'analyst'
+  const reportAnalysts = useMemo(
+    () => (analysts.length ? analysts : buildAnalystsFromMetrics(individualMetrics)),
+    [analysts, individualMetrics],
+  )
 
   useEffect(() => {
-    if (!analysts.length) return
-    if (!selectedAnalystId || !analysts.some((analyst) => analyst.id === selectedAnalystId)) {
-      setSelectedAnalystId(analysts[0].id)
+    if (!reportAnalysts.length) return
+    if (!selectedAnalystId || !reportAnalysts.some((analyst) => analyst.id === selectedAnalystId)) {
+      setSelectedAnalystId(reportAnalysts[0].id)
     }
-  }, [analysts, selectedAnalystId])
+  }, [reportAnalysts, selectedAnalystId])
 
-  const selectedAnalyst = analysts.find((analyst) => analyst.id === selectedAnalystId) ?? analysts[0] ?? null
+  const selectedAnalyst =
+    reportAnalysts.find((analyst) => analyst.id === selectedAnalystId) ?? reportAnalysts[0] ?? null
   const periodLabel = formatPeriodLabel(periodFilter)
   const previousPeriod = getPreviousPeriod(periodFilter)
   const podiumCsatGoal = getGoalValue(goals, 'podium_csat_minimum', 90)
@@ -1389,7 +1394,7 @@ function ReportsView({
         (metric) => metric.analyst_id === selectedAnalyst.id,
       )
     : []
-  const podium = buildPeriodPodium(periodIndividualMetrics, analysts, podiumCsatGoal, reviewGoal)
+  const podium = buildPeriodPodium(periodIndividualMetrics, reportAnalysts, podiumCsatGoal, reviewGoal)
   const analystResult = selectedAnalyst
     ? podium.find((item) => item.analystId === selectedAnalyst.id) ?? null
     : null
@@ -1517,7 +1522,7 @@ function ReportsView({
                 value={selectedAnalystId}
                 onChange={(event) => setSelectedAnalystId(event.target.value)}
               >
-                {analysts.map((analyst) => (
+                {reportAnalysts.map((analyst) => (
                   <option key={analyst.id} value={analyst.id}>
                     {analyst.name}
                   </option>
@@ -1589,7 +1594,7 @@ function ReportsView({
             />
           </div>
         ) : (
-          <EmptyState text="Ainda nao ha dados suficientes para gerar o SARE deste periodo." />
+          <EmptyState text="Selecione um analista e um periodo com lancamento individual para liberar a exportacao." />
         )}
       </section>
 
@@ -2594,6 +2599,29 @@ function createProfileAnalystFallback(
     active: true,
     csat_goal: 0,
   }
+}
+
+function buildAnalystsFromMetrics(metrics: IndividualMetric[]): Analyst[] {
+  const grouped = new Map<string, Analyst>()
+
+  metrics.forEach((metric) => {
+    if (grouped.has(metric.analyst_id)) return
+
+    grouped.set(metric.analyst_id, {
+      id: metric.analyst_id,
+      name: getMetricAnalystName(metric) || 'Analista',
+      active: true,
+      csat_goal: 86,
+    })
+  })
+
+  return [...grouped.values()].sort((a, b) => a.name.localeCompare(b.name))
+}
+
+function getMetricAnalystName(metric: IndividualMetric) {
+  if (Array.isArray(metric.analysts)) return metric.analysts[0]?.name ?? ''
+
+  return metric.analysts?.name ?? ''
 }
 
 function normalizeText(value: string) {
