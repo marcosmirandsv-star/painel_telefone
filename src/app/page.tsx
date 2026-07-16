@@ -758,12 +758,14 @@ function DashboardView({
       label: formatShortDate(metric.week_start),
       value: Number(metric.performance_percentage),
     }))
-  const latestIndividualMetrics = individualMetrics.slice(0, 8)
-  const latestTeamMetrics = teamMetrics.slice(0, 6)
   const podiumCsatGoal = getGoalValue(goals, 'podium_csat_minimum', 90)
   const reviewGoal = getGoalValue(goals, 'review_percentage', 25)
+  const teamPerformanceGoal = getTeamPerformanceGoal(goals)
   const monthlyPodium = buildMonthlyPodium(individualMetrics, analysts, podiumCsatGoal, reviewGoal)
   const podiumWinners = monthlyPodium.filter((item) => item.eligible).slice(0, 3)
+  const bestPerformer = monthlyPodium[0] ?? null
+  const attentionList = monthlyPodium.filter((item) => !item.eligible).slice(0, 3)
+  const eligibleCount = monthlyPodium.filter((item) => item.eligible).length
   const currentMonthLabel = getCurrentMonthLabel()
 
   return (
@@ -876,75 +878,60 @@ function DashboardView({
         </div>
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <section className="panel">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h2 className="section-title">Ultimos lancamentos individuais</h2>
-              <p className="section-subtitle">Dados mais recentes por semana e analista.</p>
-            </div>
-          </div>
+      <section className="panel">
+        <h2 className="section-title">Insights do periodo</h2>
+        <p className="section-subtitle">
+          Leitura rapida para entender desempenho, riscos e prioridades sem abrir historico de lancamentos.
+        </p>
 
-          <div className="mt-5 overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="text-slate-400">
-                <tr>
-                  <th className="pb-3 pr-4 font-medium">Analista</th>
-                  <th className="pb-3 pr-4 font-medium">Semana</th>
-                  <th className="pb-3 pr-4 font-medium">CSAT</th>
-                  <th className="pb-3 pr-4 font-medium">Avaliacoes</th>
-                  <th className="pb-3 pr-4 font-medium">Atendimentos</th>
-                  <th className="pb-3 font-medium">Evidencia</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10">
-                {latestIndividualMetrics.map((metric) => (
-                  <tr key={metric.id}>
-                    <td className="py-3 pr-4">{getAnalystName(metric.analysts)}</td>
-                    <td className="py-3 pr-4">{formatWeek(metric.week_start, metric.week_end)}</td>
-                    <td className="py-3 pr-4">{metric.csat}%</td>
-                    <td className="py-3 pr-4">{metric.total_reviews}</td>
-                    <td className="py-3 pr-4">{metric.total_tickets}</td>
-                    <td className="py-3">
-                      <EvidenceLink url={metric.evidence_url} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            {!individualMetrics.length && (
-              <EmptyState text="Ainda nao ha lancamentos individuais registrados." />
+        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          <div className="rounded-lg bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Melhor leitura</p>
+            {bestPerformer ? (
+              <>
+                <h3 className="mt-2 text-xl font-bold">{bestPerformer.analystName}</h3>
+                <p className="mt-2 text-3xl font-bold text-cyan-300">{bestPerformer.averageCsat}%</p>
+                <p className="mt-2 text-sm text-slate-400">
+                  {bestPerformer.reviewPercentage}% avaliacoes no periodo
+                </p>
+              </>
+            ) : (
+              <p className="mt-4 text-sm text-slate-500">Aguardando dados do periodo.</p>
             )}
           </div>
-        </section>
 
-        <section className="panel">
-          <h2 className="section-title">Performance da equipe</h2>
-          <p className="section-subtitle">Meta inicial configurada: 96%.</p>
+          <div className="rounded-lg bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Atencao necessaria</p>
+            {attentionList.length ? (
+              <div className="mt-4 space-y-3">
+                {attentionList.map((item) => (
+                  <div key={item.analystId} className="border-b border-white/10 pb-3 last:border-0 last:pb-0">
+                    <p className="font-semibold">{item.analystName}</p>
+                    <p className="mt-1 text-sm text-slate-400">{item.reasons.join(', ')}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-emerald-300">
+                Nenhum alerta critico entre os analistas com lancamento.
+              </p>
+            )}
+          </div>
 
-          <div className="mt-6 rounded-lg bg-slate-900 p-5">
-            <p className="text-sm text-slate-400">Ultima performance registrada</p>
-            <p className="mt-2 text-4xl font-bold text-emerald-300">
+          <div className="rounded-lg bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Saude da equipe</p>
+            <p className="mt-2 text-3xl font-bold text-emerald-300">
               {latestTeamPerformance || 0}%
             </p>
+            <p className="mt-2 text-sm text-slate-400">
+              Meta de referencia: {teamPerformanceGoal}%
+            </p>
+            <p className="mt-4 text-sm text-slate-300">
+              {eligibleCount} de {monthlyPodium.length} analistas estao elegiveis para o podio.
+            </p>
           </div>
-
-          <div className="mt-5 space-y-3">
-            {latestTeamMetrics.map((metric) => (
-              <div key={metric.id} className="list-row">
-                <span>{formatWeek(metric.week_start, metric.week_end)}</span>
-                <span className="flex items-center gap-4">
-                  <EvidenceLink url={metric.evidence_url} />
-                  <strong>{metric.performance_percentage}%</strong>
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {!teamMetrics.length && <EmptyState text="Ainda nao ha performance semanal registrada." />}
-        </section>
-      </div>
+        </div>
+      </section>
     </div>
   )
 }
@@ -1906,6 +1893,23 @@ function getGoalValue(goals: Goal[], key: string, fallback: number) {
   )
 
   return matchingLabel ? Number(matchingLabel.value) : fallback
+}
+
+function getTeamPerformanceGoal(goals: Goal[]) {
+  const goal = goals.find((item) => {
+    const key = item.key.toLowerCase()
+    const label = item.label.toLowerCase()
+
+    return (
+      item.active &&
+      (key.includes('performance') ||
+        key.includes('team') ||
+        label.includes('desempenho') ||
+        label.includes('performance'))
+    )
+  })
+
+  return goal ? Number(goal.value) : 96
 }
 
 function getCurrentMonthKey() {
