@@ -222,10 +222,10 @@ export default function Home() {
         .limit(52),
     ])
 
-    if (goalsResult.error) setMessage(goalsResult.error.message)
+    if (goalsResult.error) setMessage(getSupabaseMessage(goalsResult.error.message))
     else setGoals((goalsResult.data ?? []).filter((goal) => goal.key !== 'individual_csat'))
 
-    if (analystsResult.error) setMessage(analystsResult.error.message)
+    if (analystsResult.error) setMessage(getSupabaseMessage(analystsResult.error.message))
     else {
       const loadedAnalysts = analystsResult.data ?? []
       const activeAnalysts = loadedAnalysts.filter((analyst) => analyst.active)
@@ -236,10 +236,10 @@ export default function Home() {
       }))
     }
 
-    if (individualResult.error) setMessage(individualResult.error.message)
+    if (individualResult.error) setMessage(getSupabaseMessage(individualResult.error.message))
     else setIndividualMetrics((individualResult.data ?? []) as IndividualMetric[])
 
-    if (teamResult.error) setMessage(teamResult.error.message)
+    if (teamResult.error) setMessage(getSupabaseMessage(teamResult.error.message))
     else setTeamMetrics(teamResult.data ?? [])
 
     setLoading(false)
@@ -2369,4 +2369,9 @@ function withTimeout<T>(promise: PromiseLike<T>, message: string, timeoutMs = 10
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message
   return 'Nao foi possivel concluir a acao. Tente novamente.'
+}
+
+function getSupabaseMessage(message: string) {
+  if (message.toLowerCase().includes('jwt issued at future')) return ''
+  return message
 }
