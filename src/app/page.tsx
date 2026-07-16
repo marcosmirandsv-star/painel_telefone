@@ -141,6 +141,8 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false)
   const [goals, setGoals] = useState<Goal[]>([])
   const [analysts, setAnalysts] = useState<Analyst[]>([])
   const [individualMetrics, setIndividualMetrics] = useState<IndividualMetric[]>([])
@@ -164,6 +166,18 @@ export default function Home() {
     }
 
     loadSession()
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setUser(session?.user ?? null)
+        setIsPasswordRecovery(true)
+        setMessage('Digite uma nova senha para concluir a recuperacao.')
+      }
+    })
+
+    return () => {
+      authListener.subscription.unsubscribe()
+    }
   }, [])
 
   useEffect(() => {
@@ -247,9 +261,60 @@ export default function Home() {
     setMessage('')
   }
 
+  async function handlePasswordReset() {
+    const trimmedEmail = email.trim()
+
+    if (!trimmedEmail) {
+      setMessage('Digite seu e-mail primeiro para receber o link de redefinicao.')
+      return
+    }
+
+    setSaving(true)
+    setMessage('Enviando e-mail de redefinicao...')
+
+    const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+      redirectTo: window.location.origin,
+    })
+
+    setSaving(false)
+
+    if (error) {
+      setMessage(error.message)
+      return
+    }
+
+    setMessage('Enviamos um link para seu e-mail. Abra o link para redefinir sua senha.')
+  }
+
+  async function handleUpdatePassword(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (newPassword.length < 6) {
+      setMessage('A nova senha precisa ter pelo menos 6 caracteres.')
+      return
+    }
+
+    setSaving(true)
+    setMessage('Atualizando senha...')
+
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+
+    setSaving(false)
+
+    if (error) {
+      setMessage(error.message)
+      return
+    }
+
+    setNewPassword('')
+    setIsPasswordRecovery(false)
+    setMessage('Senha atualizada com sucesso.')
+  }
+
   async function handleLogout() {
     await supabase.auth.signOut()
     setUser(null)
+    setIsPasswordRecovery(false)
     setGoals([])
     setAnalysts([])
     setIndividualMetrics([])
@@ -584,40 +649,70 @@ export default function Home() {
     }
   }
 
-  if (!user) {
+  if (!user || isPasswordRecovery) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-white">
         <section className="w-full max-w-md rounded-lg border border-white/10 bg-white/5 p-6 shadow-2xl">
           <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-300">
             Painel Telefone
           </p>
-          <h1 className="mt-4 text-3xl font-bold">Entrar no sistema</h1>
+          <h1 className="mt-4 text-3xl font-bold">
+            {isPasswordRecovery ? 'Criar nova senha' : 'Entrar no sistema'}
+          </h1>
 
-          <form className="mt-6 space-y-4" onSubmit={handleLogin}>
-            <Field label="E-mail">
-              <input
-                className="form-input"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                required
-              />
-            </Field>
+          {isPasswordRecovery ? (
+            <form className="mt-6 space-y-4" onSubmit={handleUpdatePassword}>
+              <Field label="Nova senha">
+                <input
+                  className="form-input"
+                  type="password"
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  required
+                  minLength={6}
+                />
+              </Field>
 
-            <Field label="Senha">
-              <input
-                className="form-input"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-              />
-            </Field>
+              <button className="primary-button w-full" disabled={saving} type="submit">
+                {saving ? 'Salvando...' : 'Salvar nova senha'}
+              </button>
+            </form>
+          ) : (
+            <form className="mt-6 space-y-4" onSubmit={handleLogin}>
+              <Field label="E-mail">
+                <input
+                  className="form-input"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  required
+                />
+              </Field>
 
-            <button className="primary-button w-full" type="submit">
-              Entrar
-            </button>
-          </form>
+              <Field label="Senha">
+                <input
+                  className="form-input"
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  required
+                />
+              </Field>
+
+              <button className="primary-button w-full" type="submit">
+                Entrar
+              </button>
+
+              <button
+                className="w-full text-sm font-semibold text-cyan-300 hover:text-cyan-200 disabled:text-slate-500"
+                disabled={saving}
+                type="button"
+                onClick={handlePasswordReset}
+              >
+                {saving ? 'Enviando link...' : 'Esqueci minha senha'}
+              </button>
+            </form>
+          )}
 
           {message && <Feedback message={message} />}
         </section>
