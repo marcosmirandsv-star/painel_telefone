@@ -125,3 +125,134 @@ button:disabled {
   background: rgb(15 23 42);
   padding: 14px 18px;
 }
+
+.report-summary-card {
+  border-radius: 8px;
+  background: rgb(15 23 42);
+  padding: 16px;
+}
+
+.report-summary-card p {
+  color: rgb(148 163 184);
+  font-size: 0.8125rem;
+}
+
+.report-summary-card strong {
+  display: block;
+  margin-top: 8px;
+  color: white;
+  font-size: 1.4rem;
+}
+
+.report-evolution-row {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) 112px;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.875rem;
+}
+
+.report-evolution-row > span {
+  color: rgb(226 232 240);
+  font-weight: 700;
+}
+
+.report-evolution-track {
+  height: 16px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(30 41 59);
+}
+
+.report-evolution-bar {
+  height: 100%;
+  border-radius: inherit;
+}
+
+.report-evolution-row strong {
+  color: white;
+  text-align: right;
+}
+
+.report-evolution-row strong span {
+  color: rgb(148 163 184);
+  font-size: 0.75rem;
+}
+
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  html,
+  body {
+    background: white !important;
+    color: #0f172a !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .print-report,
+  .print-report * {
+    visibility: visible;
+  }
+
+  .print-report {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: white !important;
+    color: #0f172a !important;
+    padding: 0 !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-report .hidden.print\:block {
+    display: block !important;
+  }
+
+  .print-report .section-title,
+  .print-report h2,
+  .print-report h3,
+  .print-report strong {
+    color: #0f172a !important;
+  }
+
+  .print-report .section-subtitle,
+  .print-report p,
+  .print-report li,
+  .print-report span {
+    color: #334155 !important;
+  }
+
+  .print-report .rounded-lg,
+  .print-report .report-summary-card {
+    break-inside: avoid;
+    border: 1px solid #cbd5e1 !important;
+    background: white !important;
+    box-shadow: none !important;
+  }
+
+  .print-report .report-evolution-track {
+    background: #e2e8f0 !important;
+  }
+
+  .print-report .bg-emerald-400 {
+    background: #059669 !important;
+  }
+
+  .print-report .bg-rose-400 {
+    background: #dc2626 !important;
+  }
+
+  .print-report .bg-cyan-300 {
+    background: #0891b2 !important;
+  }
+}

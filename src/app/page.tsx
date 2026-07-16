@@ -1499,6 +1499,16 @@ function ReportsView({
     }
   }
 
+  function handlePrintReport() {
+    if (!selectedAnalyst || !analystResult) {
+      setExportMessage('Selecione um analista e um periodo com lancamento antes de gerar PDF.')
+      return
+    }
+
+    setExportMessage('Na janela de impressao, escolha "Salvar como PDF".')
+    window.setTimeout(() => window.print(), 120)
+  }
+
   return (
     <div className="mt-8 space-y-7">
       <section className="panel">
@@ -1570,39 +1580,118 @@ function ReportsView({
         <MetricCard label="Performance equipe" value={`${teamPerformance}%`} />
       </div>
 
-      <section className="panel">
-        <h2 className="section-title">Relatorio mensal SARE</h2>
-        <p className="section-subtitle">
-          Estrutura correta: Situacao, Acao, Resultado e Evolucao.
-        </p>
-        <button
-          className="mt-4 primary-button disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={!selectedAnalyst || !analystResult}
-          type="button"
-          onClick={handleExportWordReport}
-        >
-          Exportar relatorio Word
-        </button>
-        {exportMessage && <Feedback message={exportMessage} />}
+      <section className="panel print-report">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="hidden print:block text-sm font-bold uppercase tracking-[0.18em] text-cyan-300">
+              Painel Telefone
+            </p>
+            <h2 className="section-title">Relatorio mensal SARE</h2>
+            <p className="section-subtitle">
+              Estrutura correta: Situacao, Acao, Resultado e Evolucao.
+            </p>
+          </div>
+
+          {selectedAnalyst && (
+            <div className="hidden text-right print:block">
+              <p className="text-sm text-slate-400">Analista</p>
+              <p className="text-lg font-bold">{selectedAnalyst.name}</p>
+              <p className="text-sm text-slate-400">{periodLabel}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="no-print mt-4 flex flex-wrap gap-3">
+          <button
+            className="primary-button disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={!selectedAnalyst || !analystResult}
+            type="button"
+            onClick={handleExportWordReport}
+          >
+            Exportar relatorio Word
+          </button>
+          <button
+            className="secondary-button disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={!selectedAnalyst || !analystResult}
+            type="button"
+            onClick={handlePrintReport}
+          >
+            Salvar PDF
+          </button>
+        </div>
+        <div className="no-print">{exportMessage && <Feedback message={exportMessage} />}</div>
 
         {selectedAnalyst && analystResult ? (
-          <div className="mt-6 grid gap-4 lg:grid-cols-2">
-            <ReportBlock
-              title="S - Situacao"
-              text={situationText}
-            />
-            <ReportBlock
-              title="A - Acao"
-              text={actionText}
-            />
-            <ReportBlock
-              title="R - Resultado"
-              text={resultText}
-            />
-            <ReportBlock
-              title="E - Evolucao"
-              text={evolutionText}
-            />
+          <div className="mt-6 space-y-5">
+            <div className="grid gap-3 md:grid-cols-4">
+              <div className="report-summary-card">
+                <p>CSAT atual</p>
+                <strong>{analystResult.averageCsat}%</strong>
+              </div>
+              <div className="report-summary-card">
+                <p>Variacao</p>
+                <strong className={csatDelta >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                  {formatDelta(csatDelta, ' p.p.')}
+                </strong>
+              </div>
+              <div className="report-summary-card">
+                <p>Avaliacoes</p>
+                <strong>{analystResult.totalReviews}</strong>
+              </div>
+              <div className="report-summary-card">
+                <p>Podio</p>
+                <strong>{selectedRankingPosition || '-'}</strong>
+              </div>
+            </div>
+
+            {weeklyEvolution.length > 0 && (
+              <div className="rounded-lg bg-slate-900 p-5">
+                <h3 className="text-lg font-bold">Evolucao visual</h3>
+                <p className="mt-1 text-sm text-slate-400">
+                  Leitura rapida de melhora, queda ou estabilidade no periodo.
+                </p>
+                <div className="mt-4 space-y-3">
+                  {weeklyEvolution.map((item, index) => {
+                    const previous = weeklyEvolution[index - 1]
+                    const delta = previous ? round(item.csat - previous.csat) : 0
+                    const width = Math.max(8, Math.min(100, item.csat))
+                    const barClass =
+                      delta > 0 ? 'bg-emerald-400' : delta < 0 ? 'bg-rose-400' : 'bg-cyan-300'
+
+                    return (
+                      <div key={item.label} className="report-evolution-row">
+                        <span>{item.label}</span>
+                        <div className="report-evolution-track">
+                          <div className={`report-evolution-bar ${barClass}`} style={{ width: `${width}%` }} />
+                        </div>
+                        <strong>
+                          {item.csat}% <span>{formatDelta(delta, ' p.p.')}</span>
+                        </strong>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <ReportBlock
+                title="S - Situacao"
+                text={situationText}
+              />
+              <ReportBlock
+                title="A - Acao"
+                text={actionText}
+              />
+              <ReportBlock
+                title="R - Resultado"
+                text={resultText}
+              />
+              <ReportBlock
+                title="E - Evolucao"
+                text={evolutionText}
+              />
+            </div>
           </div>
         ) : (
           <EmptyState text="Selecione um analista e um periodo com lancamento individual para liberar a exportacao." />
