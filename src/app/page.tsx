@@ -159,9 +159,19 @@ export default function Home() {
   const [message, setMessage] = useState('')
 
   useEffect(() => {
+    const recoveryFromHash = new URLSearchParams(window.location.hash.replace('#', ''))
+    const recoveryFromSearch = new URLSearchParams(window.location.search)
+    const cameFromRecoveryLink =
+      recoveryFromHash.get('type') === 'recovery' ||
+      recoveryFromSearch.get('type') === 'recovery'
+
     async function loadSession() {
       const { data } = await supabase.auth.getUser()
       setUser(data.user)
+      if (cameFromRecoveryLink) {
+        setIsPasswordRecovery(true)
+        setMessage('Digite uma nova senha para concluir a recuperacao.')
+      }
       setLoading(false)
     }
 
