@@ -1421,9 +1421,67 @@ function ReportsView({
   const riskResults = podium
     .filter((item) => !item.eligible || item.averageCsat < item.individualGoal + 2)
     .slice(0, 3)
+  const reviewCount = analystMetrics.reduce((sum, metric) => sum + Number(metric.total_reviews), 0)
+  const answeredTickets = analystResult?.totalTickets ?? 0
+  const teamAnsweredCalls = periodTeamMetrics.reduce((sum, metric) => sum + Number(metric.answered_calls), 0)
+  const teamAbandonedCalls = periodTeamMetrics.reduce((sum, metric) => sum + Number(metric.abandoned_calls), 0)
+  const teamTotalCalls = periodTeamMetrics.reduce((sum, metric) => sum + Number(metric.total_calls), 0)
+  const teamLossPercentage = teamTotalCalls ? round((teamAbandonedCalls / teamTotalCalls) * 100) : 0
+  const weeklyEvolution = aggregateIndividualByWeek(analystMetrics)
+  const situationText = selectedAnalyst && analystResult
+    ? `${selectedAnalyst.name} teve ${analystResult.averageCsat}% de CSAT em ${periodLabel}, com ${analystResult.totalReviews} avaliacoes em ${analystResult.totalTickets} atendimentos. A meta individual e ${analystResult.individualGoal}% e a referencia de podio e ${podiumCsatGoal}%. Em relacao ao periodo anterior, a variacao foi de ${formatDelta(csatDelta, '%')}.`
+    : ''
+  const actionText = analystResult
+    ? analystResult.eligible
+      ? 'Manter as praticas atuais, preservar o volume de avaliacoes e acompanhar qualquer oscilacao semanal antes do fechamento do ciclo.'
+      : `Priorizar acoes objetivas sobre: ${analystResult.reasons.join(', ')}. A recomendacao inicial e revisar atendimentos de menor satisfacao, reforcar pedido de avaliacao e acompanhar o indicador semanalmente.`
+    : ''
+  const resultText = analystResult
+    ? `${analystResult.eligible ? 'O resultado atual sustenta elegibilidade ao podio.' : 'O resultado atual ainda nao sustenta elegibilidade ao podio.'} O desempenho individual deve ser lido junto da performance da equipe, que fechou em ${teamPerformance}% no periodo. ${teamStatus}`
+    : ''
+  const evolutionText = analystResult
+    ? `Proximo ciclo: ${buildDevelopmentFocus(analystResult, csatDelta)} Perguntas sugeridas para 1:1: o que ajudou ou atrapalhou o CSAT no periodo? quais atendimentos merecem revisao? qual acao simples pode aumentar avaliacoes na proxima semana?`
+    : ''
 
   function handlePeriodModeChange(mode: PeriodMode) {
     setPeriodFilter(createPeriodFilter(mode))
+  }
+
+  function handleExportWordReport() {
+    if (!selectedAnalyst || !analystResult) return
+
+    exportWordReport({
+      analystName: selectedAnalyst.name,
+      periodLabel,
+      expected: {
+        csat: podiumCsatGoal,
+        loss: 3,
+        review: reviewGoal,
+      },
+      achieved: {
+        csat: analystResult.averageCsat,
+        loss: teamLossPercentage,
+        reviewPercentage: analystResult.reviewPercentage,
+        reviewCount,
+        answeredTickets,
+        averageTickets:
+          podium.length > 0
+            ? round(podium.reduce((sum, item) => sum + item.totalTickets, 0) / podium.length)
+            : 0,
+        rankingPosition: selectedRankingPosition,
+        teamPerformance,
+        teamAnsweredCalls,
+        teamAbandonedCalls,
+        teamTotalCalls,
+      },
+      sare: {
+        situation: situationText,
+        action: actionText,
+        result: resultText,
+        evolution: evolutionText,
+      },
+      weeklyEvolution,
+    })
   }
 
   return (
@@ -1502,28 +1560,32 @@ function ReportsView({
         <p className="section-subtitle">
           Estrutura correta: Situacao, Acao, Resultado e Evolucao.
         </p>
+        <button
+          className="mt-4 primary-button disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={!selectedAnalyst || !analystResult}
+          type="button"
+          onClick={handleExportWordReport}
+        >
+          Exportar relatorio Word
+        </button>
 
         {selectedAnalyst && analystResult ? (
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
             <ReportBlock
               title="S - Situacao"
-              text={`${selectedAnalyst.name} teve ${analystResult.averageCsat}% de CSAT em ${periodLabel}, com ${analystResult.totalReviews} avaliacoes em ${analystResult.totalTickets} atendimentos. A meta individual e ${analystResult.individualGoal}% e a referencia de podio e ${podiumCsatGoal}%. Em relacao ao periodo anterior, a variacao foi de ${formatDelta(csatDelta, '%')}.`}
+              text={situationText}
             />
             <ReportBlock
               title="A - Acao"
-              text={
-                analystResult.eligible
-                  ? 'Manter as praticas atuais, preservar o volume de avaliacoes e acompanhar qualquer oscilacao semanal antes do fechamento do ciclo.'
-                  : `Priorizar acoes objetivas sobre: ${analystResult.reasons.join(', ')}. A recomendacao inicial e revisar atendimentos de menor satisfacao, reforcar pedido de avaliacao e acompanhar o indicador semanalmente.`
-              }
+              text={actionText}
             />
             <ReportBlock
               title="R - Resultado"
-              text={`${analystResult.eligible ? 'O resultado atual sustenta elegibilidade ao podio.' : 'O resultado atual ainda nao sustenta elegibilidade ao podio.'} O desempenho individual deve ser lido junto da performance da equipe, que fechou em ${teamPerformance}% no periodo. ${teamStatus}`}
+              text={resultText}
             />
             <ReportBlock
               title="E - Evolucao"
-              text={`Proximo ciclo: ${buildDevelopmentFocus(analystResult, csatDelta)} Perguntas sugeridas para 1:1: o que ajudou ou atrapalhou o CSAT no periodo? quais atendimentos merecem revisao? qual acao simples pode aumentar avaliacoes na proxima semana?`}
+              text={evolutionText}
             />
           </div>
         ) : (
@@ -2552,6 +2614,158 @@ function formatShortDate(value: string) {
   if (!value) return '-'
   const [, month, day] = value.split('-')
   return `${day}/${month}`
+}
+
+function exportWordReport({
+  analystName,
+  periodLabel,
+  expected,
+  achieved,
+  sare,
+  weeklyEvolution,
+}: {
+  analystName: string
+  periodLabel: string
+  expected: {
+    csat: number
+    loss: number
+    review: number
+  }
+  achieved: {
+    csat: number
+    loss: number
+    reviewPercentage: number
+    reviewCount: number
+    answeredTickets: number
+    averageTickets: number
+    rankingPosition: number
+    teamPerformance: number
+    teamAnsweredCalls: number
+    teamAbandonedCalls: number
+    teamTotalCalls: number
+  }
+  sare: {
+    situation: string
+    action: string
+    result: string
+    evolution: string
+  }
+  weeklyEvolution: WeeklyIndividualTrend[]
+}) {
+  const safeName = escapeHtml(analystName)
+  const evolutionRows = weeklyEvolution.length
+    ? weeklyEvolution
+        .map(
+          (item) => `
+            <tr>
+              <td>${escapeHtml(item.label)}</td>
+              <td>${item.csat}%</td>
+              <td>${item.totalReviews}</td>
+              <td>${item.totalTickets}</td>
+            </tr>
+          `,
+        )
+        .join('')
+    : '<tr><td colspan="4">Sem dados de evolucao no periodo.</td></tr>'
+
+  const documentHtml = `
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Relatorio mensal - ${safeName}</title>
+        <style>
+          body { font-family: Arial, sans-serif; color: #111827; margin: 36px; }
+          h1 { font-size: 24px; margin: 0 0 8px; }
+          h2 { color: #0f766e; font-size: 18px; margin: 24px 0 8px; }
+          h3 { font-size: 15px; margin: 18px 0 6px; }
+          p { font-size: 12px; line-height: 1.55; margin: 0 0 10px; }
+          table { border-collapse: collapse; width: 100%; margin: 10px 0 18px; }
+          th, td { border: 1px solid #cbd5e1; font-size: 11px; padding: 8px; text-align: left; }
+          th { background: #ecfeff; font-weight: bold; }
+          .subtitle { color: #475569; margin-bottom: 18px; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+          .box { border: 1px solid #cbd5e1; padding: 12px; margin-bottom: 12px; }
+          .muted { color: #475569; }
+        </style>
+      </head>
+      <body>
+        <h1>${safeName}</h1>
+        <p class="subtitle">Relatorio mensal de performance - ${escapeHtml(periodLabel)}</p>
+
+        <div class="grid">
+          <div class="box">
+            <h2>Esperado</h2>
+            <p>CSAT maior ou igual a ${expected.csat}%</p>
+            <p>Perda menor ou igual a ${expected.loss}%</p>
+            <p>${expected.review}% de avaliacoes dos atendimentos</p>
+          </div>
+          <div class="box">
+            <h2>Atingido</h2>
+            <p>CSAT: ${achieved.csat}%</p>
+            <p>Ligacoes perdidas: ${achieved.loss}% (${achieved.teamAbandonedCalls} de ${achieved.teamTotalCalls})</p>
+            <p>Avaliacoes: ${achieved.reviewPercentage}% (${achieved.reviewCount} respondidas)</p>
+            <p>Atendimentos: ${achieved.answeredTickets}</p>
+            <p>Media por colaborador: ${achieved.averageTickets}</p>
+            <p>Posicao podio: ${achieved.rankingPosition || '-'}</p>
+          </div>
+        </div>
+
+        <h2>Graficos e evolucao</h2>
+        <p class="muted">Tabela-base para graficos de evolucao mensal e performance.</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Semana</th>
+              <th>CSAT</th>
+              <th>Avaliacoes</th>
+              <th>Atendimentos</th>
+            </tr>
+          </thead>
+          <tbody>${evolutionRows}</tbody>
+        </table>
+        <p>Performance da equipe no periodo: ${achieved.teamPerformance}%.</p>
+        <p>Ligacoes atendidas pela equipe: ${achieved.teamAnsweredCalls}. Total processado: ${achieved.teamTotalCalls}.</p>
+
+        <h2>Analise SARE</h2>
+        <h3>S - Situacao</h3>
+        <p>${escapeHtml(sare.situation)}</p>
+        <h3>A - Acao</h3>
+        <p>${escapeHtml(sare.action)}</p>
+        <h3>R - Resultado</h3>
+        <p>${escapeHtml(sare.result)}</p>
+        <h3>E - Evolucao</h3>
+        <p>${escapeHtml(sare.evolution)}</p>
+      </body>
+    </html>
+  `
+  const blob = new Blob(['\ufeff', documentHtml], {
+    type: 'application/msword;charset=utf-8',
+  })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+
+  link.href = url
+  link.download = `${slugifyFileName(analystName)}-relatorio-${slugifyFileName(periodLabel)}.doc`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
+function slugifyFileName(value: string) {
+  return normalizeText(value)
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
 }
 
 function aggregateIndividualByWeek(metrics: IndividualMetric[]): WeeklyIndividualTrend[] {
