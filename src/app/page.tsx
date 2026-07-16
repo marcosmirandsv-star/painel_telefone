@@ -858,6 +858,11 @@ export default function Home() {
                 <span> | Analista: <strong>{profileAnalyst.name}</strong></span>
               )}
             </p>
+            {!isManagementUser && !profileAnalyst && (
+              <p className="mt-2 text-sm text-amber-200">
+                Perfil de analista sem vinculo com cadastro. Peça ao gestor para revisar o usuario.
+              </p>
+            )}
           </div>
 
           <button className="secondary-button self-start" onClick={handleLogout}>
@@ -2114,9 +2119,10 @@ function getAnalystName(analyst: IndividualMetric['analysts']) {
 function normalizeUserRole(role: string | null | undefined): UserRole {
   const normalized = (role ?? '').toLowerCase()
 
-  if (normalized.includes('analista') || normalized.includes('analyst')) return 'analyst'
+  if (normalized.includes('master')) return 'master'
   if (normalized.includes('coord')) return 'coordinator'
-  return 'master'
+  if (normalized.includes('analista') || normalized.includes('analyst')) return 'analyst'
+  return 'analyst'
 }
 
 function getRoleLabel(role: UserRole) {
