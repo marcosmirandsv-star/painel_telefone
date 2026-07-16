@@ -20,6 +20,16 @@ type Analyst = {
   csat_goal: number
 }
 
+type UserRole = 'master' | 'coordinator' | 'analyst'
+
+type UserProfile = {
+  id: string
+  role?: string | null
+  full_name?: string | null
+  name?: string | null
+  analyst_id?: string | null
+}
+
 type IndividualMetric = {
   id: string
   analyst_id: string
@@ -151,6 +161,7 @@ export default function Home() {
   const [password, setPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false)
+  const [profile, setProfile] = useState<UserProfile | null>(null)
   const [goals, setGoals] = useState<Goal[]>([])
   const [analysts, setAnalysts] = useState<Analyst[]>([])
   const [individualMetrics, setIndividualMetrics] = useState<IndividualMetric[]>([])
@@ -204,10 +215,13 @@ export default function Home() {
   }, [user])
 
   async function loadData() {
+    if (!user) return
+
     setLoading(true)
     setMessage('')
 
-    const [goalsResult, analystsResult, individualResult, teamResult] = await Promise.all([
+    const [profileResult, goalsResult, analystsResult, individualResult, teamResult] = await Promise.all([
+      supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(),
       supabase.from('goals').select('id, key, label, value, unit, active').order('label'),
       supabase.from('analysts').select('id, name, active, csat_goal').order('name'),
       supabase
@@ -221,6 +235,9 @@ export default function Home() {
         .order('week_start', { ascending: false })
         .limit(52),
     ])
+
+    if (profileResult.error) setMessage(getSupabaseMessage(profileResult.error.message))
+    else setProfile((profileResult.data as UserProfile | null) ?? null)
 
     if (goalsResult.error) setMessage(getSupabaseMessage(goalsResult.error.message))
     else setGoals((goalsResult.data ?? []).filter((goal) => goal.key !== 'individual_csat'))
@@ -254,6 +271,32 @@ export default function Home() {
     [analysts, individualForm.analystId],
   )
   const podiumCsatGoal = goals.find((goal) => goal.key === 'podium_csat_minimum')?.value ?? 90
+  const userRole = normalizeUserRole(profile?.role)
+  const isManagementUser = userRole !== 'analyst'
+  const profileAnalyst = useMemo(
+    () => findProfileAnalyst(profile, analysts, user?.email ?? ''),
+    [profile, analysts, user?.email],
+  )
+  const visibleAnalysts = useMemo(
+    () => (isManagementUser ? analysts : profileAnalyst ? [profileAnalyst] : []),
+    [isManagementUser, analysts, profileAnalyst],
+  )
+  const visibleActiveAnalysts = useMemo(
+    () => visibleAnalysts.filter((analyst) => analyst.active),
+    [visibleAnalysts],
+  )
+  const visibleIndividualMetrics = useMemo(
+    () =>
+      isManagementUser
+        ? individualMetrics
+        : individualMetrics.filter((metric) => metric.analyst_id === profileAnalyst?.id),
+    [isManagementUser, individualMetrics, profileAnalyst],
+  )
+
+  useEffect(() => {
+    if (isManagementUser) return
+    if (activeTab !== 'dashboard') setActiveTab('dashboard')
+  }, [activeTab, isManagementUser])
 
   async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -327,6 +370,7 @@ export default function Home() {
     await supabase.auth.signOut()
     setUser(null)
     setIsPasswordRecovery(false)
+    setProfile(null)
     setGoals([])
     setAnalysts([])
     setIndividualMetrics([])
@@ -794,6 +838,12 @@ export default function Home() {
               Painel interno para acompanhar metas, analistas, lancamentos semanais,
               performance da equipe e proximas analises com IA.
             </p>
+            <p className="mt-3 text-sm text-slate-400">
+              Perfil: <strong>{getRoleLabel(userRole)}</strong>
+              {!isManagementUser && profileAnalyst && (
+                <span> | Analista: <strong>{profileAnalyst.name}</strong></span>
+              )}
+            </p>
           </div>
 
           <button className="secondary-button self-start" onClick={handleLogout}>
@@ -805,31 +855,36 @@ export default function Home() {
           <TabButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')}>
             Dashboard
           </TabButton>
-          <TabButton active={activeTab === 'entries'} onClick={() => setActiveTab('entries')}>
-            Lancamentos
-          </TabButton>
-          <TabButton active={activeTab === 'analysts'} onClick={() => setActiveTab('analysts')}>
-            Analistas
-          </TabButton>
-          <TabButton active={activeTab === 'goals'} onClick={() => setActiveTab('goals')}>
-            Metas
-          </TabButton>
+          {isManagementUser && (
+            <>
+              <TabButton active={activeTab === 'entries'} onClick={() => setActiveTab('entries')}>
+                Lancamentos
+              </TabButton>
+              <TabButton active={activeTab === 'analysts'} onClick={() => setActiveTab('analysts')}>
+                Analistas
+              </TabButton>
+              <TabButton active={activeTab === 'goals'} onClick={() => setActiveTab('goals')}>
+                Metas
+              </TabButton>
+            </>
+          )}
         </nav>
 
         {message && <Feedback message={message} />}
 
         {activeTab === 'dashboard' && (
           <DashboardView
-            analystsCount={activeAnalysts.length}
-            analysts={analysts}
+            analystsCount={visibleActiveAnalysts.length}
+            analysts={visibleAnalysts}
             goals={goals}
-            individualMetrics={individualMetrics}
+            individualMetrics={visibleIndividualMetrics}
             teamMetrics={teamMetrics}
             loading={loading}
+            role={userRole}
           />
         )}
 
-        {activeTab === 'entries' && (
+        {isManagementUser && activeTab === 'entries' && (
           <EntriesView
             analysts={activeAnalysts}
             selectedAnalyst={selectedAnalyst}
@@ -848,7 +903,7 @@ export default function Home() {
           />
         )}
 
-        {activeTab === 'analysts' && (
+        {isManagementUser && activeTab === 'analysts' && (
           <AnalystsView
             analysts={analysts}
             analystForm={analystForm}
@@ -863,7 +918,7 @@ export default function Home() {
           />
         )}
 
-        {activeTab === 'goals' && (
+        {isManagementUser && activeTab === 'goals' && (
           <GoalsView
             goals={goals}
             goalForm={goalForm}
@@ -887,6 +942,7 @@ function DashboardView({
   individualMetrics,
   teamMetrics,
   loading,
+  role,
 }: {
   analystsCount: number
   analysts: Analyst[]
@@ -894,6 +950,7 @@ function DashboardView({
   individualMetrics: IndividualMetric[]
   teamMetrics: TeamMetric[]
   loading: boolean
+  role: UserRole
 }) {
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>(() => createPeriodFilter('month'))
   const filteredIndividualMetrics = useMemo(
@@ -927,6 +984,7 @@ function DashboardView({
   function handlePeriodModeChange(mode: PeriodMode) {
     setPeriodFilter(createPeriodFilter(mode))
   }
+  const isAnalystDashboard = role === 'analyst'
 
   return (
     <div className="mt-8 space-y-7">
@@ -979,7 +1037,10 @@ function DashboardView({
 
       <div className="grid gap-4 md:grid-cols-4">
         <MetricCard label="Status" value="Supabase conectado" tone="success" />
-        <MetricCard label="Analistas ativos" value={loading ? '...' : analystsCount} />
+        <MetricCard
+          label={isAnalystDashboard ? 'Perfil' : 'Analistas ativos'}
+          value={loading ? '...' : isAnalystDashboard ? 'Analista' : analystsCount}
+        />
         <MetricCard label="CSAT do periodo" value={`${periodAverageCsat || 0}%`} />
         <MetricCard label="Performance equipe" value={`${periodTeamPerformance || 0}%`} />
       </div>
@@ -1019,7 +1080,9 @@ function DashboardView({
           <div>
             <h2 className="section-title">Podio do periodo</h2>
             <p className="section-subtitle">
-              Ranking de {periodLabel}: CSAT minimo {podiumCsatGoal}%, avaliacoes {reviewGoal}% e atendimentos dentro da media da equipe.
+              {isAnalystDashboard
+                ? `Sua leitura no periodo ${periodLabel}: CSAT minimo ${podiumCsatGoal}%, avaliacoes ${reviewGoal}% e atendimentos dentro da media.`
+                : `Ranking de ${periodLabel}: CSAT minimo ${podiumCsatGoal}%, avaliacoes ${reviewGoal}% e atendimentos dentro da media da equipe.`}
             </p>
           </div>
         </div>
@@ -2032,6 +2095,49 @@ function formatWeek(start: string, end: string) {
 function getAnalystName(analyst: IndividualMetric['analysts']) {
   if (Array.isArray(analyst)) return analyst[0]?.name ?? 'Analista'
   return analyst?.name ?? 'Analista'
+}
+
+function normalizeUserRole(role: string | null | undefined): UserRole {
+  const normalized = (role ?? '').toLowerCase()
+
+  if (normalized.includes('analista') || normalized.includes('analyst')) return 'analyst'
+  if (normalized.includes('coord')) return 'coordinator'
+  return 'master'
+}
+
+function getRoleLabel(role: UserRole) {
+  const labels: Record<UserRole, string> = {
+    master: 'Master',
+    coordinator: 'Coordenadora',
+    analyst: 'Analista',
+  }
+
+  return labels[role]
+}
+
+function findProfileAnalyst(profile: UserProfile | null, analysts: Analyst[], email: string) {
+  if (!profile) return null
+
+  if (profile.analyst_id) {
+    const byId = analysts.find((analyst) => analyst.id === profile.analyst_id)
+    if (byId) return byId
+  }
+
+  const profileName = normalizeText(profile.full_name || profile.name || '')
+  const byName = analysts.find((analyst) => normalizeText(analyst.name) === profileName)
+
+  if (byName) return byName
+
+  const emailName = normalizeText(email.split('@')[0]?.replace(/[._-]+/g, ' ') ?? '')
+  return analysts.find((analyst) => emailName.includes(normalizeText(analyst.name))) ?? null
+}
+
+function normalizeText(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
 }
 
 function formatDate(value: string) {
