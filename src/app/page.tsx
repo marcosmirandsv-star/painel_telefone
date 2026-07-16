@@ -229,7 +229,7 @@ export default function Home() {
     const loadedProfile = (profileResult.data as UserProfile | null) ?? null
     const loadedAnalysts = analystsResult.data ?? []
     const loadedRole = normalizeUserRole(loadedProfile?.role)
-    const loadedProfileAnalyst = findProfileAnalyst(loadedProfile, loadedAnalysts, user.email ?? '')
+    const loadedProfileAnalystId = getProfileAnalystId(loadedProfile, loadedAnalysts, user.email ?? '')
 
     if (profileResult.error) setMessage(getSupabaseMessage(profileResult.error.message))
     else setProfile(loadedProfile)
@@ -254,7 +254,7 @@ export default function Home() {
       .limit(52)
 
     if (loadedRole === 'analyst') {
-      if (loadedProfileAnalyst) individualQuery = individualQuery.eq('analyst_id', loadedProfileAnalyst.id)
+      if (loadedProfileAnalystId) individualQuery = individualQuery.eq('analyst_id', loadedProfileAnalystId)
       else individualQuery = individualQuery.eq('analyst_id', '00000000-0000-0000-0000-000000000000')
     }
 
@@ -291,9 +291,18 @@ export default function Home() {
     () => findProfileAnalyst(profile, analysts, user?.email ?? ''),
     [profile, analysts, user?.email],
   )
+  const profileAnalystId = useMemo(
+    () => getProfileAnalystId(profile, analysts, user?.email ?? ''),
+    [profile, analysts, user?.email],
+  )
+  const analystFallback = useMemo(
+    () => createProfileAnalystFallback(profile, profileAnalystId, user?.email ?? ''),
+    [profile, profileAnalystId, user?.email],
+  )
+  const currentProfileAnalyst = profileAnalyst ?? analystFallback
   const visibleAnalysts = useMemo(
-    () => (isManagementUser ? analysts : profileAnalyst ? [profileAnalyst] : []),
-    [isManagementUser, analysts, profileAnalyst],
+    () => (isManagementUser ? analysts : currentProfileAnalyst ? [currentProfileAnalyst] : []),
+    [isManagementUser, analysts, currentProfileAnalyst],
   )
   const visibleActiveAnalysts = useMemo(
     () => visibleAnalysts.filter((analyst) => analyst.active),
@@ -303,8 +312,8 @@ export default function Home() {
     () =>
       isManagementUser
         ? individualMetrics
-        : individualMetrics.filter((metric) => metric.analyst_id === profileAnalyst?.id),
-    [isManagementUser, individualMetrics, profileAnalyst],
+        : individualMetrics.filter((metric) => metric.analyst_id === profileAnalystId),
+    [isManagementUser, individualMetrics, profileAnalystId],
   )
 
   useEffect(() => {
@@ -854,11 +863,11 @@ export default function Home() {
             </p>
             <p className="mt-3 text-sm text-slate-400">
               Perfil: <strong>{getRoleLabel(userRole)}</strong>
-              {!isManagementUser && profileAnalyst && (
-                <span> | Analista: <strong>{profileAnalyst.name}</strong></span>
+              {!isManagementUser && currentProfileAnalyst && (
+                <span> | Analista: <strong>{currentProfileAnalyst.name}</strong></span>
               )}
             </p>
-            {!isManagementUser && !profileAnalyst && (
+            {!isManagementUser && !currentProfileAnalyst && (
               <p className="mt-2 text-sm text-amber-200">
                 Perfil de analista sem vinculo com cadastro. Peça ao gestor para revisar o usuario.
               </p>
@@ -2250,6 +2259,27 @@ function findProfileAnalyst(profile: UserProfile | null, analysts: Analyst[], em
 
   const emailName = normalizeText(email.split('@')[0]?.replace(/[._-]+/g, ' ') ?? '')
   return analysts.find((analyst) => emailName.includes(normalizeText(analyst.name))) ?? null
+}
+
+function getProfileAnalystId(profile: UserProfile | null, analysts: Analyst[], email: string) {
+  if (profile?.analyst_id) return profile.analyst_id
+
+  return findProfileAnalyst(profile, analysts, email)?.id ?? null
+}
+
+function createProfileAnalystFallback(
+  profile: UserProfile | null,
+  analystId: string | null,
+  email: string,
+): Analyst | null {
+  if (!profile || !analystId) return null
+
+  return {
+    id: analystId,
+    name: profile.full_name || profile.name || email.split('@')[0] || 'Analista',
+    active: true,
+    csat_goal: 0,
+  }
 }
 
 function normalizeText(value: string) {
