@@ -526,7 +526,6 @@ export default function Home() {
 
   async function handleIndividualSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setSaving(true)
     setMessage('')
 
     try {
@@ -534,6 +533,31 @@ export default function Home() {
       const negativeReviews = toNumber(individualForm.negativeReviews)
       const totalReviews = positiveReviews + negativeReviews
       const totalTickets = toNumber(individualForm.totalTickets)
+
+      if (isEndBeforeStart(individualForm.weekStart, individualForm.weekEnd)) {
+        setMessage('A data final nao pode ser menor que a data inicial.')
+        return
+      }
+
+      if (totalReviews > totalTickets) {
+        setMessage('O total de avaliacoes nao pode ser maior que o total de atendimentos.')
+        return
+      }
+
+      const alreadyExists = individualMetrics.some(
+        (metric) =>
+          metric.analyst_id === individualForm.analystId &&
+          metric.week_start === individualForm.weekStart &&
+          metric.week_end === individualForm.weekEnd,
+      )
+
+      if (alreadyExists) {
+        setMessage('Ja existe lancamento para este analista neste mesmo periodo.')
+        return
+      }
+
+      setSaving(true)
+
       const reviewPercentage = totalTickets ? round((totalReviews / totalTickets) * 100) : 0
       const evidenceUrl = await uploadEvidence(individualForm.evidenceFile, 'individual')
 
@@ -567,13 +591,36 @@ export default function Home() {
 
   async function handleTeamSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setSaving(true)
     setMessage('')
 
     try {
       const answeredCalls = toNumber(teamForm.answeredCalls)
       const abandonedCalls = toNumber(teamForm.abandonedCalls)
       const totalCalls = toNumber(teamForm.totalCalls)
+
+      if (isEndBeforeStart(teamForm.weekStart, teamForm.weekEnd)) {
+        setMessage('A data final nao pode ser menor que a data inicial.')
+        return
+      }
+
+      if (answeredCalls > totalCalls) {
+        setMessage('Ligacoes atendidas nao pode ser maior que o total processado.')
+        return
+      }
+
+      const alreadyExists = teamMetrics.some(
+        (metric) =>
+          metric.week_start === teamForm.weekStart &&
+          metric.week_end === teamForm.weekEnd,
+      )
+
+      if (alreadyExists) {
+        setMessage('Ja existe performance da equipe neste mesmo periodo.')
+        return
+      }
+
+      setSaving(true)
+
       const performancePercentage = totalCalls
         ? round((answeredCalls / totalCalls) * 100)
         : 0
@@ -1127,6 +1174,31 @@ function EntriesView({
   onDeleteIndividualMetric: (metric: IndividualMetric) => void
   onDeleteTeamMetric: (metric: TeamMetric) => void
 }) {
+  const positiveReviews = toNumber(individualForm.positiveReviews)
+  const negativeReviews = toNumber(individualForm.negativeReviews)
+  const totalReviews = positiveReviews + negativeReviews
+  const totalTickets = toNumber(individualForm.totalTickets)
+  const reviewPercentage = totalTickets ? round((totalReviews / totalTickets) * 100) : 0
+  const individualDateInvalid = isEndBeforeStart(individualForm.weekStart, individualForm.weekEnd)
+  const individualDuplicate = individualMetrics.some(
+    (metric) =>
+      metric.analyst_id === individualForm.analystId &&
+      metric.week_start === individualForm.weekStart &&
+      metric.week_end === individualForm.weekEnd,
+  )
+  const individualReviewsInvalid = totalReviews > totalTickets && totalTickets > 0
+  const answeredCalls = toNumber(teamForm.answeredCalls)
+  const abandonedCalls = toNumber(teamForm.abandonedCalls)
+  const totalCalls = toNumber(teamForm.totalCalls)
+  const calculatedPerformance = totalCalls ? round((answeredCalls / totalCalls) * 100) : 0
+  const teamDateInvalid = isEndBeforeStart(teamForm.weekStart, teamForm.weekEnd)
+  const teamDuplicate = teamMetrics.some(
+    (metric) => metric.week_start === teamForm.weekStart && metric.week_end === teamForm.weekEnd,
+  )
+  const teamAnsweredInvalid = answeredCalls > totalCalls && totalCalls > 0
+  const teamTotalMismatch =
+    totalCalls > 0 && answeredCalls + abandonedCalls > 0 && answeredCalls + abandonedCalls !== totalCalls
+
   return (
     <div className="mt-8 space-y-6">
       <div className="grid gap-6 xl:grid-cols-2">
@@ -1159,6 +1231,16 @@ function EntriesView({
             <span className="mx-2 text-slate-600">|</span>
             Minimo para podio: <strong>{podiumCsatGoal}%</strong>
           </div>
+
+          {(individualDateInvalid || individualDuplicate || individualReviewsInvalid) && (
+            <div className="rounded-md border border-amber-300/30 bg-amber-300/10 p-3 text-sm text-amber-100">
+              {individualDateInvalid && <p>A data final nao pode ser menor que a data inicial.</p>}
+              {individualDuplicate && <p>Ja existe lancamento para este analista neste periodo.</p>}
+              {individualReviewsInvalid && (
+                <p>O total de avaliacoes nao pode ser maior que o total de atendimentos.</p>
+              )}
+            </div>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Inicio da semana">
@@ -1265,9 +1347,29 @@ function EntriesView({
             />
           </Field>
 
-          <button className="primary-button" disabled={saving} type="submit">
-            {saving ? 'Salvando...' : 'Salvar lancamento individual'}
-          </button>
+          <div className="rounded-md bg-slate-900 p-4 text-sm text-slate-300">
+            <p>Total de avaliacoes: <strong>{totalReviews}</strong></p>
+            <p>Percentual de avaliacoes: <strong>{reviewPercentage}%</strong></p>
+            <p>
+              CSAT informado: <strong>{toNumber(individualForm.csat)}%</strong>
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <button className="primary-button" disabled={saving} type="submit">
+              {saving ? 'Salvando...' : 'Salvar lancamento individual'}
+            </button>
+            <button
+              className="secondary-button"
+              disabled={saving}
+              type="button"
+              onClick={() =>
+                onIndividualChange({ ...initialIndividualForm, analystId: analysts[0]?.id || '' })
+              }
+            >
+              Limpar formulario
+            </button>
+          </div>
         </form>
         </section>
 
@@ -1278,6 +1380,19 @@ function EntriesView({
         </p>
 
         <form className="mt-5 grid gap-4" onSubmit={onTeamSubmit}>
+          {(teamDateInvalid || teamDuplicate || teamAnsweredInvalid || teamTotalMismatch) && (
+            <div className="rounded-md border border-amber-300/30 bg-amber-300/10 p-3 text-sm text-amber-100">
+              {teamDateInvalid && <p>A data final nao pode ser menor que a data inicial.</p>}
+              {teamDuplicate && <p>Ja existe performance da equipe neste periodo.</p>}
+              {teamAnsweredInvalid && (
+                <p>Ligacoes atendidas nao pode ser maior que o total processado.</p>
+              )}
+              {teamTotalMismatch && (
+                <p>Conferencia: atendidas + abandonadas esta diferente do total processado.</p>
+              )}
+            </div>
+          )}
+
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Inicio da semana">
               <input
@@ -1353,9 +1468,25 @@ function EntriesView({
             />
           </Field>
 
-          <button className="primary-button" disabled={saving} type="submit">
-            {saving ? 'Salvando...' : 'Salvar performance da equipe'}
-          </button>
+          <div className="rounded-md bg-slate-900 p-4 text-sm text-slate-300">
+            <p>Performance calculada: <strong>{calculatedPerformance}%</strong></p>
+            <p>Atendidas + abandonadas: <strong>{answeredCalls + abandonedCalls}</strong></p>
+            <p>Total processado: <strong>{totalCalls}</strong></p>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <button className="primary-button" disabled={saving} type="submit">
+              {saving ? 'Salvando...' : 'Salvar performance da equipe'}
+            </button>
+            <button
+              className="secondary-button"
+              disabled={saving}
+              type="button"
+              onClick={() => onTeamChange(initialTeamForm)}
+            >
+              Limpar formulario
+            </button>
+          </div>
         </form>
         </section>
       </div>
@@ -2199,6 +2330,11 @@ function buildLinePath(points: ChartPoint[]) {
 
 function toNumber(value: string) {
   return Number(value || 0)
+}
+
+function isEndBeforeStart(start: string, end: string) {
+  if (!start || !end) return false
+  return end < start
 }
 
 function round(value: number) {
