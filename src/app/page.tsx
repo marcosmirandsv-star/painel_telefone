@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useMemo, useState } from 'react'
 import { User } from '@supabase/supabase-js'
@@ -1809,44 +1809,120 @@ function ReportsView({
       </section>
 
       <section className="panel">
-        <h2 className="section-title">Camadas de IA</h2>
-        <p className="section-subtitle">
-          Leitura inicial automatica. Na proxima etapa, estes blocos podem ser enviados para uma API de IA.
-        </p>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="section-title">Camadas de IA e plano de acao</h2>
+            <p className="section-subtitle">
+              Leitura automatica para apoiar feedback, acompanhamento e decisao da lideranca.
+            </p>
+          </div>
+          <div className="rounded-lg bg-slate-900 px-4 py-3 text-sm text-slate-300">
+            Periodo analisado: <strong>{periodLabel}</strong>
+          </div>
+        </div>
 
         <div className="mt-6 grid gap-4 xl:grid-cols-3">
           <div className="rounded-lg bg-slate-900 p-5">
             <p className="text-sm text-slate-400">IA Coach individual</p>
             <h3 className="mt-2 text-xl font-bold">{selectedAnalyst?.name ?? 'Analista'}</h3>
-            <ul className="mt-4 space-y-2 text-sm text-slate-300">
-              <li>Ponto forte: {analystResult && analystResult.averageCsat >= analystResult.individualGoal ? 'CSAT dentro da meta individual.' : 'ha espaco para recuperar CSAT individual.'}</li>
-              <li>Tendencia: {getTrendText(csatDelta)}.</li>
-              <li>Plano: {analystResult ? buildDevelopmentFocus(analystResult, csatDelta) : 'aguardar lancamentos do periodo.'}</li>
-            </ul>
+            <div className="mt-4 space-y-3 text-sm text-slate-300">
+              <p>
+                <span className="text-slate-500">Leitura: </span>
+                {analystResult
+                  ? analystResult.eligible
+                    ? 'desempenho sustentando elegibilidade ao podio no periodo.'
+                    : `desempenho pede ajuste em ${analystResult.reasons.join(', ')}.`
+                  : 'aguardando lancamentos no periodo.'}
+              </p>
+              <p>
+                <span className="text-slate-500">Tendencia: </span>
+                {getTrendText(csatDelta)}.
+              </p>
+              <p>
+                <span className="text-slate-500">Foco recomendado: </span>
+                {analystResult ? buildDevelopmentFocus(analystResult, csatDelta) : 'registrar dados para liberar leitura.'}
+              </p>
+            </div>
           </div>
 
           <div className="rounded-lg bg-slate-900 p-5">
             <p className="text-sm text-slate-400">IA Supervisor equipe</p>
             {isManagementUser ? (
-              <ul className="mt-4 space-y-2 text-sm text-slate-300">
-                <li>Reconhecimento: {strongestResult ? `${strongestResult.analystName} lidera o periodo com ${strongestResult.averageCsat}%.` : 'aguardando dados.'}</li>
-                <li>Evolucao: {bestGrowth ? `${bestGrowth.analystName} variou ${formatDelta(bestGrowth.delta, '%')} vs periodo anterior.` : 'sem comparativo.'}</li>
-                <li>Acompanhamento: {attentionResults.length ? attentionResults.map((item) => item.analystName).join(', ') : 'sem alertas criticos.'}</li>
-              </ul>
+              <div className="mt-4 space-y-3 text-sm text-slate-300">
+                <p>
+                  <span className="text-slate-500">Reconhecer: </span>
+                  {strongestResult ? `${strongestResult.analystName}, com ${strongestResult.averageCsat}% de CSAT.` : 'aguardar dados do periodo.'}
+                </p>
+                <p>
+                  <span className="text-slate-500">Acompanhar: </span>
+                  {attentionResults.length ? attentionResults.map((item) => item.analystName).join(', ') : 'sem alertas criticos entre os lancamentos atuais.'}
+                </p>
+                <p>
+                  <span className="text-slate-500">Evolucao: </span>
+                  {bestGrowth ? `${bestGrowth.analystName} apresenta o melhor movimento comparativo (${formatDelta(bestGrowth.delta, ' p.p.')}).` : 'sem base comparativa suficiente.'}
+                </p>
+              </div>
             ) : (
               <p className="mt-4 text-sm text-slate-300">
-                Para analistas, esta camada fica resumida. A visao completa da equipe e exclusiva da gestao.
+                A visao completa de equipe e exclusiva da gestao. Voce visualiza sua leitura individual e a performance geral compartilhada.
               </p>
             )}
           </div>
 
           <div className="rounded-lg bg-slate-900 p-5">
             <p className="text-sm text-slate-400">IA Executiva operacao</p>
-            <ul className="mt-4 space-y-2 text-sm text-slate-300">
-              <li>Performance: {teamPerformance}% no periodo, meta {teamPerformanceGoal}%.</li>
-              <li>Previsao: {teamPerformance >= teamPerformanceGoal ? 'tendencia de fechamento dentro da referencia.' : 'risco de fechamento abaixo da referencia.'}</li>
-              <li>Risco: {riskResults.length ? `${riskResults.length} analista(s) pedem acompanhamento.` : 'nenhum risco individual evidente no periodo.'}</li>
-            </ul>
+            <div className="mt-4 space-y-3 text-sm text-slate-300">
+              <p>
+                <span className="text-slate-500">Performance: </span>
+                {teamPerformance}% no periodo, meta {teamPerformanceGoal}%.
+              </p>
+              <p>
+                <span className="text-slate-500">Previsao: </span>
+                {teamPerformance >= teamPerformanceGoal
+                  ? 'fechamento tende a permanecer dentro da referencia se o volume atual se mantiver.'
+                  : 'ha risco de fechamento abaixo da referencia se nao houver recuperacao.'}
+              </p>
+              <p>
+                <span className="text-slate-500">Risco: </span>
+                {riskResults.length ? `${riskResults.length} analista(s) pedem acompanhamento no ciclo.` : 'nenhum risco individual evidente no periodo.'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-lg bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Roteiro sugerido para 1:1</p>
+            <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm text-slate-300">
+              <li>Comecar pela situacao do periodo e confirmar se os numeros refletem a realidade operacional.</li>
+              <li>Discutir o principal ponto de variacao: CSAT, avaliacoes ou volume de atendimentos.</li>
+              <li>Definir uma acao objetiva para a proxima semana, com comportamento observavel.</li>
+              <li>Registrar a expectativa do proximo ciclo e revisar no fechamento seguinte.</li>
+            </ol>
+          </div>
+
+          <div className="rounded-lg bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">{isManagementUser ? 'Fila de acompanhamento' : 'Meu proximo ciclo'}</p>
+            {isManagementUser ? (
+              riskResults.length ? (
+                <div className="mt-4 space-y-3">
+                  {riskResults.map((item) => (
+                    <div key={item.analystId} className="rounded-md bg-slate-950 p-3">
+                      <p className="font-semibold">{item.analystName}</p>
+                      <p className="mt-1 text-sm text-slate-400">{item.reasons.join(', ')}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-4 text-sm text-emerald-300">
+                  Nenhum analista entrou em fila de acompanhamento neste periodo.
+                </p>
+              )
+            ) : (
+              <p className="mt-4 text-sm text-slate-300">
+                Acompanhar sua evolucao semanal, proteger o volume de avaliacoes e revisar atendimentos que possam impactar o CSAT.
+              </p>
+            )}
           </div>
         </div>
       </section>
@@ -2901,24 +2977,45 @@ function exportWordReport({
     (worst, item) => (!worst || item.csat < worst.csat ? item : worst),
     null,
   )
-  const csatDelta = firstEvolution && lastEvolution ? round(lastEvolution.csat - firstEvolution.csat) : 0
-  const reviewDelta =
-    firstEvolution && lastEvolution ? lastEvolution.totalReviews - firstEvolution.totalReviews : 0
+  const hasWeeklyComparison = weeklyEvolution.length > 1
+  const csatDelta = hasWeeklyComparison && firstEvolution && lastEvolution ? round(lastEvolution.csat - firstEvolution.csat) : 0
+  const csatTrendLabel = !hasWeeklyComparison
+    ? 'Sem comparativo'
+    : csatDelta > 0
+      ? 'Melhorou'
+      : csatDelta < 0
+        ? 'Piorou'
+        : 'Estavel'
+  const csatTrendClass = !hasWeeklyComparison ? 'neutral' : csatDelta >= 0 ? 'positive' : 'negative'
+  const goalGap = round(achieved.csat - expected.csat)
+  const goalGapText = goalGap >= 0
+    ? `${formatDelta(goalGap, ' p.p.')} acima da referencia`
+    : `${formatDelta(goalGap, ' p.p.')} abaixo da referencia`
+  const reviewGap = round(achieved.reviewPercentage - expected.review)
+  const reviewGapText = reviewGap >= 0
+    ? `${formatDelta(reviewGap, ' p.p.')} acima da meta`
+    : `${formatDelta(reviewGap, ' p.p.')} abaixo da meta`
   const evolutionBars = weeklyEvolution.length
     ? weeklyEvolution
         .map((item, index) => {
           const previous = weeklyEvolution[index - 1]
           const delta = previous ? round(item.csat - previous.csat) : 0
-          const color = delta > 0 ? '#059669' : delta < 0 ? '#dc2626' : '#64748b'
+          const color = delta > 0 ? '#059669' : delta < 0 ? '#dc2626' : '#0891b2'
           const width = Math.max(8, Math.min(100, item.csat))
+          const marker = delta > 0 ? 'subiu' : delta < 0 ? 'caiu' : index === 0 ? 'base' : 'estavel'
 
           return `
             <div class="evolution-row">
               <div class="evolution-label">${escapeHtml(item.label)}</div>
               <div class="evolution-track">
+                <div class="goal-line"></div>
                 <div class="evolution-bar" style="width:${width}%; background:${color};"></div>
               </div>
-              <div class="evolution-value">${item.csat}% <span class="muted">${formatDelta(delta, ' p.p.')}</span></div>
+              <div class="evolution-value">
+                <strong>${item.csat}%</strong>
+                <span class="${delta >= 0 ? 'positive' : 'negative'}">${index === 0 ? 'inicio' : formatDelta(delta, ' p.p.')}</span>
+                <em>${marker}</em>
+              </div>
             </div>
           `
         })
@@ -2946,46 +3043,58 @@ function exportWordReport({
         <meta charset="utf-8" />
         <title>Relatorio mensal - ${safeName}</title>
         <style>
-          body { font-family: Arial, sans-serif; color: #111827; margin: 36px; }
-          h1 { font-size: 24px; margin: 0 0 8px; }
+          body { font-family: Arial, sans-serif; color: #111827; margin: 34px; }
+          h1 { font-size: 28px; margin: 0 0 6px; color: #0f172a; }
           h2 { color: #0f766e; font-size: 18px; margin: 24px 0 8px; }
-          h3 { font-size: 15px; margin: 18px 0 6px; }
+          h3 { font-size: 15px; margin: 18px 0 6px; color: #0f172a; }
           p { font-size: 12px; line-height: 1.55; margin: 0 0 10px; }
           table { border-collapse: collapse; width: 100%; margin: 10px 0 18px; }
           th, td { border: 1px solid #cbd5e1; font-size: 11px; padding: 8px; text-align: left; }
-          th { background: #ecfeff; font-weight: bold; }
+          th { background: #ecfeff; font-weight: bold; color: #0f172a; }
           .subtitle { color: #475569; margin-bottom: 18px; }
+          .header { border-bottom: 3px solid #06b6d4; padding-bottom: 12px; margin-bottom: 18px; }
           .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-          .box { border: 1px solid #cbd5e1; padding: 12px; margin-bottom: 12px; }
+          .box { border: 1px solid #cbd5e1; background: #f8fafc; padding: 12px; margin-bottom: 12px; }
+          .box h2 { margin-top: 0; }
           .insight-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0 18px; }
-          .insight { background: #f8fafc; border: 1px solid #cbd5e1; padding: 10px; }
-          .insight-label { color: #475569; font-size: 10px; margin-bottom: 5px; }
-          .insight-value { font-size: 18px; font-weight: bold; }
+          .insight { background: #f8fafc; border: 1px solid #cbd5e1; border-top: 4px solid #0891b2; padding: 10px; min-height: 58px; }
+          .insight-label { color: #475569; font-size: 10px; margin-bottom: 5px; text-transform: uppercase; letter-spacing: .03em; }
+          .insight-value { font-size: 18px; font-weight: bold; color: #0f172a; }
+          .insight-note { color: #475569; font-size: 10px; margin-top: 3px; }
           .positive { color: #059669; }
           .negative { color: #dc2626; }
-          .evolution-row { display: grid; grid-template-columns: 70px 1fr 110px; gap: 10px; align-items: center; margin: 8px 0; }
-          .evolution-label { font-size: 11px; font-weight: bold; }
-          .evolution-track { background: #e2e8f0; height: 16px; border-radius: 2px; overflow: hidden; }
-          .evolution-bar { height: 16px; }
-          .evolution-value { font-size: 11px; font-weight: bold; }
+          .neutral { color: #475569; }
+          .trend-panel { border: 1px solid #cbd5e1; padding: 12px; margin: 12px 0 18px; }
+          .trend-title { font-size: 12px; font-weight: bold; margin-bottom: 10px; color: #0f172a; }
+          .evolution-row { display: grid; grid-template-columns: 74px 1fr 140px; gap: 10px; align-items: center; margin: 10px 0; }
+          .evolution-label { font-size: 11px; font-weight: bold; color: #0f172a; }
+          .evolution-track { background: #e2e8f0; height: 20px; border-radius: 3px; overflow: hidden; position: relative; }
+          .evolution-bar { height: 20px; }
+          .goal-line { position: absolute; left: ${expected.csat}%; top: 0; width: 2px; height: 20px; background: #111827; opacity: .55; }
+          .evolution-value { font-size: 11px; font-weight: normal; }
+          .evolution-value strong { display: inline-block; min-width: 42px; }
+          .evolution-value span { font-weight: bold; }
+          .evolution-value em { color: #64748b; font-style: normal; margin-left: 4px; }
           .muted { color: #475569; }
+          .callout { background: #ecfeff; border-left: 4px solid #0891b2; padding: 10px 12px; margin: 12px 0 16px; }
         </style>
       </head>
       <body>
-        <h1>${safeName}</h1>
-        <p class="subtitle">Relatorio mensal de performance - ${escapeHtml(periodLabel)}</p>
+        <div class="header">
+          <h1>${safeName}</h1>
+          <p class="subtitle">Relatorio mensal de performance - ${escapeHtml(periodLabel)}</p>
+        </div>
 
         <div class="grid">
           <div class="box">
             <h2>Esperado</h2>
             <p>CSAT maior ou igual a ${expected.csat}%</p>
-            
             <p>${expected.review}% de avaliacoes dos atendimentos</p>
           </div>
           <div class="box">
             <h2>Atingido</h2>
-            <p>CSAT: ${achieved.csat}%</p>
-            <p>Avaliacoes: ${achieved.reviewPercentage}% (${achieved.reviewCount} respondidas)</p>
+            <p>CSAT: ${achieved.csat}% (${goalGapText})</p>
+            <p>Avaliacoes: ${achieved.reviewPercentage}% (${achieved.reviewCount} respondidas, ${reviewGapText})</p>
             <p>Atendimentos: ${achieved.answeredTickets}</p>
             <p>Media por colaborador: ${achieved.averageTickets}</p>
             <p>Posicao podio: ${achieved.rankingPosition || '-'}</p>
@@ -2993,7 +3102,7 @@ function exportWordReport({
         </div>
 
         <h2>Sintese do feedback</h2>
-        <p>${escapeHtml(achieved.summary)}</p>
+        <div class="callout"><p>${escapeHtml(achieved.summary)}</p></div>
 
         <h2>Graficos e evolucao</h2>
         <p class="muted">Leitura visual para identificar rapidamente melhora, queda ou estabilidade.</p>
@@ -3001,21 +3110,28 @@ function exportWordReport({
           <div class="insight">
             <div class="insight-label">CSAT atual</div>
             <div class="insight-value">${achieved.csat}%</div>
+            <div class="insight-note">${goalGapText}</div>
           </div>
           <div class="insight">
-            <div class="insight-label">Variacao no periodo</div>
-            <div class="insight-value ${csatDelta >= 0 ? 'positive' : 'negative'}">${formatDelta(csatDelta, ' p.p.')}</div>
+            <div class="insight-label">Tendencia</div>
+            <div class="insight-value ${csatTrendClass}">${csatTrendLabel}</div>
+            <div class="insight-note">${hasWeeklyComparison ? formatDelta(csatDelta, ' p.p.') : 'precisa de mais semanas'}</div>
           </div>
           <div class="insight">
             <div class="insight-label">Melhor semana</div>
             <div class="insight-value">${bestEvolution ? `${bestEvolution.label} - ${bestEvolution.csat}%` : '-'}</div>
+            <div class="insight-note">ponto mais alto do periodo</div>
           </div>
           <div class="insight">
-            <div class="insight-label">Avaliacoes</div>
-            <div class="insight-value ${reviewDelta >= 0 ? 'positive' : 'negative'}">${formatDelta(reviewDelta)}</div>
+            <div class="insight-label">Avaliacoes respondidas</div>
+            <div class="insight-value">${achieved.reviewCount}</div>
+            <div class="insight-note">${achieved.reviewPercentage}% dos atendimentos</div>
           </div>
         </div>
-        ${evolutionBars}
+        <div class="trend-panel">
+          <div class="trend-title">Evolucao semanal do CSAT - linha escura marca a referencia de ${expected.csat}%</div>
+          ${evolutionBars}
+        </div>
         <p class="muted">Menor ponto do periodo: ${worstEvolution ? `${worstEvolution.label} - ${worstEvolution.csat}%` : '-'}.</p>
         <table>
           <thead>
@@ -3030,7 +3146,7 @@ function exportWordReport({
         </table>
         <h2>Contexto operacional da equipe</h2>
         <p>Performance da equipe no periodo: ${achieved.teamPerformance}%.</p>
-        <p>Ligacoes atendidas pela equipe: ${achieved.teamAnsweredCalls}. Total processado: ${achieved.teamTotalCalls}. Ligacoes perdidas: ${achieved.loss}% (${achieved.teamAbandonedCalls} de ${achieved.teamTotalCalls}).</p>
+        <p>Ligacoes atendidas pela equipe: ${achieved.teamAnsweredCalls}. Total processado: ${achieved.teamTotalCalls}.</p>
 
         <h2>Analise SARE</h2>
         <h3>S - Situacao</h3>
@@ -3466,3 +3582,5 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
+
