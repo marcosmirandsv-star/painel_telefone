@@ -1078,6 +1078,14 @@ function DashboardView({
       ? 'Manter CSAT, volume e percentual de avaliacoes ate o fechamento.'
       : analystResult.reasons.join(', ')
     : 'Selecione outro periodo ou aguarde o lancamento semanal.'
+  const analystActionText = analystResult
+    ? buildDevelopmentFocus(analystResult, csatDelta)
+    : 'Aguardar lancamento do periodo para liberar recomendacao individual.'
+  const analystPulseText = analystResult
+    ? analystResult.eligible
+      ? 'Voce esta dentro da leitura esperada para disputar o podio.'
+      : 'Existe pelo menos um ponto objetivo para recuperar antes do fechamento.'
+    : 'Ainda nao ha dados individuais para este filtro.'
 
   return (
     <div className="mt-8 space-y-7">
@@ -1166,7 +1174,7 @@ function DashboardView({
 
           <div className="grid flex-1 gap-4 md:grid-cols-3">
             <div className="executive-card">
-              <p>CSAT vs periodo anterior</p>
+              <p>{isAnalystDashboard ? 'Meu CSAT vs periodo anterior' : 'CSAT vs periodo anterior'}</p>
               <strong>{formatDelta(csatDelta, ' p.p.')}</strong>
               <span>Atual: {periodAverageCsat || 0}%</span>
             </div>
@@ -1176,7 +1184,7 @@ function DashboardView({
               <span>{formatDelta(teamPerformanceDelta, ' p.p.')} vs anterior</span>
             </div>
             <div className="executive-card">
-              <p>Cobertura de avaliacoes</p>
+              <p>{isAnalystDashboard ? 'Minhas avaliacoes' : 'Cobertura de avaliacoes'}</p>
               <strong>{reviewCoverage}%</strong>
               <span>{totalReviews} avaliacoes em {totalTickets} atendimentos</span>
             </div>
@@ -1259,7 +1267,7 @@ function DashboardView({
               <h3 className={`mt-2 text-2xl font-bold ${analystResult?.eligible ? 'text-emerald-300' : 'text-cyan-300'}`}>
                 {analystStatusText}
               </h3>
-              <p className="mt-3 text-sm text-slate-400">{analystFocusText}</p>
+              <p className="mt-3 text-sm text-slate-400">{analystPulseText}</p>
             </div>
 
             <div className="rounded-lg bg-slate-900 p-5">
@@ -1372,10 +1380,10 @@ function DashboardView({
             <div className="rounded-lg bg-slate-900 p-5">
               <p className="text-sm text-slate-400">Ponto de atencao</p>
               <p className="mt-2 text-xl font-bold">
-                {analystResult ? analystFocusText : 'Sem dados no periodo'}
+                {analystResult ? analystActionText : 'Sem dados no periodo'}
               </p>
               <p className="mt-2 text-sm text-slate-400">
-                Use os filtros acima para comparar semana, mes, ano ou periodo personalizado.
+                Esta recomendacao muda conforme o periodo selecionado no filtro.
               </p>
             </div>
 
