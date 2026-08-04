@@ -1010,7 +1010,7 @@ function DashboardView({
     .slice(-8)
     .map((metric) => ({
       label: formatShortDate(metric.week_start),
-      value: Number(metric.performance_percentage),
+      value: calculateTeamPerformance([metric]),
     }))
   const podiumCsatGoal = getGoalValue(goals, 'podium_csat_minimum', 90)
   const reviewGoal = getGoalValue(goals, 'review_percentage', 25)
@@ -1030,30 +1030,37 @@ function DashboardView({
   const previousTeamPerformance = calculateTeamPerformance(previousTeamMetrics)
   const csatDelta = round(periodAverageCsat - previousAverageCsat)
   const teamPerformanceDelta = round(periodTeamPerformance - previousTeamPerformance)
-  const totalReviews = filteredIndividualMetrics.reduce((sum, metric) => sum + Number(metric.positive_reviews), 0)
+  const totalReviews = filteredIndividualMetrics.reduce((sum, metric) => sum + Number(metric.total_reviews), 0)
   const totalTickets = filteredIndividualMetrics.reduce((sum, metric) => sum + Number(metric.total_tickets), 0)
   const reviewCoverage = totalTickets ? round((totalReviews / totalTickets) * 100) : 0
   const teamAnsweredCalls = filteredTeamMetrics.reduce((sum, metric) => sum + Number(metric.answered_calls), 0)
   const teamTotalCalls = filteredTeamMetrics.reduce((sum, metric) => sum + Number(metric.total_calls), 0)
   const attentionCount = attentionList.length
+  const hasPeriodData = filteredIndividualMetrics.length > 0 || filteredTeamMetrics.length > 0
   const executiveStatus =
-    periodTeamPerformance >= teamPerformanceGoal && periodAverageCsat >= podiumCsatGoal
-      ? 'Periodo saudavel'
-      : attentionCount
-        ? 'Periodo pede acompanhamento'
-        : 'Periodo em consolidacao'
+    !hasPeriodData
+      ? 'Sem dados no periodo'
+      : periodTeamPerformance >= teamPerformanceGoal && periodAverageCsat >= podiumCsatGoal
+        ? 'Periodo saudavel'
+        : attentionCount
+          ? 'Periodo pede acompanhamento'
+          : 'Periodo em consolidacao'
   const executiveStatusTone =
-    periodTeamPerformance >= teamPerformanceGoal && periodAverageCsat >= podiumCsatGoal
-      ? 'text-emerald-300'
-      : attentionCount
-        ? 'text-amber-300'
-        : 'text-cyan-300'
+    !hasPeriodData
+      ? 'text-slate-300'
+      : periodTeamPerformance >= teamPerformanceGoal && periodAverageCsat >= podiumCsatGoal
+        ? 'text-emerald-300'
+        : attentionCount
+          ? 'text-amber-300'
+          : 'text-cyan-300'
   const executivePriority =
-    attentionList.length > 0
-      ? `Priorizar ${attentionList.map((item) => item.analystName).join(', ')}.`
-      : periodTeamPerformance < teamPerformanceGoal
-        ? 'Revisar performance operacional da equipe.'
-        : 'Manter rotina de acompanhamento semanal.'
+    !hasPeriodData
+      ? 'Selecionar outro periodo ou aguardar os lancamentos.'
+      : attentionList.length > 0
+        ? `Priorizar ${attentionList.map((item) => item.analystName).join(', ')}.`
+        : periodTeamPerformance < teamPerformanceGoal
+          ? 'Revisar performance operacional da equipe.'
+          : 'Manter rotina de acompanhamento semanal.'
 
   function handlePeriodModeChange(mode: PeriodMode) {
     setPeriodFilter(createPeriodFilter(mode))
