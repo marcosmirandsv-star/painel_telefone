@@ -1037,6 +1037,35 @@ function DashboardView({
   const teamTotalCalls = filteredTeamMetrics.reduce((sum, metric) => sum + Number(metric.total_calls), 0)
   const attentionCount = attentionList.length
   const hasPeriodData = filteredIndividualMetrics.length > 0 || filteredTeamMetrics.length > 0
+  const predictiveGoalProbability = calculateGoalProbability({
+    hasData: hasPeriodData,
+    csat: periodAverageCsat,
+    csatGoal: podiumCsatGoal,
+    csatDelta,
+    teamPerformance: periodTeamPerformance,
+    teamPerformanceGoal,
+    teamPerformanceDelta,
+    reviewCoverage,
+    reviewGoal,
+    eligibleCount,
+    totalAnalysts: periodPodium.length,
+  })
+  const projectedCsat = projectMetric(periodAverageCsat, csatDelta, podiumCsatGoal)
+  const projectedTeamPerformance = projectMetric(periodTeamPerformance, teamPerformanceDelta, teamPerformanceGoal)
+  const predictiveRiskLevel = getPredictiveRiskLevel(
+    predictiveGoalProbability,
+    csatDelta,
+    teamPerformanceDelta,
+    attentionCount,
+  )
+  const predictiveAction =
+    !hasPeriodData
+      ? 'Aguardar novos lancamentos para liberar previsao.'
+      : predictiveRiskLevel === 'Alto'
+        ? 'Priorizar feedback SARE e acompanhamento semanal dos indicadores criticos.'
+        : predictiveRiskLevel === 'Medio'
+          ? 'Monitorar variacoes e reforcar os pontos abaixo da meta antes do fechamento.'
+          : 'Manter rotina atual e preservar consistencia ate o fechamento.'
   const executiveStatus =
     !hasPeriodData
       ? 'Sem dados no periodo'
@@ -1212,6 +1241,45 @@ function DashboardView({
           </div>
         )}
       </section>
+
+      <section className="panel">
+        <h2 className="section-title">Inteligencia preditiva</h2>
+        <p className="section-subtitle">
+          Projecao inicial baseada nos lancamentos, metas, variacao contra periodo anterior e risco operacional.
+        </p>
+
+        <div className="mt-6 grid gap-4 lg:grid-cols-4">
+          <PredictiveCard
+            label="Chance de atingir metas"
+            value={`${predictiveGoalProbability}%`}
+            detail={
+              hasPeriodData
+                ? `${eligibleCount} de ${periodPodium.length} analistas elegiveis no periodo`
+                : 'sem base de dados no periodo'
+            }
+            tone={predictiveGoalProbability >= 75 ? 'success' : predictiveGoalProbability >= 45 ? 'warning' : 'danger'}
+          />
+          <PredictiveCard
+            label="Previsao CSAT"
+            value={`${projectedCsat}%`}
+            detail={`${formatDelta(csatDelta, ' p.p.')} vs periodo anterior`}
+            tone={projectedCsat >= podiumCsatGoal ? 'success' : 'warning'}
+          />
+          <PredictiveCard
+            label="Previsao performance"
+            value={`${projectedTeamPerformance}%`}
+            detail={`meta operacional ${teamPerformanceGoal}%`}
+            tone={projectedTeamPerformance >= teamPerformanceGoal ? 'success' : 'danger'}
+          />
+          <PredictiveCard
+            label="Risco de queda"
+            value={predictiveRiskLevel}
+            detail={predictiveAction}
+            tone={predictiveRiskLevel === 'Baixo' ? 'success' : predictiveRiskLevel === 'Medio' ? 'warning' : 'danger'}
+          />
+        </div>
+      </section>
+
       <section className="panel">
         <h2 className="section-title">
           {isAnalystDashboard ? 'Minha evolucao recente' : 'Variacoes recentes'}
@@ -2698,6 +2766,32 @@ function MetricCard({
   )
 }
 
+function PredictiveCard({
+  label,
+  value,
+  detail,
+  tone,
+}: {
+  label: string
+  value: string | number
+  detail: string
+  tone: 'success' | 'warning' | 'danger'
+}) {
+  const toneClass =
+    tone === 'success'
+      ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200'
+      : tone === 'warning'
+        ? 'border-amber-400/40 bg-amber-400/10 text-amber-200'
+        : 'border-rose-400/40 bg-rose-400/10 text-rose-200'
+
+  return (
+    <div className={`rounded-lg border p-5 ${toneClass}`}>
+      <p className="text-sm text-slate-300">{label}</p>
+      <p className="mt-2 text-2xl font-bold">{value}</p>
+      <p className="mt-3 text-sm leading-5 text-slate-300">{detail}</p>
+    </div>
+  )
+}
 function TrendLineChart({
   label,
   points,
@@ -3398,6 +3492,66 @@ function isMetricInPeriod(weekStart: string, weekEnd: string, period: PeriodFilt
   return weekStart <= period.end && weekEnd >= period.start
 }
 
+function calculateGoalProbability({
+  hasData,
+  csat,
+  csatGoal,
+  csatDelta,
+  teamPerformance,
+  teamPerformanceGoal,
+  teamPerformanceDelta,
+  reviewCoverage,
+  reviewGoal,
+  eligibleCount,
+  totalAnalysts,
+}: {
+  hasData: boolean
+  csat: number
+  csatGoal: number
+  csatDelta: number
+  teamPerformance: number
+  teamPerformanceGoal: number
+  teamPerformanceDelta: number
+  reviewCoverage: number
+  reviewGoal: number
+  eligibleCount: number
+  totalAnalysts: number
+}) {
+  if (!hasData) return 0
+
+  const csatScore = clampScore(50 + (csat - csatGoal) * 8 + csatDelta * 4)
+  const teamScore = clampScore(50 + (teamPerformance - teamPerformanceGoal) * 10 + teamPerformanceDelta * 4)
+  const reviewScore = clampScore(50 + (reviewCoverage - reviewGoal) * 3)
+  const podiumScore = totalAnalysts ? (eligibleCount / totalAnalysts) * 100 : 0
+
+  return Math.round(csatScore * 0.35 + teamScore * 0.3 + reviewScore * 0.2 + podiumScore * 0.15)
+}
+
+function projectMetric(current: number, delta: number, fallbackGoal: number) {
+  if (!current) return fallbackGoal
+  return round(Math.max(0, Math.min(100, current + delta * 0.5)))
+}
+
+function getPredictiveRiskLevel(
+  probability: number,
+  csatDelta: number,
+  teamPerformanceDelta: number,
+  attentionCount: number,
+) {
+  if (probability < 45 || csatDelta < -2 || teamPerformanceDelta < -1.5 || attentionCount >= 3) {
+    return 'Alto'
+  }
+
+  if (probability < 75 || csatDelta < 0 || teamPerformanceDelta < 0 || attentionCount > 0) {
+    return 'Medio'
+  }
+
+  return 'Baixo'
+}
+
+function clampScore(value: number) {
+  return Math.max(0, Math.min(100, value))
+}
 function calculateAverageCsat(metrics: IndividualMetric[]) {
   if (!metrics.length) return 0
 
@@ -3582,5 +3736,6 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
