@@ -1537,18 +1537,25 @@ function ReportsView({
   const teamLossPercentage = teamTotalCalls ? round((teamAbandonedCalls / teamTotalCalls) * 100) : 0
   const weeklyEvolution = aggregateIndividualByWeek(analystMetrics)
   const situationText = selectedAnalyst && analystResult
-    ? `${selectedAnalyst.name} teve ${analystResult.averageCsat}% de CSAT em ${periodLabel}, com ${analystResult.totalReviews} avaliacoes em ${analystResult.totalTickets} atendimentos. A meta individual e ${analystResult.individualGoal}% e a referencia de podio e ${podiumCsatGoal}%. Em relacao ao periodo anterior, a variacao foi de ${formatDelta(csatDelta, '%')}.`
+    ? `${selectedAnalyst.name} fechou ${periodLabel} com CSAT de ${analystResult.averageCsat}%, ${analystResult.totalReviews} avaliacoes e ${analystResult.totalTickets} atendimentos registrados. A meta individual e ${analystResult.individualGoal}% e a referencia para podio e ${podiumCsatGoal}%. A variacao contra o periodo anterior foi de ${formatDelta(csatDelta, ' p.p.')}.`
     : ''
   const actionText = analystResult
     ? analystResult.eligible
-      ? 'Manter as praticas atuais, preservar o volume de avaliacoes e acompanhar qualquer oscilacao semanal antes do fechamento do ciclo.'
-      : `Priorizar acoes objetivas sobre: ${analystResult.reasons.join(', ')}. A recomendacao inicial e revisar atendimentos de menor satisfacao, reforcar pedido de avaliacao e acompanhar o indicador semanalmente.`
+      ? 'Foram alinhadas a manutencao das praticas atuais, a preservacao do volume de avaliacoes e o acompanhamento semanal de qualquer oscilacao antes do fechamento do ciclo.'
+      : `Foram alinhadas a priorizacao dos pontos: ${analystResult.reasons.join(', ')}. A recomendacao inicial e revisar atendimentos de menor satisfacao, reforcar o convite para avaliacao e acompanhar o indicador semanalmente.`
     : ''
   const resultText = analystResult
-    ? `${analystResult.eligible ? 'O resultado atual sustenta elegibilidade ao podio.' : 'O resultado atual ainda nao sustenta elegibilidade ao podio.'} O desempenho individual deve ser lido junto da performance da equipe, que fechou em ${teamPerformance}% no periodo. ${teamStatus}`
+    ? analystResult.eligible
+      ? `Resultado esperado: manter CSAT acima de ${podiumCsatGoal}%, preservar elegibilidade ao podio e sustentar volume de avaliacoes igual ou superior a ${reviewGoal}% dos atendimentos.`
+      : `Resultado esperado: recuperar os pontos impeditivos para aproximar o desempenho da referencia de podio (${podiumCsatGoal}%) e elevar a consistencia do indicador no proximo ciclo.`
     : ''
   const evolutionText = analystResult
-    ? `Proximo ciclo: ${buildDevelopmentFocus(analystResult, csatDelta)} Perguntas sugeridas para 1:1: o que ajudou ou atrapalhou o CSAT no periodo? quais atendimentos merecem revisao? qual acao simples pode aumentar avaliacoes na proxima semana?`
+    ? `Expectativa e plano de desenvolvimento: ${buildDevelopmentFocus(analystResult, csatDelta)} Perguntas sugeridas para 1:1: o que ajudou ou atrapalhou o CSAT no periodo? quais atendimentos merecem revisao? qual acao simples pode aumentar avaliacoes na proxima semana?`
+    : ''
+  const feedbackSummary = analystResult
+    ? analystResult.eligible
+      ? `${selectedAnalyst?.name ?? 'Analista'} esta elegivel ao podio no periodo. O foco recomendado e preservar consistencia, volume de avaliacoes e acompanhamento semanal.`
+      : `${selectedAnalyst?.name ?? 'Analista'} ainda nao sustenta elegibilidade ao podio neste periodo. O foco recomendado e atuar sobre: ${analystResult.reasons.join(', ')}.`
     : ''
 
   function handlePeriodModeChange(mode: PeriodMode) {
@@ -1567,12 +1574,13 @@ function ReportsView({
         periodLabel,
         expected: {
           csat: podiumCsatGoal,
-          loss: 3,
+
           review: reviewGoal,
         },
         achieved: {
           csat: analystResult.averageCsat,
           loss: teamLossPercentage,
+          summary: feedbackSummary,
           reviewPercentage: analystResult.reviewPercentage,
           reviewCount,
           answeredTickets,
@@ -1690,7 +1698,7 @@ function ReportsView({
             </p>
             <h2 className="section-title">Relatorio mensal SARE</h2>
             <p className="section-subtitle">
-              Estrutura correta: Situacao, Acao, Resultado e Evolucao.
+              Estrutura correta: Situacao, Alinhamentos Realizados, Resultado Esperado e Expectativa.
             </p>
           </div>
 
@@ -1782,15 +1790,15 @@ function ReportsView({
                 text={situationText}
               />
               <ReportBlock
-                title="A - Acao"
+                title="A - Alinhamentos Realizados"
                 text={actionText}
               />
               <ReportBlock
-                title="R - Resultado"
+                title="R - Resultado Esperado"
                 text={resultText}
               />
               <ReportBlock
-                title="E - Evolucao"
+                title="E - Expectativa e Plano de Desenvolvimento"
                 text={evolutionText}
               />
             </div>
@@ -2858,12 +2866,12 @@ function exportWordReport({
   periodLabel: string
   expected: {
     csat: number
-    loss: number
     review: number
   }
   achieved: {
     csat: number
     loss: number
+    summary: string
     reviewPercentage: number
     reviewCount: number
     answeredTickets: number
@@ -2971,7 +2979,7 @@ function exportWordReport({
           <div class="box">
             <h2>Esperado</h2>
             <p>CSAT maior ou igual a ${expected.csat}%</p>
-            <p>Perda menor ou igual a ${expected.loss}%</p>
+            
             <p>${expected.review}% de avaliacoes dos atendimentos</p>
           </div>
           <div class="box">
@@ -2983,6 +2991,9 @@ function exportWordReport({
             <p>Posicao podio: ${achieved.rankingPosition || '-'}</p>
           </div>
         </div>
+
+        <h2>Sintese do feedback</h2>
+        <p>${escapeHtml(achieved.summary)}</p>
 
         <h2>Graficos e evolucao</h2>
         <p class="muted">Leitura visual para identificar rapidamente melhora, queda ou estabilidade.</p>
@@ -3017,18 +3028,18 @@ function exportWordReport({
           </thead>
           <tbody>${evolutionRows}</tbody>
         </table>
-        <h2>Indicador coletivo informativo</h2>
+        <h2>Contexto operacional da equipe</h2>
         <p>Performance da equipe no periodo: ${achieved.teamPerformance}%.</p>
         <p>Ligacoes atendidas pela equipe: ${achieved.teamAnsweredCalls}. Total processado: ${achieved.teamTotalCalls}. Ligacoes perdidas: ${achieved.loss}% (${achieved.teamAbandonedCalls} de ${achieved.teamTotalCalls}).</p>
 
         <h2>Analise SARE</h2>
         <h3>S - Situacao</h3>
         <p>${escapeHtml(sare.situation)}</p>
-        <h3>A - Acao</h3>
+        <h3>A - Alinhamentos Realizados</h3>
         <p>${escapeHtml(sare.action)}</p>
-        <h3>R - Resultado</h3>
+        <h3>R - Resultado Esperado</h3>
         <p>${escapeHtml(sare.result)}</p>
-        <h3>E - Evolucao</h3>
+        <h3>E - Expectativa e Plano de Desenvolvimento</h3>
         <p>${escapeHtml(sare.evolution)}</p>
       </body>
     </html>
