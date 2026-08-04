@@ -871,7 +871,7 @@ export default function Home() {
             </p>
             {!isManagementUser && !currentProfileAnalyst && (
               <p className="mt-2 text-sm text-amber-200">
-                Perfil de analista sem vinculo com cadastro. Peça ao gestor para revisar o usuario.
+                Perfil de analista sem vinculo com cadastro. Peca ao gestor para revisar o usuario.
               </p>
             )}
           </div>
@@ -1015,6 +1015,9 @@ function DashboardView({
   const podiumCsatGoal = getGoalValue(goals, 'podium_csat_minimum', 90)
   const reviewGoal = getGoalValue(goals, 'review_percentage', 25)
   const teamPerformanceGoal = getTeamPerformanceGoal(goals)
+  const previousPeriodFilter = getPreviousPeriod(periodFilter)
+  const previousIndividualMetrics = filterIndividualMetricsByPeriod(individualMetrics, previousPeriodFilter)
+  const previousTeamMetrics = filterTeamMetricsByPeriod(teamMetrics, previousPeriodFilter)
   const periodPodium = buildPeriodPodium(filteredIndividualMetrics, analysts, podiumCsatGoal, reviewGoal)
   const podiumWinners = periodPodium.filter((item) => item.eligible).slice(0, 3)
   const bestPerformer = periodPodium[0] ?? null
@@ -1022,7 +1025,35 @@ function DashboardView({
   const eligibleCount = periodPodium.filter((item) => item.eligible).length
   const periodLabel = formatPeriodLabel(periodFilter)
   const periodAverageCsat = calculateAverageCsat(filteredIndividualMetrics)
-  const periodTeamPerformance = filteredTeamMetrics[0]?.performance_percentage ?? 0
+  const previousAverageCsat = calculateAverageCsat(previousIndividualMetrics)
+  const periodTeamPerformance = calculateTeamPerformance(filteredTeamMetrics)
+  const previousTeamPerformance = calculateTeamPerformance(previousTeamMetrics)
+  const csatDelta = round(periodAverageCsat - previousAverageCsat)
+  const teamPerformanceDelta = round(periodTeamPerformance - previousTeamPerformance)
+  const totalReviews = filteredIndividualMetrics.reduce((sum, metric) => sum + Number(metric.positive_reviews), 0)
+  const totalTickets = filteredIndividualMetrics.reduce((sum, metric) => sum + Number(metric.total_tickets), 0)
+  const reviewCoverage = totalTickets ? round((totalReviews / totalTickets) * 100) : 0
+  const teamAnsweredCalls = filteredTeamMetrics.reduce((sum, metric) => sum + Number(metric.answered_calls), 0)
+  const teamTotalCalls = filteredTeamMetrics.reduce((sum, metric) => sum + Number(metric.total_calls), 0)
+  const attentionCount = attentionList.length
+  const executiveStatus =
+    periodTeamPerformance >= teamPerformanceGoal && periodAverageCsat >= podiumCsatGoal
+      ? 'Periodo saudavel'
+      : attentionCount
+        ? 'Periodo pede acompanhamento'
+        : 'Periodo em consolidacao'
+  const executiveStatusTone =
+    periodTeamPerformance >= teamPerformanceGoal && periodAverageCsat >= podiumCsatGoal
+      ? 'text-emerald-300'
+      : attentionCount
+        ? 'text-amber-300'
+        : 'text-cyan-300'
+  const executivePriority =
+    attentionList.length > 0
+      ? `Priorizar ${attentionList.map((item) => item.analystName).join(', ')}.`
+      : periodTeamPerformance < teamPerformanceGoal
+        ? 'Revisar performance operacional da equipe.'
+        : 'Manter rotina de acompanhamento semanal.'
 
   function handlePeriodModeChange(mode: PeriodMode) {
     setPeriodFilter(createPeriodFilter(mode))
@@ -1110,6 +1141,62 @@ function DashboardView({
         )}
       </div>
 
+      <section className="panel">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-stretch">
+          <div className="xl:w-2/5">
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
+              {isAnalystDashboard ? 'Resumo individual' : 'Resumo executivo'}
+            </p>
+            <h2 className={`mt-3 text-3xl font-bold ${isAnalystDashboard ? 'text-cyan-300' : executiveStatusTone}`}>
+              {isAnalystDashboard ? analystStatusText : executiveStatus}
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-slate-300">
+              {isAnalystDashboard
+                ? analystFocusText
+                : `${periodLabel}: ${eligibleCount} de ${periodPodium.length} analistas elegiveis ao podio. ${executivePriority}`}
+            </p>
+          </div>
+
+          <div className="grid flex-1 gap-4 md:grid-cols-3">
+            <div className="executive-card">
+              <p>CSAT vs periodo anterior</p>
+              <strong>{formatDelta(csatDelta, ' p.p.')}</strong>
+              <span>Atual: {periodAverageCsat || 0}%</span>
+            </div>
+            <div className="executive-card">
+              <p>Performance equipe</p>
+              <strong>{periodTeamPerformance || 0}%</strong>
+              <span>{formatDelta(teamPerformanceDelta, ' p.p.')} vs anterior</span>
+            </div>
+            <div className="executive-card">
+              <p>Cobertura de avaliacoes</p>
+              <strong>{reviewCoverage}%</strong>
+              <span>{totalReviews} avaliacoes em {totalTickets} atendimentos</span>
+            </div>
+          </div>
+        </div>
+
+        {!isAnalystDashboard && (
+          <div className="mt-5 grid gap-4 lg:grid-cols-3">
+            <div className="rounded-lg bg-slate-900 p-4">
+              <p className="text-sm text-slate-400">Prioridade do gestor</p>
+              <p className="mt-2 font-semibold">{executivePriority}</p>
+            </div>
+            <div className="rounded-lg bg-slate-900 p-4">
+              <p className="text-sm text-slate-400">Volume operacional</p>
+              <p className="mt-2 font-semibold">
+                {teamAnsweredCalls} atendidas de {teamTotalCalls} processadas
+              </p>
+            </div>
+            <div className="rounded-lg bg-slate-900 p-4">
+              <p className="text-sm text-slate-400">Proxima acao sugerida</p>
+              <p className="mt-2 font-semibold">
+                {attentionCount ? 'Abrir feedback SARE dos analistas em atencao.' : 'Comparar evolucao semanal e preservar consistencia.'}
+              </p>
+            </div>
+          </div>
+        )}
+      </section>
       <section className="panel">
         <h2 className="section-title">
           {isAnalystDashboard ? 'Minha evolucao recente' : 'Variacoes recentes'}
