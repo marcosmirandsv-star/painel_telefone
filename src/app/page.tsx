@@ -2528,100 +2528,233 @@ function EntriesHistory({
   onDeleteIndividualMetric: (metric: IndividualMetric) => void
   onDeleteTeamMetric: (metric: TeamMetric) => void
 }) {
+  const [historyType, setHistoryType] = useState<'all' | 'individual' | 'team'>('all')
+  const [historyAnalyst, setHistoryAnalyst] = useState('all')
+  const [historyStart, setHistoryStart] = useState('')
+  const [historyEnd, setHistoryEnd] = useState('')
+  const analystOptions = getHistoryAnalystOptions(individualMetrics)
+  const filteredIndividualMetrics = individualMetrics.filter((metric) => {
+    const analystName = getAnalystName(metric.analysts)
+    const matchesAnalyst = historyAnalyst === 'all' || analystName === historyAnalyst
+    return matchesAnalyst && isMetricInsideHistoryFilter(metric.week_start, metric.week_end, historyStart, historyEnd)
+  })
+  const filteredTeamMetrics = teamMetrics.filter((metric) =>
+    isMetricInsideHistoryFilter(metric.week_start, metric.week_end, historyStart, historyEnd),
+  )
+  const showIndividual = historyType === 'all' || historyType === 'individual'
+  const showTeam = historyType === 'all' || historyType === 'team'
+  const totalIndividualReviews = filteredIndividualMetrics.reduce(
+    (sum, metric) => sum + Number(metric.total_reviews),
+    0,
+  )
+  const totalIndividualTickets = filteredIndividualMetrics.reduce(
+    (sum, metric) => sum + Number(metric.total_tickets),
+    0,
+  )
+  const averageHistoryCsat = calculateAverageCsat(filteredIndividualMetrics)
+  const averageTeamPerformance = calculateTeamPerformance(filteredTeamMetrics)
+
+  function clearHistoryFilters() {
+    setHistoryType('all')
+    setHistoryAnalyst('all')
+    setHistoryStart('')
+    setHistoryEnd('')
+  }
+
   return (
     <section className="panel">
-      <h2 className="section-title">Historico de lancamentos</h2>
-      <p className="section-subtitle">
-        Use Excluir para remover lancamentos de teste ou registros feitos por engano.
-      </p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h2 className="section-title">Historico de lancamentos</h2>
+          <p className="section-subtitle">
+            Filtre registros por tipo, periodo e analista para revisar dados acumulados ou excluir lancamentos de teste.
+          </p>
+        </div>
+        <button className="secondary-button self-start" type="button" onClick={clearHistoryFilters}>
+          Limpar filtros
+        </button>
+      </div>
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-4">
+        <Field label="Tipo de historico">
+          <select
+            className="form-input"
+            value={historyType}
+            onChange={(event) => setHistoryType(event.target.value as 'all' | 'individual' | 'team')}
+          >
+            <option value="all">Todos</option>
+            <option value="individual">Somente individuais</option>
+            <option value="team">Somente equipe</option>
+          </select>
+        </Field>
+        <Field label="Analista">
+          <select
+            className="form-input"
+            disabled={historyType === 'team'}
+            value={historyAnalyst}
+            onChange={(event) => setHistoryAnalyst(event.target.value)}
+          >
+            <option value="all">Todos</option>
+            {analystOptions.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Inicio">
+          <input
+            className="form-input"
+            type="date"
+            value={historyStart}
+            onChange={(event) => setHistoryStart(event.target.value)}
+          />
+        </Field>
+        <Field label="Fim">
+          <input
+            className="form-input"
+            type="date"
+            value={historyEnd}
+            onChange={(event) => setHistoryEnd(event.target.value)}
+          />
+        </Field>
+      </div>
+
+      <div className="mt-5 grid gap-4 md:grid-cols-4">
+        <div className="rounded-lg bg-slate-900 p-4">
+          <p className="text-sm text-slate-400">Registros individuais</p>
+          <p className="mt-2 text-2xl font-bold">{filteredIndividualMetrics.length}</p>
+        </div>
+        <div className="rounded-lg bg-slate-900 p-4">
+          <p className="text-sm text-slate-400">CSAT medio filtrado</p>
+          <p className="mt-2 text-2xl font-bold">{averageHistoryCsat}%</p>
+        </div>
+        <div className="rounded-lg bg-slate-900 p-4">
+          <p className="text-sm text-slate-400">Avaliacoes / atendimentos</p>
+          <p className="mt-2 text-2xl font-bold">{totalIndividualReviews}/{totalIndividualTickets}</p>
+        </div>
+        <div className="rounded-lg bg-slate-900 p-4">
+          <p className="text-sm text-slate-400">Performance equipe</p>
+          <p className="mt-2 text-2xl font-bold">{averageTeamPerformance}%</p>
+        </div>
+      </div>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        <div>
-          <h3 className="font-semibold">Individuais</h3>
-          <div className="mt-3 overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="text-slate-400">
-                <tr>
-                  <th className="pb-3 pr-4 font-medium">Analista</th>
-                  <th className="pb-3 pr-4 font-medium">Semana</th>
-                  <th className="pb-3 pr-4 font-medium">CSAT</th>
-                  <th className="pb-3 pr-4 font-medium">Evidencia</th>
-                  <th className="pb-3 font-medium">Acao</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10">
-                {individualMetrics.map((metric) => (
-                  <tr key={metric.id}>
-                    <td className="py-3 pr-4">{getAnalystName(metric.analysts)}</td>
-                    <td className="py-3 pr-4">{formatWeek(metric.week_start, metric.week_end)}</td>
-                    <td className="py-3 pr-4">{metric.csat}%</td>
-                    <td className="py-3 pr-4">
-                      <EvidenceLink url={metric.evidence_url} />
-                    </td>
-                    <td className="py-3">
-                      <button
-                        className="danger-button"
-                        disabled={saving}
-                        type="button"
-                        onClick={() => onDeleteIndividualMetric(metric)}
-                      >
-                        Excluir
-                      </button>
-                    </td>
+        {showIndividual && (
+          <div>
+            <h3 className="font-semibold">Lancamentos individuais</h3>
+            <div className="mt-3 overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="text-slate-400">
+                  <tr>
+                    <th className="pb-3 pr-4 font-medium">Analista</th>
+                    <th className="pb-3 pr-4 font-medium">Semana</th>
+                    <th className="pb-3 pr-4 font-medium">CSAT</th>
+                    <th className="pb-3 pr-4 font-medium">Avaliacoes</th>
+                    <th className="pb-3 pr-4 font-medium">Atendimentos</th>
+                    <th className="pb-3 pr-4 font-medium">Evidencia</th>
+                    <th className="pb-3 font-medium">Acao</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-white/10">
+                  {filteredIndividualMetrics.map((metric) => (
+                    <tr key={metric.id}>
+                      <td className="py-3 pr-4">{getAnalystName(metric.analysts)}</td>
+                      <td className="py-3 pr-4">{formatWeek(metric.week_start, metric.week_end)}</td>
+                      <td className="py-3 pr-4">{metric.csat}%</td>
+                      <td className="py-3 pr-4">{metric.total_reviews}</td>
+                      <td className="py-3 pr-4">{metric.total_tickets}</td>
+                      <td className="py-3 pr-4">
+                        <EvidenceLink url={metric.evidence_url} />
+                      </td>
+                      <td className="py-3">
+                        <button
+                          className="danger-button"
+                          disabled={saving}
+                          type="button"
+                          onClick={() => onDeleteIndividualMetric(metric)}
+                        >
+                          Excluir
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
 
-            {!individualMetrics.length && (
-              <EmptyState text="Nenhum lancamento individual registrado." />
-            )}
+              {!filteredIndividualMetrics.length && (
+                <EmptyState text="Nenhum lancamento individual encontrado com estes filtros." />
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
-        <div>
-          <h3 className="font-semibold">Equipe</h3>
-          <div className="mt-3 overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead className="text-slate-400">
-                <tr>
-                  <th className="pb-3 pr-4 font-medium">Semana</th>
-                  <th className="pb-3 pr-4 font-medium">Performance</th>
-                  <th className="pb-3 pr-4 font-medium">Evidencia</th>
-                  <th className="pb-3 font-medium">Acao</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10">
-                {teamMetrics.map((metric) => (
-                  <tr key={metric.id}>
-                    <td className="py-3 pr-4">{formatWeek(metric.week_start, metric.week_end)}</td>
-                    <td className="py-3 pr-4">{metric.performance_percentage}%</td>
-                    <td className="py-3 pr-4">
-                      <EvidenceLink url={metric.evidence_url} />
-                    </td>
-                    <td className="py-3">
-                      <button
-                        className="danger-button"
-                        disabled={saving}
-                        type="button"
-                        onClick={() => onDeleteTeamMetric(metric)}
-                      >
-                        Excluir
-                      </button>
-                    </td>
+        {showTeam && (
+          <div>
+            <h3 className="font-semibold">Performance da equipe</h3>
+            <div className="mt-3 overflow-x-auto">
+              <table className="min-w-full text-left text-sm">
+                <thead className="text-slate-400">
+                  <tr>
+                    <th className="pb-3 pr-4 font-medium">Semana</th>
+                    <th className="pb-3 pr-4 font-medium">Performance</th>
+                    <th className="pb-3 pr-4 font-medium">Atendidas</th>
+                    <th className="pb-3 pr-4 font-medium">Processadas</th>
+                    <th className="pb-3 pr-4 font-medium">Evidencia</th>
+                    <th className="pb-3 font-medium">Acao</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-white/10">
+                  {filteredTeamMetrics.map((metric) => (
+                    <tr key={metric.id}>
+                      <td className="py-3 pr-4">{formatWeek(metric.week_start, metric.week_end)}</td>
+                      <td className="py-3 pr-4">{metric.performance_percentage}%</td>
+                      <td className="py-3 pr-4">{metric.answered_calls}</td>
+                      <td className="py-3 pr-4">{metric.total_calls}</td>
+                      <td className="py-3 pr-4">
+                        <EvidenceLink url={metric.evidence_url} />
+                      </td>
+                      <td className="py-3">
+                        <button
+                          className="danger-button"
+                          disabled={saving}
+                          type="button"
+                          onClick={() => onDeleteTeamMetric(metric)}
+                        >
+                          Excluir
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
 
-            {!teamMetrics.length && <EmptyState text="Nenhuma performance de equipe registrada." />}
+              {!filteredTeamMetrics.length && (
+                <EmptyState text="Nenhuma performance de equipe encontrada com estes filtros." />
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </section>
   )
 }
+function getHistoryAnalystOptions(metrics: IndividualMetric[]) {
+  const names = new Set<string>()
+  metrics.forEach((metric) => names.add(getAnalystName(metric.analysts)))
+  return [...names].sort((a, b) => a.localeCompare(b))
+}
 
+function isMetricInsideHistoryFilter(
+  weekStart: string,
+  weekEnd: string,
+  filterStart: string,
+  filterEnd: string,
+) {
+  if (filterStart && weekEnd < filterStart) return false
+  if (filterEnd && weekStart > filterEnd) return false
+  return true
+}
 function AnalystsView({
   analysts,
   analystForm,
@@ -3885,6 +4018,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
