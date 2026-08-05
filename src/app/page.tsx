@@ -65,6 +65,63 @@ type TeamMetric = {
   notes: string | null
 }
 
+type ChatTeam = {
+  id: string
+  name: string
+  legacy_name: string | null
+  manager_name: string | null
+  active: boolean
+}
+
+type ChatAnalyst = {
+  id: string
+  team_id: string
+  name: string
+  csat_goal: number
+  active: boolean
+}
+
+type ChatMonthlyMetric = {
+  id: string
+  team_id: string
+  analyst_id: string
+  month_label: string
+  year: number
+  month_number: number
+  period_start: string
+  period_end: string
+  csat: number
+  review_percentage: number
+  sending_percentage: number
+  total_tickets: number
+  inactive_tickets: number
+  valid_tickets: number
+  reviews: number
+  positive_reviews: number
+  negative_reviews: number
+  csat_goal: number
+  csat_delta: number
+  general_review_goal: number
+  status: string | null
+  chat_analysts?:
+    | {
+        name: string
+        csat_goal: number
+      }
+    | {
+        name: string
+        csat_goal: number
+      }[]
+    | null
+  chat_teams?:
+    | {
+        name: string
+      }
+    | {
+        name: string
+      }[]
+    | null
+}
 type IndividualForm = {
   analystId: string
   weekStart: string
@@ -168,6 +225,9 @@ export default function Home() {
   const [analysts, setAnalysts] = useState<Analyst[]>([])
   const [individualMetrics, setIndividualMetrics] = useState<IndividualMetric[]>([])
   const [teamMetrics, setTeamMetrics] = useState<TeamMetric[]>([])
+  const [chatTeams, setChatTeams] = useState<ChatTeam[]>([])
+  const [chatAnalysts, setChatAnalysts] = useState<ChatAnalyst[]>([])
+  const [chatMonthlyMetrics, setChatMonthlyMetrics] = useState<ChatMonthlyMetric[]>([])
   const [activeModule, setActiveModule] = useState<AppModule>('phone')
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard')
   const [individualForm, setIndividualForm] = useState(initialIndividualForm)
@@ -275,6 +335,25 @@ export default function Home() {
 
     if (teamResult.error) setMessage(getSupabaseMessage(teamResult.error.message))
     else setTeamMetrics(teamResult.data ?? [])
+
+    const [chatTeamsResult, chatAnalystsResult, chatMetricsResult] = await Promise.all([
+      supabase.from('chat_teams').select('id, name, legacy_name, manager_name, active').order('name'),
+      supabase.from('chat_analysts').select('id, team_id, name, csat_goal, active').order('name'),
+      supabase
+        .from('chat_monthly_metrics')
+        .select('id, team_id, analyst_id, month_label, year, month_number, period_start, period_end, csat, review_percentage, sending_percentage, total_tickets, inactive_tickets, valid_tickets, reviews, positive_reviews, negative_reviews, csat_goal, csat_delta, general_review_goal, status, chat_analysts(name, csat_goal), chat_teams(name)')
+        .order('period_start', { ascending: false })
+        .limit(500),
+    ])
+
+    if (chatTeamsResult.error) setMessage(getSupabaseMessage(chatTeamsResult.error.message))
+    else setChatTeams((chatTeamsResult.data ?? []) as ChatTeam[])
+
+    if (chatAnalystsResult.error) setMessage(getSupabaseMessage(chatAnalystsResult.error.message))
+    else setChatAnalysts((chatAnalystsResult.data ?? []) as ChatAnalyst[])
+
+    if (chatMetricsResult.error) setMessage(getSupabaseMessage(chatMetricsResult.error.message))
+    else setChatMonthlyMetrics((chatMetricsResult.data ?? []) as ChatMonthlyMetric[])
 
     setLoading(false)
   }
@@ -933,7 +1012,15 @@ export default function Home() {
 
         {message && <Feedback message={message} />}
 
-        {activeModule === 'chat' && <ChatModulePlaceholder role={userRole} />}
+        {activeModule === 'chat' && (
+          <ChatModuleDashboard
+            role={userRole}
+            teams={chatTeams}
+            analysts={chatAnalysts}
+            metrics={chatMonthlyMetrics}
+            loading={loading}
+          />
+        )}
 
         {activeModule === 'phone' && activeTab === 'dashboard' && (
           <DashboardView
@@ -1008,48 +1095,234 @@ export default function Home() {
   )
 }
 
-function ChatModulePlaceholder({ role }: { role: UserRole }) {
+function ChatModuleDashboard({
+  role,
+  teams,
+  analysts,
+  metrics,
+  loading,
+}: {
+  role: UserRole
+  teams: ChatTeam[]
+  analysts: ChatAnalyst[]
+  metrics: ChatMonthlyMetric[]
+  loading: boolean
+}) {
   const isManagementUser = role !== 'analyst'
+  const periods = useMemo(() => {
+    const map = new Map<string, { label: string; year: number; monthNumber: number; start: string }>()
+    metrics.forEach((metric) => {
+      const key = `${metric.year}-${metric.month_number}`
+      if (!map.has(key)) {
+        map.set(key, {
+          label: metric.month_label,
+          year: metric.year,
+          monthNumber: metric.month_number,
+          start: metric.period_start,
+        })
+      }
+    })
+    return [...map.values()].sort((a, b) => b.start.localeCompare(a.start))
+  }, [metrics])
+  const [selectedTeamId, setSelectedTeamId] = useState('all')
+  const [selectedPeriodKey, setSelectedPeriodKey] = useState('')
+
+  useEffect(() => {
+    if (!selectedPeriodKey && periods[0]) {
+      setSelectedPeriodKey(`${periods[0].year}-${periods[0].monthNumber}`)
+    }
+  }, [periods, selectedPeriodKey])
+
+  if (!isManagementUser) {
+    return (
+      <div className="mt-8 space-y-7">
+        <section className="panel">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Modulo chat</p>
+          <h2 className="mt-3 text-3xl font-bold">Acesso restrito a gestao</h2>
+          <p className="mt-3 max-w-3xl text-slate-300">
+            O modulo chat sera usado para importacao mensal, calculos consolidados, podio e relatorios de gestao.
+          </p>
+        </section>
+      </div>
+    )
+  }
+
+  const selectedPeriod = periods.find((period) => `${period.year}-${period.monthNumber}` === selectedPeriodKey) ?? periods[0]
+  const visibleMetrics = metrics.filter((metric) => {
+    const matchesTeam = selectedTeamId === 'all' || metric.team_id === selectedTeamId
+    const matchesPeriod = selectedPeriod
+      ? metric.year === selectedPeriod.year && metric.month_number === selectedPeriod.monthNumber
+      : true
+    return matchesTeam && matchesPeriod
+  })
+  const trendMetrics = metrics.filter((metric) => selectedTeamId === 'all' || metric.team_id === selectedTeamId)
+  const selectedTeamName =
+    selectedTeamId === 'all' ? 'Todas as equipes' : teams.find((team) => team.id === selectedTeamId)?.name ?? 'Equipe'
+  const totals = visibleMetrics.reduce(
+    (acc, metric) => ({
+      tickets: acc.tickets + Number(metric.total_tickets),
+      validTickets: acc.validTickets + Number(metric.valid_tickets),
+      reviews: acc.reviews + Number(metric.reviews),
+      positives: acc.positives + Number(metric.positive_reviews),
+      inactive: acc.inactive + Number(metric.inactive_tickets),
+    }),
+    { tickets: 0, validTickets: 0, reviews: 0, positives: 0, inactive: 0 },
+  )
+  const averageTickets = visibleMetrics.length ? round(totals.tickets / visibleMetrics.length) : 0
+  const averageCsat = visibleMetrics.length
+    ? round(visibleMetrics.reduce((sum, metric) => sum + Number(metric.csat), 0) / visibleMetrics.length)
+    : 0
+  const reviewCoverage = totals.validTickets ? round((totals.reviews / totals.validTickets) * 100) : 0
+  const noReviewPercentage = totals.validTickets ? round(((totals.validTickets - totals.reviews) / totals.validTickets) * 100) : 0
+  const podium = buildChatPodium(visibleMetrics, averageTickets)
+  const attention = visibleMetrics
+    .map((metric) => ({ metric, reasons: getChatAttentionReasons(metric, averageTickets) }))
+    .filter((item) => item.reasons.length)
+    .sort((a, b) => Number(a.metric.csat) - Number(b.metric.csat))
+    .slice(0, 5)
+  const monthlyTrend = buildChatMonthlyTrend(trendMetrics).slice(-7)
 
   return (
     <div className="mt-8 space-y-7">
       <section className="panel">
-        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
-          Modulo em preparacao
-        </p>
-        <h2 className="mt-3 text-3xl font-bold">Controle da equipe de chat</h2>
-        <p className="mt-3 max-w-3xl text-slate-300">
-          Este espaco esta reservado para receber o projeto de chat como um modulo independente, reaproveitando login,
-          perfis de acesso, relatorios, indicadores e camadas de IA desta plataforma.
-        </p>
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Modulo chat</p>
+            <h2 className="mt-3 text-3xl font-bold">Performance mensal do chat</h2>
+            <p className="section-subtitle">
+              Leitura consolidada dos dados historicos importados do sistema antigo. A importacao mensal entra na proxima etapa.
+            </p>
+          </div>
 
-        <div className="mt-6 grid gap-4 lg:grid-cols-3">
-          <div className="rounded-lg bg-slate-900 p-5">
-            <p className="text-sm text-slate-400">Arquitetura</p>
-            <p className="mt-2 text-xl font-bold">Modulo separado</p>
-            <p className="mt-2 text-sm text-slate-400">
-              As regras do chat entram sem misturar os calculos do telefone.
-            </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Equipe">
+              <select className="form-input" value={selectedTeamId} onChange={(event) => setSelectedTeamId(event.target.value)}>
+                <option value="all">Todas as equipes</option>
+                {teams.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Periodo">
+              <select className="form-input" value={selectedPeriodKey} onChange={(event) => setSelectedPeriodKey(event.target.value)}>
+                {periods.map((period) => (
+                  <option key={`${period.year}-${period.monthNumber}`} value={`${period.year}-${period.monthNumber}`}>
+                    {period.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          </div>
+        </div>
+      </section>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <MetricCard label="Equipe" value={selectedTeamName} />
+        <MetricCard label="CSAT medio" value={loading ? '...' : `${averageCsat}%`} />
+        <MetricCard label="% avaliacoes" value={`${reviewCoverage}%`} />
+        <MetricCard label="Atendimentos" value={totals.tickets} />
+      </div>
+
+      <section className="panel">
+        <div className="grid gap-6 xl:grid-cols-3">
+          <div className="xl:col-span-2">
+            <h2 className="section-title">Evolucao mensal</h2>
+            <p className="section-subtitle">CSAT medio consolidado por mes no filtro selecionado.</p>
+            <div className="mt-5">
+              <TrendLineChart label="CSAT mensal" points={monthlyTrend} suffix="%" />
+            </div>
           </div>
           <div className="rounded-lg bg-slate-900 p-5">
-            <p className="text-sm text-slate-400">Acesso</p>
-            <p className="mt-2 text-xl font-bold">{isManagementUser ? 'Gestao completa' : 'Visao individual'}</p>
-            <p className="mt-2 text-sm text-slate-400">
-              O modulo seguira os mesmos perfis: Master, Coordenadora e Analista.
-            </p>
+            <h3 className="text-xl font-bold">Resumo operacional</h3>
+            <div className="mt-4 space-y-3 text-sm text-slate-300">
+              <p>Validos: <strong>{totals.validTickets}</strong></p>
+              <p>Inativos: <strong>{totals.inactive}</strong></p>
+              <p>Avaliacoes: <strong>{totals.reviews}</strong></p>
+              <p>Sem avaliacao/envio: <strong>{noReviewPercentage}%</strong></p>
+              <p>Media por analista: <strong>{averageTickets}</strong></p>
+            </div>
           </div>
-          <div className="rounded-lg bg-slate-900 p-5">
-            <p className="text-sm text-slate-400">Proxima etapa</p>
-            <p className="mt-2 text-xl font-bold">Importar codigo-fonte</p>
-            <p className="mt-2 text-sm text-slate-400">
-              Quando o projeto de chat for enviado, vamos analisar e encaixar por etapas.
-            </p>
+        </div>
+      </section>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <section className="panel">
+          <h2 className="section-title">Podio do chat</h2>
+          <p className="section-subtitle">Criterios: CSAT minimo 90%, avaliacoes a partir de 25% e volume acima da media.</p>
+          <div className="mt-5 space-y-3">
+            {podium.length ? (
+              podium.map((metric, index) => (
+                <div key={metric.id} className="flex items-center justify-between rounded-lg bg-slate-900 p-4">
+                  <div>
+                    <p className="font-semibold">{index + 1}. {getChatAnalystName(metric)}</p>
+                    <p className="text-sm text-slate-400">{metric.total_tickets} atendimentos | {metric.review_percentage}% avaliacoes</p>
+                  </div>
+                  <strong className="text-emerald-300">{metric.csat}%</strong>
+                </div>
+              ))
+            ) : (
+              <EmptyState text="Nenhum analista atingiu todos os criterios neste periodo." />
+            )}
           </div>
+        </section>
+
+        <section className="panel">
+          <h2 className="section-title">Analistas em atencao</h2>
+          <p className="section-subtitle">Lista objetiva para orientar acompanhamento mensal.</p>
+          <div className="mt-5 space-y-3">
+            {attention.length ? (
+              attention.map((item) => (
+                <div key={item.metric.id} className="rounded-lg bg-slate-900 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-semibold">{getChatAnalystName(item.metric)}</p>
+                    <strong className="text-amber-200">{item.metric.csat}%</strong>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-400">{item.reasons.join(', ')}</p>
+                </div>
+              ))
+            ) : (
+              <EmptyState text="Nenhum ponto critico encontrado neste filtro." />
+            )}
+          </div>
+        </section>
+      </div>
+
+      <section className="panel">
+        <h2 className="section-title">Base importada</h2>
+        <p className="section-subtitle">
+          {metrics.length} registros historicos carregados. Este modulo esta em leitura ate ativarmos a importacao mensal.
+        </p>
+        <div className="mt-5 overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="text-slate-400">
+              <tr>
+                <th className="px-3 py-2">Analista</th>
+                <th className="px-3 py-2">Equipe</th>
+                <th className="px-3 py-2">CSAT</th>
+                <th className="px-3 py-2">Avaliacoes</th>
+                <th className="px-3 py-2">Atendimentos</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleMetrics.map((metric) => (
+                <tr key={metric.id} className="border-t border-slate-800">
+                  <td className="px-3 py-3 font-semibold">{getChatAnalystName(metric)}</td>
+                  <td className="px-3 py-3 text-slate-300">{getChatTeamName(metric)}</td>
+                  <td className="px-3 py-3">{metric.csat}%</td>
+                  <td className="px-3 py-3">{metric.review_percentage}%</td>
+                  <td className="px-3 py-3">{metric.total_tickets}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
     </div>
   )
 }
+
 function DashboardView({
   analystsCount,
   analysts,
@@ -3981,6 +4254,60 @@ function getPredictiveRiskLevel(
 function clampScore(value: number) {
   return Math.max(0, Math.min(100, value))
 }
+function getChatAnalystName(metric: ChatMonthlyMetric) {
+  const analyst = Array.isArray(metric.chat_analysts) ? metric.chat_analysts[0] : metric.chat_analysts
+  return analyst?.name ?? 'Analista'
+}
+
+function getChatTeamName(metric: ChatMonthlyMetric) {
+  const team = Array.isArray(metric.chat_teams) ? metric.chat_teams[0] : metric.chat_teams
+  return team?.name ?? 'Equipe'
+}
+
+function buildChatPodium(metrics: ChatMonthlyMetric[], averageTickets: number) {
+  return metrics
+    .filter(
+      (metric) =>
+        Number(metric.csat) >= 90 &&
+        Number(metric.review_percentage) >= 25 &&
+        Number(metric.total_tickets) >= averageTickets,
+    )
+    .sort((a, b) => Number(b.csat) - Number(a.csat))
+    .slice(0, 3)
+}
+
+function getChatAttentionReasons(metric: ChatMonthlyMetric, averageTickets: number) {
+  const reasons: string[] = []
+  if (Number(metric.csat) < 90) reasons.push('CSAT abaixo de 90%')
+  if (Number(metric.review_percentage) < 25) reasons.push('avaliacoes abaixo de 25%')
+  if (Number(metric.total_tickets) < averageTickets) reasons.push('volume abaixo da media')
+  return reasons
+}
+
+function buildChatMonthlyTrend(metrics: ChatMonthlyMetric[]) {
+  const grouped = new Map<string, { label: string; year: number; month: number; csatSum: number; count: number }>()
+  metrics.forEach((metric) => {
+    const key = `${metric.year}-${metric.month_number}`
+    const current = grouped.get(key) ?? {
+      label: metric.month_label,
+      year: metric.year,
+      month: metric.month_number,
+      csatSum: 0,
+      count: 0,
+    }
+    current.csatSum += Number(metric.csat)
+    current.count += 1
+    grouped.set(key, current)
+  })
+
+  return [...grouped.values()]
+    .sort((a, b) => (a.year === b.year ? a.month - b.month : a.year - b.year))
+    .map((item) => ({
+      label: item.label.replace(' 2026', ''),
+      value: item.count ? round(item.csatSum / item.count) : 0,
+    }))
+}
+
 function calculateAverageCsat(metrics: IndividualMetric[]) {
   if (!metrics.length) return 0
 
@@ -4165,6 +4492,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
