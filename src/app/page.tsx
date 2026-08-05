@@ -119,6 +119,8 @@ type PeriodFilter = {
   end: string
 }
 
+type AppModule = 'phone' | 'chat'
+
 type ActiveTab = 'dashboard' | 'reports' | 'analysts' | 'goals' | 'entries'
 
 const initialIndividualForm: IndividualForm = {
@@ -166,6 +168,7 @@ export default function Home() {
   const [analysts, setAnalysts] = useState<Analyst[]>([])
   const [individualMetrics, setIndividualMetrics] = useState<IndividualMetric[]>([])
   const [teamMetrics, setTeamMetrics] = useState<TeamMetric[]>([])
+  const [activeModule, setActiveModule] = useState<AppModule>('phone')
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard')
   const [individualForm, setIndividualForm] = useState(initialIndividualForm)
   const [teamForm, setTeamForm] = useState(initialTeamForm)
@@ -881,7 +884,31 @@ export default function Home() {
           </button>
         </header>
 
-        <nav className="mt-6 flex flex-wrap gap-2">
+        <div className="mt-6 grid gap-3 md:grid-cols-2">
+          <button
+            className={activeModule === 'phone' ? 'module-card-active' : 'module-card'}
+            type="button"
+            onClick={() => {
+              setActiveModule('phone')
+              setActiveTab('dashboard')
+            }}
+          >
+            <span>Modulo telefone</span>
+            <strong>Performance de atendimento</strong>
+            <small>Dashboard, lancamentos, metas, podio, SARE e IA preditiva.</small>
+          </button>
+          <button
+            className={activeModule === 'chat' ? 'module-card-active' : 'module-card'}
+            type="button"
+            onClick={() => setActiveModule('chat')}
+          >
+            <span>Modulo chat</span>
+            <strong>Controle da equipe de chat</strong>
+            <small>Reservado para importar o projeto atual de chat como modulo separado.</small>
+          </button>
+        </div>
+        {activeModule === 'phone' && (
+          <nav className="mt-6 flex flex-wrap gap-2">
           <TabButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')}>
             Dashboard
           </TabButton>
@@ -901,11 +928,14 @@ export default function Home() {
               </TabButton>
             </>
           )}
-        </nav>
+          </nav>
+        )}
 
         {message && <Feedback message={message} />}
 
-        {activeTab === 'dashboard' && (
+        {activeModule === 'chat' && <ChatModulePlaceholder role={userRole} />}
+
+        {activeModule === 'phone' && activeTab === 'dashboard' && (
           <DashboardView
             analystsCount={visibleActiveAnalysts.length}
             analysts={visibleAnalysts}
@@ -917,7 +947,7 @@ export default function Home() {
           />
         )}
 
-        {activeTab === 'reports' && (
+        {activeModule === 'phone' && activeTab === 'reports' && (
           <ReportsView
             analysts={visibleAnalysts}
             goals={goals}
@@ -927,7 +957,7 @@ export default function Home() {
           />
         )}
 
-        {isManagementUser && activeTab === 'entries' && (
+        {activeModule === 'phone' && isManagementUser && activeTab === 'entries' && (
           <EntriesView
             analysts={activeAnalysts}
             selectedAnalyst={selectedAnalyst}
@@ -946,7 +976,7 @@ export default function Home() {
           />
         )}
 
-        {isManagementUser && activeTab === 'analysts' && (
+        {activeModule === 'phone' && isManagementUser && activeTab === 'analysts' && (
           <AnalystsView
             analysts={analysts}
             analystForm={analystForm}
@@ -961,7 +991,7 @@ export default function Home() {
           />
         )}
 
-        {isManagementUser && activeTab === 'goals' && (
+        {activeModule === 'phone' && isManagementUser && activeTab === 'goals' && (
           <GoalsView
             goals={goals}
             goalForm={goalForm}
@@ -978,6 +1008,48 @@ export default function Home() {
   )
 }
 
+function ChatModulePlaceholder({ role }: { role: UserRole }) {
+  const isManagementUser = role !== 'analyst'
+
+  return (
+    <div className="mt-8 space-y-7">
+      <section className="panel">
+        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
+          Modulo em preparacao
+        </p>
+        <h2 className="mt-3 text-3xl font-bold">Controle da equipe de chat</h2>
+        <p className="mt-3 max-w-3xl text-slate-300">
+          Este espaco esta reservado para receber o projeto de chat como um modulo independente, reaproveitando login,
+          perfis de acesso, relatorios, indicadores e camadas de IA desta plataforma.
+        </p>
+
+        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          <div className="rounded-lg bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Arquitetura</p>
+            <p className="mt-2 text-xl font-bold">Modulo separado</p>
+            <p className="mt-2 text-sm text-slate-400">
+              As regras do chat entram sem misturar os calculos do telefone.
+            </p>
+          </div>
+          <div className="rounded-lg bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Acesso</p>
+            <p className="mt-2 text-xl font-bold">{isManagementUser ? 'Gestao completa' : 'Visao individual'}</p>
+            <p className="mt-2 text-sm text-slate-400">
+              O modulo seguira os mesmos perfis: Master, Coordenadora e Analista.
+            </p>
+          </div>
+          <div className="rounded-lg bg-slate-900 p-5">
+            <p className="text-sm text-slate-400">Proxima etapa</p>
+            <p className="mt-2 text-xl font-bold">Importar codigo-fonte</p>
+            <p className="mt-2 text-sm text-slate-400">
+              Quando o projeto de chat for enviado, vamos analisar e encaixar por etapas.
+            </p>
+          </div>
+        </div>
+      </section>
+    </div>
+  )
+}
 function DashboardView({
   analystsCount,
   analysts,
@@ -3736,6 +3808,8 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
+
 
 
 
