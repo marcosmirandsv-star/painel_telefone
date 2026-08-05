@@ -2912,123 +2912,175 @@ function GoalsView({
   onCancelEdit: () => void
 }) {
   return (
-    <div className="mt-8 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+    <div className="mt-8 space-y-6">
       <section className="panel">
-        <h2 className="section-title">
-          {editingGoalId ? 'Editar meta' : 'Selecione uma meta'}
-        </h2>
+        <h2 className="section-title">Metas e impacto no sistema</h2>
         <p className="section-subtitle">
-          Ajuste metas gerais da operacao sem alterar codigo ou rodar query.
+          Estes parametros alimentam dashboard, podio, relatorios SARE e leituras preditivas. O CSAT individual continua no cadastro de cada analista.
         </p>
 
-        <form className="mt-5 grid gap-4" onSubmit={onGoalSubmit}>
-          <Field label="Nome da meta">
-            <input
-              className="form-input"
-              disabled={!editingGoalId}
-              value={goalForm.label}
-              onChange={(event) => onGoalChange({ ...goalForm, label: event.target.value })}
-              required
-            />
-          </Field>
+        <div className="mt-5 grid gap-4 lg:grid-cols-3">
+          <GoalImpactCard
+            title="Podio mensal"
+            text="Usa CSAT minimo para podio, percentual minimo de avaliacoes e volume de atendimentos dentro da media da equipe."
+          />
+          <GoalImpactCard
+            title="Performance da equipe"
+            text="Define a referencia operacional compartilhada por todos e usada nos alertas executivos."
+          />
+          <GoalImpactCard
+            title="Relatorios e IA"
+            text="As metas aparecem no SARE, nos planos de desenvolvimento e na inteligencia preditiva do dashboard."
+          />
+        </div>
+      </section>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Valor">
+      <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+        <section className="panel">
+          <h2 className="section-title">
+            {editingGoalId ? 'Editar meta' : 'Selecione uma meta'}
+          </h2>
+          <p className="section-subtitle">
+            Ajuste metas gerais da operacao sem alterar codigo ou rodar query.
+          </p>
+
+          <form className="mt-5 grid gap-4" onSubmit={onGoalSubmit}>
+            <Field label="Nome da meta">
               <input
                 className="form-input"
                 disabled={!editingGoalId}
-                min="0"
-                step="0.01"
-                type="number"
-                value={goalForm.value}
-                onChange={(event) => onGoalChange({ ...goalForm, value: event.target.value })}
+                value={goalForm.label}
+                onChange={(event) => onGoalChange({ ...goalForm, label: event.target.value })}
                 required
               />
             </Field>
 
-            <Field label="Unidade">
-              <select
-                className="form-input"
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Valor">
+                <input
+                  className="form-input"
+                  disabled={!editingGoalId}
+                  min="0"
+                  step="0.01"
+                  type="number"
+                  value={goalForm.value}
+                  onChange={(event) => onGoalChange({ ...goalForm, value: event.target.value })}
+                  required
+                />
+              </Field>
+
+              <Field label="Unidade">
+                <select
+                  className="form-input"
+                  disabled={!editingGoalId}
+                  value={goalForm.unit}
+                  onChange={(event) => onGoalChange({ ...goalForm, unit: event.target.value })}
+                >
+                  <option value="percent">Percentual</option>
+                  <option value="number">Numero</option>
+                </select>
+              </Field>
+            </div>
+
+            <label className="flex items-center gap-3 text-sm text-slate-300">
+              <input
+                checked={goalForm.active}
                 disabled={!editingGoalId}
-                value={goalForm.unit}
-                onChange={(event) => onGoalChange({ ...goalForm, unit: event.target.value })}
-              >
-                <option value="percent">Percentual</option>
-                <option value="number">Numero</option>
-              </select>
-            </Field>
-          </div>
+                type="checkbox"
+                onChange={(event) => onGoalChange({ ...goalForm, active: event.target.checked })}
+              />
+              Meta ativa
+            </label>
 
-          <label className="flex items-center gap-3 text-sm text-slate-300">
-            <input
-              checked={goalForm.active}
-              disabled={!editingGoalId}
-              type="checkbox"
-              onChange={(event) => onGoalChange({ ...goalForm, active: event.target.checked })}
-            />
-            Meta ativa
-          </label>
-
-          <div className="flex flex-wrap gap-3">
-            <button className="primary-button" disabled={!editingGoalId || saving} type="submit">
-              {saving ? 'Salvando...' : 'Salvar meta'}
-            </button>
-
-            {editingGoalId && (
-              <button className="secondary-button" type="button" onClick={onCancelEdit}>
-                Cancelar
+            <div className="flex flex-wrap gap-3">
+              <button className="primary-button" disabled={!editingGoalId || saving} type="submit">
+                {saving ? 'Salvando...' : 'Salvar meta'}
               </button>
-            )}
-          </div>
-        </form>
-      </section>
 
-      <section className="panel">
-        <h2 className="section-title">Metas configuradas</h2>
-        <p className="section-subtitle">
-          O CSAT individual fica no cadastro de cada analista; aqui ficam metas da operacao.
-        </p>
+              {editingGoalId && (
+                <button className="secondary-button" type="button" onClick={onCancelEdit}>
+                  Cancelar
+                </button>
+              )}
+            </div>
+          </form>
+        </section>
 
-        <div className="mt-5 overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="text-slate-400">
-              <tr>
-                <th className="pb-3 pr-4 font-medium">Meta</th>
-                <th className="pb-3 pr-4 font-medium">Valor</th>
-                <th className="pb-3 pr-4 font-medium">Status</th>
-                <th className="pb-3 font-medium">Acao</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/10">
-              {goals.map((goal) => (
-                <tr key={goal.id}>
-                  <td className="py-3 pr-4">{goal.label}</td>
-                  <td className="py-3 pr-4">
-                    {goal.value}
-                    {goal.unit === 'percent' ? '%' : ''}
-                  </td>
-                  <td className="py-3 pr-4">
-                    <span className={goal.active ? 'text-emerald-300' : 'text-slate-400'}>
-                      {goal.active ? 'Ativa' : 'Inativa'}
-                    </span>
-                  </td>
-                  <td className="py-3">
-                    <button className="small-button" type="button" onClick={() => onEditGoal(goal)}>
-                      Editar
-                    </button>
-                  </td>
+        <section className="panel">
+          <h2 className="section-title">Metas configuradas</h2>
+          <p className="section-subtitle">
+            O CSAT individual fica no cadastro de cada analista; aqui ficam metas da operacao.
+          </p>
+
+          <div className="mt-5 overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="text-slate-400">
+                <tr>
+                  <th className="pb-3 pr-4 font-medium">Meta</th>
+                  <th className="pb-3 pr-4 font-medium">Valor</th>
+                  <th className="pb-3 pr-4 font-medium">Status</th>
+                  <th className="pb-3 pr-4 font-medium">Impacto</th>
+                  <th className="pb-3 font-medium">Acao</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-white/10">
+                {goals.map((goal) => (
+                  <tr key={goal.id}>
+                    <td className="py-3 pr-4">{goal.label}</td>
+                    <td className="py-3 pr-4">
+                      {goal.value}
+                      {goal.unit === 'percent' ? '%' : ''}
+                    </td>
+                    <td className="py-3 pr-4">
+                      <span className={goal.active ? 'text-emerald-300' : 'text-slate-400'}>
+                        {goal.active ? 'Ativa' : 'Inativa'}
+                      </span>
+                    </td>
+                    <td className="py-3 pr-4 text-slate-400">{getGoalImpactText(goal)}</td>
+                    <td className="py-3">
+                      <button className="small-button" type="button" onClick={() => onEditGoal(goal)}>
+                        Editar
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
 
-          {!goals.length && <EmptyState text="Nenhuma meta cadastrada." />}
-        </div>
-      </section>
+            {!goals.length && <EmptyState text="Nenhuma meta cadastrada." />}
+          </div>
+        </section>
+      </div>
+    </div>
+  )
+}
+function GoalImpactCard({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="rounded-lg bg-slate-900 p-5">
+      <p className="text-sm text-slate-400">{title}</p>
+      <p className="mt-2 text-sm leading-6 text-slate-300">{text}</p>
     </div>
   )
 }
 
+function getGoalImpactText(goal: Goal) {
+  const key = goal.key.toLowerCase()
+  const label = goal.label.toLowerCase()
+
+  if (key.includes('podium') || label.includes('podio') || label.includes('pÃ³dio')) {
+    return 'Define elegibilidade para o podio e relatorios SARE.'
+  }
+
+  if (key.includes('review') || label.includes('avalia')) {
+    return 'Define o minimo de avaliacoes esperado por atendimento.'
+  }
+
+  if (key.includes('performance') || key.includes('team') || label.includes('performance') || label.includes('desempenho')) {
+    return 'Define a referencia da performance operacional da equipe.'
+  }
+
+  return 'Parametro operacional usado nos calculos e leituras do painel.'
+}
 function MetricCard({
   label,
   value,
@@ -4018,6 +4070,8 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
+
 
 
 
