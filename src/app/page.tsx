@@ -888,7 +888,7 @@ export default function Home() {
       <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-white">
         <section className="w-full max-w-md rounded-lg border border-white/10 bg-white/5 p-6 shadow-2xl">
           <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-300">
-            Painel Telefone
+            Central de Performance
           </p>
           <h1 className="mt-4 text-3xl font-bold">
             {isPasswordRecovery ? 'Criar nova senha' : 'Entrar no sistema'}
@@ -960,7 +960,7 @@ export default function Home() {
         <header className="flex flex-col gap-5 border-b border-white/10 pb-6 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-300">
-              Painel Telefone
+              Central de Performance
             </p>
             <h1 className="mt-3 text-3xl font-bold sm:text-4xl">
               Gestao de Performance de Atendimento
@@ -1007,7 +1007,7 @@ export default function Home() {
           >
             <span>Modulo chat</span>
             <strong>Controle da equipe de chat</strong>
-            <small>Reservado para importar o projeto atual de chat como modulo separado.</small>
+            <small>Dados do Zendesk, importacao mensal, podio e relatorios de gestao.</small>
           </button>
         </div>
         {activeModule === 'phone' && (
@@ -1335,7 +1335,7 @@ function ChatModuleDashboard({
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Modulo chat</p>
             <h2 className="mt-3 text-3xl font-bold">Performance mensal do chat</h2>
             <p className="section-subtitle">
-              Leitura consolidada dos dados historicos importados do sistema antigo. A importacao mensal entra na proxima etapa.
+              Leitura consolidada dos dados historicos e das importacoes mensais do Zendesk.
             </p>
           </div>
 
@@ -1369,7 +1369,7 @@ function ChatModuleDashboard({
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Importacao mensal</p>
             <h3 className="mt-2 text-2xl font-bold">Atualizar base do chat</h3>
             <p className="section-subtitle">
-              Use as planilhas de satisfacao e inatividade baixadas do 55PBX. O calculo segue a regra original do painel do chat.
+              Use as planilhas de satisfacao e inatividade baixadas do Zendesk. O calculo segue a regra original do painel do chat.
             </p>
           </div>
 
@@ -2446,7 +2446,7 @@ function ReportsView({
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="hidden print:block text-sm font-bold uppercase tracking-[0.18em] text-cyan-300">
-              Painel Telefone
+              Central de Performance
             </p>
             <h2 className="section-title">Relatorio mensal SARE</h2>
             <p className="section-subtitle">
@@ -4982,6 +4982,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
