@@ -1,6 +1,7 @@
 ﻿'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useState } from 'react'
+import * as XLSX from 'xlsx'
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 
@@ -79,6 +80,29 @@ type ChatAnalyst = {
   name: string
   csat_goal: number
   active: boolean
+}
+
+type ChatMetricImportRecord = {
+  team_id: string
+  analyst_id: string
+  month_label: string
+  year: number
+  month_number: number
+  period_start: string
+  period_end: string
+  csat: number
+  review_percentage: number
+  sending_percentage: number
+  total_tickets: number
+  inactive_tickets: number
+  valid_tickets: number
+  reviews: number
+  positive_reviews: number
+  negative_reviews: number
+  csat_goal: number
+  csat_delta: number
+  general_review_goal: number
+  status: string
 }
 
 type ChatMonthlyMetric = {
@@ -1019,6 +1043,7 @@ export default function Home() {
             analysts={chatAnalysts}
             metrics={chatMonthlyMetrics}
             loading={loading}
+            onImportComplete={loadData}
           />
         )}
 
@@ -1101,12 +1126,14 @@ function ChatModuleDashboard({
   analysts,
   metrics,
   loading,
+  onImportComplete,
 }: {
   role: UserRole
   teams: ChatTeam[]
   analysts: ChatAnalyst[]
   metrics: ChatMonthlyMetric[]
   loading: boolean
+  onImportComplete: () => Promise<void>
 }) {
   const isManagementUser = role !== 'analyst'
   const periods = useMemo(() => {
@@ -1126,6 +1153,69 @@ function ChatModuleDashboard({
   }, [metrics])
   const [selectedTeamId, setSelectedTeamId] = useState('all')
   const [selectedPeriodKey, setSelectedPeriodKey] = useState('')
+  const [chatImportYear, setChatImportYear] = useState(String(new Date().getFullYear()))
+  const [chatImportMonth, setChatImportMonth] = useState(String(new Date().getMonth() + 1))
+  const [chatSatisfactionFile, setChatSatisfactionFile] = useState<File | null>(null)
+  const [chatInactiveFile, setChatInactiveFile] = useState<File | null>(null)
+  const [chatImportSaving, setChatImportSaving] = useState(false)
+  const [chatImportMessage, setChatImportMessage] = useState('')
+
+  async function handleChatMonthlyImport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setChatImportMessage('')
+
+    if (!chatSatisfactionFile || !chatInactiveFile) {
+      setChatImportMessage('Selecione a planilha de satisfacao e a planilha de inativos antes de importar.')
+      return
+    }
+
+    const year = Number(chatImportYear)
+    const monthNumber = Number(chatImportMonth)
+
+    if (!year || !monthNumber || monthNumber < 1 || monthNumber > 12) {
+      setChatImportMessage('Informe um mes e ano validos para a importacao.')
+      return
+    }
+
+    setChatImportSaving(true)
+
+    try {
+      const [satisfactionRows, inactiveRows] = await Promise.all([
+        readSheetRows(chatSatisfactionFile),
+        readSheetRows(chatInactiveFile),
+      ])
+      const period = getChatMonthPeriod(year, monthNumber)
+      const importRows = buildChatMetricRowsFromSheets({
+        satisfactionRows,
+        inactiveRows,
+        analysts,
+        year,
+        monthNumber,
+        monthLabel: period.label,
+        periodStart: period.start,
+        periodEnd: period.end,
+      })
+
+      if (!importRows.length) {
+        setChatImportMessage('Nenhum analista do cadastro foi encontrado nos arquivos selecionados.')
+        return
+      }
+
+      const { error } = await supabase.from('chat_monthly_metrics').upsert(importRows, {
+        onConflict: 'team_id,analyst_id,year,month_number',
+      })
+
+      if (error) throw error
+
+      await onImportComplete()
+      setSelectedPeriodKey(`${year}-${monthNumber}`)
+      setChatImportMessage(`Importacao concluida: ${importRows.length} analistas processados para ${period.label}.`)
+    } catch (error) {
+      setChatImportMessage(getErrorMessage(error))
+    } finally {
+      setChatImportSaving(false)
+    }
+  }
 
   useEffect(() => {
     if (!selectedPeriodKey && periods[0]) {
@@ -1273,6 +1363,60 @@ function ChatModuleDashboard({
         </div>
       </section>
 
+      <section className="panel">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Importacao mensal</p>
+            <h3 className="mt-2 text-2xl font-bold">Atualizar base do chat</h3>
+            <p className="section-subtitle">
+              Use as planilhas de satisfacao e inatividade baixadas do 55PBX. O calculo segue a regra original do painel do chat.
+            </p>
+          </div>
+
+          <form className="grid flex-1 gap-3 md:grid-cols-5" onSubmit={handleChatMonthlyImport}>
+            <Field label="Mes">
+              <select className="form-input" value={chatImportMonth} onChange={(event) => setChatImportMonth(event.target.value)}>
+                {chatMonthOptions.map((month) => (
+                  <option key={month.value} value={month.value}>
+                    {month.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Ano">
+              <input
+                className="form-input"
+                min="2020"
+                max="2100"
+                type="number"
+                value={chatImportYear}
+                onChange={(event) => setChatImportYear(event.target.value)}
+              />
+            </Field>
+            <Field label="Satisfacao">
+              <input
+                accept=".xlsx,.xls,.csv,text/csv"
+                className="form-input"
+                type="file"
+                onChange={(event) => setChatSatisfactionFile(event.target.files?.[0] ?? null)}
+              />
+            </Field>
+            <Field label="Inatividade">
+              <input
+                accept=".xlsx,.xls,.csv,text/csv"
+                className="form-input"
+                type="file"
+                onChange={(event) => setChatInactiveFile(event.target.files?.[0] ?? null)}
+              />
+            </Field>
+            <button className="btn-primary self-end" disabled={chatImportSaving} type="submit">
+              {chatImportSaving ? 'Importando...' : 'Importar mes'}
+            </button>
+          </form>
+        </div>
+
+        {chatImportMessage && <p className="mt-4 rounded-md bg-slate-900/70 px-4 py-3 text-sm text-slate-200">{chatImportMessage}</p>}
+      </section>
       <div className="grid gap-4 md:grid-cols-4">
         <MetricCard label="Equipe" value={selectedTeamName} />
         <MetricCard label="CSAT medio" value={loading ? '...' : `${averageCsat}%`} />
@@ -4364,6 +4508,244 @@ function getChatTeamName(metric: ChatMonthlyMetric) {
   return team?.name ?? 'Equipe'
 }
 
+const chatMonthOptions = [
+  { value: '1', label: 'Janeiro' },
+  { value: '2', label: 'Fevereiro' },
+  { value: '3', label: 'Marco' },
+  { value: '4', label: 'Abril' },
+  { value: '5', label: 'Maio' },
+  { value: '6', label: 'Junho' },
+  { value: '7', label: 'Julho' },
+  { value: '8', label: 'Agosto' },
+  { value: '9', label: 'Setembro' },
+  { value: '10', label: 'Outubro' },
+  { value: '11', label: 'Novembro' },
+  { value: '12', label: 'Dezembro' },
+]
+
+async function readSheetRows(file: File) {
+  if (file.name.toLowerCase().endsWith('.csv')) {
+    return parseCsvRows(await file.text())
+  }
+
+  const buffer = await file.arrayBuffer()
+  const workbook = XLSX.read(buffer, { type: 'array' })
+  const sheetName = workbook.SheetNames[0]
+  if (!sheetName) return []
+
+  return XLSX.utils.sheet_to_json<Record<string, string | number | null>>(workbook.Sheets[sheetName], {
+    defval: '',
+    raw: false,
+  })
+}
+
+function parseCsvRows(text: string) {
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter((line) => line.trim())
+  if (lines.length < 2) return []
+
+  const delimiter = detectCsvDelimiter(lines[0])
+  const headers = parseCsvLine(lines[0], delimiter).map((header) => header.trim())
+
+  return lines.slice(1).map((line) => {
+    const values = parseCsvLine(line, delimiter)
+    return headers.reduce<Record<string, string>>((row, header, index) => {
+      row[header] = values[index]?.trim() ?? ''
+      return row
+    }, {})
+  })
+}
+
+function detectCsvDelimiter(headerLine: string) {
+  const commaCount = (headerLine.match(/,/g) ?? []).length
+  const semicolonCount = (headerLine.match(/;/g) ?? []).length
+  return semicolonCount > commaCount ? ';' : ','
+}
+
+function parseCsvLine(line: string, delimiter: string) {
+  const values: string[] = []
+  let current = ''
+  let insideQuotes = false
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index]
+    const next = line[index + 1]
+
+    if (char === '"' && insideQuotes && next === '"') {
+      current += '"'
+      index += 1
+      continue
+    }
+
+    if (char === '"') {
+      insideQuotes = !insideQuotes
+      continue
+    }
+
+    if (char === delimiter && !insideQuotes) {
+      values.push(current)
+      current = ''
+      continue
+    }
+
+    current += char
+  }
+
+  values.push(current)
+  return values
+}
+
+function normalizeChatText(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+}
+
+function normalizeChatColumn(value: string) {
+  return normalizeChatText(value).replace(/[^a-z0-9]/g, '')
+}
+
+function findChatColumn(rows: Record<string, string | number | null>[], candidates: string[]) {
+  const headers = Object.keys(rows[0] ?? {})
+  const normalizedCandidates = candidates.map(normalizeChatColumn)
+  const directMatch = headers.find((header) => normalizedCandidates.includes(normalizeChatColumn(header)))
+  if (directMatch) return directMatch
+
+  return headers.find((header) => {
+    const normalizedHeader = normalizeChatColumn(header)
+    return normalizedCandidates.some((candidate) => normalizedHeader.includes(candidate) || candidate.includes(normalizedHeader))
+  })
+}
+
+function getChatRowValue(row: Record<string, string | number | null>, column: string) {
+  return String(row[column] ?? '').trim()
+}
+
+function getChatMonthPeriod(year: number, monthNumber: number) {
+  const month = chatMonthOptions.find((option) => Number(option.value) === monthNumber)?.label ?? 'Periodo'
+  const paddedMonth = String(monthNumber).padStart(2, '0')
+  const lastDay = new Date(year, monthNumber, 0).getDate()
+
+  return {
+    label: `${month} ${year}`,
+    start: `${year}-${paddedMonth}-01`,
+    end: `${year}-${paddedMonth}-${String(lastDay).padStart(2, '0')}`,
+  }
+}
+
+function buildChatMetricRowsFromSheets({
+  satisfactionRows,
+  inactiveRows,
+  analysts,
+  year,
+  monthNumber,
+  monthLabel,
+  periodStart,
+  periodEnd,
+}: {
+  satisfactionRows: Record<string, string | number | null>[]
+  inactiveRows: Record<string, string | number | null>[]
+  analysts: ChatAnalyst[]
+  year: number
+  monthNumber: number
+  monthLabel: string
+  periodStart: string
+  periodEnd: string
+}) {
+  const satisfactionAnalystColumn = findChatColumn(satisfactionRows, [
+    'Nome do atribuido',
+    'Atribuido',
+    'Assignee',
+    'Responsavel',
+    'Nome do agente',
+    'Analista',
+  ])
+  const satisfactionRatingColumn = findChatColumn(satisfactionRows, [
+    'Indice de satisfacao do ticket Boa Ruim vazio',
+    'Indice de satisfacao do ticket',
+    'Satisfacao',
+    'CSAT',
+    'Rating',
+    'Avaliacao',
+  ])
+  const inactiveAnalystColumn = findChatColumn(inactiveRows, [
+    'Nome do atribuido',
+    'Atribuido',
+    'Assignee',
+    'Responsavel',
+    'Nome do agente',
+    'Analista',
+  ])
+
+  if (!satisfactionAnalystColumn) throw new Error('Nao encontrei a coluna do analista na planilha de satisfacao.')
+  if (!satisfactionRatingColumn) throw new Error('Nao encontrei a coluna de satisfacao/avaliacao na planilha de satisfacao.')
+  if (!inactiveAnalystColumn) throw new Error('Nao encontrei a coluna do analista na planilha de inatividade.')
+
+  return analysts
+    .filter((analyst) => analyst.active)
+    .map((analyst): ChatMetricImportRecord | null => {
+      const analystName = normalizeChatText(analyst.name)
+      const analystSatisfactionRows = satisfactionRows.filter(
+        (row) => normalizeChatText(getChatRowValue(row, satisfactionAnalystColumn)) === analystName,
+      )
+      const analystInactiveRows = inactiveRows.filter(
+        (row) => normalizeChatText(getChatRowValue(row, inactiveAnalystColumn)) === analystName,
+      )
+      const totalTickets = analystSatisfactionRows.length
+      const inactiveTickets = analystInactiveRows.length
+
+      if (!totalTickets) return null
+
+      const validTickets = Math.max(totalTickets - inactiveTickets, 0)
+      const ratedRows = analystSatisfactionRows.filter((row) => {
+        const rating = normalizeChatText(getChatRowValue(row, satisfactionRatingColumn))
+        return rating === 'boa' || rating === 'ruim' || rating === 'good' || rating === 'bad'
+      })
+      const positiveReviews = ratedRows.filter((row) => {
+        const rating = normalizeChatText(getChatRowValue(row, satisfactionRatingColumn))
+        return rating === 'boa' || rating === 'good'
+      }).length
+      const reviews = ratedRows.length
+      const negativeReviews = Math.max(reviews - positiveReviews, 0)
+      const csat = reviews ? round((positiveReviews / reviews) * 100) : 0
+      const reviewPercentage = validTickets ? round((reviews / validTickets) * 100) : 0
+      const sendingPercentage = validTickets ? round(((validTickets - reviews) / validTickets) * 100) : 0
+      const csatGoal = Number(analyst.csat_goal) || 86
+      const generalReviewGoal = 25
+      const csatDelta = round(csat - csatGoal)
+      const status =
+        csat >= csatGoal && reviewPercentage >= generalReviewGoal
+          ? 'Meta Superada'
+          : csat >= csatGoal || reviewPercentage >= generalReviewGoal
+            ? 'Atencao'
+            : 'Critico'
+
+      return {
+        team_id: analyst.team_id,
+        analyst_id: analyst.id,
+        month_label: monthLabel,
+        year,
+        month_number: monthNumber,
+        period_start: periodStart,
+        period_end: periodEnd,
+        csat,
+        review_percentage: reviewPercentage,
+        sending_percentage: sendingPercentage,
+        total_tickets: totalTickets,
+        inactive_tickets: inactiveTickets,
+        valid_tickets: validTickets,
+        reviews,
+        positive_reviews: positiveReviews,
+        negative_reviews: negativeReviews,
+        csat_goal: csatGoal,
+        csat_delta: csatDelta,
+        general_review_goal: generalReviewGoal,
+        status,
+      }
+    })
+    .filter((record): record is ChatMetricImportRecord => Boolean(record))
+}
 function calculateChatAverage(
   metrics: ChatMonthlyMetric[],
   field: 'csat' | 'review_percentage' | 'sending_percentage',
@@ -4600,6 +4982,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
