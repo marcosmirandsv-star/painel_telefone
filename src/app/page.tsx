@@ -1326,8 +1326,8 @@ function DashboardView({
             value={`${predictiveGoalProbability}%`}
             detail={
               hasPeriodData
-                ? `${eligibleCount} de ${periodPodium.length} analistas elegiveis no periodo`
-                : 'sem base de dados no periodo'
+                ? `CSAT, performance, avaliacoes e podio combinados. ${eligibleCount} de ${periodPodium.length} elegiveis.`
+                : 'Sem base de dados no periodo.'
             }
             tone={predictiveGoalProbability >= 75 ? 'success' : predictiveGoalProbability >= 45 ? 'warning' : 'danger'}
           />
@@ -1349,6 +1349,28 @@ function DashboardView({
             detail={predictiveAction}
             tone={predictiveRiskLevel === 'Baixo' ? 'success' : predictiveRiskLevel === 'Medio' ? 'warning' : 'danger'}
           />
+        </div>
+
+        <div className="mt-5 rounded-lg bg-slate-900 p-5">
+          <p className="text-sm font-semibold text-slate-200">Como ler esta previsao</p>
+          <div className="mt-3 grid gap-3 text-sm leading-6 text-slate-400 md:grid-cols-2">
+            <p>
+              A chance de atingir metas combina CSAT do periodo, performance da equipe, cobertura de avaliacoes e
+              quantidade de analistas elegiveis ao podio.
+            </p>
+            <p>
+              As previsoes usam o resultado atual e parte da variacao contra o periodo anterior. Quanto mais semanas
+              lancadas, mais confiavel fica a leitura.
+            </p>
+            <p>
+              O risco de queda sobe quando CSAT ou performance perdem forca, quando a chance fica abaixo de 75% ou
+              quando existem analistas em acompanhamento.
+            </p>
+            <p>
+              Esta leitura e um alerta de gestao: ela ajuda a decidir onde agir antes do fechamento, sem substituir a
+              analise do gestor.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -4070,6 +4092,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
