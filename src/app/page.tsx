@@ -1163,6 +1163,33 @@ function DashboardView({
           ? 'Revisar performance operacional da equipe.'
           : 'Manter rotina de acompanhamento semanal.'
 
+  const executiveCriticalPoint =
+    !hasPeriodData
+      ? 'Sem dados suficientes para diagnostico.'
+      : attentionList.length > 0
+        ? `${attentionCount} analista(s) abaixo dos criterios de podio.`
+        : periodAverageCsat < podiumCsatGoal
+          ? `CSAT do periodo abaixo da meta de podio (${podiumCsatGoal}%).`
+          : periodTeamPerformance < teamPerformanceGoal
+            ? `Performance da equipe abaixo da meta operacional (${teamPerformanceGoal}%).`
+            : 'Indicadores principais dentro da faixa esperada.'
+  const executiveNextAction =
+    !hasPeriodData
+      ? 'Conferir se os lancamentos da semana/mes ja foram feitos.'
+      : attentionCount
+        ? 'Abrir feedback SARE dos analistas em atencao e acompanhar a semana seguinte.'
+        : periodTeamPerformance < teamPerformanceGoal
+          ? 'Revisar abandonos, escala e gargalos antes do fechamento.'
+          : 'Comparar evolucao semanal e preservar a rotina atual.'
+  const executiveClosingRead =
+    !hasPeriodData
+      ? 'Fechamento ainda nao liberado para leitura.'
+      : predictiveRiskLevel === 'Alto'
+        ? 'Fechamento em risco: agir antes de consolidar o periodo.'
+        : predictiveRiskLevel === 'Medio'
+          ? 'Fechamento pede monitoramento: ha variacao que pode mudar o resultado.'
+          : 'Fechamento favoravel: manter acompanhamento ate concluir o periodo.'
+
   function handlePeriodModeChange(mode: PeriodMode) {
     setPeriodFilter(createPeriodFilter(mode))
   }
@@ -1293,21 +1320,20 @@ function DashboardView({
         </div>
 
         {!isAnalystDashboard && (
-          <div className="mt-5 grid gap-4 lg:grid-cols-3">
-            <div className="rounded-lg bg-slate-900 p-4">
-              <p className="text-sm text-slate-400">Prioridade do gestor</p>
-              <p className="mt-2 font-semibold">{executivePriority}</p>
+          <div className="mt-5 grid gap-4 lg:grid-cols-3">            <div className="rounded-lg bg-slate-900 p-4">
+              <p className="text-sm text-slate-400">Ponto critico</p>
+              <p className="mt-2 font-semibold">{executiveCriticalPoint}</p>
+              <p className="mt-2 text-xs leading-5 text-slate-500">{executivePriority}</p>
             </div>
             <div className="rounded-lg bg-slate-900 p-4">
-              <p className="text-sm text-slate-400">Volume operacional</p>
-              <p className="mt-2 font-semibold">
-                {teamAnsweredCalls} atendidas de {teamTotalCalls} processadas
-              </p>
+              <p className="text-sm text-slate-400">Acao recomendada</p>
+              <p className="mt-2 font-semibold">{executiveNextAction}</p>
             </div>
             <div className="rounded-lg bg-slate-900 p-4">
-              <p className="text-sm text-slate-400">Proxima acao sugerida</p>
-              <p className="mt-2 font-semibold">
-                {attentionCount ? 'Abrir feedback SARE dos analistas em atencao.' : 'Comparar evolucao semanal e preservar consistencia.'}
+              <p className="text-sm text-slate-400">Leitura do fechamento</p>
+              <p className="mt-2 font-semibold">{executiveClosingRead}</p>
+              <p className="mt-2 text-xs leading-5 text-slate-500">
+                Volume: {teamAnsweredCalls} atendidas de {teamTotalCalls} processadas.
               </p>
             </div>
           </div>
