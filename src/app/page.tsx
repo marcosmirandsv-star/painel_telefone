@@ -1169,11 +1169,26 @@ function ChatModuleDashboard({
     { tickets: 0, validTickets: 0, reviews: 0, positives: 0, inactive: 0 },
   )
   const averageTickets = visibleMetrics.length ? round(totals.tickets / visibleMetrics.length) : 0
-  const averageCsat = visibleMetrics.length
-    ? round(visibleMetrics.reduce((sum, metric) => sum + Number(metric.csat), 0) / visibleMetrics.length)
-    : 0
-  const reviewCoverage = totals.validTickets ? round((totals.reviews / totals.validTickets) * 100) : 0
-  const noReviewPercentage = totals.validTickets ? round(((totals.validTickets - totals.reviews) / totals.validTickets) * 100) : 0
+  const averageCsat = calculateChatAverage(visibleMetrics, 'csat')
+  const averageReviews = calculateChatAverage(visibleMetrics, 'review_percentage')
+  const averageSending = calculateChatAverage(visibleMetrics, 'sending_percentage')
+  const previousPeriodIndex = selectedPeriod
+    ? periods.findIndex((period) => period.year === selectedPeriod.year && period.monthNumber === selectedPeriod.monthNumber)
+    : -1
+  const previousPeriod = previousPeriodIndex >= 0 ? periods[previousPeriodIndex + 1] : undefined
+  const previousMetrics = metrics.filter((metric) => {
+    const matchesTeam = selectedTeamId === 'all' || metric.team_id === selectedTeamId
+    const matchesPeriod = previousPeriod
+      ? metric.year === previousPeriod.year && metric.month_number === previousPeriod.monthNumber
+      : false
+    return matchesTeam && matchesPeriod
+  })
+  const previousAverageCsat = calculateChatAverage(previousMetrics, 'csat')
+  const previousAverageReviews = calculateChatAverage(previousMetrics, 'review_percentage')
+  const previousAverageSending = calculateChatAverage(previousMetrics, 'sending_percentage')
+  const chatCsatDelta = round(averageCsat - previousAverageCsat)
+  const chatReviewDelta = round(averageReviews - previousAverageReviews)
+  const chatSendingDelta = round(averageSending - previousAverageSending)
   const podium = buildChatPodium(visibleMetrics, averageTickets)
   const attention = visibleMetrics
     .map((metric) => ({ metric, reasons: getChatAttentionReasons(metric, averageTickets) }))
@@ -1181,6 +1196,46 @@ function ChatModuleDashboard({
     .sort((a, b) => Number(a.metric.csat) - Number(b.metric.csat))
     .slice(0, 5)
   const monthlyTrend = buildChatMonthlyTrend(trendMetrics).slice(-7)
+  const chatExecutiveStatus =
+    !visibleMetrics.length
+      ? 'Sem dados no periodo'
+      : averageCsat >= 90 && averageReviews >= 25
+        ? 'Operacao saudavel'
+        : averageCsat < 85 || averageReviews < 20 || attention.length >= 3
+          ? 'Acompanhamento prioritario'
+          : 'Periodo em atencao'
+  const chatExecutiveTone =
+    !visibleMetrics.length
+      ? 'text-slate-300'
+      : averageCsat >= 90 && averageReviews >= 25
+        ? 'text-emerald-300'
+        : averageCsat < 85 || averageReviews < 20 || attention.length >= 3
+          ? 'text-rose-300'
+          : 'text-amber-300'
+  const chatMainAlert =
+    !visibleMetrics.length
+      ? 'Selecione outro periodo ou aguarde a importacao mensal.'
+      : averageCsat < 85
+        ? 'A qualidade do atendimento tem espaco para evolucao.'
+        : averageCsat < 90
+          ? 'CSAT abaixo da referencia de podio do chat.'
+          : averageReviews < 20
+            ? 'A participacao dos clientes nas pesquisas precisa ser ampliada.'
+            : averageReviews < 25
+              ? 'Avaliacoes abaixo do minimo usado para elegibilidade ao podio.'
+              : attention.length
+                ? 'Ha analistas com pelo menos um criterio fora da referencia.'
+                : 'Equipe alinhada com os criterios principais do periodo.'
+  const chatRecommendedAction =
+    !visibleMetrics.length
+      ? 'Importar ou selecionar um mes com dados.'
+      : averageCsat < 90
+        ? 'Revisar atendimentos negativos e direcionar feedback dos analistas em atencao.'
+        : averageReviews < 25
+          ? 'Reforcar convite para avaliacao e acompanhar volume de respostas no proximo ciclo.'
+          : attention.length
+            ? 'Priorizar os analistas listados em atencao antes do proximo fechamento.'
+            : 'Manter rotina atual e acompanhar se o resultado se sustenta no mes seguinte.'
 
   return (
     <div className="mt-8 space-y-7">
@@ -1221,9 +1276,54 @@ function ChatModuleDashboard({
       <div className="grid gap-4 md:grid-cols-4">
         <MetricCard label="Equipe" value={selectedTeamName} />
         <MetricCard label="CSAT medio" value={loading ? '...' : `${averageCsat}%`} />
-        <MetricCard label="% avaliacoes" value={`${reviewCoverage}%`} />
+        <MetricCard label="% avaliacoes" value={`${averageReviews}%`} />
         <MetricCard label="Atendimentos" value={totals.tickets} />
       </div>
+
+      <section className="panel">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-stretch">
+          <div className="xl:w-2/5">
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Resumo executivo</p>
+            <h2 className={`mt-3 text-3xl font-bold ${chatExecutiveTone}`}>{chatExecutiveStatus}</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-300">
+              {selectedPeriod?.label ?? 'Periodo'} - {selectedTeamName}. {chatMainAlert}
+            </p>
+          </div>
+
+          <div className="grid flex-1 gap-4 md:grid-cols-3">
+            <div className="executive-card">
+              <p>CSAT vs mes anterior</p>
+              <strong>{formatDelta(chatCsatDelta, ' p.p.')}</strong>
+              <span>Atual: {averageCsat}%</span>
+            </div>
+            <div className="executive-card">
+              <p>Avaliacoes vs mes anterior</p>
+              <strong>{formatDelta(chatReviewDelta, ' p.p.')}</strong>
+              <span>Atual: {averageReviews}%</span>
+            </div>
+            <div className="executive-card">
+              <p>Envio/sem avaliacao</p>
+              <strong>{averageSending}%</strong>
+              <span>{formatDelta(chatSendingDelta, ' p.p.')} vs anterior</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-3">
+          <div className="rounded-lg bg-slate-900 p-4">
+            <p className="text-sm text-slate-400">Alerta principal</p>
+            <p className="mt-2 font-semibold">{chatMainAlert}</p>
+          </div>
+          <div className="rounded-lg bg-slate-900 p-4">
+            <p className="text-sm text-slate-400">Acao recomendada</p>
+            <p className="mt-2 font-semibold">{chatRecommendedAction}</p>
+          </div>
+          <div className="rounded-lg bg-slate-900 p-4">
+            <p className="text-sm text-slate-400">Criterio legado</p>
+            <p className="mt-2 font-semibold">CSAT 90%, avaliacoes 25% e volume acima da media.</p>
+          </div>
+        </div>
+      </section>
 
       <section className="panel">
         <div className="grid gap-6 xl:grid-cols-3">
@@ -1240,7 +1340,7 @@ function ChatModuleDashboard({
               <p>Validos: <strong>{totals.validTickets}</strong></p>
               <p>Inativos: <strong>{totals.inactive}</strong></p>
               <p>Avaliacoes: <strong>{totals.reviews}</strong></p>
-              <p>Sem avaliacao/envio: <strong>{noReviewPercentage}%</strong></p>
+              <p>Envio/sem avaliacao medio: <strong>{averageSending}%</strong></p>
               <p>Media por analista: <strong>{averageTickets}</strong></p>
             </div>
           </div>
@@ -4264,6 +4364,14 @@ function getChatTeamName(metric: ChatMonthlyMetric) {
   return team?.name ?? 'Equipe'
 }
 
+function calculateChatAverage(
+  metrics: ChatMonthlyMetric[],
+  field: 'csat' | 'review_percentage' | 'sending_percentage',
+) {
+  if (!metrics.length) return 0
+  return round(metrics.reduce((sum, metric) => sum + Number(metric[field]), 0) / metrics.length)
+}
+
 function buildChatPodium(metrics: ChatMonthlyMetric[], averageTickets: number) {
   return metrics
     .filter(
@@ -4492,6 +4600,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
