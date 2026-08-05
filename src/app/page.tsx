@@ -1746,6 +1746,29 @@ function ReportsView({
       : `${selectedAnalyst?.name ?? 'Analista'} ainda nao sustenta elegibilidade ao podio neste periodo. O foco recomendado e atuar sobre: ${analystResult.reasons.join(', ')}.`
     : ''
 
+  const hasSelectedAnalyst = Boolean(selectedAnalyst)
+  const hasAnalystLaunch = Boolean(analystResult)
+  const hasTeamLaunch = periodTeamMetrics.length > 0
+  const reportReady = hasSelectedAnalyst && hasAnalystLaunch
+  const reportReadinessItems = [
+    {
+      label: 'Analista selecionado',
+      done: hasSelectedAnalyst,
+      detail: selectedAnalyst ? selectedAnalyst.name : 'Selecione um analista para gerar o SARE.',
+    },
+    {
+      label: 'Lancamento individual no periodo',
+      done: hasAnalystLaunch,
+      detail: hasAnalystLaunch ? 'Dados individuais encontrados.' : 'Nao ha lancamento individual para este filtro.',
+    },
+    {
+      label: 'Desempenho da equipe',
+      done: hasTeamLaunch,
+      detail: hasTeamLaunch
+        ? `${teamPerformance}% de performance no periodo.`
+        : 'Sem lancamento de equipe; o relatorio sai, mas a leitura operacional fica incompleta.',
+    },
+  ]
   function handlePeriodModeChange(mode: PeriodMode) {
     setPeriodFilter(createPeriodFilter(mode))
   }
@@ -1878,6 +1901,30 @@ function ReportsView({
         <MetricCard label="Performance equipe" value={`${teamPerformance}%`} />
       </div>
 
+      <section className="panel no-print">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="section-title">Prontidao do relatorio</h2>
+            <p className="section-subtitle">
+              Confira se o SARE deste periodo ja tem base suficiente antes de exportar.
+            </p>
+          </div>
+          <span className={`rounded-full px-4 py-2 text-sm font-semibold ${reportReady ? 'bg-emerald-400/10 text-emerald-300' : 'bg-amber-400/10 text-amber-200'}`}>
+            {reportReady ? 'Pronto para exportar' : 'Pendente de dados'}
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-3 lg:grid-cols-3">
+          {reportReadinessItems.map((item) => (
+            <div key={item.label} className="rounded-lg bg-slate-900 p-4">
+              <p className={item.done ? 'text-sm font-semibold text-emerald-300' : 'text-sm font-semibold text-amber-200'}>
+                {item.done ? 'OK' : 'Pendente'} - {item.label}
+              </p>
+              <p className="mt-2 text-sm leading-5 text-slate-400">{item.detail}</p>
+            </div>
+          ))}
+        </div>
+      </section>
       <section className="panel print-report">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -4118,6 +4165,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
