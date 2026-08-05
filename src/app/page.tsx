@@ -2134,9 +2134,86 @@ function EntriesView({
   const teamAnsweredInvalid = answeredCalls > totalCalls && totalCalls > 0
   const teamTotalMismatch =
     totalCalls > 0 && answeredCalls + abandonedCalls > 0 && answeredCalls + abandonedCalls !== totalCalls
+  const checklistStart = individualForm.weekStart || teamForm.weekStart
+  const checklistEnd = individualForm.weekEnd || teamForm.weekEnd
+  const checklistIndividualMetrics =
+    checklistStart && checklistEnd
+      ? individualMetrics.filter((metric) => metric.week_start === checklistStart && metric.week_end === checklistEnd)
+      : []
+  const launchedAnalystIds = new Set(checklistIndividualMetrics.map((metric) => metric.analyst_id))
+  const pendingAnalysts = analysts.filter((analyst) => !launchedAnalystIds.has(analyst.id))
+  const checklistTeamMetric =
+    checklistStart && checklistEnd
+      ? teamMetrics.find((metric) => metric.week_start === checklistStart && metric.week_end === checklistEnd)
+      : null
+  const checklistComplete =
+    Boolean(checklistStart && checklistEnd && checklistTeamMetric && pendingAnalysts.length === 0)
+
 
   return (
     <div className="mt-8 space-y-6">
+      <section className="panel">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="section-title">Fechamento semanal</h2>
+            <p className="section-subtitle">
+              Use este resumo para conferir se todos os lancamentos da semana foram feitos antes de fechar o periodo.
+            </p>
+          </div>
+          <div className={`rounded-lg px-4 py-3 text-sm font-semibold ${checklistComplete ? 'bg-emerald-400/10 text-emerald-200' : 'bg-amber-400/10 text-amber-100'}`}>
+            {checklistComplete ? 'Semana completa' : 'Semana pendente'}
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-4">
+          <div className="rounded-lg bg-slate-900 p-4">
+            <p className="text-sm text-slate-400">Periodo conferido</p>
+            <p className="mt-2 font-semibold">
+              {checklistStart && checklistEnd ? `${formatDate(checklistStart)} a ${formatDate(checklistEnd)}` : 'Informe as datas'}
+            </p>
+          </div>
+          <div className="rounded-lg bg-slate-900 p-4">
+            <p className="text-sm text-slate-400">Analistas lancados</p>
+            <p className="mt-2 text-2xl font-bold">{checklistIndividualMetrics.length}/{analysts.length}</p>
+          </div>
+          <div className="rounded-lg bg-slate-900 p-4">
+            <p className="text-sm text-slate-400">Performance equipe</p>
+            <p className={`mt-2 text-xl font-bold ${checklistTeamMetric ? 'text-emerald-300' : 'text-amber-200'}`}>
+              {checklistTeamMetric ? 'Registrada' : 'Pendente'}
+            </p>
+          </div>
+          <div className="rounded-lg bg-slate-900 p-4">
+            <p className="text-sm text-slate-400">Proxima acao</p>
+            <p className="mt-2 font-semibold">
+              {!checklistStart || !checklistEnd
+                ? 'Preencher inicio e fim da semana.'
+                : pendingAnalysts.length
+                  ? `Faltam ${pendingAnalysts.length} analista(s).`
+                  : checklistTeamMetric
+                    ? 'Conferir historico e evidencias.'
+                    : 'Registrar performance da equipe.'}
+            </p>
+          </div>
+        </div>
+
+        {checklistStart && checklistEnd && (
+          <div className="mt-5 rounded-lg bg-slate-900 p-4">
+            <p className="text-sm text-slate-400">Pendencias por analista</p>
+            {pendingAnalysts.length ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {pendingAnalysts.map((analyst) => (
+                  <span key={analyst.id} className="rounded-full bg-amber-400/10 px-3 py-1 text-sm text-amber-100">
+                    {analyst.name}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-emerald-300">Todos os analistas ativos ja possuem lancamento neste periodo.</p>
+            )}
+          </div>
+        )}
+      </section>
+
       <div className="grid gap-6 xl:grid-cols-2">
         <section className="panel">
         <h2 className="section-title">Lancamento individual</h2>
