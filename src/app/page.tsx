@@ -1652,7 +1652,8 @@ function ChatModuleDashboard({
                 <th className="px-3 py-2">Atendimentos</th>
                 <th className="px-3 py-2">Validos</th>
                 <th className="px-3 py-2">Inativos</th>
-                <th className="px-3 py-2">% inativos</th>
+                <th className="px-3 py-2">% inatividade</th>
+                <th className="px-3 py-2">% envio avaliacao</th>
               </tr>
             </thead>
             <tbody>
@@ -1666,6 +1667,7 @@ function ChatModuleDashboard({
                   <td className="px-3 py-3">{metric.valid_tickets}</td>
                   <td className="px-3 py-3">{metric.inactive_tickets}</td>
                   <td className="px-3 py-3">{metric.total_tickets ? round((Number(metric.inactive_tickets) / Number(metric.total_tickets)) * 100) : 0}%</td>
+                  <td className="px-3 py-3">{metric.sending_percentage}%</td>
                 </tr>
               ))}
             </tbody>
@@ -5372,6 +5374,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
