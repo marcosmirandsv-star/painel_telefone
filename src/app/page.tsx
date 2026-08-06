@@ -1399,6 +1399,10 @@ function ChatModuleDashboard({
 
       if (error) throw error
 
+      if (editingChatAnalystId) {
+        await syncChatMetricGoalsForAnalyst(editingChatAnalystId, csatGoal)
+      }
+
       await onImportComplete()
       resetChatAnalystForm()
       setChatAnalystMessage(editingChatAnalystId ? 'Analista atualizado com sucesso.' : 'Analista incluido com sucesso.')
@@ -1409,6 +1413,26 @@ function ChatModuleDashboard({
     }
   }
 
+  async function syncChatMetricGoalsForAnalyst(analystId: string, csatGoal: number) {
+    const { data, error } = await supabase
+      .from('chat_monthly_metrics')
+      .select('id, csat, review_percentage')
+      .eq('analyst_id', analystId)
+
+    if (error) throw error
+
+    const updates = (data ?? []).map((metric) => ({
+      id: metric.id,
+      csat_goal: csatGoal,
+      csat_delta: round(Number(metric.csat) - csatGoal),
+      status: getChatMetricStatus(Number(metric.csat), Number(metric.review_percentage), csatGoal, 25),
+    }))
+
+    if (!updates.length) return
+
+    const { error: updateError } = await supabase.from('chat_monthly_metrics').upsert(updates)
+    if (updateError) throw updateError
+  }
   function handleEditChatAnalyst(analyst: ChatAnalyst) {
     setEditingChatAnalystId(analyst.id)
     setChatAnalystForm({
@@ -5420,12 +5444,7 @@ function buildChatMetricRowsFromSheets({
       const csatGoal = Number(analyst.csat_goal) || 86
       const generalReviewGoal = 25
       const csatDelta = round(csat - csatGoal)
-      const status =
-        csat >= csatGoal && reviewPercentage >= generalReviewGoal
-          ? 'Meta Superada'
-          : csat >= csatGoal || reviewPercentage >= generalReviewGoal
-            ? 'Atencao'
-            : 'Critico'
+      const status = getChatMetricStatus(csat, reviewPercentage, csatGoal, generalReviewGoal)
 
       return {
         team_id: analyst.team_id,
@@ -5495,6 +5514,11 @@ function buildChatPodium(metrics: ChatMonthlyMetric[], averageTickets: number) {
     .slice(0, 3)
 }
 
+function getChatMetricStatus(csat: number, reviewPercentage: number, csatGoal: number, reviewGoal = 25) {
+  if (csat >= csatGoal && reviewPercentage >= reviewGoal) return 'Meta Superada'
+  if (csat >= csatGoal || reviewPercentage >= reviewGoal) return 'Atencao'
+  return 'Critico'
+}
 function getChatAttentionReasons(metric: ChatMonthlyMetric, averageTickets: number) {
   const reasons: string[] = []
   if (Number(metric.csat) < 90) reasons.push('CSAT abaixo de 90%')
@@ -5711,6 +5735,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
