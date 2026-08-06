@@ -1173,7 +1173,10 @@ function ChatModuleDashboard({
   const [chatImportMessage, setChatImportMessage] = useState('')
   const [chatExportMessage, setChatExportMessage] = useState('')
   const [selectedChatReportMetricId, setSelectedChatReportMetricId] = useState('')
-
+  const [chatAnalystForm, setChatAnalystForm] = useState({ teamId: '', name: '', csatGoal: '86' })
+  const [editingChatAnalystId, setEditingChatAnalystId] = useState<string | null>(null)
+  const [chatAnalystSaving, setChatAnalystSaving] = useState(false)
+  const [chatAnalystMessage, setChatAnalystMessage] = useState('')
   async function handleChatMonthlyImport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setChatImportMessage('')
@@ -1236,6 +1239,11 @@ function ChatModuleDashboard({
       setSelectedPeriodKey(`${periods[0].year}-${periods[0].monthNumber}`)
     }
   }, [periods, selectedPeriodKey])
+  useEffect(() => {
+    if (!chatAnalystForm.teamId && teams[0]) {
+      setChatAnalystForm((current) => ({ ...current, teamId: teams[0].id }))
+    }
+  }, [teams, chatAnalystForm.teamId])
 
   if (!isManagementUser) {
     return (
@@ -1349,7 +1357,116 @@ function ChatModuleDashboard({
             ? 'Priorizar os analistas listados em atencao antes do proximo fechamento.'
             : 'Manter rotina atual e acompanhar se o resultado se sustenta no mes seguinte.'
 
-    function handleExportChatIndividualReport() {
+    function resetChatAnalystForm() {
+    setEditingChatAnalystId(null)
+    setChatAnalystForm({ teamId: teams[0]?.id ?? '', name: '', csatGoal: '86' })
+  }
+
+  async function handleChatAnalystSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setChatAnalystMessage('')
+
+    const name = chatAnalystForm.name.trim()
+    const csatGoal = Number(chatAnalystForm.csatGoal)
+
+    if (!chatAnalystForm.teamId) {
+      setChatAnalystMessage('Selecione uma equipe antes de salvar o analista.')
+      return
+    }
+
+    if (!name) {
+      setChatAnalystMessage('Informe o nome do analista.')
+      return
+    }
+
+    if (Number.isNaN(csatGoal) || csatGoal < 0 || csatGoal > 100) {
+      setChatAnalystMessage('Informe uma meta CSAT entre 0 e 100.')
+      return
+    }
+
+    setChatAnalystSaving(true)
+
+    try {
+      const payload = {
+        team_id: chatAnalystForm.teamId,
+        name,
+        csat_goal: csatGoal,
+      }
+
+      const { error } = editingChatAnalystId
+        ? await supabase.from('chat_analysts').update(payload).eq('id', editingChatAnalystId)
+        : await supabase.from('chat_analysts').insert({ ...payload, active: true })
+
+      if (error) throw error
+
+      await onImportComplete()
+      resetChatAnalystForm()
+      setChatAnalystMessage(editingChatAnalystId ? 'Analista atualizado com sucesso.' : 'Analista incluido com sucesso.')
+    } catch (error) {
+      setChatAnalystMessage(getErrorMessage(error))
+    } finally {
+      setChatAnalystSaving(false)
+    }
+  }
+
+  function handleEditChatAnalyst(analyst: ChatAnalyst) {
+    setEditingChatAnalystId(analyst.id)
+    setChatAnalystForm({
+      teamId: analyst.team_id,
+      name: analyst.name,
+      csatGoal: String(analyst.csat_goal),
+    })
+    setChatAnalystMessage('')
+  }
+
+  async function handleToggleChatAnalyst(analyst: ChatAnalyst) {
+    setChatAnalystMessage('')
+    setChatAnalystSaving(true)
+
+    try {
+      const { error } = await supabase
+        .from('chat_analysts')
+        .update({ active: !analyst.active })
+        .eq('id', analyst.id)
+
+      if (error) throw error
+
+      await onImportComplete()
+      if (editingChatAnalystId === analyst.id) resetChatAnalystForm()
+      setChatAnalystMessage(analyst.active ? 'Analista inativado com sucesso.' : 'Analista reativado com sucesso.')
+    } catch (error) {
+      setChatAnalystMessage(getErrorMessage(error))
+    } finally {
+      setChatAnalystSaving(false)
+    }
+  }
+
+  async function handleDeleteChatAnalyst(analyst: ChatAnalyst) {
+    setChatAnalystMessage('')
+
+    const confirmed = window.confirm(
+      `Excluir ${analyst.name}? Use exclusao apenas para cadastros criados por engano. Se houver historico importado, prefira inativar.`,
+    )
+
+    if (!confirmed) return
+
+    setChatAnalystSaving(true)
+
+    try {
+      const { error } = await supabase.from('chat_analysts').delete().eq('id', analyst.id)
+
+      if (error) throw error
+
+      await onImportComplete()
+      if (editingChatAnalystId === analyst.id) resetChatAnalystForm()
+      setChatAnalystMessage('Analista excluido com sucesso.')
+    } catch (error) {
+      setChatAnalystMessage(`${getErrorMessage(error)} Se este analista ja tiver historico, inative em vez de excluir.`)
+    } finally {
+      setChatAnalystSaving(false)
+    }
+  }
+  function handleExportChatIndividualReport() {
     if (!selectedChatReportMetric) {
       setChatExportMessage('Selecione um analista com dados antes de exportar o relatorio individual.')
       return
@@ -1636,6 +1753,121 @@ function ChatModuleDashboard({
         {chatExportMessage && <p className="mt-4 rounded-md bg-slate-900/70 px-4 py-3 text-sm text-slate-200">{chatExportMessage}</p>}
       </section>
       
+      <section className="panel">
+        <div className="flex flex-col gap-6 xl:flex-row">
+          <div className="xl:w-2/5">
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Cadastro do chat</p>
+            <h2 className="section-title">{editingChatAnalystId ? 'Editar meta do analista' : 'Incluir analista do chat'}</h2>
+            <p className="section-subtitle">
+              Cadastre analistas por equipe e mantenha a meta individual de CSAT usada nas importacoes e relatorios do chat.
+            </p>
+
+            <form className="mt-5 grid gap-4" onSubmit={handleChatAnalystSubmit}>
+              <Field label="Equipe">
+                <select
+                  className="form-input"
+                  value={chatAnalystForm.teamId}
+                  onChange={(event) => setChatAnalystForm({ ...chatAnalystForm, teamId: event.target.value })}
+                  required
+                >
+                  {teams.map((team) => (
+                    <option key={team.id} value={team.id}>
+                      {team.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Nome do analista">
+                <input
+                  className="form-input"
+                  value={chatAnalystForm.name}
+                  onChange={(event) => setChatAnalystForm({ ...chatAnalystForm, name: event.target.value })}
+                  required
+                />
+              </Field>
+
+              <Field label="Meta CSAT individual (%)">
+                <input
+                  className="form-input"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  type="number"
+                  value={chatAnalystForm.csatGoal}
+                  onChange={(event) => setChatAnalystForm({ ...chatAnalystForm, csatGoal: event.target.value })}
+                  required
+                />
+              </Field>
+
+              <div className="flex flex-wrap gap-3">
+                <button className="btn-primary" disabled={chatAnalystSaving} type="submit">
+                  {chatAnalystSaving ? 'Salvando...' : editingChatAnalystId ? 'Salvar alteracoes' : 'Incluir analista'}
+                </button>
+
+                {editingChatAnalystId && (
+                  <button className="secondary-button" type="button" onClick={resetChatAnalystForm}>
+                    Cancelar
+                  </button>
+                )}
+              </div>
+            </form>
+
+            {chatAnalystMessage && (
+              <p className="mt-4 rounded-md bg-slate-900/70 px-4 py-3 text-sm text-slate-200">{chatAnalystMessage}</p>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-x-auto">
+            <h3 className="text-xl font-bold">Analistas e metas cadastradas</h3>
+            <p className="section-subtitle">
+              Inative para preservar historico. Exclua apenas cadastros criados por engano.
+            </p>
+            <table className="mt-5 min-w-full text-left text-sm">
+              <thead className="text-slate-400">
+                <tr>
+                  <th className="pb-3 pr-4 font-medium">Analista</th>
+                  <th className="pb-3 pr-4 font-medium">Equipe</th>
+                  <th className="pb-3 pr-4 font-medium">Meta CSAT</th>
+                  <th className="pb-3 pr-4 font-medium">Status</th>
+                  <th className="pb-3 font-medium">Acoes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/10">
+                {[...analysts]
+                  .sort((a, b) => `${getChatTeamNameById(teams, a.team_id)} ${a.name}`.localeCompare(`${getChatTeamNameById(teams, b.team_id)} ${b.name}`))
+                  .map((analyst) => (
+                    <tr key={analyst.id}>
+                      <td className="py-3 pr-4 font-semibold">{analyst.name}</td>
+                      <td className="py-3 pr-4 text-slate-300">{getChatTeamNameById(teams, analyst.team_id)}</td>
+                      <td className="py-3 pr-4">{analyst.csat_goal}%</td>
+                      <td className="py-3 pr-4">
+                        <span className={analyst.active ? 'text-emerald-300' : 'text-slate-400'}>
+                          {analyst.active ? 'Ativo' : 'Inativo'}
+                        </span>
+                      </td>
+                      <td className="py-3">
+                        <div className="flex flex-wrap gap-2">
+                          <button className="small-button" type="button" onClick={() => handleEditChatAnalyst(analyst)}>
+                            Editar
+                          </button>
+                          <button className="small-button" type="button" onClick={() => handleToggleChatAnalyst(analyst)}>
+                            {analyst.active ? 'Inativar' : 'Reativar'}
+                          </button>
+                          <button className="danger-button" type="button" onClick={() => handleDeleteChatAnalyst(analyst)}>
+                            Excluir
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+
+            {!analysts.length && <EmptyState text="Nenhum analista de chat cadastrado." />}
+          </div>
+        </div>
+      </section>
       <section className="panel">
         <h2 className="section-title">Base importada</h2>
         <p className="section-subtitle">
@@ -4121,7 +4353,7 @@ function exportChatIndividualReport({
 }) {
   const analystName = getChatAnalystName(metric)
   const safeName = escapeHtml(analystName)
-  const csatGoal = 90
+  const csatGoal = Number(metric.csat_goal) || 90
   const reviewGoal = 25
   const csatGap = round(Number(metric.csat) - csatGoal)
   const reviewGap = round(Number(metric.review_percentage) - reviewGoal)
@@ -4969,6 +5201,9 @@ function getPredictiveRiskLevel(
 function clampScore(value: number) {
   return Math.max(0, Math.min(100, value))
 }
+function getChatTeamNameById(teams: ChatTeam[], teamId: string) {
+  return teams.find((team) => team.id === teamId)?.name ?? 'Equipe'
+}
 function getChatAnalystName(metric: ChatMonthlyMetric) {
   const analyst = Array.isArray(metric.chat_analysts) ? metric.chat_analysts[0] : metric.chat_analysts
   return analyst?.name ?? 'Analista'
@@ -5476,6 +5711,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
