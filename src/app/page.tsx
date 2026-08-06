@@ -1426,7 +1426,7 @@ function ChatModuleDashboard({
         averageTickets,
         podiumPosition: selectedChatPodiumPosition,
         style: chatFeedbackStyle,
-        managerNotes: chatManagerNotes,
+        managerNotes: '',
       })
     : ''
   const chatExecutiveStatus =
@@ -1831,7 +1831,7 @@ function ChatModuleDashboard({
           .filter((historyMetric) => historyMetric.analyst_id === selectedChatReportMetric.analyst_id)
           .sort((a, b) => (a.year === b.year ? a.month_number - b.month_number : a.year - b.year)),
         feedbackStyle: chatFeedbackStyle,
-        managerNotes: chatManagerNotes,
+        managerNotes: '',
         feedbackText: finalFeedbackText,
       })
 
@@ -2341,9 +2341,9 @@ function ChatModuleDashboard({
           <Field label="Texto final do feedback">
             <textarea
               className="form-input min-h-56"
-              value={chatFeedbackDraft || chatReportFeedbackSuggestion}
+              value={chatFeedbackDraft}
               onChange={(event) => setChatFeedbackDraft(event.target.value)}
-              placeholder="Gere uma sugestao ou escreva o feedback final do relatorio."
+              placeholder="Clique em Gerar sugestao, Gerar com IA ou escreva o feedback final do relatorio."
             />
           </Field>
 
@@ -5290,7 +5290,7 @@ function buildChatFeedbackText({
   const productivityGap = averageTickets ? round(((Number(metric.total_tickets) - averageTickets) / averageTickets) * 100) : 0
   const podiumText = podiumPosition > 0 ? `${podiumPosition}o lugar no podio` : 'fora do podio neste fechamento'
   const contextLine = `${analystName} fechou o ciclo com CSAT de ${metric.csat}%, avaliacoes de ${metric.review_percentage}%, envio/sem avaliacao de ${metric.sending_percentage}% e ${metric.total_tickets} atendimentos. Status: ${status}.`
-  const notesLine = managerNotes.trim() ? `Contexto do gestor: ${managerNotes.trim()}` : ''
+  const notesLine = managerNotes.trim() ? 'As observacoes do gestor foram consideradas na leitura e devem orientar os combinados do proximo ciclo.' : ''
   const strengths: string[] = []
   const actions: string[] = []
 
@@ -5326,7 +5326,7 @@ function buildChatFeedbackText({
   if (style === 'sare') {
     return [
       `Situacao: ${contextLine}`,
-      `Alinhamentos Realizados: ${actionText}. ${notesLine}`,
+      notesLine ? `Alinhamentos Realizados: ${actionText}. ${notesLine}` : `Alinhamentos Realizados: ${actionText}.`,
       `Resultado Esperado: ${resultText} Posicao atual: ${podiumText}.`,
       `Expectativa e Plano de Desenvolvimento: para o proximo ciclo mensal, acompanhar a manutencao do CSAT, ampliar a qualidade da amostra de avaliacoes quando necessario e proteger o volume valido de atendimentos.`,
     ]
@@ -5338,7 +5338,7 @@ function buildChatFeedbackText({
     return [
       `Momento observado: ${contextLine}`,
       `Impacto: ${strengthText}. A leitura coloca o colaborador ${podiumText}.`,
-      `Melhoria ou manutencao: ${actionText}. ${notesLine}`,
+      notesLine ? `Melhoria ou manutencao: ${actionText}. ${notesLine}` : `Melhoria ou manutencao: ${actionText}.`,
       `Orientacao: ${resultText}`,
     ]
       .filter(Boolean)
@@ -5348,7 +5348,7 @@ function buildChatFeedbackText({
   return [
     `Leitura do ciclo: ${contextLine}`,
     `Forcas observadas: ${strengthText}.`,
-    `Plano de desenvolvimento: ${actionText}. ${notesLine}`,
+    notesLine ? `Plano de desenvolvimento: ${actionText}. ${notesLine}` : `Plano de desenvolvimento: ${actionText}.`,
     `Expectativa para o proximo ciclo mensal: ${resultText} Posicao atual: ${podiumText}.`,
   ]
     .filter(Boolean)
@@ -6462,6 +6462,9 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
+
+
 
 
 
