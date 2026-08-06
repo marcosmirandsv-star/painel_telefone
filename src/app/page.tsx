@@ -1371,7 +1371,12 @@ function ChatModuleDashboard({
   const excludedChatAnalystIds = new Set(activePodiumExclusions.map((exclusion) => exclusion.analyst_id))
   const chatRanking = buildChatRanking(visibleMetrics, averageTickets, excludedChatAnalystIds)
   const automaticPodium = chatRanking.filter((item) => item.eligible).slice(0, 3).map((item) => item.metric)
-  const podium = manualPodiumMetrics.length ? manualPodiumMetrics.slice(0, 3) : automaticPodium
+  const podium = [1, 2, 3].map((position, index) => {
+    const manual = activeManualPodium.find((item) => item.position === position)
+    return manual
+      ? visibleMetrics.find((metric) => metric.analyst_id === manual.analyst_id) ?? automaticPodium[index] ?? null
+      : automaticPodium[index] ?? null
+  })
   const attention = visibleMetrics
     .map((metric) => ({ metric, reasons: getChatAttentionReasons(metric, averageTickets) }))
     .filter((item) => item.reasons.length)
@@ -1384,7 +1389,7 @@ function ChatModuleDashboard({
     ? chatRanking.find((item) => item.metric.id === selectedChatReportMetric.id)
     : null
   const selectedChatPodiumPosition = selectedChatReportMetric
-    ? podium.findIndex((metric) => metric.analyst_id === selectedChatReportMetric.analyst_id) + 1
+    ? podium.findIndex((metric) => metric?.analyst_id === selectedChatReportMetric.analyst_id) + 1
     : 0
   const chatExecutiveStatus =
     !visibleMetrics.length
@@ -1614,23 +1619,23 @@ function ChatModuleDashboard({
     }
 
     try {
-      await supabase
+      const deleteResult = await supabase
         .from('chat_podium_manual')
         .delete()
         .eq('team_id', selectedTeamId)
         .eq('year', selectedPeriod.year)
         .eq('month_number', selectedPeriod.monthNumber)
 
-      const { error } = await supabase.from('chat_podium_manual').upsert(rows, {
-        onConflict: 'team_id,year,month_number,position',
-      })
+      if (deleteResult.error) throw deleteResult.error
+
+      const { error } = await supabase.from('chat_podium_manual').insert(rows)
 
       if (error) throw error
 
       await onImportComplete()
       setChatPodiumMessage('Podio manual salvo para este periodo.')
     } catch (error) {
-      setChatPodiumMessage(getErrorMessage(error))
+      setChatPodiumMessage(`Erro ao salvar podio manual: ${getErrorMessage(error)}`)
     }
   }
 
@@ -6015,6 +6020,21 @@ function withTimeout<T>(promise: PromiseLike<T>, message: string, timeoutMs = 10
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) return error.message
+
+  if (error && typeof error === 'object') {
+    const supabaseError = error as {
+      message?: string
+      details?: string
+      hint?: string
+      code?: string
+    }
+    const parts = [supabaseError.message, supabaseError.details, supabaseError.hint, supabaseError.code]
+      .filter(Boolean)
+      .map(String)
+
+    if (parts.length) return parts.join(' | ')
+  }
+
   return 'Nao foi possivel concluir a acao. Tente novamente.'
 }
 
@@ -6022,6 +6042,8 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
+
 
 
 
