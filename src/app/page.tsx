@@ -192,6 +192,18 @@ type MonthlyPodiumResult = {
   reasons: string[]
 }
 
+type PhonePodiumRankingRow = {
+  position: number
+  analyst_id: string
+  analyst_name: string
+  average_csat: number
+  total_reviews: number
+  total_tickets: number
+  review_percentage: number
+  individual_goal: number
+  eligible: boolean
+  reasons: string[] | null
+}
 type PeriodMode = 'week' | 'month' | 'year' | 'custom'
 
 type PeriodFilter = {
@@ -359,7 +371,7 @@ export default function Home() {
 
     if (teamResult.error) setMessage(getSupabaseMessage(teamResult.error.message))
     else setTeamMetrics(teamResult.data ?? [])
-
+
     const [chatTeamsResult, chatAnalystsResult, chatMetricsResult] = await Promise.all([
       supabase.from('chat_teams').select('id, name, legacy_name, manager_name, active').order('name'),
       supabase.from('chat_analysts').select('id, team_id, name, csat_goal, active').order('name'),
@@ -1006,8 +1018,8 @@ export default function Home() {
             onClick={() => setActiveModule('chat')}
           >
             <span>Modulo chat</span>
-            <strong>Controle da equipe de chat</strong>
-            <small>Dados do Zendesk, importacao mensal, podio e relatorios de gestao.</small>
+            <strong>Performance de atendimento via chat</strong>
+            <small>Dados do Zendesk, importacao mensal, ranking, podio e relatorios individuais.</small>
           </button>
         </div>
         {activeModule === 'phone' && (
@@ -1160,6 +1172,7 @@ function ChatModuleDashboard({
   const [chatImportSaving, setChatImportSaving] = useState(false)
   const [chatImportMessage, setChatImportMessage] = useState('')
   const [chatExportMessage, setChatExportMessage] = useState('')
+  const [selectedChatReportMetricId, setSelectedChatReportMetricId] = useState('')
 
   async function handleChatMonthlyImport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -1232,7 +1245,7 @@ function ChatModuleDashboard({
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Modulo chat</p>
           <h2 className="mt-3 text-3xl font-bold">Acesso restrito a gestao</h2>
           <p className="mt-3 max-w-3xl text-slate-300">
-            O modulo chat sera usado para importacao mensal, calculos consolidados, podio e relatorios de gestao.
+            O modulo chat sera usado para importacao mensal, calculos consolidados, ranking, podio e relatorios individuais.
           </p>
         </section>
       </div>
@@ -1282,13 +1295,19 @@ function ChatModuleDashboard({
   const chatCsatDelta = round(averageCsat - previousAverageCsat)
   const chatReviewDelta = round(averageReviews - previousAverageReviews)
   const chatSendingDelta = round(averageSending - previousAverageSending)
-  const podium = buildChatPodium(visibleMetrics, averageTickets)
+  const chatRanking = buildChatRanking(visibleMetrics, averageTickets)
+  const podium = chatRanking.filter((item) => item.eligible).slice(0, 3).map((item) => item.metric)
   const attention = visibleMetrics
     .map((metric) => ({ metric, reasons: getChatAttentionReasons(metric, averageTickets) }))
     .filter((item) => item.reasons.length)
     .sort((a, b) => Number(a.metric.csat) - Number(b.metric.csat))
     .slice(0, 5)
   const monthlyTrend = buildChatMonthlyTrend(trendMetrics).slice(-7)
+  const selectedChatReportMetric =
+    visibleMetrics.find((metric) => metric.id === selectedChatReportMetricId) ?? visibleMetrics[0] ?? null
+  const selectedChatPodiumPosition = selectedChatReportMetric
+    ? chatRanking.findIndex((item) => item.metric.id === selectedChatReportMetric.id) + 1
+    : 0
   const chatExecutiveStatus =
     !visibleMetrics.length
       ? 'Sem dados no periodo'
@@ -1330,36 +1349,23 @@ function ChatModuleDashboard({
             ? 'Priorizar os analistas listados em atencao antes do proximo fechamento.'
             : 'Manter rotina atual e acompanhar se o resultado se sustenta no mes seguinte.'
 
-  function handleExportChatReport() {
-    if (!visibleMetrics.length) {
-      setChatExportMessage('Selecione um periodo com dados antes de exportar o relatorio.')
+    function handleExportChatIndividualReport() {
+    if (!selectedChatReportMetric) {
+      setChatExportMessage('Selecione um analista com dados antes de exportar o relatorio individual.')
       return
     }
 
     try {
-      const fileName = exportChatManagementReport({
-        teamName: selectedTeamName,
+      const fileName = exportChatIndividualReport({
+        metric: selectedChatReportMetric,
         periodLabel: selectedPeriod?.label ?? 'Periodo',
-        totals,
         averageTickets,
-        averageCsat,
-        averageReviews,
-        averageSending,
-        chatCsatDelta,
-        chatReviewDelta,
-        chatSendingDelta,
-        chatExecutiveStatus,
-        chatMainAlert,
-        chatRecommendedAction,
-        podium,
-        attention,
-        monthlyTrend,
-        visibleMetrics,
+        podiumPosition: selectedChatPodiumPosition,
       })
 
-      setChatExportMessage(`Relatorio gerado: ${fileName}. Verifique a pasta Downloads.`)
+      setChatExportMessage(`Relatorio individual gerado: ${fileName}. Verifique a pasta Downloads.`)
     } catch {
-      setChatExportMessage('Nao foi possivel gerar o relatorio. Tente novamente ou use outro navegador.')
+      setChatExportMessage('Nao foi possivel gerar o relatorio individual. Tente novamente ou use outro navegador.')
     }
   }
 
@@ -1528,23 +1534,42 @@ function ChatModuleDashboard({
       </section>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <section className="panel">
-          <h2 className="section-title">Podio do chat</h2>
-          <p className="section-subtitle">Criterios: CSAT minimo 90%, avaliacoes a partir de 25% e volume acima da media.</p>
-          <div className="mt-5 space-y-3">
-            {podium.length ? (
-              podium.map((metric, index) => (
-                <div key={metric.id} className="flex items-center justify-between rounded-lg bg-slate-900 p-4">
-                  <div>
-                    <p className="font-semibold">{index + 1}. {getChatAnalystName(metric)}</p>
-                    <p className="text-sm text-slate-400">{metric.total_tickets} atendimentos | {metric.review_percentage}% avaliacoes</p>
-                  </div>
-                  <strong className="text-emerald-300">{metric.csat}%</strong>
-                </div>
-              ))
-            ) : (
-              <EmptyState text="Nenhum analista atingiu todos os criterios neste periodo." />
-            )}
+                <section className="panel">
+          <h2 className="section-title">Ranking mensal do chat</h2>
+          <p className="section-subtitle">Lista final do periodo, do primeiro ao ultimo. Criterios: CSAT minimo 90%, avaliacoes a partir de 25% e volume acima da media.</p>
+          <div className="mt-5 overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="text-slate-400">
+                <tr>
+                  <th className="pb-3 pr-4 font-medium">Posicao</th>
+                  <th className="pb-3 pr-4 font-medium">Analista</th>
+                  <th className="pb-3 pr-4 font-medium">CSAT</th>
+                  <th className="pb-3 pr-4 font-medium">Avaliacoes</th>
+                  <th className="pb-3 pr-4 font-medium">Atendimentos</th>
+                  <th className="pb-3 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/10">
+                {chatRanking.map((item, index) => (
+                  <tr key={item.metric.id}>
+                    <td className="py-3 pr-4 font-bold text-cyan-300">{index + 1}o</td>
+                    <td className="py-3 pr-4">{getChatAnalystName(item.metric)}</td>
+                    <td className="py-3 pr-4">{item.metric.csat}%</td>
+                    <td className="py-3 pr-4">{item.metric.review_percentage}%</td>
+                    <td className="py-3 pr-4">{item.metric.total_tickets}</td>
+                    <td className="py-3">
+                      {item.eligible ? (
+                        <span className="text-emerald-300">Elegivel</span>
+                      ) : (
+                        <span className="text-slate-400">{item.reasons.join(', ')}</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {!chatRanking.length && <EmptyState text="Nenhum dado de chat encontrado neste periodo." />}
           </div>
         </section>
 
@@ -1570,41 +1595,44 @@ function ChatModuleDashboard({
       </div>
 
       <section className="panel">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Relatorio gerencial</p>
-            <h2 className="section-title">Fechamento mensal do chat</h2>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Relatorio individual</p>
+            <h2 className="section-title">Analise mensal por analista</h2>
             <p className="section-subtitle">
-              Exporta um resumo executivo com indicadores, podio, analistas em atencao e evolucao mensal.
+              Gera um documento individual no modelo de fechamento: esperado, atingido, analise tecnica e feedback de performance.
             </p>
           </div>
-          <button
-            className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={!visibleMetrics.length}
-            type="button"
-            onClick={handleExportChatReport}
-          >
-            Exportar Word
-          </button>
-        </div>
 
-        <div className="mt-5 grid gap-4 lg:grid-cols-3">
-          <div className="rounded-lg bg-slate-900 p-4">
-            <p className="text-sm text-slate-400">Leitura executiva</p>
-            <p className="mt-2 font-semibold">{chatExecutiveStatus}</p>
-          </div>
-          <div className="rounded-lg bg-slate-900 p-4">
-            <p className="text-sm text-slate-400">Ponto de decisao</p>
-            <p className="mt-2 font-semibold">{chatMainAlert}</p>
-          </div>
-          <div className="rounded-lg bg-slate-900 p-4">
-            <p className="text-sm text-slate-400">Proxima acao</p>
-            <p className="mt-2 font-semibold">{chatRecommendedAction}</p>
+          <div className="grid flex-1 gap-3 md:grid-cols-[1fr_auto]">
+            <Field label="Analista">
+              <select
+                className="form-input"
+                value={selectedChatReportMetric?.id ?? ''}
+                onChange={(event) => setSelectedChatReportMetricId(event.target.value)}
+              >
+                {visibleMetrics.map((metric) => (
+                  <option key={metric.id} value={metric.id}>
+                    {getChatAnalystName(metric)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <button
+              className="btn-primary self-end disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!selectedChatReportMetric}
+              type="button"
+              onClick={handleExportChatIndividualReport}
+            >
+              Exportar individual
+            </button>
           </div>
         </div>
+      
 
         {chatExportMessage && <p className="mt-4 rounded-md bg-slate-900/70 px-4 py-3 text-sm text-slate-200">{chatExportMessage}</p>}
       </section>
+      
       <section className="panel">
         <h2 className="section-title">Base importada</h2>
         <p className="section-subtitle">
@@ -1657,6 +1685,7 @@ function DashboardView({
   role: UserRole
 }) {
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>(() => createPeriodFilter('month'))
+  const [phonePodiumRanking, setPhonePodiumRanking] = useState<PhonePodiumRankingRow[]>([])
   const filteredIndividualMetrics = useMemo(
     () => filterIndividualMetricsByPeriod(individualMetrics, periodFilter),
     [individualMetrics, periodFilter],
@@ -1679,6 +1708,25 @@ function DashboardView({
   const previousPeriodFilter = getPreviousPeriod(periodFilter)
   const previousIndividualMetrics = filterIndividualMetricsByPeriod(individualMetrics, previousPeriodFilter)
   const previousTeamMetrics = filterTeamMetricsByPeriod(teamMetrics, previousPeriodFilter)
+  useEffect(() => {
+    let active = true
+
+    async function loadPhonePodiumRanking() {
+      const { data, error } = await supabase.rpc('get_phone_podium_ranking', {
+        p_start: periodFilter.start,
+        p_end: periodFilter.end,
+      })
+
+      if (!active) return
+      setPhonePodiumRanking(error ? [] : ((data ?? []) as PhonePodiumRankingRow[]))
+    }
+
+    loadPhonePodiumRanking()
+
+    return () => {
+      active = false
+    }
+  }, [periodFilter.start, periodFilter.end])
   const periodPodium = buildPeriodPodium(filteredIndividualMetrics, analysts, podiumCsatGoal, reviewGoal)
   const podiumWinners = periodPodium.filter((item) => item.eligible).slice(0, 3)
   const bestPerformer = periodPodium[0] ?? null
@@ -1785,6 +1833,8 @@ function DashboardView({
   const isAnalystDashboard = role === 'analyst'
   const analystProfile = isAnalystDashboard ? analysts[0] ?? null : null
   const analystResult = isAnalystDashboard ? periodPodium[0] ?? null : null
+  const secureAnalystRanking = isAnalystDashboard ? phonePodiumRanking[0] ?? null : null
+  const analystRankingPosition = secureAnalystRanking?.position ?? (analystResult ? periodPodium.findIndex((item) => item.analystId === analystResult.analystId) + 1 : 0)
   const analystStatusText = analystResult
     ? analystResult.eligible
       ? 'Elegivel para o podio'
@@ -2058,10 +2108,10 @@ function DashboardView({
             </div>
 
             <div className="rounded-lg bg-slate-900 p-5">
-              <p className="text-sm text-slate-400">Atendimentos no periodo</p>
-              <p className="mt-2 text-3xl font-bold">{analystResult?.totalTickets ?? 0}</p>
+              <p className="text-sm text-slate-400">Posicao no ranking</p>
+              <p className="mt-2 text-3xl font-bold">{analystRankingPosition ? `${analystRankingPosition}o` : '-'}</p>
               <p className="mt-2 text-sm text-slate-400">
-                A meta de podio considera volume dentro da media da equipe.
+                No filtro semanal, esta e sua posicao parcial; no mensal, mostra a leitura acumulada.
               </p>
             </div>
           </div>
@@ -2242,6 +2292,7 @@ function ReportsView({
   role: UserRole
 }) {
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>(() => createPeriodFilter('month'))
+  const [phonePodiumRanking, setPhonePodiumRanking] = useState<PhonePodiumRankingRow[]>([])
   const [selectedAnalystId, setSelectedAnalystId] = useState('')
   const [exportMessage, setExportMessage] = useState('')
   const isManagementUser = role !== 'analyst'
@@ -4042,202 +4093,117 @@ function formatShortDate(value: string) {
   return `${day}/${month}`
 }
 
-function exportChatManagementReport({
-  teamName,
+function exportChatIndividualReport({
+  metric,
   periodLabel,
-  totals,
   averageTickets,
-  averageCsat,
-  averageReviews,
-  averageSending,
-  chatCsatDelta,
-  chatReviewDelta,
-  chatSendingDelta,
-  chatExecutiveStatus,
-  chatMainAlert,
-  chatRecommendedAction,
-  podium,
-  attention,
-  monthlyTrend,
-  visibleMetrics,
+  podiumPosition,
 }: {
-  teamName: string
+  metric: ChatMonthlyMetric
   periodLabel: string
-  totals: {
-    tickets: number
-    validTickets: number
-    reviews: number
-    positives: number
-    negatives: number
-    inactive: number
-  }
   averageTickets: number
-  averageCsat: number
-  averageReviews: number
-  averageSending: number
-  chatCsatDelta: number
-  chatReviewDelta: number
-  chatSendingDelta: number
-  chatExecutiveStatus: string
-  chatMainAlert: string
-  chatRecommendedAction: string
-  podium: ChatMonthlyMetric[]
-  attention: { metric: ChatMonthlyMetric; reasons: string[] }[]
-  monthlyTrend: { label: string; value: number }[]
-  visibleMetrics: ChatMonthlyMetric[]
+  podiumPosition: number
 }) {
-  const safeTeamName = escapeHtml(teamName)
-  const safePeriodLabel = escapeHtml(periodLabel)
-  const podiumRows = podium.length
-    ? podium
-        .map(
-          (metric, index) => `
-            <tr>
-              <td>${index + 1}</td>
-              <td>${escapeHtml(getChatAnalystName(metric))}</td>
-              <td>${metric.csat}%</td>
-              <td>${metric.review_percentage}%</td>
-              <td>${metric.total_tickets}</td>
-            </tr>
-          `,
-        )
-        .join('')
-    : '<tr><td colspan="5">Nenhum analista atingiu todos os criterios de podio.</td></tr>'
-  const attentionRows = attention.length
-    ? attention
-        .map(
-          (item) => `
-            <tr>
-              <td>${escapeHtml(getChatAnalystName(item.metric))}</td>
-              <td>${item.metric.csat}%</td>
-              <td>${item.metric.review_percentage}%</td>
-              <td>${item.metric.total_tickets}</td>
-              <td>${escapeHtml(item.reasons.join(', '))}</td>
-            </tr>
-          `,
-        )
-        .join('')
-    : '<tr><td colspan="5">Nenhum ponto critico encontrado no filtro.</td></tr>'
-  const baseRows = visibleMetrics
-    .map(
-      (metric) => `
-        <tr>
-          <td>${escapeHtml(getChatAnalystName(metric))}</td>
-          <td>${escapeHtml(getChatTeamName(metric))}</td>
-          <td>${metric.csat}%</td>
-          <td>${metric.review_percentage}%</td>
-          <td>${metric.sending_percentage}%</td>
-          <td>${metric.total_tickets}</td>
-          <td>${metric.inactive_tickets}</td>
-        </tr>
-      `,
-    )
-    .join('')
-  const trendBars = monthlyTrend.length
-    ? monthlyTrend
-        .map((point, index) => {
-          const previous = monthlyTrend[index - 1]
-          const delta = previous ? round(point.value - previous.value) : 0
-          const color = delta > 0 ? '#059669' : delta < 0 ? '#dc2626' : '#0891b2'
-          const width = Math.max(8, Math.min(100, point.value))
-          const reading = index === 0 ? 'base' : delta > 0 ? 'melhorou' : delta < 0 ? 'piorou' : 'estavel'
-
-          return `
-            <div class="trend-row">
-              <div class="trend-label">${escapeHtml(point.label)}</div>
-              <div class="trend-track">
-                <div class="goal-line"></div>
-                <div class="trend-bar" style="width:${width}%; background:${color};"></div>
-              </div>
-              <div class="trend-value"><strong>${point.value}%</strong><span>${index === 0 ? 'inicio' : formatDelta(delta, ' p.p.')}</span><em>${reading}</em></div>
-            </div>
-          `
-        })
-        .join('')
-    : '<p class="muted">Sem evolucao mensal para este filtro.</p>'
+  const analystName = getChatAnalystName(metric)
+  const safeName = escapeHtml(analystName)
+  const csatGoal = 90
+  const reviewGoal = 25
+  const csatGap = round(Number(metric.csat) - csatGoal)
+  const reviewGap = round(Number(metric.review_percentage) - reviewGoal)
+  const productivityGap = averageTickets ? round(((Number(metric.total_tickets) - averageTickets) / averageTickets) * 100) : 0
+  const podiumText = podiumPosition > 0
+    ? `${podiumPosition}o Lugar - CSAT: ${metric.csat}% | ${metric.total_tickets} atendimentos | ${metric.review_percentage}% avaliacoes`
+    : 'Nao elegivel ao podio neste periodo'
+  const status = metric.status || (Number(metric.csat) >= csatGoal && Number(metric.review_percentage) >= reviewGoal ? 'Meta Superada' : 'Em acompanhamento')
+  const statusColor = status === 'Meta Superada' ? '#059669' : status === 'Critico' ? '#dc2626' : '#d97706'
+  const csatText = csatGap >= 0
+    ? `O resultado superou a referencia de ${csatGoal}% em ${formatDelta(csatGap, ' p.p.')}.`
+    : `O resultado ficou ${formatDelta(csatGap, ' p.p.')} abaixo da referencia de ${csatGoal}%.`
+  const reviewText = reviewGap >= 0
+    ? `O resultado superou a meta de avaliacoes em ${formatDelta(reviewGap, ' p.p.')}.`
+    : `O resultado ficou ${formatDelta(reviewGap, ' p.p.')} abaixo da meta minima de avaliacoes.`
+  const productivityText = productivityGap >= 0
+    ? `${analystName} absorveu uma demanda ${formatDelta(productivityGap, '%')} superior a media da operacao.`
+    : `${analystName} ficou ${formatDelta(productivityGap, '%')} abaixo da media de atendimentos da operacao.`
+  const feedbackSummary = status === 'Meta Superada'
+    ? 'O desempenho do periodo sustenta reconhecimento positivo. O foco recomendado e manter consistencia, preservar qualidade e continuar estimulando o volume de avaliacoes.'
+    : 'O desempenho do periodo pede acompanhamento. O foco recomendado e revisar atendimentos negativos, reforcar convite para avaliacao e acompanhar a evolucao no proximo fechamento.'
 
   const documentHtml = `
     <!doctype html>
     <html>
       <head>
         <meta charset="utf-8" />
-        <title>Relatorio gerencial chat - ${safePeriodLabel}</title>
+        <title>Analise individual - ${safeName}</title>
         <style>
           body { font-family: Arial, sans-serif; color: #111827; margin: 34px; }
-          h1 { font-size: 28px; margin: 0 0 6px; color: #0f172a; }
+          h1 { font-size: 26px; margin: 0 0 6px; color: #0f172a; }
           h2 { color: #0f766e; font-size: 18px; margin: 24px 0 8px; }
-          p { font-size: 12px; line-height: 1.55; margin: 0 0 10px; }
-          table { border-collapse: collapse; width: 100%; margin: 10px 0 18px; }
-          th, td { border: 1px solid #cbd5e1; font-size: 11px; padding: 8px; text-align: left; }
-          th { background: #ecfeff; font-weight: bold; color: #0f172a; }
+          h3 { font-size: 14px; margin: 16px 0 6px; color: #0f172a; }
+          p { font-size: 12px; line-height: 1.55; margin: 0 0 8px; }
+          ul { margin-top: 6px; }
+          li { font-size: 12px; line-height: 1.55; margin-bottom: 5px; }
           .header { border-bottom: 3px solid #06b6d4; padding-bottom: 12px; margin-bottom: 18px; }
-          .subtitle { color: #475569; margin-bottom: 18px; }
-          .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0 18px; }
-          .card { background: #f8fafc; border: 1px solid #cbd5e1; border-top: 4px solid #0891b2; padding: 10px; min-height: 64px; }
-          .card p { color: #475569; font-size: 10px; margin-bottom: 5px; text-transform: uppercase; letter-spacing: .03em; }
-          .card strong { display: block; font-size: 20px; color: #0f172a; }
-          .card span { display: block; color: #475569; font-size: 10px; margin-top: 3px; }
-          .callout { background: #ecfeff; border-left: 4px solid #0891b2; padding: 10px 12px; margin: 12px 0 16px; }
+          .subtitle { color: #475569; margin-bottom: 0; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0 18px; }
+          .box { border: 1px solid #cbd5e1; background: #f8fafc; padding: 12px; margin-bottom: 12px; }
+          .box h2 { margin-top: 0; }
+          .status { border-left: 5px solid ${statusColor}; background: #f8fafc; padding: 12px; margin-top: 8px; }
+          .status strong { color: ${statusColor}; font-size: 16px; }
           .muted { color: #475569; }
-          .trend-panel { border: 1px solid #cbd5e1; padding: 12px; margin: 12px 0 18px; }
-          .trend-row { display: grid; grid-template-columns: 84px 1fr 150px; gap: 10px; align-items: center; margin: 10px 0; }
-          .trend-label { font-size: 11px; font-weight: bold; color: #0f172a; }
-          .trend-track { background: #e2e8f0; height: 20px; border-radius: 3px; overflow: hidden; position: relative; }
-          .trend-bar { height: 20px; }
-          .goal-line { position: absolute; left: 90%; top: 0; width: 2px; height: 20px; background: #111827; opacity: .55; }
-          .trend-value { font-size: 11px; }
-          .trend-value strong { display: inline-block; min-width: 42px; }
-          .trend-value span { font-weight: bold; margin-right: 4px; }
-          .trend-value em { color: #64748b; font-style: normal; }
+          .metric { font-weight: bold; color: #0f172a; }
         </style>
       </head>
       <body>
         <div class="header">
-          <h1>Relatorio gerencial do Chat</h1>
-          <p class="subtitle">${safePeriodLabel} - ${safeTeamName} - Fonte: Zendesk</p>
+          <h1>Relatorio de Performance - ${safeName}</h1>
+          <p class="subtitle">Periodo: ${escapeHtml(periodLabel)} | Fonte: Zendesk</p>
         </div>
 
         <div class="grid">
-          <div class="card"><p>CSAT medio</p><strong>${averageCsat}%</strong><span>${formatDelta(chatCsatDelta, ' p.p.')} vs mes anterior</span></div>
-          <div class="card"><p>Avaliacoes</p><strong>${averageReviews}%</strong><span>${formatDelta(chatReviewDelta, ' p.p.')} vs mes anterior</span></div>
-          <div class="card"><p>Sem avaliacao</p><strong>${averageSending}%</strong><span>${formatDelta(chatSendingDelta, ' p.p.')} vs mes anterior</span></div>
-          <div class="card"><p>Atendimentos</p><strong>${totals.tickets}</strong><span>${averageTickets} media por analista</span></div>
+          <div class="box">
+            <h2>Esperado:</h2>
+            <p>>= ${reviewGoal}% de avaliacoes</p>
+            <p>>= ${csatGoal}% de Satisfacao</p>
+          </div>
+          <div class="box">
+            <h2>Atingido:</h2>
+            <p>CSAT: <span class="metric">${metric.csat}%</span></p>
+            <p>Avaliacoes: <span class="metric">${metric.review_percentage}%</span> (${metric.positive_reviews} positivos + ${metric.negative_reviews} negativos = ${metric.reviews})</p>
+            <p>% Envio: <span class="metric">${metric.sending_percentage}%</span></p>
+            <p>Atendidos: ${metric.total_tickets} - ${metric.inactive_tickets} = <span class="metric">${metric.valid_tickets}</span></p>
+            <p>Media por agente: ${averageTickets}</p>
+            <p>Posicao no Podio: ${escapeHtml(podiumText)}</p>
+          </div>
         </div>
 
-        <h2>Resumo executivo</h2>
-        <div class="callout">
-          <p><strong>${escapeHtml(chatExecutiveStatus)}</strong></p>
-          <p>${escapeHtml(chatMainAlert)}</p>
-          <p><strong>Acao recomendada:</strong> ${escapeHtml(chatRecommendedAction)}</p>
+        <h2>Analise Tecnica de Desempenho</h2>
+        <h3>Qualidade e Satisfacao do Cliente (CSAT)</h3>
+        <p>O(A) colaborador(a) registrou um indice de <strong>Satisfacao (CSAT) de ${metric.csat}%</strong>.</p>
+        <ul>
+          <li><strong>Comparativo com a meta:</strong> ${escapeHtml(csatText)}</li>
+          <li><strong>Analise detalhada:</strong> Do volume total de feedbacks recebidos (${metric.reviews}), <strong>${metric.positive_reviews} foram positivos</strong>. Houve ${metric.negative_reviews} registros negativos.</li>
+        </ul>
+
+        <h3>Engajamento e Coleta de Feedback</h3>
+        <p>O(A) colaborador(a) alcancou uma <strong>taxa de avaliacoes de ${metric.review_percentage}%</strong>.</p>
+        <ul>
+          <li><strong>Comparativo com a meta:</strong> ${escapeHtml(reviewText)}</li>
+          <li><strong>Calculo:</strong> A taxa foi calculada sobre ${metric.reviews} avaliacoes divididas por ${metric.valid_tickets} atendimentos validos.</li>
+        </ul>
+
+        <h3>Produtividade e Volumetria</h3>
+        <p>O volume total de atendimentos realizados pelo(a) colaborador(a) foi de <strong>${metric.total_tickets} chamados</strong>.</p>
+        <ul>
+          <li><strong>Comparativo com a operacao:</strong> A media de atendimentos por agente foi de ${averageTickets}. ${escapeHtml(productivityText)}</li>
+          <li><strong>Destaque:</strong> ${escapeHtml(podiumText)}.</li>
+        </ul>
+
+        <h2>Feedback de Performance</h2>
+        <div class="status">
+          <p>Status Geral do Periodo: <strong>${escapeHtml(status)}</strong></p>
+          <p>${escapeHtml(feedbackSummary)}</p>
         </div>
-
-        <h2>Resumo operacional</h2>
-        <table>
-          <tr><th>Atendimentos</th><th>Validos</th><th>Inativos</th><th>Avaliacoes</th><th>Positivas</th><th>Negativas</th></tr>
-          <tr><td>${totals.tickets}</td><td>${totals.validTickets}</td><td>${totals.inactive}</td><td>${totals.reviews}</td><td>${totals.positives}</td><td>${totals.negatives}</td></tr>
-        </table>
-
-        <h2>Evolucao mensal do CSAT</h2>
-        <p class="muted">Linha escura marca a referencia de 90% usada para podio.</p>
-        <div class="trend-panel">${trendBars}</div>
-
-        <h2>Podio do chat</h2>
-        <table>
-          <tr><th>Posicao</th><th>Analista</th><th>CSAT</th><th>Avaliacoes</th><th>Atendimentos</th></tr>
-          ${podiumRows}
-        </table>
-
-        <h2>Analistas em atencao</h2>
-        <table>
-          <tr><th>Analista</th><th>CSAT</th><th>Avaliacoes</th><th>Atendimentos</th><th>Motivo</th></tr>
-          ${attentionRows}
-        </table>
-
-        <h2>Base do periodo</h2>
-        <table>
-          <tr><th>Analista</th><th>Equipe</th><th>CSAT</th><th>Avaliacoes</th><th>Sem avaliacao</th><th>Atendimentos</th><th>Inativos</th></tr>
-          ${baseRows}
-        </table>
       </body>
     </html>
   `
@@ -4246,7 +4212,7 @@ function exportChatManagementReport({
   })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
-  const fileName = `chat-relatorio-${slugifyFileName(teamName)}-${slugifyFileName(periodLabel)}.doc`
+  const fileName = `analise-${slugifyFileName(analystName)}-${slugifyFileName(periodLabel)}.doc`
 
   link.href = url
   link.download = fileName
@@ -4258,6 +4224,7 @@ function exportChatManagementReport({
 
   return fileName
 }
+
 function exportWordReport({
   analystName,
   periodLabel,
@@ -5042,6 +5009,29 @@ function calculateChatAverage(
   return round(metrics.reduce((sum, metric) => sum + Number(metric[field]), 0) / metrics.length)
 }
 
+function buildChatRanking(metrics: ChatMonthlyMetric[], averageTickets: number) {
+  return metrics
+    .map((metric) => {
+      const reasons = getChatAttentionReasons(metric, averageTickets)
+
+      return {
+        metric,
+        eligible: reasons.length === 0,
+        reasons,
+      }
+    })
+    .sort((a, b) => {
+      if (a.eligible !== b.eligible) return a.eligible ? -1 : 1
+      if (Number(b.metric.csat) !== Number(a.metric.csat)) return Number(b.metric.csat) - Number(a.metric.csat)
+      if (Number(b.metric.review_percentage) !== Number(a.metric.review_percentage)) {
+        return Number(b.metric.review_percentage) - Number(a.metric.review_percentage)
+      }
+      if (Number(b.metric.total_tickets) !== Number(a.metric.total_tickets)) {
+        return Number(b.metric.total_tickets) - Number(a.metric.total_tickets)
+      }
+      return getChatAnalystName(a.metric).localeCompare(getChatAnalystName(b.metric))
+    })
+}
 function buildChatPodium(metrics: ChatMonthlyMetric[], averageTickets: number) {
   return metrics
     .filter(
@@ -5270,6 +5260,12 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
+
+
+
+
+
 
 
 
