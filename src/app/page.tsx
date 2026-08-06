@@ -112,7 +112,6 @@ type ChatPodiumManual = {
   year: number
   month_number: number
   position: number
-  reason: string | null
 }
 
 type ChatPodiumExclusion = {
@@ -403,7 +402,7 @@ export default function Home() {
         .limit(500),
       supabase
         .from('chat_podium_manual')
-        .select('id, team_id, analyst_id, year, month_number, position, reason')
+        .select('id, team_id, analyst_id, year, month_number, position')
         .order('year', { ascending: false }),
       supabase
         .from('chat_podium_exclusions')
@@ -1602,7 +1601,6 @@ function ChatModuleDashboard({
               year: selectedPeriod.year,
               month_number: selectedPeriod.monthNumber,
               position,
-              reason: 'Ajuste manual da gestao',
             }
           : null
       })
@@ -1915,7 +1913,7 @@ function ChatModuleDashboard({
                 {winner ? (
                   <>
                     <p className="mt-3 text-lg font-bold">{getChatAnalystName(winner)}</p>
-                    <p className="mt-2 text-sm text-slate-300">CSAT {winner.csat}% | {winner.total_tickets} atendimentos</p>
+                    <p className="mt-2 text-sm text-slate-300">CSAT {winner.csat}% | {winner.review_percentage}% avaliacoes | {winner.total_tickets} atendimentos</p>
                   </>
                 ) : (
                   <p className="mt-3 text-slate-400">Aguardando elegivel</p>
@@ -6042,6 +6040,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
