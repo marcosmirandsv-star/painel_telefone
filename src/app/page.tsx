@@ -4920,6 +4920,12 @@ function exportChatIndividualReport({
           .trend-read { background: #ecfeff; border-left: 4px solid #0891b2; padding: 9px 10px; margin: 8px 0 10px; }
           .trend-read p { margin: 0; }
           .coach { border-left: 5px solid #0891b2; background: #ecfeff; padding: 12px; margin-top: 8px; }
+          .kpi-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 12px 0 16px; }
+          .kpi-card { border: 1px solid #cbd5e1; background: #ffffff; padding: 10px; }
+          .kpi-card span { display: block; color: #475569; font-size: 10px; margin-bottom: 5px; }
+          .kpi-card strong { display: block; color: #0f172a; font-size: 18px; }
+          .kpi-card em { display: block; color: #475569; font-size: 10px; font-style: normal; margin-top: 5px; }
+          .coach h3 { margin-top: 0; color: #0f172a; }
         </style>
       </head>
       <body>
@@ -4942,6 +4948,24 @@ function exportChatIndividualReport({
             <p>Atendidos: ${metric.total_tickets} - ${metric.inactive_tickets} = <span class="metric">${metric.valid_tickets}</span></p>
             <p>Media por agente: ${averageTickets}</p>
             <p>Posicao no Podio: ${escapeHtml(podiumText)}</p>
+          </div>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <span>Qualidade percebida</span>
+            <strong>${metric.csat}%</strong>
+            <em>Meta individual: ${csatGoal}% (${formatDelta(csatGap, ' p.p.')})</em>
+          </div>
+          <div class="kpi-card">
+            <span>Participacao em avaliacoes</span>
+            <strong>${metric.review_percentage}%</strong>
+            <em>Referencia: ${reviewGoal}% (${formatDelta(reviewGap, ' p.p.')})</em>
+          </div>
+          <div class="kpi-card">
+            <span>Volume mensal</span>
+            <strong>${metric.total_tickets}</strong>
+            <em>Media da operacao: ${averageTickets} (${formatDelta(productivityGap, '%')})</em>
           </div>
         </div>
 
@@ -4979,7 +5003,7 @@ function exportChatIndividualReport({
 
         <h2>Feedback Coach</h2>
         <div class="coach">
-          <p>${escapeHtml(coachFeedback)}</p>
+          ${coachFeedback}
         </div>
       </body>
     </html>
@@ -5027,6 +5051,9 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
   const reviewPoints = history
     .map((metric, index) => `${xFor(index)},${yForPercent(Number(metric.review_percentage))}`)
     .join(' ')
+  const sendingPoints = history
+    .map((metric, index) => `${xFor(index)},${yForPercent(Number(metric.sending_percentage))}`)
+    .join(' ')
   const monthLabels = history
     .map((metric, index) => {
       const x = xFor(index)
@@ -5040,10 +5067,12 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
       const x = xFor(index)
       const csatY = yForPercent(Number(metric.csat))
       const reviewY = yForPercent(Number(metric.review_percentage))
+      const sendingY = yForPercent(Number(metric.sending_percentage))
 
       return `
         <circle cx="${x}" cy="${csatY}" r="3" fill="#0891b2"></circle>
         <circle cx="${x}" cy="${reviewY}" r="3" fill="#7c3aed"></circle>
+        <circle cx="${x}" cy="${sendingY}" r="3" fill="#d97706"></circle>
       `
     })
     .join('')
@@ -5069,6 +5098,7 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
           <td>${metric.csat}%</td>
           <td>${metric.review_percentage}%</td>
           <td>${metric.total_tickets}</td>
+          <td>${metric.sending_percentage}%</td>
         </tr>
       `,
     )
@@ -5087,6 +5117,8 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
         <span class="legend-dot" style="background:#0891b2;"></span>CSAT
         &nbsp;&nbsp;
         <span class="legend-dot" style="background:#7c3aed;"></span>Avaliacoes
+        &nbsp;&nbsp;
+        <span class="legend-dot" style="background:#d97706;"></span>Envio/sem avaliacao
       </p>
       <svg class="line-chart" viewBox="0 0 620 150" xmlns="http://www.w3.org/2000/svg">
         <line x1="42" y1="18" x2="42" y2="116" stroke="#cbd5e1" stroke-width="1"></line>
@@ -5097,6 +5129,7 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
         <text x="14" y="119" font-size="9" fill="#475569">0%</text>
         <polyline points="${csatPoints}" fill="none" stroke="#0891b2" stroke-width="3"></polyline>
         <polyline points="${reviewPoints}" fill="none" stroke="#7c3aed" stroke-width="3"></polyline>
+        <polyline points="${sendingPoints}" fill="none" stroke="#d97706" stroke-width="3"></polyline>
         ${pointLabels}
         ${monthLabels}
       </svg>
@@ -5110,6 +5143,7 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
           <th>CSAT</th>
           <th>Avaliacoes</th>
           <th>Atendimentos</th>
+          <th>Envio</th>
         </tr>
         ${tableRows}
       </table>
@@ -5132,41 +5166,52 @@ function buildChatCoachFeedback({
   productivityGap: number
   metric: ChatMonthlyMetric
 }) {
-  const positiveReadings: string[] = []
-  const developmentReadings: string[] = []
+  const strengths: string[] = []
+  const developmentPoints: string[] = []
 
   if (csatGap >= 0) {
-    positiveReadings.push('a experiencia entregue ao cliente foi bem percebida e ficou acima da referencia de satisfacao')
+    strengths.push('manteve uma percepcao positiva do cliente acima da meta individual')
   } else {
-    developmentReadings.push('aprofundar a leitura das avaliacoes negativas para identificar comportamentos, temas ou momentos da conversa que possam ser melhorados')
+    developmentPoints.push('aprofundar a leitura dos atendimentos que geraram avaliacao negativa e identificar padroes de abordagem')
   }
 
   if (reviewGap >= 0) {
-    positiveReadings.push('o volume de respostas dos clientes da seguranca para interpretar o resultado do mes')
+    strengths.push('conseguiu uma amostra de avaliacoes suficiente para sustentar a leitura do mes')
   } else {
-    developmentReadings.push('melhorar a conversao de atendimentos validos em avaliacoes, reforcando encerramentos claros e convite natural para feedback')
+    developmentPoints.push('aumentar a conversao de atendimentos validos em avaliacoes, com encerramentos mais claros e convite natural para feedback')
   }
 
   if (productivityGap >= 0) {
-    positiveReadings.push('o volume de atendimento ficou acima da media da operacao, mantendo boa entrega mesmo com alta demanda')
+    strengths.push('entregou volume acima da media da operacao')
   } else {
-    developmentReadings.push('entender se o volume abaixo da media esta relacionado a distribuicao, ausencias, carteira de atendimento ou ritmo operacional')
+    developmentPoints.push('entender se o volume abaixo da media teve relacao com distribuicao, ausencias, emprestimos ou caracteristica da carteira')
   }
 
-  const recognition =
-    positiveReadings.length > 0
-      ? `Reconhecimento do ciclo: ${positiveReadings.join('; ')}.`
-      : 'Reconhecimento do ciclo: ainda nao ha um indicador claramente acima da referencia, mas o resultado ajuda a direcionar um plano objetivo para o proximo fechamento.'
-  const development =
-    developmentReadings.length > 0
-      ? `Ponto de desenvolvimento: ${developmentReadings.join('; ')}.`
-      : 'Ponto de desenvolvimento: o desafio agora e sustentar o padrao, evitar queda de consistencia e transformar o bom resultado em referencia para a equipe.'
+  const statusReading =
+    status === 'Meta Superada'
+      ? 'O ciclo indica consistencia e merece reconhecimento. A prioridade nao e mudar tudo, mas proteger o padrao que funcionou.'
+      : status === 'Critico'
+        ? 'O ciclo pede intervencao mais objetiva. A prioridade e reduzir dispersao, escolher poucos comportamentos de melhoria e medir o efeito no proximo fechamento.'
+        : 'O ciclo mostra pontos positivos, mas ainda pede ajuste fino para transformar bom desempenho em resultado consistente.'
+  const strengthsText = strengths.length ? strengths.join('; ') : 'houve base suficiente para direcionar um plano de desenvolvimento com clareza'
+  const developmentText = developmentPoints.length
+    ? developmentPoints.join('; ')
+    : 'sustentar consistencia, compartilhar boas praticas e evitar acomodacao apos um ciclo positivo'
   const nextStep =
     status === 'Meta Superada'
-      ? 'Para o proximo mes, a recomendacao e preservar as praticas que geraram esse resultado e observar se a mesma consistencia se repete no novo fechamento mensal.'
-      : 'Para o proximo mes, a recomendacao e escolher uma acao prioritaria, acompanhar o impacto no fechamento seguinte e comparar se houve evolucao real nos indicadores.'
+      ? 'No proximo fechamento mensal, observe se o resultado se repete com a mesma qualidade e se o volume de avaliacoes continua forte.'
+      : 'No proximo fechamento mensal, compare se a acao escolhida gerou evolucao real em CSAT, avaliacoes e volume.'
 
-  return `${analystName} encerrou o mes com CSAT de ${metric.csat}%, ${metric.review_percentage}% de avaliacoes e ${metric.total_tickets} atendimentos registrados. ${recognition} ${development} ${nextStep} Status atual: ${status}.`
+  return `
+    <h3>Leitura do ciclo</h3>
+    <p>${escapeHtml(analystName)} fechou o mes com CSAT de ${metric.csat}%, ${metric.review_percentage}% de avaliacoes, ${metric.sending_percentage}% de envio/sem avaliacao e ${metric.total_tickets} atendimentos. ${escapeHtml(statusReading)}</p>
+    <h3>Forcas observadas</h3>
+    <p>${escapeHtml(strengthsText)}.</p>
+    <h3>Plano de desenvolvimento</h3>
+    <p>${escapeHtml(developmentText)}.</p>
+    <h3>Expectativa para o proximo ciclo mensal</h3>
+    <p>${escapeHtml(nextStep)} Status atual: ${escapeHtml(status)}.</p>
+  `
 }
 
 function exportWordReport({
@@ -6262,6 +6307,8 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
+
 
 
 
