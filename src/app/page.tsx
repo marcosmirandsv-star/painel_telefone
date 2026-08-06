@@ -1213,7 +1213,7 @@ function ChatModuleDashboard({
   const [chatImportMessage, setChatImportMessage] = useState('')
   const [chatExportMessage, setChatExportMessage] = useState('')
   const [selectedChatReportMetricId, setSelectedChatReportMetricId] = useState('')
-  const [chatActiveTab, setChatActiveTab] = useState<'overview' | 'import' | 'podium' | 'reports' | 'settings' | 'base'>('overview')
+  const [chatActiveTab, setChatActiveTab] = useState<'overview' | 'podium' | 'analysis' | 'reports' | 'import' | 'settings' | 'base'>('overview')
   const [manualPodiumDraft, setManualPodiumDraft] = useState<Record<number, string>>({})
   const [chatPodiumMessage, setChatPodiumMessage] = useState('')
   const [chatAnalystForm, setChatAnalystForm] = useState({ teamId: '', name: '', csatGoal: '86' })
@@ -1383,6 +1383,29 @@ function ChatModuleDashboard({
     .sort((a, b) => Number(a.metric.csat) - Number(b.metric.csat))
     .slice(0, 5)
   const monthlyTrend = buildChatMonthlyTrend(trendMetrics).slice(-7)
+  const monthlyUnifiedTrend = buildChatMonthlyUnifiedTrend(trendMetrics).slice(-7)
+  const chatGoalsReachedCount = visibleMetrics.filter(
+    (metric) => Number(metric.csat) >= Number(metric.csat_goal) && Number(metric.review_percentage) >= Number(metric.general_review_goal),
+  ).length
+  const chatCriticalCount = visibleMetrics.filter((metric) => metric.status === 'Critico').length
+  const chatTopPerformers = chatRanking
+    .filter((item) => item.eligible || (Number(item.metric.csat) >= Number(item.metric.csat_goal) && Number(item.metric.review_percentage) >= 25))
+    .slice(0, 5)
+  const chatOpportunities = visibleMetrics
+    .map((metric) => ({
+      metric,
+      reasons: getChatAttentionReasons(metric, averageTickets),
+      csatDelta: round(Number(metric.csat) - Number(metric.csat_goal)),
+      reviewDelta: round(Number(metric.review_percentage) - Number(metric.general_review_goal)),
+      sendingDelta: round(Number(metric.sending_percentage) - 80),
+    }))
+    .filter((item) => item.reasons.length || item.csatDelta < 0 || item.reviewDelta < 0 || item.sendingDelta < 0)
+    .sort((a, b) => {
+      if (b.reasons.length !== a.reasons.length) return b.reasons.length - a.reasons.length
+      if (a.csatDelta !== b.csatDelta) return a.csatDelta - b.csatDelta
+      return Number(a.metric.csat) - Number(b.metric.csat)
+    })
+    .slice(0, 6)
   const selectedChatReportMetric =
     visibleMetrics.find((metric) => metric.id === selectedChatReportMetricId) ?? visibleMetrics[0] ?? null
   const selectedChatRankingItem = selectedChatReportMetric
@@ -1768,6 +1791,9 @@ function ChatModuleDashboard({
         <TabButton active={chatActiveTab === 'podium'} onClick={() => setChatActiveTab('podium')}>
           Ranking e podio
         </TabButton>
+        <TabButton active={chatActiveTab === 'analysis'} onClick={() => setChatActiveTab('analysis')}>
+          Analise
+        </TabButton>
         <TabButton active={chatActiveTab === 'reports'} onClick={() => setChatActiveTab('reports')}>
           Relatorios
         </TabButton>
@@ -1894,7 +1920,14 @@ function ChatModuleDashboard({
             <h2 className="section-title">Evolucao mensal</h2>
             <p className="section-subtitle">CSAT medio consolidado por mes no filtro selecionado.</p>
             <div className="mt-5">
-              <TrendLineChart label="CSAT mensal" points={monthlyTrend} suffix="%" />
+              <GroupedPercentTrendChart
+                points={monthlyUnifiedTrend}
+                series={[
+                  { key: 'csat', label: 'CSAT', color: 'bg-cyan-300' },
+                  { key: 'reviews', label: 'Avaliacoes', color: 'bg-emerald-300' },
+                  { key: 'sending', label: 'Envio/sem avaliacao', color: 'bg-amber-300' },
+                ]}
+              />
             </div>
           </div>
           <div className="rounded-lg bg-slate-900 p-5">
@@ -1905,6 +1938,8 @@ function ChatModuleDashboard({
               <p>Avaliacoes: <strong>{totals.reviews}</strong></p>
               <p>Envio/sem avaliacao medio: <strong>{averageSending}%</strong></p>
               <p>Media por analista: <strong>{averageTickets}</strong></p>
+              <p>Metas superadas: <strong>{chatGoalsReachedCount}</strong></p>
+              <p>Criticos: <strong>{chatCriticalCount}</strong></p>
             </div>
           </div>
         </div>
@@ -2044,6 +2079,96 @@ function ChatModuleDashboard({
         </section>
       </div>
 
+
+      <section className={chatActiveTab === 'analysis' ? 'panel' : 'hidden'}>
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Analise detalhada</p>
+          <h2 className="section-title">Leitura por criterios do painel antigo</h2>
+          <p className="section-subtitle">
+            Mostra delta de CSAT contra a meta individual, delta de avaliacoes contra 25%, envio/sem avaliacao contra 80% e volume contra a media do periodo.
+          </p>
+        </div>
+
+        <div className="mt-5 grid gap-6 xl:grid-cols-2">
+          <div className="rounded-lg bg-slate-900 p-5">
+            <h3 className="text-xl font-bold">Top performers</h3>
+            <div className="mt-4 space-y-3">
+              {chatTopPerformers.length ? (
+                chatTopPerformers.map((item, index) => (
+                  <div key={item.metric.id} className="rounded-md bg-slate-950/60 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm text-cyan-300">{index + 1}o destaque</p>
+                        <p className="mt-1 font-semibold">{getChatAnalystName(item.metric)}</p>
+                      </div>
+                      <strong>{item.metric.csat}%</strong>
+                    </div>
+                    <p className="mt-2 text-sm text-slate-400">
+                      Avaliacoes {item.metric.review_percentage}%, atendimento {item.metric.total_tickets} e meta CSAT {item.metric.csat_goal}%.
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <EmptyState text="Ainda nao ha destaque no filtro selecionado." />
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-slate-900 p-5">
+            <h3 className="text-xl font-bold">Oportunidades</h3>
+            <div className="mt-4 space-y-3">
+              {chatOpportunities.length ? (
+                chatOpportunities.map((item) => (
+                  <div key={item.metric.id} className="rounded-md bg-slate-950/60 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="font-semibold">{getChatAnalystName(item.metric)}</p>
+                      <span className="text-sm text-amber-200">{item.metric.status}</span>
+                    </div>
+                    <p className="mt-2 text-sm text-slate-400">{item.reasons.length ? item.reasons.join(', ') : 'Acompanhar estabilidade dos indicadores.'}</p>
+                    <p className="mt-2 text-sm text-slate-300">
+                      CSAT {formatDelta(item.csatDelta, ' p.p.')}, avaliacoes {formatDelta(item.reviewDelta, ' p.p.')} e envio {formatDelta(item.sendingDelta, ' p.p.')}.
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <EmptyState text="Nenhuma oportunidade critica encontrada neste periodo." />
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="text-slate-400">
+              <tr>
+                <th className="pb-3 pr-4 font-medium">Analista</th>
+                <th className="pb-3 pr-4 font-medium">Status</th>
+                <th className="pb-3 pr-4 font-medium">CSAT</th>
+                <th className="pb-3 pr-4 font-medium">Delta CSAT</th>
+                <th className="pb-3 pr-4 font-medium">Avaliacoes</th>
+                <th className="pb-3 pr-4 font-medium">Delta aval.</th>
+                <th className="pb-3 pr-4 font-medium">Envio</th>
+                <th className="pb-3 pr-4 font-medium">Atendimentos</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              {chatRanking.map((item) => (
+                <tr key={item.metric.id}>
+                  <td className="py-3 pr-4 font-semibold">{getChatAnalystName(item.metric)}</td>
+                  <td className="py-3 pr-4">{item.metric.status}</td>
+                  <td className="py-3 pr-4">{item.metric.csat}%</td>
+                  <td className="py-3 pr-4">{formatDelta(round(Number(item.metric.csat) - Number(item.metric.csat_goal)), ' p.p.')}</td>
+                  <td className="py-3 pr-4">{item.metric.review_percentage}%</td>
+                  <td className="py-3 pr-4">{formatDelta(round(Number(item.metric.review_percentage) - Number(item.metric.general_review_goal)), ' p.p.')}</td>
+                  <td className="py-3 pr-4">{item.metric.sending_percentage}%</td>
+                  <td className="py-3 pr-4">{item.metric.total_tickets} / media {averageTickets}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {!chatRanking.length && <EmptyState text="Nenhum dado para analise neste filtro." />}
+        </div>
+      </section>
       <section className={chatActiveTab === 'reports' ? 'panel' : 'hidden'}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
@@ -4517,6 +4642,46 @@ function BarTrend({
   )
 }
 
+function GroupedPercentTrendChart({
+  points,
+  series,
+}: {
+  points: Array<{ label: string; csat: number; reviews: number; sending: number }>
+  series: Array<{ key: 'csat' | 'reviews' | 'sending'; label: string; color: string }>
+}) {
+  return (
+    <div className="rounded-lg bg-slate-900 p-4">
+      <div className="flex flex-wrap gap-3 text-xs text-slate-300">
+        {series.map((item) => (
+          <span key={item.key} className="inline-flex items-center gap-2">
+            <span className={`h-2.5 w-2.5 rounded-full ${item.color}`} />
+            {item.label}
+          </span>
+        ))}
+      </div>
+
+      <div className="mt-5 space-y-4">
+        {points.map((point) => (
+          <div key={point.label} className="grid gap-2 md:grid-cols-[90px_1fr] md:items-center">
+            <span className="text-sm font-semibold text-slate-300">{point.label}</span>
+            <div className="grid gap-2">
+              {series.map((item) => (
+                <div key={item.key} className="grid grid-cols-[1fr_48px] items-center gap-3">
+                  <div className="h-3 rounded-full bg-slate-800">
+                    <div className={`h-3 rounded-full ${item.color}`} style={{ width: `${Math.max(point[item.key], 3)}%` }} />
+                  </div>
+                  <strong className="text-right text-xs">{point[item.key]}%</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        {!points.length && <EmptyState text="Sem dados suficientes para o grafico." />}
+      </div>
+    </div>
+  )
+}
+
 function TabButton({
   active,
   children,
@@ -5839,6 +6004,41 @@ function getChatAttentionReasons(metric: ChatMonthlyMetric, averageTickets: numb
   return reasons
 }
 
+function buildChatMonthlyUnifiedTrend(metrics: ChatMonthlyMetric[]) {
+  const grouped = new Map<
+    string,
+    { label: string; year: number; month: number; csatSum: number; reviewsSum: number; sendingSum: number; count: number }
+  >()
+
+  metrics.forEach((metric) => {
+    const key = `${metric.year}-${metric.month_number}`
+    const current = grouped.get(key) ?? {
+      label: metric.month_label,
+      year: metric.year,
+      month: metric.month_number,
+      csatSum: 0,
+      reviewsSum: 0,
+      sendingSum: 0,
+      count: 0,
+    }
+
+    current.csatSum += Number(metric.csat)
+    current.reviewsSum += Number(metric.review_percentage)
+    current.sendingSum += Number(metric.sending_percentage)
+    current.count += 1
+    grouped.set(key, current)
+  })
+
+  return [...grouped.values()]
+    .sort((a, b) => (a.year === b.year ? a.month - b.month : a.year - b.year))
+    .map((item) => ({
+      label: item.label.replace(' 2026', ''),
+      csat: item.count ? round(item.csatSum / item.count) : 0,
+      reviews: item.count ? round(item.reviewsSum / item.count) : 0,
+      sending: item.count ? round(item.sendingSum / item.count) : 0,
+    }))
+}
+
 function buildChatMonthlyTrend(metrics: ChatMonthlyMetric[]) {
   const grouped = new Map<string, { label: string; year: number; month: number; csatSum: number; count: number }>()
   metrics.forEach((metric) => {
@@ -6062,6 +6262,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
