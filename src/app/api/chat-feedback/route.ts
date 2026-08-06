@@ -36,11 +36,11 @@ type ChatFeedbackRequest = {
 
 const styleInstructions = {
   coach:
-    'Use formato Coach com seÃ§Ãµes: Leitura do ciclo, ForÃ§as observadas, Plano de desenvolvimento, Expectativa para o prÃ³ximo ciclo mensal.',
+    'Use formato Coach com secoes: Leitura do ciclo, Forcas observadas, Plano de desenvolvimento, Expectativa para o proximo ciclo mensal.',
   sare:
-    'Use formato SARE com seÃ§Ãµes: SituaÃ§Ã£o, Alinhamentos Realizados, Resultado Esperado, Expectativa e Plano de Desenvolvimento.',
+    'Use formato SARE com secoes: Situacao, Alinhamentos Realizados, Resultado Esperado, Expectativa e Plano de Desenvolvimento.',
   mimo:
-    'Use formato MIMO com seÃ§Ãµes: Momento observado, Impacto, Melhoria ou manutenÃ§Ã£o, OrientaÃ§Ã£o.',
+    'Use formato MIMO com secoes: Momento observado, Impacto, Melhoria ou manutencao, Orientacao.',
 }
 
 function getErrorText(error: unknown) {
@@ -48,48 +48,11 @@ function getErrorText(error: unknown) {
   return 'Erro inesperado ao gerar feedback com IA.'
 }
 
-function extractText(data: unknown) {
-  const response = data as {
-    output_text?: string
-    output?: {
-      content?: {
-        text?: string
-      }[]
-    }[]
-  }
+function buildPrompt(body: ChatFeedbackRequest) {
+  const metric = body.metric
+  const feedbackStyle = body.feedbackStyle ?? 'coach'
 
-  if (typeof response.output_text === 'string') return response.output_text
-
-  return (
-    response.output
-      ?.flatMap((item) => item.content ?? [])
-      .map((content) => content.text)
-      .filter(Boolean)
-      .join('\n') ?? ''
-  )
-}
-
-export async function POST(request: Request) {
-  const apiKey = process.env.OPENAI_API_KEY
-
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: 'OPENAI_API_KEY nao configurada. Adicione a chave nas variaveis de ambiente para usar a IA.' },
-      { status: 503 },
-    )
-  }
-
-  try {
-    const body = (await request.json()) as ChatFeedbackRequest
-    const metric = body.metric
-
-    if (!metric?.analystName) {
-      return NextResponse.json({ error: 'Dados do analista nao foram enviados para a IA.' }, { status: 400 })
-    }
-
-    const feedbackStyle = body.feedbackStyle ?? 'coach'
-    const model = process.env.OPENAI_MODEL || 'gpt-5.6-terra'
-    const input = `
+  return `
 Voce e um coach senior de atendimento ao cliente e deve escrever um feedback profissional, humano e objetivo para um relatorio mensal individual do time de chat.
 
 Regras:
@@ -103,18 +66,18 @@ Regras:
 - ${styleInstructions[feedbackStyle]}
 
 Periodo: ${body.periodLabel ?? 'Periodo nao informado'}
-Analista: ${metric.analystName}
-Equipe: ${metric.teamName ?? 'Equipe nao informada'}
-Status: ${metric.status ?? 'Nao informado'}
-CSAT: ${metric.csat}% | Meta CSAT: ${metric.csatGoal}%
-Avaliacoes: ${metric.reviewPercentage}% | Meta avaliacoes: ${metric.reviewGoal ?? 25}%
-Envio/sem avaliacao: ${metric.sendingPercentage}%
-Atendimentos totais: ${metric.totalTickets}
-Atendimentos inativos: ${metric.inactiveTickets}
-Atendimentos validos: ${metric.validTickets}
-Avaliacoes recebidas: ${metric.reviews}
-Positivas: ${metric.positiveReviews}
-Negativas: ${metric.negativeReviews}
+Analista: ${metric?.analystName}
+Equipe: ${metric?.teamName ?? 'Equipe nao informada'}
+Status: ${metric?.status ?? 'Nao informado'}
+CSAT: ${metric?.csat}% | Meta CSAT: ${metric?.csatGoal}%
+Avaliacoes: ${metric?.reviewPercentage}% | Meta avaliacoes: ${metric?.reviewGoal ?? 25}%
+Envio/sem avaliacao: ${metric?.sendingPercentage}%
+Atendimentos totais: ${metric?.totalTickets}
+Atendimentos inativos: ${metric?.inactiveTickets}
+Atendimentos validos: ${metric?.validTickets}
+Avaliacoes recebidas: ${metric?.reviews}
+Positivas: ${metric?.positiveReviews}
+Negativas: ${metric?.negativeReviews}
 Media de atendimentos da operacao: ${body.averageTickets}
 Posicao no podio: ${body.podiumPosition && body.podiumPosition > 0 ? `${body.podiumPosition}o lugar` : 'fora do podio'}
 
@@ -127,34 +90,80 @@ ${body.managerNotes?.trim() || 'Sem observacoes adicionais.'}
 Texto base do sistema, caso ajude:
 ${body.fallbackText ?? ''}
 `
+}
 
-    const openAiResponse = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        input,
-        max_output_tokens: 900,
-        reasoning: { effort: 'low' },
-        text: { verbosity: 'medium' },
-        store: false,
-      }),
-    })
+function extractChatCompletionText(data: unknown) {
+  const response = data as {
+    choices?: {
+      message?: {
+        content?: string
+      }
+    }[]
+  }
 
-    const data = await openAiResponse.json()
+  return response.choices?.[0]?.message?.content ?? ''
+}
 
-    if (!openAiResponse.ok) {
-      const message = data?.error?.message || 'Nao foi possivel gerar feedback com IA.'
-      return NextResponse.json({ error: message }, { status: openAiResponse.status })
+async function generateWithGitHubModels(prompt: string) {
+  const token = process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN
+
+  if (!token) {
+    throw new Error('GITHUB_MODELS_TOKEN nao configurado. Adicione na Vercel um token do GitHub com permissao models: read.')
+  }
+
+  const response = await fetch('https://models.github.ai/inference/chat/completions', {
+    method: 'POST',
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+    body: JSON.stringify({
+      model: process.env.GITHUB_MODELS_MODEL || 'openai/gpt-4.1',
+      messages: [
+        {
+          role: 'system',
+          content: 'Voce escreve feedbacks profissionais para relatorios mensais de atendimento.',
+        },
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+      temperature: 0.4,
+      max_tokens: 900,
+    }),
+  })
+  const data = await response.json()
+
+  if (!response.ok) {
+    const message = data?.message || data?.error?.message || 'Nao foi possivel gerar feedback com GitHub Models.'
+    throw new Error(message)
+  }
+
+  return extractChatCompletionText(data).trim()
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = (await request.json()) as ChatFeedbackRequest
+
+    if (!body.metric?.analystName) {
+      return NextResponse.json({ error: 'Dados do analista nao foram enviados para a IA.' }, { status: 400 })
     }
 
-    const feedback = extractText(data).trim()
+    const prompt = buildPrompt(body)
+    const feedback = await generateWithGitHubModels(prompt)
 
     if (!feedback) {
-      return NextResponse.json({ error: 'A IA nao retornou texto para o feedback.' }, { status: 502 })
+      return NextResponse.json(
+        {
+          error:
+            'A IA nao retornou texto. Tente novamente em alguns instantes.',
+        },
+        { status: 503 },
+      )
     }
 
     return NextResponse.json({ feedback })
@@ -162,4 +171,3 @@ ${body.fallbackText ?? ''}
     return NextResponse.json({ error: getErrorText(error) }, { status: 500 })
   }
 }
-
