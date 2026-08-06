@@ -1639,7 +1639,7 @@ function ChatModuleDashboard({
       <section className="panel">
         <h2 className="section-title">Base importada</h2>
         <p className="section-subtitle">
-          {metrics.length} registros carregados entre historico e importacoes mensais do Zendesk.
+          {metrics.length} registros carregados entre historico e importacoes mensais do Zendesk. O % envio avaliacao segue a regra do painel antigo: atendimentos validos sem avaliacao dividido por atendimentos validos. A inatividade e apenas apoio operacional: inativos dividido por atendimentos totais.
         </p>
         <div className="mt-5 overflow-x-auto">
           <table className="min-w-full text-left text-sm">
@@ -5374,6 +5374,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
