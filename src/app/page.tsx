@@ -1217,6 +1217,7 @@ function ChatModuleDashboard({
   const [chatFeedbackStyle, setChatFeedbackStyle] = useState<ChatFeedbackStyle>('coach')
   const [chatManagerNotes, setChatManagerNotes] = useState('')
   const [chatFeedbackDraft, setChatFeedbackDraft] = useState('')
+  const [chatAiSaving, setChatAiSaving] = useState(false)
   const [selectedChatReportMetricId, setSelectedChatReportMetricId] = useState('')
   const [chatActiveTab, setChatActiveTab] = useState<'overview' | 'podium' | 'analysis' | 'reports' | 'import' | 'settings' | 'base'>('overview')
   const [manualPodiumDraft, setManualPodiumDraft] = useState<Record<number, string>>({})
@@ -1749,6 +1750,70 @@ function ChatModuleDashboard({
     setChatExportMessage('Sugestao de feedback gerada. Revise o texto antes de exportar.')
   }
 
+  async function handleGenerateChatFeedbackWithAi() {
+    if (!selectedChatReportMetric) {
+      setChatExportMessage('Selecione um analista com dados antes de acionar a IA.')
+      return
+    }
+
+    setChatAiSaving(true)
+    setChatExportMessage('Gerando feedback com IA...')
+
+    try {
+      const history = metrics
+        .filter((historyMetric) => historyMetric.analyst_id === selectedChatReportMetric.analyst_id)
+        .sort((a, b) => (a.year === b.year ? a.month_number - b.month_number : a.year - b.year))
+        .map((historyMetric) => ({
+          monthLabel: historyMetric.month_label,
+          csat: Number(historyMetric.csat),
+          reviewPercentage: Number(historyMetric.review_percentage),
+          sendingPercentage: Number(historyMetric.sending_percentage),
+          totalTickets: Number(historyMetric.total_tickets),
+        }))
+      const response = await fetch('/api/chat-feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          feedbackStyle: chatFeedbackStyle,
+          periodLabel: selectedPeriod?.label ?? 'Periodo',
+          managerNotes: chatManagerNotes,
+          fallbackText: chatReportFeedbackSuggestion,
+          averageTickets,
+          podiumPosition: selectedChatPodiumPosition,
+          metric: {
+            analystName: getChatAnalystName(selectedChatReportMetric),
+            teamName: getChatTeamName(selectedChatReportMetric),
+            csat: Number(selectedChatReportMetric.csat),
+            reviewPercentage: Number(selectedChatReportMetric.review_percentage),
+            sendingPercentage: Number(selectedChatReportMetric.sending_percentage),
+            totalTickets: Number(selectedChatReportMetric.total_tickets),
+            inactiveTickets: Number(selectedChatReportMetric.inactive_tickets),
+            validTickets: Number(selectedChatReportMetric.valid_tickets),
+            reviews: Number(selectedChatReportMetric.reviews),
+            positiveReviews: Number(selectedChatReportMetric.positive_reviews),
+            negativeReviews: Number(selectedChatReportMetric.negative_reviews),
+            csatGoal: Number(selectedChatReportMetric.csat_goal),
+            reviewGoal: Number(selectedChatReportMetric.general_review_goal),
+            status: selectedChatReportMetric.status,
+          },
+          monthlyHistory: history,
+        }),
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data?.error || 'Nao foi possivel gerar feedback com IA.')
+      }
+
+      setChatFeedbackDraft(data.feedback)
+      setChatExportMessage('Feedback gerado com IA. Revise o texto antes de exportar.')
+    } catch (error) {
+      setChatExportMessage(getErrorMessage(error))
+    } finally {
+      setChatAiSaving(false)
+    }
+  }
+
   function handleExportChatIndividualReport() {
     if (!selectedChatReportMetric) {
       setChatExportMessage('Selecione um analista com dados antes de exportar o relatorio individual.')
@@ -2251,7 +2316,7 @@ function ChatModuleDashboard({
             />
           </Field>
 
-          <div className="grid gap-3 lg:grid-cols-[auto_1fr] lg:items-start">
+          <div className="grid gap-3 lg:grid-cols-[auto_auto_1fr] lg:items-start">
             <button
               className="btn-secondary disabled:cursor-not-allowed disabled:opacity-60"
               disabled={!selectedChatReportMetric}
@@ -6389,6 +6454,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
