@@ -1213,6 +1213,7 @@ function ChatModuleDashboard({
   const [chatImportMessage, setChatImportMessage] = useState('')
   const [chatExportMessage, setChatExportMessage] = useState('')
   const [selectedChatReportMetricId, setSelectedChatReportMetricId] = useState('')
+  const [chatActiveTab, setChatActiveTab] = useState<'overview' | 'import' | 'podium' | 'reports' | 'settings' | 'base'>('overview')
   const [manualPodiumDraft, setManualPodiumDraft] = useState<Record<number, string>>({})
   const [chatPodiumMessage, setChatPodiumMessage] = useState('')
   const [chatAnalystForm, setChatAnalystForm] = useState({ teamId: '', name: '', csatGoal: '86' })
@@ -1760,7 +1761,28 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <section className="panel">
+      <nav className="tab-row">
+        <TabButton active={chatActiveTab === 'overview'} onClick={() => setChatActiveTab('overview')}>
+          Painel
+        </TabButton>
+        <TabButton active={chatActiveTab === 'podium'} onClick={() => setChatActiveTab('podium')}>
+          Ranking e podio
+        </TabButton>
+        <TabButton active={chatActiveTab === 'reports'} onClick={() => setChatActiveTab('reports')}>
+          Relatorios
+        </TabButton>
+        <TabButton active={chatActiveTab === 'import'} onClick={() => setChatActiveTab('import')}>
+          Importacao
+        </TabButton>
+        <TabButton active={chatActiveTab === 'settings'} onClick={() => setChatActiveTab('settings')}>
+          Cadastros
+        </TabButton>
+        <TabButton active={chatActiveTab === 'base'} onClick={() => setChatActiveTab('base')}>
+          Base importada
+        </TabButton>
+      </nav>
+
+      <section className={chatActiveTab === 'import' ? 'panel' : 'hidden'}>
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Importacao mensal</p>
@@ -1814,14 +1836,14 @@ function ChatModuleDashboard({
 
         {chatImportMessage && <p className="mt-4 rounded-md bg-slate-900/70 px-4 py-3 text-sm text-slate-200">{chatImportMessage}</p>}
       </section>
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className={chatActiveTab === 'overview' ? 'grid gap-4 md:grid-cols-4' : 'hidden'}>
         <MetricCard label="Equipe" value={selectedTeamName} />
         <MetricCard label="CSAT medio" value={loading ? '...' : `${averageCsat}%`} />
         <MetricCard label="% avaliacoes" value={`${averageReviews}%`} />
         <MetricCard label="Atendimentos" value={totals.tickets} />
       </div>
 
-      <section className="panel">
+      <section className={chatActiveTab === 'overview' ? 'panel' : 'hidden'}>
         <div className="flex flex-col gap-6 xl:flex-row xl:items-stretch">
           <div className="xl:w-2/5">
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Resumo executivo</p>
@@ -1866,7 +1888,7 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <section className="panel">
+      <section className={chatActiveTab === 'overview' ? 'panel' : 'hidden'}>
         <div className="grid gap-6 xl:grid-cols-3">
           <div className="xl:col-span-2">
             <h2 className="section-title">Evolucao mensal</h2>
@@ -1888,7 +1910,7 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <section className="panel">
+      <section className={chatActiveTab === 'podium' ? 'panel' : 'hidden'}>
         <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <h2 className="section-title">Podio final do chat</h2>
@@ -1955,7 +1977,7 @@ function ChatModuleDashboard({
         {chatPodiumMessage && <p className="mt-4 rounded-md bg-slate-900/70 px-4 py-3 text-sm text-slate-200">{chatPodiumMessage}</p>}
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className={chatActiveTab === 'podium' ? 'grid gap-6 xl:grid-cols-2' : 'hidden'}>
                 <section className="panel">
           <h2 className="section-title">Ranking mensal do chat</h2>
           <p className="section-subtitle">Lista final do periodo, do primeiro ao ultimo. Criterios: CSAT minimo 90%, avaliacoes a partir de 25% e volume acima da media do periodo ({averageTickets} atendimentos). Excecoes manuais preservam o historico e apenas removem a elegibilidade ao podio.</p>
@@ -2022,7 +2044,7 @@ function ChatModuleDashboard({
         </section>
       </div>
 
-      <section className="panel">
+      <section className={chatActiveTab === 'reports' ? 'panel' : 'hidden'}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Relatorio individual</p>
@@ -2061,7 +2083,7 @@ function ChatModuleDashboard({
         {chatExportMessage && <p className="mt-4 rounded-md bg-slate-900/70 px-4 py-3 text-sm text-slate-200">{chatExportMessage}</p>}
       </section>
       
-      <section className="panel">
+      <section className={chatActiveTab === 'settings' ? 'panel' : 'hidden'}>
         <div className="flex flex-col gap-6 xl:flex-row">
           <div className="xl:w-2/5">
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Cadastro do chat</p>
@@ -2176,7 +2198,7 @@ function ChatModuleDashboard({
           </div>
         </div>
       </section>
-      <section className="panel">
+      <section className={chatActiveTab === 'base' ? 'panel' : 'hidden'}>
         <h2 className="section-title">Base importada</h2>
         <p className="section-subtitle">
           {metrics.length} registros carregados entre historico e importacoes mensais do Zendesk. O % envio avaliacao segue a regra do painel antigo: atendimentos validos sem avaliacao dividido por atendimentos validos. A inatividade e apenas apoio operacional: inativos dividido por atendimentos totais.
@@ -6040,6 +6062,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
