@@ -2325,8 +2325,16 @@ function ChatModuleDashboard({
             >
               Gerar sugestao
             </button>
+            <button
+              className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!selectedChatReportMetric || chatAiSaving}
+              type="button"
+              onClick={handleGenerateChatFeedbackWithAi}
+            >
+              {chatAiSaving ? 'Gerando IA...' : 'Gerar com IA'}
+            </button>
             <p className="text-sm text-slate-300">
-              A sugestao usa os numeros do Zendesk e suas observacoes. O texto final abaixo pode ser ajustado antes do arquivo ser gerado.
+              A sugestao local nao usa IA. O botao com IA usa os numeros do Zendesk e suas observacoes para gerar um texto mais humano.
             </p>
           </div>
 
@@ -6454,6 +6462,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
