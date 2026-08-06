@@ -105,6 +105,15 @@ type ChatMetricImportRecord = {
   status: string
 }
 
+type ChatPodiumExclusion = {
+  id: string
+  team_id: string
+  analyst_id: string
+  year: number
+  month_number: number
+  reason: string | null
+}
+
 type ChatMonthlyMetric = {
   id: string
   team_id: string
@@ -264,6 +273,7 @@ export default function Home() {
   const [chatTeams, setChatTeams] = useState<ChatTeam[]>([])
   const [chatAnalysts, setChatAnalysts] = useState<ChatAnalyst[]>([])
   const [chatMonthlyMetrics, setChatMonthlyMetrics] = useState<ChatMonthlyMetric[]>([])
+  const [chatPodiumExclusions, setChatPodiumExclusions] = useState<ChatPodiumExclusion[]>([])
   const [activeModule, setActiveModule] = useState<AppModule>('phone')
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard')
   const [individualForm, setIndividualForm] = useState(initialIndividualForm)
@@ -372,7 +382,7 @@ export default function Home() {
     if (teamResult.error) setMessage(getSupabaseMessage(teamResult.error.message))
     else setTeamMetrics(teamResult.data ?? [])
 
-    const [chatTeamsResult, chatAnalystsResult, chatMetricsResult] = await Promise.all([
+    const [chatTeamsResult, chatAnalystsResult, chatMetricsResult, chatExclusionsResult] = await Promise.all([
       supabase.from('chat_teams').select('id, name, legacy_name, manager_name, active').order('name'),
       supabase.from('chat_analysts').select('id, team_id, name, csat_goal, active').order('name'),
       supabase
@@ -380,6 +390,10 @@ export default function Home() {
         .select('id, team_id, analyst_id, month_label, year, month_number, period_start, period_end, csat, review_percentage, sending_percentage, total_tickets, inactive_tickets, valid_tickets, reviews, positive_reviews, negative_reviews, csat_goal, csat_delta, general_review_goal, status, chat_analysts(name, csat_goal), chat_teams(name)')
         .order('period_start', { ascending: false })
         .limit(500),
+      supabase
+        .from('chat_podium_exclusions')
+        .select('id, team_id, analyst_id, year, month_number, reason')
+        .order('year', { ascending: false }),
     ])
 
     if (chatTeamsResult.error) setMessage(getSupabaseMessage(chatTeamsResult.error.message))
@@ -390,6 +404,9 @@ export default function Home() {
 
     if (chatMetricsResult.error) setMessage(getSupabaseMessage(chatMetricsResult.error.message))
     else setChatMonthlyMetrics((chatMetricsResult.data ?? []) as ChatMonthlyMetric[])
+
+    if (chatExclusionsResult.error) setChatPodiumExclusions([])
+    else setChatPodiumExclusions((chatExclusionsResult.data ?? []) as ChatPodiumExclusion[])
 
     setLoading(false)
   }
@@ -1054,6 +1071,7 @@ export default function Home() {
             teams={chatTeams}
             analysts={chatAnalysts}
             metrics={chatMonthlyMetrics}
+            podiumExclusions={chatPodiumExclusions}
             loading={loading}
             onImportComplete={loadData}
           />
@@ -1137,6 +1155,7 @@ function ChatModuleDashboard({
   teams,
   analysts,
   metrics,
+  podiumExclusions,
   loading,
   onImportComplete,
 }: {
@@ -1144,6 +1163,7 @@ function ChatModuleDashboard({
   teams: ChatTeam[]
   analysts: ChatAnalyst[]
   metrics: ChatMonthlyMetric[]
+  podiumExclusions: ChatPodiumExclusion[]
   loading: boolean
   onImportComplete: () => Promise<void>
 }) {
@@ -1303,7 +1323,16 @@ function ChatModuleDashboard({
   const chatCsatDelta = round(averageCsat - previousAverageCsat)
   const chatReviewDelta = round(averageReviews - previousAverageReviews)
   const chatSendingDelta = round(averageSending - previousAverageSending)
-  const chatRanking = buildChatRanking(visibleMetrics, averageTickets)
+  const activePodiumExclusions = podiumExclusions.filter((exclusion) => {
+    const matchesTeam = selectedTeamId === 'all' || exclusion.team_id === selectedTeamId
+    const matchesPeriod = selectedPeriod
+      ? exclusion.year === selectedPeriod.year && exclusion.month_number === selectedPeriod.monthNumber
+      : true
+
+    return matchesTeam && matchesPeriod
+  })
+  const excludedChatAnalystIds = new Set(activePodiumExclusions.map((exclusion) => exclusion.analyst_id))
+  const chatRanking = buildChatRanking(visibleMetrics, averageTickets, excludedChatAnalystIds)
   const podium = chatRanking.filter((item) => item.eligible).slice(0, 3).map((item) => item.metric)
   const attention = visibleMetrics
     .map((metric) => ({ metric, reasons: getChatAttentionReasons(metric, averageTickets) }))
@@ -1313,9 +1342,13 @@ function ChatModuleDashboard({
   const monthlyTrend = buildChatMonthlyTrend(trendMetrics).slice(-7)
   const selectedChatReportMetric =
     visibleMetrics.find((metric) => metric.id === selectedChatReportMetricId) ?? visibleMetrics[0] ?? null
-  const selectedChatPodiumPosition = selectedChatReportMetric
-    ? chatRanking.findIndex((item) => item.metric.id === selectedChatReportMetric.id) + 1
-    : 0
+  const selectedChatRankingItem = selectedChatReportMetric
+    ? chatRanking.find((item) => item.metric.id === selectedChatReportMetric.id)
+    : null
+  const selectedChatPodiumPosition =
+    selectedChatRankingItem?.eligible && selectedChatReportMetric
+      ? chatRanking.filter((item) => item.eligible).findIndex((item) => item.metric.id === selectedChatReportMetric.id) + 1
+      : 0
   const chatExecutiveStatus =
     !visibleMetrics.length
       ? 'Sem dados no periodo'
@@ -1490,6 +1523,54 @@ function ChatModuleDashboard({
       setChatAnalystSaving(false)
     }
   }
+  function getChatPodiumExclusion(metric: ChatMonthlyMetric) {
+    return activePodiumExclusions.find(
+      (exclusion) =>
+        exclusion.analyst_id === metric.analyst_id &&
+        exclusion.team_id === metric.team_id &&
+        exclusion.year === metric.year &&
+        exclusion.month_number === metric.month_number,
+    )
+  }
+
+  async function handleToggleChatPodiumExclusion(metric: ChatMonthlyMetric) {
+    setChatExportMessage('')
+
+    const currentExclusion = getChatPodiumExclusion(metric)
+
+    try {
+      if (currentExclusion) {
+        const { error } = await supabase.from('chat_podium_exclusions').delete().eq('id', currentExclusion.id)
+        if (error) throw error
+        setChatExportMessage(`${getChatAnalystName(metric)} voltou a concorrer ao podio deste periodo.`)
+      } else {
+        const reason = window.prompt(
+          `Motivo para tirar ${getChatAnalystName(metric)} do podio deste periodo:`,
+          'Emprestimo para outro setor / volume atipico',
+        )
+
+        if (reason === null) return
+
+        const { error } = await supabase.from('chat_podium_exclusions').upsert(
+          {
+            team_id: metric.team_id,
+            analyst_id: metric.analyst_id,
+            year: metric.year,
+            month_number: metric.month_number,
+            reason: reason.trim() || 'Excecao operacional',
+          },
+          { onConflict: 'team_id,analyst_id,year,month_number' },
+        )
+        if (error) throw error
+        setChatExportMessage(`${getChatAnalystName(metric)} ficou fora do podio deste periodo por excecao operacional.`)
+      }
+
+      await onImportComplete()
+    } catch (error) {
+      setChatExportMessage(getErrorMessage(error))
+    }
+  }
+
   function handleExportChatIndividualReport() {
     if (!selectedChatReportMetric) {
       setChatExportMessage('Selecione um analista com dados antes de exportar o relatorio individual.')
@@ -1680,7 +1761,7 @@ function ChatModuleDashboard({
       <div className="grid gap-6 xl:grid-cols-2">
                 <section className="panel">
           <h2 className="section-title">Ranking mensal do chat</h2>
-          <p className="section-subtitle">Lista final do periodo, do primeiro ao ultimo. Criterios: CSAT minimo 90%, avaliacoes a partir de 25% e volume acima da media do periodo ({averageTickets} atendimentos).</p>
+          <p className="section-subtitle">Lista final do periodo, do primeiro ao ultimo. Criterios: CSAT minimo 90%, avaliacoes a partir de 25% e volume acima da media do periodo ({averageTickets} atendimentos). Excecoes manuais preservam o historico e apenas removem a elegibilidade ao podio.</p>
           <div className="mt-5 overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="text-slate-400">
@@ -1690,7 +1771,8 @@ function ChatModuleDashboard({
                   <th className="pb-3 pr-4 font-medium">CSAT</th>
                   <th className="pb-3 pr-4 font-medium">Avaliacoes</th>
                   <th className="pb-3 pr-4 font-medium">Atendimentos</th>
-                  <th className="pb-3 font-medium">Status</th>
+                  <th className="pb-3 pr-4 font-medium">Status</th>
+                  <th className="pb-3 font-medium">Podio</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/10">
@@ -1701,12 +1783,17 @@ function ChatModuleDashboard({
                     <td className="py-3 pr-4">{item.metric.csat}%</td>
                     <td className="py-3 pr-4">{item.metric.review_percentage}%</td>
                     <td className="py-3 pr-4">{item.metric.total_tickets}</td>
-                    <td className="py-3">
+                    <td className="py-3 pr-4">
                       {item.eligible ? (
                         <span className="text-emerald-300">Elegivel</span>
                       ) : (
                         <span className="text-slate-400">{item.reasons.join(', ')}</span>
                       )}
+                    </td>
+                    <td className="py-3">
+                      <button className="small-button" type="button" onClick={() => handleToggleChatPodiumExclusion(item.metric)}>
+                        {getChatPodiumExclusion(item.metric) ? 'Permitir' : 'Tirar'}
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -5479,10 +5566,15 @@ function calculateChatAverage(
   return round(metrics.reduce((sum, metric) => sum + Number(metric[field]), 0) / metrics.length)
 }
 
-function buildChatRanking(metrics: ChatMonthlyMetric[], averageTickets: number) {
+function buildChatRanking(
+  metrics: ChatMonthlyMetric[],
+  averageTickets: number,
+  excludedAnalystIds = new Set<string>(),
+) {
   return metrics
     .map((metric) => {
       const reasons = getChatAttentionReasons(metric, averageTickets)
+      if (excludedAnalystIds.has(metric.analyst_id)) reasons.push('fora do podio por excecao operacional')
 
       return {
         metric,
@@ -5735,6 +5827,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
