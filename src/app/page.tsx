@@ -105,6 +105,16 @@ type ChatMetricImportRecord = {
   status: string
 }
 
+type ChatPodiumManual = {
+  id: string
+  team_id: string
+  analyst_id: string
+  year: number
+  month_number: number
+  position: number
+  reason: string | null
+}
+
 type ChatPodiumExclusion = {
   id: string
   team_id: string
@@ -273,6 +283,7 @@ export default function Home() {
   const [chatTeams, setChatTeams] = useState<ChatTeam[]>([])
   const [chatAnalysts, setChatAnalysts] = useState<ChatAnalyst[]>([])
   const [chatMonthlyMetrics, setChatMonthlyMetrics] = useState<ChatMonthlyMetric[]>([])
+  const [chatPodiumManual, setChatPodiumManual] = useState<ChatPodiumManual[]>([])
   const [chatPodiumExclusions, setChatPodiumExclusions] = useState<ChatPodiumExclusion[]>([])
   const [activeModule, setActiveModule] = useState<AppModule>('phone')
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard')
@@ -382,7 +393,7 @@ export default function Home() {
     if (teamResult.error) setMessage(getSupabaseMessage(teamResult.error.message))
     else setTeamMetrics(teamResult.data ?? [])
 
-    const [chatTeamsResult, chatAnalystsResult, chatMetricsResult, chatExclusionsResult] = await Promise.all([
+    const [chatTeamsResult, chatAnalystsResult, chatMetricsResult, chatManualPodiumResult, chatExclusionsResult] = await Promise.all([
       supabase.from('chat_teams').select('id, name, legacy_name, manager_name, active').order('name'),
       supabase.from('chat_analysts').select('id, team_id, name, csat_goal, active').order('name'),
       supabase
@@ -390,6 +401,10 @@ export default function Home() {
         .select('id, team_id, analyst_id, month_label, year, month_number, period_start, period_end, csat, review_percentage, sending_percentage, total_tickets, inactive_tickets, valid_tickets, reviews, positive_reviews, negative_reviews, csat_goal, csat_delta, general_review_goal, status, chat_analysts(name, csat_goal), chat_teams(name)')
         .order('period_start', { ascending: false })
         .limit(500),
+      supabase
+        .from('chat_podium_manual')
+        .select('id, team_id, analyst_id, year, month_number, position, reason')
+        .order('year', { ascending: false }),
       supabase
         .from('chat_podium_exclusions')
         .select('id, team_id, analyst_id, year, month_number, reason')
@@ -404,6 +419,9 @@ export default function Home() {
 
     if (chatMetricsResult.error) setMessage(getSupabaseMessage(chatMetricsResult.error.message))
     else setChatMonthlyMetrics((chatMetricsResult.data ?? []) as ChatMonthlyMetric[])
+
+    if (chatManualPodiumResult.error) setChatPodiumManual([])
+    else setChatPodiumManual((chatManualPodiumResult.data ?? []) as ChatPodiumManual[])
 
     if (chatExclusionsResult.error) setChatPodiumExclusions([])
     else setChatPodiumExclusions((chatExclusionsResult.data ?? []) as ChatPodiumExclusion[])
@@ -1071,6 +1089,7 @@ export default function Home() {
             teams={chatTeams}
             analysts={chatAnalysts}
             metrics={chatMonthlyMetrics}
+            manualPodium={chatPodiumManual}
             podiumExclusions={chatPodiumExclusions}
             loading={loading}
             onImportComplete={loadData}
@@ -1155,6 +1174,7 @@ function ChatModuleDashboard({
   teams,
   analysts,
   metrics,
+  manualPodium,
   podiumExclusions,
   loading,
   onImportComplete,
@@ -1163,6 +1183,7 @@ function ChatModuleDashboard({
   teams: ChatTeam[]
   analysts: ChatAnalyst[]
   metrics: ChatMonthlyMetric[]
+  manualPodium: ChatPodiumManual[]
   podiumExclusions: ChatPodiumExclusion[]
   loading: boolean
   onImportComplete: () => Promise<void>
@@ -1193,6 +1214,8 @@ function ChatModuleDashboard({
   const [chatImportMessage, setChatImportMessage] = useState('')
   const [chatExportMessage, setChatExportMessage] = useState('')
   const [selectedChatReportMetricId, setSelectedChatReportMetricId] = useState('')
+  const [manualPodiumDraft, setManualPodiumDraft] = useState<Record<number, string>>({})
+  const [chatPodiumMessage, setChatPodiumMessage] = useState('')
   const [chatAnalystForm, setChatAnalystForm] = useState({ teamId: '', name: '', csatGoal: '86' })
   const [editingChatAnalystId, setEditingChatAnalystId] = useState<string | null>(null)
   const [chatAnalystSaving, setChatAnalystSaving] = useState(false)
@@ -1323,6 +1346,20 @@ function ChatModuleDashboard({
   const chatCsatDelta = round(averageCsat - previousAverageCsat)
   const chatReviewDelta = round(averageReviews - previousAverageReviews)
   const chatSendingDelta = round(averageSending - previousAverageSending)
+  const activeManualPodium = manualPodium
+    .filter((item) => {
+      const matchesTeam = selectedTeamId !== 'all' && item.team_id === selectedTeamId
+      const matchesPeriod = selectedPeriod
+        ? item.year === selectedPeriod.year && item.month_number === selectedPeriod.monthNumber
+        : true
+
+      return matchesTeam && matchesPeriod
+    })
+    .sort((a, b) => a.position - b.position)
+  const manualPodiumMetrics = activeManualPodium
+    .map((manual) => visibleMetrics.find((metric) => metric.analyst_id === manual.analyst_id) ?? null)
+    .filter((metric): metric is ChatMonthlyMetric => Boolean(metric))
+
   const activePodiumExclusions = podiumExclusions.filter((exclusion) => {
     const matchesTeam = selectedTeamId === 'all' || exclusion.team_id === selectedTeamId
     const matchesPeriod = selectedPeriod
@@ -1333,7 +1370,8 @@ function ChatModuleDashboard({
   })
   const excludedChatAnalystIds = new Set(activePodiumExclusions.map((exclusion) => exclusion.analyst_id))
   const chatRanking = buildChatRanking(visibleMetrics, averageTickets, excludedChatAnalystIds)
-  const podium = chatRanking.filter((item) => item.eligible).slice(0, 3).map((item) => item.metric)
+  const automaticPodium = chatRanking.filter((item) => item.eligible).slice(0, 3).map((item) => item.metric)
+  const podium = manualPodiumMetrics.length ? manualPodiumMetrics.slice(0, 3) : automaticPodium
   const attention = visibleMetrics
     .map((metric) => ({ metric, reasons: getChatAttentionReasons(metric, averageTickets) }))
     .filter((item) => item.reasons.length)
@@ -1345,10 +1383,9 @@ function ChatModuleDashboard({
   const selectedChatRankingItem = selectedChatReportMetric
     ? chatRanking.find((item) => item.metric.id === selectedChatReportMetric.id)
     : null
-  const selectedChatPodiumPosition =
-    selectedChatRankingItem?.eligible && selectedChatReportMetric
-      ? chatRanking.filter((item) => item.eligible).findIndex((item) => item.metric.id === selectedChatReportMetric.id) + 1
-      : 0
+  const selectedChatPodiumPosition = selectedChatReportMetric
+    ? podium.findIndex((metric) => metric.analyst_id === selectedChatReportMetric.analyst_id) + 1
+    : 0
   const chatExecutiveStatus =
     !visibleMetrics.length
       ? 'Sem dados no periodo'
@@ -1379,6 +1416,7 @@ function ChatModuleDashboard({
               : attention.length
                 ? 'Ha analistas com pelo menos um criterio fora da referencia.'
                 : 'Equipe alinhada com os criterios principais do periodo.'
+
   const chatRecommendedAction =
     !visibleMetrics.length
       ? 'Importar ou selecionar um mes com dados.'
@@ -1531,6 +1569,95 @@ function ChatModuleDashboard({
         exclusion.year === metric.year &&
         exclusion.month_number === metric.month_number,
     )
+  }
+
+  function getManualPodiumDraftValue(position: number) {
+    return manualPodiumDraft[position] ?? activeManualPodium.find((item) => item.position === position)?.analyst_id ?? ''
+  }
+  async function handleSaveChatManualPodium() {
+    setChatPodiumMessage('')
+
+    if (!selectedPeriod) {
+      setChatPodiumMessage('Selecione um periodo antes de salvar o podio manual.')
+      return
+    }
+
+    if (selectedTeamId === 'all') {
+      setChatPodiumMessage('Selecione uma equipe especifica para salvar o podio manual.')
+      return
+    }
+
+    const rows = [1, 2, 3]
+      .map((position) => {
+        const analystId = getManualPodiumDraftValue(position)
+        return analystId
+          ? {
+              team_id: selectedTeamId,
+              analyst_id: analystId,
+              year: selectedPeriod.year,
+              month_number: selectedPeriod.monthNumber,
+              position,
+              reason: 'Ajuste manual da gestao',
+            }
+          : null
+      })
+      .filter((row): row is NonNullable<typeof row> => Boolean(row))
+
+    if (!rows.length) {
+      setChatPodiumMessage('Selecione pelo menos um analista para salvar o podio manual.')
+      return
+    }
+
+    if (new Set(rows.map((row) => row.analyst_id)).size !== rows.length) {
+      setChatPodiumMessage('O mesmo analista nao pode ocupar mais de uma posicao.')
+      return
+    }
+
+    try {
+      await supabase
+        .from('chat_podium_manual')
+        .delete()
+        .eq('team_id', selectedTeamId)
+        .eq('year', selectedPeriod.year)
+        .eq('month_number', selectedPeriod.monthNumber)
+
+      const { error } = await supabase.from('chat_podium_manual').upsert(rows, {
+        onConflict: 'team_id,year,month_number,position',
+      })
+
+      if (error) throw error
+
+      await onImportComplete()
+      setChatPodiumMessage('Podio manual salvo para este periodo.')
+    } catch (error) {
+      setChatPodiumMessage(getErrorMessage(error))
+    }
+  }
+
+  async function handleResetChatManualPodium() {
+    setChatPodiumMessage('')
+
+    if (!selectedPeriod || selectedTeamId === 'all') {
+      setChatPodiumMessage('Selecione uma equipe especifica para resetar o podio manual.')
+      return
+    }
+
+    try {
+      const { error } = await supabase
+        .from('chat_podium_manual')
+        .delete()
+        .eq('team_id', selectedTeamId)
+        .eq('year', selectedPeriod.year)
+        .eq('month_number', selectedPeriod.monthNumber)
+
+      if (error) throw error
+
+      setManualPodiumDraft({})
+      await onImportComplete()
+      setChatPodiumMessage('Podio manual removido. O ranking automatico voltou a valer.')
+    } catch (error) {
+      setChatPodiumMessage(getErrorMessage(error))
+    }
   }
 
   async function handleToggleChatPodiumExclusion(metric: ChatMonthlyMetric) {
@@ -1756,6 +1883,73 @@ function ChatModuleDashboard({
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="panel">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <h2 className="section-title">Podio final do chat</h2>
+            <p className="section-subtitle">
+              Usa o ranking automatico, mas permite ajuste manual por equipe e periodo quando houver emprestimo, cobertura ou excecao operacional.
+            </p>
+          </div>
+          {activeManualPodium.length > 0 && (
+            <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">
+              Podio manual ativo
+            </span>
+          )}
+        </div>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-3">
+          {[0, 1, 2].map((index) => {
+            const winner = podium[index]
+
+            return (
+              <div key={index} className="rounded-lg bg-slate-900 p-4">
+                <p className="text-sm text-slate-400">{index + 1}o lugar</p>
+                {winner ? (
+                  <>
+                    <p className="mt-3 text-lg font-bold">{getChatAnalystName(winner)}</p>
+                    <p className="mt-2 text-sm text-slate-300">CSAT {winner.csat}% | {winner.total_tickets} atendimentos</p>
+                  </>
+                ) : (
+                  <p className="mt-3 text-slate-400">Aguardando elegivel</p>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto_auto]">
+          {[1, 2, 3].map((position) => (
+            <Field key={position} label={`${position}o lugar manual`}>
+              <select
+                className="form-input"
+                disabled={selectedTeamId === 'all'}
+                value={getManualPodiumDraftValue(position)}
+                onChange={(event) => setManualPodiumDraft((current) => ({ ...current, [position]: event.target.value }))}
+              >
+                <option value="">Automatico</option>
+                {visibleMetrics.map((metric) => (
+                  <option key={metric.id} value={metric.analyst_id}>
+                    {getChatAnalystName(metric)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          ))}
+          <button className="btn-primary self-end" type="button" onClick={handleSaveChatManualPodium}>
+            Salvar podio
+          </button>
+          <button className="secondary-button self-end" type="button" onClick={handleResetChatManualPodium}>
+            Resetar
+          </button>
+        </div>
+
+        {selectedTeamId === 'all' && (
+          <p className="mt-3 text-sm text-slate-400">Para ajustar manualmente, selecione uma equipe especifica no filtro do modulo chat.</p>
+        )}
+        {chatPodiumMessage && <p className="mt-4 rounded-md bg-slate-900/70 px-4 py-3 text-sm text-slate-200">{chatPodiumMessage}</p>}
       </section>
 
       <div className="grid gap-6 xl:grid-cols-2">
@@ -3304,6 +3498,7 @@ function EntriesView({
           </div>
         )}
       </section>
+
 
       <div className="grid gap-6 xl:grid-cols-2">
         <section className="panel">
@@ -5827,6 +6022,9 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
+
+
 
 
 
