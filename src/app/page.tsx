@@ -4343,27 +4343,43 @@ function buildChatCoachFeedback({
   productivityGap: number
   metric: ChatMonthlyMetric
 }) {
-  const strengths: string[] = []
-  const focus: string[] = []
+  const positiveReadings: string[] = []
+  const developmentReadings: string[] = []
 
-  if (csatGap >= 0) strengths.push('qualidade percebida pelo cliente acima da referencia de satisfacao')
-  else focus.push('revisar atendimentos com avaliacao negativa e transformar os principais motivos em acao pratica')
+  if (csatGap >= 0) {
+    positiveReadings.push('a experiencia entregue ao cliente foi bem percebida e ficou acima da referencia de satisfacao')
+  } else {
+    developmentReadings.push('aprofundar a leitura das avaliacoes negativas para identificar comportamentos, temas ou momentos da conversa que possam ser melhorados')
+  }
 
-  if (reviewGap >= 0) strengths.push('boa capacidade de gerar retorno dos clientes por meio das avaliacoes')
-  else focus.push('aumentar o convite para avaliacao no encerramento dos atendimentos validos')
+  if (reviewGap >= 0) {
+    positiveReadings.push('o volume de respostas dos clientes da seguranca para interpretar o resultado do mes')
+  } else {
+    developmentReadings.push('melhorar a conversao de atendimentos validos em avaliacoes, reforcando encerramentos claros e convite natural para feedback')
+  }
 
-  if (productivityGap >= 0) strengths.push('volume de atendimento acima da media da operacao')
-  else focus.push('acompanhar volume mensal para entender se a diferenca vem de escala, distribuicao ou produtividade')
+  if (productivityGap >= 0) {
+    positiveReadings.push('o volume de atendimento ficou acima da media da operacao, mantendo boa entrega mesmo com alta demanda')
+  } else {
+    developmentReadings.push('entender se o volume abaixo da media esta relacionado a distribuicao, ausencias, carteira de atendimento ou ritmo operacional')
+  }
 
-  const strengthText = strengths.length
-    ? `Pontos fortes: ${strengths.join('; ')}.`
-    : 'O periodo ainda nao mostra um ponto forte sustentado nos criterios principais.'
-  const focusText = focus.length
-    ? `Plano de desenvolvimento: ${focus.join('; ')}.`
-    : 'Plano de desenvolvimento: manter consistencia, compartilhar boas praticas e proteger o padrao no proximo fechamento.'
+  const recognition =
+    positiveReadings.length > 0
+      ? `Reconhecimento do ciclo: ${positiveReadings.join('; ')}.`
+      : 'Reconhecimento do ciclo: ainda nao ha um indicador claramente acima da referencia, mas o resultado ajuda a direcionar um plano objetivo para o proximo fechamento.'
+  const development =
+    developmentReadings.length > 0
+      ? `Ponto de desenvolvimento: ${developmentReadings.join('; ')}.`
+      : 'Ponto de desenvolvimento: o desafio agora e sustentar o padrao, evitar queda de consistencia e transformar o bom resultado em referencia para a equipe.'
+  const nextStep =
+    status === 'Meta Superada'
+      ? 'Para o proximo mes, a recomendacao e preservar as praticas que geraram esse resultado e observar se a mesma consistencia se repete no novo fechamento mensal.'
+      : 'Para o proximo mes, a recomendacao e escolher uma acao prioritaria, acompanhar o impacto no fechamento seguinte e comparar se houve evolucao real nos indicadores.'
 
-  return `${analystName}, a leitura de coach para este ciclo e: ${strengthText} ${focusText} Para o proximo mes, acompanhe semanalmente CSAT (${metric.csat}%), avaliacoes (${metric.review_percentage}%) e volume (${metric.total_tickets}) para agir antes do fechamento. Status atual: ${status}.`
+  return `${analystName} encerrou o mes com CSAT de ${metric.csat}%, ${metric.review_percentage}% de avaliacoes e ${metric.total_tickets} atendimentos registrados. ${recognition} ${development} ${nextStep} Status atual: ${status}.`
 }
+
 function exportWordReport({
   analystName,
   periodLabel,
@@ -5399,6 +5415,8 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
+
 
 
 
