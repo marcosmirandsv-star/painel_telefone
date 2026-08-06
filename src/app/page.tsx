@@ -4176,12 +4176,18 @@ function exportChatIndividualReport({
           .status strong { color: ${statusColor}; font-size: 16px; }
           .muted { color: #475569; }
           .metric { font-weight: bold; color: #0f172a; }
-          .trend { border: 1px solid #cbd5e1; padding: 12px; margin: 10px 0 16px; }
-          .trend-row { display: grid; grid-template-columns: 92px 1fr 72px; gap: 8px; align-items: center; margin: 8px 0; }
-          .trend-label { font-size: 11px; font-weight: bold; color: #0f172a; }
-          .trend-track { background: #e2e8f0; height: 16px; border-radius: 3px; overflow: hidden; }
-          .trend-bar { height: 16px; background: #0891b2; }
-          .trend-value { font-size: 11px; font-weight: bold; text-align: right; }
+          .trend { border: 1px solid #cbd5e1; background: #f8fafc; padding: 12px; margin: 10px 0 16px; }
+          .trend-table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+          .trend-table th { background: #0f766e; color: #ffffff; font-size: 10px; padding: 7px; text-align: left; }
+          .trend-table td { border: 1px solid #dbe3ef; font-size: 10px; padding: 7px; vertical-align: middle; }
+          .bar-wrap { background: #e2e8f0; height: 13px; width: 100%; border-radius: 2px; margin-top: 4px; }
+          .bar { height: 13px; border-radius: 2px; }
+          .bar-csat { background: #0891b2; }
+          .bar-review { background: #7c3aed; }
+          .bar-volume { background: #059669; }
+          .trend-value { display: block; font-weight: bold; color: #0f172a; }
+          .trend-read { background: #ecfeff; border-left: 4px solid #0891b2; padding: 9px 10px; margin: 8px 0 10px; }
+          .trend-read p { margin: 0; }
           .coach { border-left: 5px solid #0891b2; background: #ecfeff; padding: 12px; margin-top: 8px; }
         </style>
       </head>
@@ -4231,7 +4237,7 @@ function exportChatIndividualReport({
         </ul>
 
         <h2>Evolucao mensal</h2>
-        <p class="muted">Leitura visual dos meses importados para o(a) analista. Quanto maior a barra, maior o resultado daquele indicador.</p>
+        <p class="muted">Leitura comparativa dos meses importados. O objetivo e enxergar rapidamente melhora, queda ou estabilidade em CSAT, avaliacoes e volume.</p>
         ${evolutionRows}
 
         <h2>Feedback de Performance</h2>
@@ -4268,37 +4274,56 @@ function exportChatIndividualReport({
 function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
   if (!history.length) return '<p class="muted">Sem historico mensal suficiente para exibir evolucao.</p>'
 
-  const buildRows = (field: 'csat' | 'total_tickets' | 'review_percentage', suffix = '') => {
-    const max = Math.max(...history.map((metric) => Number(metric[field])), 1)
+  const first = history[0]
+  const last = history.at(-1) ?? first
+  const csatDelta = round(Number(last.csat) - Number(first.csat))
+  const reviewDelta = round(Number(last.review_percentage) - Number(first.review_percentage))
+  const ticketDelta = Number(last.total_tickets) - Number(first.total_tickets)
+  const maxTickets = Math.max(...history.map((metric) => Number(metric.total_tickets)), 1)
+  const deltaText = (value: number, suffix = '') => (value > 0 ? `+${value}${suffix}` : `${value}${suffix}`)
+  const readText =
+    history.length > 1
+      ? `No historico importado, o CSAT variou ${deltaText(csatDelta, ' p.p.')}, as avaliacoes variaram ${deltaText(reviewDelta, ' p.p.')} e o volume mudou ${deltaText(ticketDelta)} atendimentos entre ${first.month_label} e ${last.month_label}.`
+      : 'Ha apenas um mes importado para este analista; o grafico funciona como fotografia do periodo.'
+  const rows = history
+    .map((metric) => {
+      const csatWidth = Math.max(4, Math.min(100, Number(metric.csat)))
+      const reviewWidth = Math.max(4, Math.min(100, Number(metric.review_percentage)))
+      const volumeWidth = Math.max(4, Math.min(100, (Number(metric.total_tickets) / maxTickets) * 100))
 
-    return history
-      .map((metric) => {
-        const value = Number(metric[field])
-        const width = Math.max(6, Math.min(100, (value / max) * 100))
-
-        return `
-          <div class="trend-row">
-            <div class="trend-label">${escapeHtml(metric.month_label.replace(' 2026', ''))}</div>
-            <div class="trend-track"><div class="trend-bar" style="width:${width}%;"></div></div>
-            <div class="trend-value">${value}${suffix}</div>
-          </div>
-        `
-      })
-      .join('')
-  }
+      return `
+        <tr>
+          <td><strong>${escapeHtml(metric.month_label.replace(' 2026', ''))}</strong></td>
+          <td>
+            <span class="trend-value">${metric.csat}%</span>
+            <div class="bar-wrap"><div class="bar bar-csat" style="width:${csatWidth}%;"></div></div>
+          </td>
+          <td>
+            <span class="trend-value">${metric.review_percentage}%</span>
+            <div class="bar-wrap"><div class="bar bar-review" style="width:${reviewWidth}%;"></div></div>
+          </td>
+          <td>
+            <span class="trend-value">${metric.total_tickets}</span>
+            <div class="bar-wrap"><div class="bar bar-volume" style="width:${volumeWidth}%;"></div></div>
+          </td>
+        </tr>
+      `
+    })
+    .join('')
 
   return `
     <div class="trend">
-      <h3>CSAT</h3>
-      ${buildRows('csat', '%')}
-    </div>
-    <div class="trend">
-      <h3>Atendimentos</h3>
-      ${buildRows('total_tickets')}
-    </div>
-    <div class="trend">
-      <h3>Avaliacoes</h3>
-      ${buildRows('review_percentage', '%')}
+      <div class="trend-read"><p>${escapeHtml(readText)}</p></div>
+      <table class="trend-table">
+        <tr>
+          <th>Mes</th>
+          <th>CSAT</th>
+          <th>Avaliacoes</th>
+          <th>Atendimentos</th>
+        </tr>
+        ${rows}
+      </table>
+      <p class="muted">CSAT e avaliacoes usam escala percentual. Atendimentos usam escala relativa ao maior volume do historico exibido.</p>
     </div>
   `
 }
@@ -5374,6 +5399,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
