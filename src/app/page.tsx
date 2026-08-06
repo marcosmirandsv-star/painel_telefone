@@ -232,6 +232,8 @@ type PeriodFilter = {
 
 type AppModule = 'phone' | 'chat'
 
+type ChatFeedbackStyle = 'coach' | 'sare' | 'mimo'
+
 type ActiveTab = 'dashboard' | 'reports' | 'analysts' | 'goals' | 'entries'
 
 const initialIndividualForm: IndividualForm = {
@@ -1212,6 +1214,9 @@ function ChatModuleDashboard({
   const [chatImportSaving, setChatImportSaving] = useState(false)
   const [chatImportMessage, setChatImportMessage] = useState('')
   const [chatExportMessage, setChatExportMessage] = useState('')
+  const [chatFeedbackStyle, setChatFeedbackStyle] = useState<ChatFeedbackStyle>('coach')
+  const [chatManagerNotes, setChatManagerNotes] = useState('')
+  const [chatFeedbackDraft, setChatFeedbackDraft] = useState('')
   const [selectedChatReportMetricId, setSelectedChatReportMetricId] = useState('')
   const [chatActiveTab, setChatActiveTab] = useState<'overview' | 'podium' | 'analysis' | 'reports' | 'import' | 'settings' | 'base'>('overview')
   const [manualPodiumDraft, setManualPodiumDraft] = useState<Record<number, string>>({})
@@ -1414,6 +1419,15 @@ function ChatModuleDashboard({
   const selectedChatPodiumPosition = selectedChatReportMetric
     ? podium.findIndex((metric) => metric?.analyst_id === selectedChatReportMetric.analyst_id) + 1
     : 0
+  const chatReportFeedbackSuggestion = selectedChatReportMetric
+    ? buildChatFeedbackText({
+        metric: selectedChatReportMetric,
+        averageTickets,
+        podiumPosition: selectedChatPodiumPosition,
+        style: chatFeedbackStyle,
+        managerNotes: chatManagerNotes,
+      })
+    : ''
   const chatExecutiveStatus =
     !visibleMetrics.length
       ? 'Sem dados no periodo'
@@ -1725,6 +1739,16 @@ function ChatModuleDashboard({
     }
   }
 
+  function handleGenerateChatFeedbackDraft() {
+    if (!selectedChatReportMetric) {
+      setChatExportMessage('Selecione um analista com dados antes de gerar o feedback.')
+      return
+    }
+
+    setChatFeedbackDraft(chatReportFeedbackSuggestion)
+    setChatExportMessage('Sugestao de feedback gerada. Revise o texto antes de exportar.')
+  }
+
   function handleExportChatIndividualReport() {
     if (!selectedChatReportMetric) {
       setChatExportMessage('Selecione um analista com dados antes de exportar o relatorio individual.')
@@ -1732,6 +1756,7 @@ function ChatModuleDashboard({
     }
 
     try {
+      const finalFeedbackText = (chatFeedbackDraft || chatReportFeedbackSuggestion).trim()
       const fileName = exportChatIndividualReport({
         metric: selectedChatReportMetric,
         periodLabel: selectedPeriod?.label ?? 'Periodo',
@@ -1740,6 +1765,9 @@ function ChatModuleDashboard({
         monthlyHistory: metrics
           .filter((historyMetric) => historyMetric.analyst_id === selectedChatReportMetric.analyst_id)
           .sort((a, b) => (a.year === b.year ? a.month_number - b.month_number : a.year - b.year)),
+        feedbackStyle: chatFeedbackStyle,
+        managerNotes: chatManagerNotes,
+        feedbackText: finalFeedbackText,
       })
 
       setChatExportMessage(`Relatorio individual gerado: ${fileName}. Verifique a pasta Downloads.`)
@@ -2179,12 +2207,15 @@ function ChatModuleDashboard({
             </p>
           </div>
 
-          <div className="grid flex-1 gap-3 md:grid-cols-[1fr_auto]">
+          <div className="grid flex-1 gap-3 md:grid-cols-2">
             <Field label="Analista">
               <select
                 className="form-input"
                 value={selectedChatReportMetric?.id ?? ''}
-                onChange={(event) => setSelectedChatReportMetricId(event.target.value)}
+                onChange={(event) => {
+                  setSelectedChatReportMetricId(event.target.value)
+                  setChatFeedbackDraft('')
+                }}
               >
                 {visibleMetrics.map((metric) => (
                   <option key={metric.id} value={metric.id}>
@@ -2193,15 +2224,64 @@ function ChatModuleDashboard({
                 ))}
               </select>
             </Field>
+            <Field label="Modelo do feedback">
+              <select
+                className="form-input"
+                value={chatFeedbackStyle}
+                onChange={(event) => {
+                  setChatFeedbackStyle(event.target.value as ChatFeedbackStyle)
+                  setChatFeedbackDraft('')
+                }}
+              >
+                <option value="coach">Coach</option>
+                <option value="sare">SARE</option>
+                <option value="mimo">MIMO</option>
+              </select>
+            </Field>
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-4">
+          <Field label="Observacoes do gestor">
+            <textarea
+              className="form-input min-h-24"
+              value={chatManagerNotes}
+              onChange={(event) => setChatManagerNotes(event.target.value)}
+              placeholder="Inclua contexto do mes, combinados, pontos de atencao ou reconhecimento para entrar no feedback."
+            />
+          </Field>
+
+          <div className="grid gap-3 lg:grid-cols-[auto_1fr] lg:items-start">
             <button
-              className="btn-primary self-end disabled:cursor-not-allowed disabled:opacity-60"
+              className="btn-secondary disabled:cursor-not-allowed disabled:opacity-60"
               disabled={!selectedChatReportMetric}
               type="button"
-              onClick={handleExportChatIndividualReport}
+              onClick={handleGenerateChatFeedbackDraft}
             >
-              Exportar individual
+              Gerar sugestao
             </button>
+            <p className="text-sm text-slate-300">
+              A sugestao usa os numeros do Zendesk e suas observacoes. O texto final abaixo pode ser ajustado antes do arquivo ser gerado.
+            </p>
           </div>
+
+          <Field label="Texto final do feedback">
+            <textarea
+              className="form-input min-h-56"
+              value={chatFeedbackDraft || chatReportFeedbackSuggestion}
+              onChange={(event) => setChatFeedbackDraft(event.target.value)}
+              placeholder="Gere uma sugestao ou escreva o feedback final do relatorio."
+            />
+          </Field>
+
+          <button
+            className="btn-primary w-fit disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={!selectedChatReportMetric}
+            type="button"
+            onClick={handleExportChatIndividualReport}
+          >
+            Exportar individual
+          </button>
         </div>
       
 
@@ -4840,12 +4920,18 @@ function exportChatIndividualReport({
   averageTickets,
   podiumPosition,
   monthlyHistory,
+  feedbackStyle,
+  managerNotes,
+  feedbackText,
 }: {
   metric: ChatMonthlyMetric
   periodLabel: string
   averageTickets: number
   podiumPosition: number
   monthlyHistory: ChatMonthlyMetric[]
+  feedbackStyle: ChatFeedbackStyle
+  managerNotes: string
+  feedbackText: string
 }) {
   const analystName = getChatAnalystName(metric)
   const safeName = escapeHtml(analystName)
@@ -4868,17 +4954,9 @@ function exportChatIndividualReport({
   const productivityText = productivityGap >= 0
     ? `${analystName} absorveu uma demanda ${formatDelta(productivityGap, '%')} superior a media da operacao.`
     : `${analystName} ficou ${formatDelta(productivityGap, '%')} abaixo da media de atendimentos da operacao.`
-  const feedbackSummary = status === 'Meta Superada'
-    ? 'O desempenho do periodo sustenta reconhecimento positivo. O foco recomendado e manter consistencia, preservar qualidade e continuar estimulando o volume de avaliacoes.'
-    : 'O desempenho do periodo pede acompanhamento. O foco recomendado e revisar atendimentos negativos, reforcar convite para avaliacao e acompanhar a evolucao no proximo fechamento.'
-  const coachFeedback = buildChatCoachFeedback({
-    analystName,
-    status,
-    csatGap,
-    reviewGap,
-    productivityGap,
-    metric,
-  })
+  const finalFeedback = feedbackText.trim() || buildChatFeedbackText({ metric, averageTickets, podiumPosition, style: feedbackStyle, managerNotes })
+  const feedbackTitle = getChatFeedbackStyleLabel(feedbackStyle)
+  const managerNotesHtml = managerNotes.trim() ? `<h2>Observacoes do gestor</h2><div class="note-box">${formatChatFeedbackForReport(managerNotes)}</div>` : ''
   const evolutionRows = buildChatReportEvolutionRows(monthlyHistory)
 
   const documentHtml = `
@@ -4920,6 +4998,18 @@ function exportChatIndividualReport({
           .trend-read { background: #ecfeff; border-left: 4px solid #0891b2; padding: 9px 10px; margin: 8px 0 10px; }
           .trend-read p { margin: 0; }
           .coach { border-left: 5px solid #0891b2; background: #ecfeff; padding: 12px; margin-top: 8px; }
+          .note-box { border-left: 5px solid #64748b; background: #f8fafc; padding: 12px; margin-top: 8px; }
+          .month-card { border: 1px solid #cbd5e1; background: #ffffff; padding: 10px; margin: 10px 0; page-break-inside: avoid; }
+          .month-card-title { font-size: 12px; font-weight: bold; margin: 0 0 8px; color: #0f172a; }
+          .indicator-row { display: grid; grid-template-columns: 90px 1fr 58px; gap: 8px; align-items: center; margin: 6px 0; }
+          .indicator-label { color: #334155; font-size: 10px; font-weight: bold; }
+          .indicator-track { background: #e2e8f0; height: 15px; overflow: hidden; }
+          .indicator-fill { height: 15px; }
+          .indicator-fill.csat { background: #0891b2; }
+          .indicator-fill.review { background: #7c3aed; }
+          .indicator-fill.sending { background: #d97706; }
+          .indicator-fill.volume { background: #059669; }
+          .indicator-value { color: #0f172a; font-size: 10px; font-weight: bold; text-align: right; }
           .kpi-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 12px 0 16px; }
           .kpi-card { border: 1px solid #cbd5e1; background: #ffffff; padding: 10px; }
           .kpi-card span { display: block; color: #475569; font-size: 10px; margin-bottom: 5px; }
@@ -4995,15 +5085,11 @@ function exportChatIndividualReport({
         <p class="muted">Leitura comparativa dos meses importados. O objetivo e enxergar rapidamente melhora, queda ou estabilidade em CSAT, avaliacoes e volume.</p>
         ${evolutionRows}
 
-        <h2>Feedback de Performance</h2>
-        <div class="status">
-          <p>Status Geral do Periodo: <strong>${escapeHtml(status)}</strong></p>
-          <p>${escapeHtml(feedbackSummary)}</p>
-        </div>
+        ${managerNotesHtml}
 
-        <h2>Feedback Coach</h2>
+        <h2>Feedback ${escapeHtml(feedbackTitle)}</h2>
         <div class="coach">
-          ${coachFeedback}
+          ${formatChatFeedbackForReport(finalFeedback)}
         </div>
       </body>
     </html>
@@ -5033,59 +5119,39 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
   const last = history.at(-1) ?? first
   const csatDelta = round(Number(last.csat) - Number(first.csat))
   const reviewDelta = round(Number(last.review_percentage) - Number(first.review_percentage))
+  const sendingDelta = round(Number(last.sending_percentage) - Number(first.sending_percentage))
   const ticketDelta = Number(last.total_tickets) - Number(first.total_tickets)
   const maxTickets = Math.max(...history.map((metric) => Number(metric.total_tickets)), 1)
   const deltaText = (value: number, suffix = '') => (value > 0 ? `+${value}${suffix}` : `${value}${suffix}`)
-  const chartWidth = 620
-  const chartHeight = 150
-  const leftPadding = 42
-  const rightPadding = 20
-  const topPadding = 18
-  const bottomPadding = 34
-  const plotWidth = chartWidth - leftPadding - rightPadding
-  const plotHeight = chartHeight - topPadding - bottomPadding
-  const xFor = (index: number) =>
-    history.length === 1 ? leftPadding + plotWidth / 2 : leftPadding + (index / (history.length - 1)) * plotWidth
-  const yForPercent = (value: number) => topPadding + (100 - Math.max(0, Math.min(100, value))) / 100 * plotHeight
-  const csatPoints = history.map((metric, index) => `${xFor(index)},${yForPercent(Number(metric.csat))}`).join(' ')
-  const reviewPoints = history
-    .map((metric, index) => `${xFor(index)},${yForPercent(Number(metric.review_percentage))}`)
-    .join(' ')
-  const sendingPoints = history
-    .map((metric, index) => `${xFor(index)},${yForPercent(Number(metric.sending_percentage))}`)
-    .join(' ')
-  const monthLabels = history
-    .map((metric, index) => {
-      const x = xFor(index)
-      const label = escapeHtml(metric.month_label.replace(' 2026', '').slice(0, 3))
-
-      return `<text x="${x}" y="140" text-anchor="middle" font-size="10" fill="#475569">${label}</text>`
-    })
-    .join('')
-  const pointLabels = history
-    .map((metric, index) => {
-      const x = xFor(index)
-      const csatY = yForPercent(Number(metric.csat))
-      const reviewY = yForPercent(Number(metric.review_percentage))
-      const sendingY = yForPercent(Number(metric.sending_percentage))
-
-      return `
-        <circle cx="${x}" cy="${csatY}" r="3" fill="#0891b2"></circle>
-        <circle cx="${x}" cy="${reviewY}" r="3" fill="#7c3aed"></circle>
-        <circle cx="${x}" cy="${sendingY}" r="3" fill="#d97706"></circle>
-      `
-    })
-    .join('')
-  const volumeRows = history
+  const barWidth = (value: number, max = 100) => `${Math.max(3, Math.min(100, (value / max) * 100))}%`
+  const monthCards = history
     .map((metric) => {
-      const value = Number(metric.total_tickets)
-      const width = Math.max(4, Math.min(100, (value / maxTickets) * 100))
+      const month = escapeHtml(metric.month_label.replace(' 2026', ''))
+      const volumeWidth = barWidth(Number(metric.total_tickets), maxTickets)
 
       return `
-        <div class="volume-row">
-          <div class="volume-label">${escapeHtml(metric.month_label.replace(' 2026', ''))}</div>
-          <div class="volume-track"><div class="volume-bar" style="width:${width}%;"></div></div>
-          <div class="volume-value">${value}</div>
+        <div class="month-card">
+          <p class="month-card-title">${month}</p>
+          <div class="indicator-row">
+            <span class="indicator-label">CSAT</span>
+            <span class="indicator-track"><span class="indicator-fill csat" style="display:block;width:${barWidth(Number(metric.csat))};"></span></span>
+            <span class="indicator-value">${metric.csat}%</span>
+          </div>
+          <div class="indicator-row">
+            <span class="indicator-label">Avaliacoes</span>
+            <span class="indicator-track"><span class="indicator-fill review" style="display:block;width:${barWidth(Number(metric.review_percentage))};"></span></span>
+            <span class="indicator-value">${metric.review_percentage}%</span>
+          </div>
+          <div class="indicator-row">
+            <span class="indicator-label">Envio</span>
+            <span class="indicator-track"><span class="indicator-fill sending" style="display:block;width:${barWidth(Number(metric.sending_percentage))};"></span></span>
+            <span class="indicator-value">${metric.sending_percentage}%</span>
+          </div>
+          <div class="indicator-row">
+            <span class="indicator-label">Atendimentos</span>
+            <span class="indicator-track"><span class="indicator-fill volume" style="display:block;width:${volumeWidth};"></span></span>
+            <span class="indicator-value">${metric.total_tickets}</span>
+          </div>
         </div>
       `
     })
@@ -5097,53 +5163,31 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
           <td><strong>${escapeHtml(metric.month_label.replace(' 2026', ''))}</strong></td>
           <td>${metric.csat}%</td>
           <td>${metric.review_percentage}%</td>
-          <td>${metric.total_tickets}</td>
           <td>${metric.sending_percentage}%</td>
+          <td>${metric.total_tickets}</td>
         </tr>
       `,
     )
     .join('')
   const readText =
     history.length > 1
-      ? `No historico importado, o CSAT variou ${deltaText(csatDelta, ' p.p.')}, as avaliacoes variaram ${deltaText(reviewDelta, ' p.p.')} e o volume mudou ${deltaText(ticketDelta)} atendimentos entre ${first.month_label} e ${last.month_label}.`
+      ? `No historico importado, o CSAT variou ${deltaText(csatDelta, ' p.p.')}, as avaliacoes variaram ${deltaText(reviewDelta, ' p.p.')}, o envio variou ${deltaText(sendingDelta, ' p.p.')} e o volume mudou ${deltaText(ticketDelta)} atendimentos entre ${first.month_label} e ${last.month_label}.`
       : 'Ha apenas um mes importado para este analista; a leitura funciona como fotografia do periodo.'
 
   return `
     <div class="trend">
       <div class="trend-read"><p>${escapeHtml(readText)}</p></div>
-
-      <p class="chart-title">CSAT e avaliacoes</p>
-      <p class="chart-legend">
-        <span class="legend-dot" style="background:#0891b2;"></span>CSAT
-        &nbsp;&nbsp;
-        <span class="legend-dot" style="background:#7c3aed;"></span>Avaliacoes
-        &nbsp;&nbsp;
-        <span class="legend-dot" style="background:#d97706;"></span>Envio/sem avaliacao
-      </p>
-      <svg class="line-chart" viewBox="0 0 620 150" xmlns="http://www.w3.org/2000/svg">
-        <line x1="42" y1="18" x2="42" y2="116" stroke="#cbd5e1" stroke-width="1"></line>
-        <line x1="42" y1="116" x2="600" y2="116" stroke="#cbd5e1" stroke-width="1"></line>
-        <line x1="42" y1="${yForPercent(90)}" x2="600" y2="${yForPercent(90)}" stroke="#0f172a" stroke-width="1" stroke-dasharray="4 4"></line>
-        <text x="8" y="${yForPercent(90) + 4}" font-size="9" fill="#475569">90%</text>
-        <text x="9" y="22" font-size="9" fill="#475569">100%</text>
-        <text x="14" y="119" font-size="9" fill="#475569">0%</text>
-        <polyline points="${csatPoints}" fill="none" stroke="#0891b2" stroke-width="3"></polyline>
-        <polyline points="${reviewPoints}" fill="none" stroke="#7c3aed" stroke-width="3"></polyline>
-        <polyline points="${sendingPoints}" fill="none" stroke="#d97706" stroke-width="3"></polyline>
-        ${pointLabels}
-        ${monthLabels}
-      </svg>
-
-      <p class="chart-title">Atendimentos</p>
-      ${volumeRows}
+      <p class="chart-title">Evolucao visual por mes</p>
+      <p class="chart-legend">Barras percentuais mostram CSAT, avaliacoes e envio. A barra de atendimentos usa escala relativa ao maior volume do historico exibido.</p>
+      ${monthCards}
 
       <table class="trend-table">
         <tr>
           <th>Mes</th>
           <th>CSAT</th>
           <th>Avaliacoes</th>
-          <th>Atendimentos</th>
           <th>Envio</th>
+          <th>Atendimentos</th>
         </tr>
         ${tableRows}
       </table>
@@ -5151,69 +5195,107 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
   `
 }
 
-function buildChatCoachFeedback({
-  analystName,
-  status,
-  csatGap,
-  reviewGap,
-  productivityGap,
+function buildChatFeedbackText({
   metric,
+  averageTickets,
+  podiumPosition,
+  style,
+  managerNotes,
 }: {
-  analystName: string
-  status: string
-  csatGap: number
-  reviewGap: number
-  productivityGap: number
   metric: ChatMonthlyMetric
+  averageTickets: number
+  podiumPosition: number
+  style: ChatFeedbackStyle
+  managerNotes: string
 }) {
+  const analystName = getChatAnalystName(metric)
+  const csatGoal = Number(metric.csat_goal) || 90
+  const reviewGoal = Number(metric.general_review_goal) || 25
+  const status = metric.status || getChatMetricStatus(Number(metric.csat), Number(metric.review_percentage), csatGoal, reviewGoal)
+  const csatGap = round(Number(metric.csat) - csatGoal)
+  const reviewGap = round(Number(metric.review_percentage) - reviewGoal)
+  const productivityGap = averageTickets ? round(((Number(metric.total_tickets) - averageTickets) / averageTickets) * 100) : 0
+  const podiumText = podiumPosition > 0 ? `${podiumPosition}o lugar no podio` : 'fora do podio neste fechamento'
+  const contextLine = `${analystName} fechou o ciclo com CSAT de ${metric.csat}%, avaliacoes de ${metric.review_percentage}%, envio/sem avaliacao de ${metric.sending_percentage}% e ${metric.total_tickets} atendimentos. Status: ${status}.`
+  const notesLine = managerNotes.trim() ? `Contexto do gestor: ${managerNotes.trim()}` : ''
   const strengths: string[] = []
-  const developmentPoints: string[] = []
+  const actions: string[] = []
 
   if (csatGap >= 0) {
-    strengths.push('manteve uma percepcao positiva do cliente acima da meta individual')
+    strengths.push(`qualidade percebida acima da meta individual de ${csatGoal}%`)
+    actions.push('manter o padrao de abordagem que sustentou a satisfacao do cliente')
   } else {
-    developmentPoints.push('aprofundar a leitura dos atendimentos que geraram avaliacao negativa e identificar padroes de abordagem')
+    actions.push('revisar os atendimentos que geraram avaliacao negativa e transformar os principais pontos em combinados praticos')
   }
 
   if (reviewGap >= 0) {
-    strengths.push('conseguiu uma amostra de avaliacoes suficiente para sustentar a leitura do mes')
+    strengths.push(`volume de avaliacoes suficiente, ${formatDelta(reviewGap, ' p.p.')} acima da referencia`)
+    actions.push('preservar a rotina de encerramento que estimula resposta do cliente')
   } else {
-    developmentPoints.push('aumentar a conversao de atendimentos validos em avaliacoes, com encerramentos mais claros e convite natural para feedback')
+    actions.push('reforcar a coleta de feedback no encerramento, buscando elevar a amostra de avaliacoes')
   }
 
   if (productivityGap >= 0) {
-    strengths.push('entregou volume acima da media da operacao')
+    strengths.push(`volume ${formatDelta(productivityGap, '%')} acima da media da operacao`)
   } else {
-    developmentPoints.push('entender se o volume abaixo da media teve relacao com distribuicao, ausencias, emprestimos ou caracteristica da carteira')
+    actions.push('validar se o volume abaixo da media veio de distribuicao, ausencias, emprestimo para outro setor ou oportunidade de produtividade')
   }
 
-  const statusReading =
+  const strengthText = strengths.length ? strengths.join('; ') : 'ha oportunidade de consolidar padroes de qualidade, volume e coleta de feedback'
+  const actionText = actions.join('; ')
+  const resultText =
     status === 'Meta Superada'
-      ? 'O ciclo indica consistencia e merece reconhecimento. A prioridade nao e mudar tudo, mas proteger o padrao que funcionou.'
+      ? 'O resultado esperado e preservar a consistencia e usar o ciclo como referencia positiva para o proximo fechamento mensal.'
       : status === 'Critico'
-        ? 'O ciclo pede intervencao mais objetiva. A prioridade e reduzir dispersao, escolher poucos comportamentos de melhoria e medir o efeito no proximo fechamento.'
-        : 'O ciclo mostra pontos positivos, mas ainda pede ajuste fino para transformar bom desempenho em resultado consistente.'
-  const strengthsText = strengths.length ? strengths.join('; ') : 'houve base suficiente para direcionar um plano de desenvolvimento com clareza'
-  const developmentText = developmentPoints.length
-    ? developmentPoints.join('; ')
-    : 'sustentar consistencia, compartilhar boas praticas e evitar acomodacao apos um ciclo positivo'
-  const nextStep =
-    status === 'Meta Superada'
-      ? 'No proximo fechamento mensal, observe se o resultado se repete com a mesma qualidade e se o volume de avaliacoes continua forte.'
-      : 'No proximo fechamento mensal, compare se a acao escolhida gerou evolucao real em CSAT, avaliacoes e volume.'
+        ? 'O resultado esperado e recuperar previsibilidade no proximo fechamento, priorizando poucos ajustes de alto impacto.'
+        : 'O resultado esperado e transformar os bons sinais do ciclo em consistencia suficiente para superar todos os criterios no proximo fechamento.'
 
-  return `
-    <h3>Leitura do ciclo</h3>
-    <p>${escapeHtml(analystName)} fechou o mes com CSAT de ${metric.csat}%, ${metric.review_percentage}% de avaliacoes, ${metric.sending_percentage}% de envio/sem avaliacao e ${metric.total_tickets} atendimentos. ${escapeHtml(statusReading)}</p>
-    <h3>Forcas observadas</h3>
-    <p>${escapeHtml(strengthsText)}.</p>
-    <h3>Plano de desenvolvimento</h3>
-    <p>${escapeHtml(developmentText)}.</p>
-    <h3>Expectativa para o proximo ciclo mensal</h3>
-    <p>${escapeHtml(nextStep)} Status atual: ${escapeHtml(status)}.</p>
-  `
+  if (style === 'sare') {
+    return [
+      `Situacao: ${contextLine}`,
+      `Alinhamentos Realizados: ${actionText}. ${notesLine}`,
+      `Resultado Esperado: ${resultText} Posicao atual: ${podiumText}.`,
+      `Expectativa e Plano de Desenvolvimento: para o proximo ciclo mensal, acompanhar a manutencao do CSAT, ampliar a qualidade da amostra de avaliacoes quando necessario e proteger o volume valido de atendimentos.`,
+    ]
+      .filter(Boolean)
+      .join('\n\n')
+  }
+
+  if (style === 'mimo') {
+    return [
+      `Momento observado: ${contextLine}`,
+      `Impacto: ${strengthText}. A leitura coloca o colaborador ${podiumText}.`,
+      `Melhoria ou manutencao: ${actionText}. ${notesLine}`,
+      `Orientacao: ${resultText}`,
+    ]
+      .filter(Boolean)
+      .join('\n\n')
+  }
+
+  return [
+    `Leitura do ciclo: ${contextLine}`,
+    `Forcas observadas: ${strengthText}.`,
+    `Plano de desenvolvimento: ${actionText}. ${notesLine}`,
+    `Expectativa para o proximo ciclo mensal: ${resultText} Posicao atual: ${podiumText}.`,
+  ]
+    .filter(Boolean)
+    .join('\n\n')
 }
 
+function getChatFeedbackStyleLabel(style: ChatFeedbackStyle) {
+  if (style === 'sare') return 'SARE'
+  if (style === 'mimo') return 'MIMO'
+  return 'Coach'
+}
+
+function formatChatFeedbackForReport(text: string) {
+  return text
+    .split(/\r?\n\r?\n+/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean)
+    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\r?\n/g, '<br />')}</p>`)
+    .join('')
+}
 function exportWordReport({
   analystName,
   periodLabel,
@@ -6307,6 +6389,11 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
+
+
+
+
 
 
 
