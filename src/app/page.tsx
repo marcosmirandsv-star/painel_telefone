@@ -4177,15 +4177,18 @@ function exportChatIndividualReport({
           .muted { color: #475569; }
           .metric { font-weight: bold; color: #0f172a; }
           .trend { border: 1px solid #cbd5e1; background: #f8fafc; padding: 12px; margin: 10px 0 16px; }
-          .trend-table { border-collapse: collapse; width: 100%; margin-top: 8px; }
+          .trend-table { border-collapse: collapse; width: 100%; margin-top: 12px; }
           .trend-table th { background: #0f766e; color: #ffffff; font-size: 10px; padding: 7px; text-align: left; }
           .trend-table td { border: 1px solid #dbe3ef; font-size: 10px; padding: 7px; vertical-align: middle; }
-          .bar-wrap { background: #e2e8f0; height: 13px; width: 100%; border-radius: 2px; margin-top: 4px; }
-          .bar { height: 13px; border-radius: 2px; }
-          .bar-csat { background: #0891b2; }
-          .bar-review { background: #7c3aed; }
-          .bar-volume { background: #059669; }
-          .trend-value { display: block; font-weight: bold; color: #0f172a; }
+          .chart-title { font-size: 12px; font-weight: bold; color: #0f172a; margin: 12px 0 6px; }
+          .chart-legend { font-size: 10px; color: #475569; margin: 4px 0 8px; }
+          .legend-dot { display: inline-block; width: 9px; height: 9px; margin-right: 4px; border-radius: 9px; }
+          .line-chart { width: 100%; height: 165px; border: 1px solid #cbd5e1; background: #ffffff; }
+          .volume-row { display: grid; grid-template-columns: 78px 1fr 64px; gap: 8px; align-items: center; margin: 7px 0; }
+          .volume-label { font-size: 10px; font-weight: bold; color: #0f172a; }
+          .volume-track { background: #e2e8f0; height: 16px; border-radius: 2px; overflow: hidden; }
+          .volume-bar { background: #059669; height: 16px; border-radius: 2px; }
+          .volume-value { font-size: 10px; font-weight: bold; text-align: right; }
           .trend-read { background: #ecfeff; border-left: 4px solid #0891b2; padding: 9px 10px; margin: 8px 0 10px; }
           .trend-read p { margin: 0; }
           .coach { border-left: 5px solid #0891b2; background: #ecfeff; padding: 12px; margin-top: 8px; }
@@ -4281,39 +4284,98 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
   const ticketDelta = Number(last.total_tickets) - Number(first.total_tickets)
   const maxTickets = Math.max(...history.map((metric) => Number(metric.total_tickets)), 1)
   const deltaText = (value: number, suffix = '') => (value > 0 ? `+${value}${suffix}` : `${value}${suffix}`)
-  const readText =
-    history.length > 1
-      ? `No historico importado, o CSAT variou ${deltaText(csatDelta, ' p.p.')}, as avaliacoes variaram ${deltaText(reviewDelta, ' p.p.')} e o volume mudou ${deltaText(ticketDelta)} atendimentos entre ${first.month_label} e ${last.month_label}.`
-      : 'Ha apenas um mes importado para este analista; o grafico funciona como fotografia do periodo.'
-  const rows = history
-    .map((metric) => {
-      const csatWidth = Math.max(4, Math.min(100, Number(metric.csat)))
-      const reviewWidth = Math.max(4, Math.min(100, Number(metric.review_percentage)))
-      const volumeWidth = Math.max(4, Math.min(100, (Number(metric.total_tickets) / maxTickets) * 100))
+  const chartWidth = 620
+  const chartHeight = 150
+  const leftPadding = 42
+  const rightPadding = 20
+  const topPadding = 18
+  const bottomPadding = 34
+  const plotWidth = chartWidth - leftPadding - rightPadding
+  const plotHeight = chartHeight - topPadding - bottomPadding
+  const xFor = (index: number) =>
+    history.length === 1 ? leftPadding + plotWidth / 2 : leftPadding + (index / (history.length - 1)) * plotWidth
+  const yForPercent = (value: number) => topPadding + (100 - Math.max(0, Math.min(100, value))) / 100 * plotHeight
+  const csatPoints = history.map((metric, index) => `${xFor(index)},${yForPercent(Number(metric.csat))}`).join(' ')
+  const reviewPoints = history
+    .map((metric, index) => `${xFor(index)},${yForPercent(Number(metric.review_percentage))}`)
+    .join(' ')
+  const monthLabels = history
+    .map((metric, index) => {
+      const x = xFor(index)
+      const label = escapeHtml(metric.month_label.replace(' 2026', '').slice(0, 3))
+
+      return `<text x="${x}" y="140" text-anchor="middle" font-size="10" fill="#475569">${label}</text>`
+    })
+    .join('')
+  const pointLabels = history
+    .map((metric, index) => {
+      const x = xFor(index)
+      const csatY = yForPercent(Number(metric.csat))
+      const reviewY = yForPercent(Number(metric.review_percentage))
 
       return `
-        <tr>
-          <td><strong>${escapeHtml(metric.month_label.replace(' 2026', ''))}</strong></td>
-          <td>
-            <span class="trend-value">${metric.csat}%</span>
-            <div class="bar-wrap"><div class="bar bar-csat" style="width:${csatWidth}%;"></div></div>
-          </td>
-          <td>
-            <span class="trend-value">${metric.review_percentage}%</span>
-            <div class="bar-wrap"><div class="bar bar-review" style="width:${reviewWidth}%;"></div></div>
-          </td>
-          <td>
-            <span class="trend-value">${metric.total_tickets}</span>
-            <div class="bar-wrap"><div class="bar bar-volume" style="width:${volumeWidth}%;"></div></div>
-          </td>
-        </tr>
+        <circle cx="${x}" cy="${csatY}" r="3" fill="#0891b2"></circle>
+        <circle cx="${x}" cy="${reviewY}" r="3" fill="#7c3aed"></circle>
       `
     })
     .join('')
+  const volumeRows = history
+    .map((metric) => {
+      const value = Number(metric.total_tickets)
+      const width = Math.max(4, Math.min(100, (value / maxTickets) * 100))
+
+      return `
+        <div class="volume-row">
+          <div class="volume-label">${escapeHtml(metric.month_label.replace(' 2026', ''))}</div>
+          <div class="volume-track"><div class="volume-bar" style="width:${width}%;"></div></div>
+          <div class="volume-value">${value}</div>
+        </div>
+      `
+    })
+    .join('')
+  const tableRows = history
+    .map(
+      (metric) => `
+        <tr>
+          <td><strong>${escapeHtml(metric.month_label.replace(' 2026', ''))}</strong></td>
+          <td>${metric.csat}%</td>
+          <td>${metric.review_percentage}%</td>
+          <td>${metric.total_tickets}</td>
+        </tr>
+      `,
+    )
+    .join('')
+  const readText =
+    history.length > 1
+      ? `No historico importado, o CSAT variou ${deltaText(csatDelta, ' p.p.')}, as avaliacoes variaram ${deltaText(reviewDelta, ' p.p.')} e o volume mudou ${deltaText(ticketDelta)} atendimentos entre ${first.month_label} e ${last.month_label}.`
+      : 'Ha apenas um mes importado para este analista; a leitura funciona como fotografia do periodo.'
 
   return `
     <div class="trend">
       <div class="trend-read"><p>${escapeHtml(readText)}</p></div>
+
+      <p class="chart-title">CSAT e avaliacoes</p>
+      <p class="chart-legend">
+        <span class="legend-dot" style="background:#0891b2;"></span>CSAT
+        &nbsp;&nbsp;
+        <span class="legend-dot" style="background:#7c3aed;"></span>Avaliacoes
+      </p>
+      <svg class="line-chart" viewBox="0 0 620 150" xmlns="http://www.w3.org/2000/svg">
+        <line x1="42" y1="18" x2="42" y2="116" stroke="#cbd5e1" stroke-width="1"></line>
+        <line x1="42" y1="116" x2="600" y2="116" stroke="#cbd5e1" stroke-width="1"></line>
+        <line x1="42" y1="${yForPercent(90)}" x2="600" y2="${yForPercent(90)}" stroke="#0f172a" stroke-width="1" stroke-dasharray="4 4"></line>
+        <text x="8" y="${yForPercent(90) + 4}" font-size="9" fill="#475569">90%</text>
+        <text x="9" y="22" font-size="9" fill="#475569">100%</text>
+        <text x="14" y="119" font-size="9" fill="#475569">0%</text>
+        <polyline points="${csatPoints}" fill="none" stroke="#0891b2" stroke-width="3"></polyline>
+        <polyline points="${reviewPoints}" fill="none" stroke="#7c3aed" stroke-width="3"></polyline>
+        ${pointLabels}
+        ${monthLabels}
+      </svg>
+
+      <p class="chart-title">Atendimentos</p>
+      ${volumeRows}
+
       <table class="trend-table">
         <tr>
           <th>Mes</th>
@@ -4321,9 +4383,8 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
           <th>Avaliacoes</th>
           <th>Atendimentos</th>
         </tr>
-        ${rows}
+        ${tableRows}
       </table>
-      <p class="muted">CSAT e avaliacoes usam escala percentual. Atendimentos usam escala relativa ao maior volume do historico exibido.</p>
     </div>
   `
 }
@@ -5415,6 +5476,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
