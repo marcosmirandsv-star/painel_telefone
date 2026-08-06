@@ -1159,6 +1159,7 @@ function ChatModuleDashboard({
   const [chatInactiveFile, setChatInactiveFile] = useState<File | null>(null)
   const [chatImportSaving, setChatImportSaving] = useState(false)
   const [chatImportMessage, setChatImportMessage] = useState('')
+  const [chatExportMessage, setChatExportMessage] = useState('')
 
   async function handleChatMonthlyImport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -1226,7 +1227,8 @@ function ChatModuleDashboard({
   if (!isManagementUser) {
     return (
       <div className="mt-8 space-y-7">
-        <section className="panel">
+
+      <section className="panel">
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Modulo chat</p>
           <h2 className="mt-3 text-3xl font-bold">Acesso restrito a gestao</h2>
           <p className="mt-3 max-w-3xl text-slate-300">
@@ -1254,9 +1256,10 @@ function ChatModuleDashboard({
       validTickets: acc.validTickets + Number(metric.valid_tickets),
       reviews: acc.reviews + Number(metric.reviews),
       positives: acc.positives + Number(metric.positive_reviews),
+      negatives: acc.negatives + Number(metric.negative_reviews),
       inactive: acc.inactive + Number(metric.inactive_tickets),
     }),
-    { tickets: 0, validTickets: 0, reviews: 0, positives: 0, inactive: 0 },
+    { tickets: 0, validTickets: 0, reviews: 0, positives: 0, negatives: 0, inactive: 0 },
   )
   const averageTickets = visibleMetrics.length ? round(totals.tickets / visibleMetrics.length) : 0
   const averageCsat = calculateChatAverage(visibleMetrics, 'csat')
@@ -1326,6 +1329,39 @@ function ChatModuleDashboard({
           : attention.length
             ? 'Priorizar os analistas listados em atencao antes do proximo fechamento.'
             : 'Manter rotina atual e acompanhar se o resultado se sustenta no mes seguinte.'
+
+  function handleExportChatReport() {
+    if (!visibleMetrics.length) {
+      setChatExportMessage('Selecione um periodo com dados antes de exportar o relatorio.')
+      return
+    }
+
+    try {
+      const fileName = exportChatManagementReport({
+        teamName: selectedTeamName,
+        periodLabel: selectedPeriod?.label ?? 'Periodo',
+        totals,
+        averageTickets,
+        averageCsat,
+        averageReviews,
+        averageSending,
+        chatCsatDelta,
+        chatReviewDelta,
+        chatSendingDelta,
+        chatExecutiveStatus,
+        chatMainAlert,
+        chatRecommendedAction,
+        podium,
+        attention,
+        monthlyTrend,
+        visibleMetrics,
+      })
+
+      setChatExportMessage(`Relatorio gerado: ${fileName}. Verifique a pasta Downloads.`)
+    } catch {
+      setChatExportMessage('Nao foi possivel gerar o relatorio. Tente novamente ou use outro navegador.')
+    }
+  }
 
   return (
     <div className="mt-8 space-y-7">
@@ -1534,9 +1570,45 @@ function ChatModuleDashboard({
       </div>
 
       <section className="panel">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Relatorio gerencial</p>
+            <h2 className="section-title">Fechamento mensal do chat</h2>
+            <p className="section-subtitle">
+              Exporta um resumo executivo com indicadores, podio, analistas em atencao e evolucao mensal.
+            </p>
+          </div>
+          <button
+            className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={!visibleMetrics.length}
+            type="button"
+            onClick={handleExportChatReport}
+          >
+            Exportar Word
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-3">
+          <div className="rounded-lg bg-slate-900 p-4">
+            <p className="text-sm text-slate-400">Leitura executiva</p>
+            <p className="mt-2 font-semibold">{chatExecutiveStatus}</p>
+          </div>
+          <div className="rounded-lg bg-slate-900 p-4">
+            <p className="text-sm text-slate-400">Ponto de decisao</p>
+            <p className="mt-2 font-semibold">{chatMainAlert}</p>
+          </div>
+          <div className="rounded-lg bg-slate-900 p-4">
+            <p className="text-sm text-slate-400">Proxima acao</p>
+            <p className="mt-2 font-semibold">{chatRecommendedAction}</p>
+          </div>
+        </div>
+
+        {chatExportMessage && <p className="mt-4 rounded-md bg-slate-900/70 px-4 py-3 text-sm text-slate-200">{chatExportMessage}</p>}
+      </section>
+      <section className="panel">
         <h2 className="section-title">Base importada</h2>
         <p className="section-subtitle">
-          {metrics.length} registros historicos carregados. Este modulo esta em leitura ate ativarmos a importacao mensal.
+          {metrics.length} registros carregados entre historico e importacoes mensais do Zendesk.
         </p>
         <div className="mt-5 overflow-x-auto">
           <table className="min-w-full text-left text-sm">
@@ -3970,6 +4042,222 @@ function formatShortDate(value: string) {
   return `${day}/${month}`
 }
 
+function exportChatManagementReport({
+  teamName,
+  periodLabel,
+  totals,
+  averageTickets,
+  averageCsat,
+  averageReviews,
+  averageSending,
+  chatCsatDelta,
+  chatReviewDelta,
+  chatSendingDelta,
+  chatExecutiveStatus,
+  chatMainAlert,
+  chatRecommendedAction,
+  podium,
+  attention,
+  monthlyTrend,
+  visibleMetrics,
+}: {
+  teamName: string
+  periodLabel: string
+  totals: {
+    tickets: number
+    validTickets: number
+    reviews: number
+    positives: number
+    negatives: number
+    inactive: number
+  }
+  averageTickets: number
+  averageCsat: number
+  averageReviews: number
+  averageSending: number
+  chatCsatDelta: number
+  chatReviewDelta: number
+  chatSendingDelta: number
+  chatExecutiveStatus: string
+  chatMainAlert: string
+  chatRecommendedAction: string
+  podium: ChatMonthlyMetric[]
+  attention: { metric: ChatMonthlyMetric; reasons: string[] }[]
+  monthlyTrend: { label: string; value: number }[]
+  visibleMetrics: ChatMonthlyMetric[]
+}) {
+  const safeTeamName = escapeHtml(teamName)
+  const safePeriodLabel = escapeHtml(periodLabel)
+  const podiumRows = podium.length
+    ? podium
+        .map(
+          (metric, index) => `
+            <tr>
+              <td>${index + 1}</td>
+              <td>${escapeHtml(getChatAnalystName(metric))}</td>
+              <td>${metric.csat}%</td>
+              <td>${metric.review_percentage}%</td>
+              <td>${metric.total_tickets}</td>
+            </tr>
+          `,
+        )
+        .join('')
+    : '<tr><td colspan="5">Nenhum analista atingiu todos os criterios de podio.</td></tr>'
+  const attentionRows = attention.length
+    ? attention
+        .map(
+          (item) => `
+            <tr>
+              <td>${escapeHtml(getChatAnalystName(item.metric))}</td>
+              <td>${item.metric.csat}%</td>
+              <td>${item.metric.review_percentage}%</td>
+              <td>${item.metric.total_tickets}</td>
+              <td>${escapeHtml(item.reasons.join(', '))}</td>
+            </tr>
+          `,
+        )
+        .join('')
+    : '<tr><td colspan="5">Nenhum ponto critico encontrado no filtro.</td></tr>'
+  const baseRows = visibleMetrics
+    .map(
+      (metric) => `
+        <tr>
+          <td>${escapeHtml(getChatAnalystName(metric))}</td>
+          <td>${escapeHtml(getChatTeamName(metric))}</td>
+          <td>${metric.csat}%</td>
+          <td>${metric.review_percentage}%</td>
+          <td>${metric.sending_percentage}%</td>
+          <td>${metric.total_tickets}</td>
+          <td>${metric.inactive_tickets}</td>
+        </tr>
+      `,
+    )
+    .join('')
+  const trendBars = monthlyTrend.length
+    ? monthlyTrend
+        .map((point, index) => {
+          const previous = monthlyTrend[index - 1]
+          const delta = previous ? round(point.value - previous.value) : 0
+          const color = delta > 0 ? '#059669' : delta < 0 ? '#dc2626' : '#0891b2'
+          const width = Math.max(8, Math.min(100, point.value))
+          const reading = index === 0 ? 'base' : delta > 0 ? 'melhorou' : delta < 0 ? 'piorou' : 'estavel'
+
+          return `
+            <div class="trend-row">
+              <div class="trend-label">${escapeHtml(point.label)}</div>
+              <div class="trend-track">
+                <div class="goal-line"></div>
+                <div class="trend-bar" style="width:${width}%; background:${color};"></div>
+              </div>
+              <div class="trend-value"><strong>${point.value}%</strong><span>${index === 0 ? 'inicio' : formatDelta(delta, ' p.p.')}</span><em>${reading}</em></div>
+            </div>
+          `
+        })
+        .join('')
+    : '<p class="muted">Sem evolucao mensal para este filtro.</p>'
+
+  const documentHtml = `
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Relatorio gerencial chat - ${safePeriodLabel}</title>
+        <style>
+          body { font-family: Arial, sans-serif; color: #111827; margin: 34px; }
+          h1 { font-size: 28px; margin: 0 0 6px; color: #0f172a; }
+          h2 { color: #0f766e; font-size: 18px; margin: 24px 0 8px; }
+          p { font-size: 12px; line-height: 1.55; margin: 0 0 10px; }
+          table { border-collapse: collapse; width: 100%; margin: 10px 0 18px; }
+          th, td { border: 1px solid #cbd5e1; font-size: 11px; padding: 8px; text-align: left; }
+          th { background: #ecfeff; font-weight: bold; color: #0f172a; }
+          .header { border-bottom: 3px solid #06b6d4; padding-bottom: 12px; margin-bottom: 18px; }
+          .subtitle { color: #475569; margin-bottom: 18px; }
+          .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0 18px; }
+          .card { background: #f8fafc; border: 1px solid #cbd5e1; border-top: 4px solid #0891b2; padding: 10px; min-height: 64px; }
+          .card p { color: #475569; font-size: 10px; margin-bottom: 5px; text-transform: uppercase; letter-spacing: .03em; }
+          .card strong { display: block; font-size: 20px; color: #0f172a; }
+          .card span { display: block; color: #475569; font-size: 10px; margin-top: 3px; }
+          .callout { background: #ecfeff; border-left: 4px solid #0891b2; padding: 10px 12px; margin: 12px 0 16px; }
+          .muted { color: #475569; }
+          .trend-panel { border: 1px solid #cbd5e1; padding: 12px; margin: 12px 0 18px; }
+          .trend-row { display: grid; grid-template-columns: 84px 1fr 150px; gap: 10px; align-items: center; margin: 10px 0; }
+          .trend-label { font-size: 11px; font-weight: bold; color: #0f172a; }
+          .trend-track { background: #e2e8f0; height: 20px; border-radius: 3px; overflow: hidden; position: relative; }
+          .trend-bar { height: 20px; }
+          .goal-line { position: absolute; left: 90%; top: 0; width: 2px; height: 20px; background: #111827; opacity: .55; }
+          .trend-value { font-size: 11px; }
+          .trend-value strong { display: inline-block; min-width: 42px; }
+          .trend-value span { font-weight: bold; margin-right: 4px; }
+          .trend-value em { color: #64748b; font-style: normal; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>Relatorio gerencial do Chat</h1>
+          <p class="subtitle">${safePeriodLabel} - ${safeTeamName} - Fonte: Zendesk</p>
+        </div>
+
+        <div class="grid">
+          <div class="card"><p>CSAT medio</p><strong>${averageCsat}%</strong><span>${formatDelta(chatCsatDelta, ' p.p.')} vs mes anterior</span></div>
+          <div class="card"><p>Avaliacoes</p><strong>${averageReviews}%</strong><span>${formatDelta(chatReviewDelta, ' p.p.')} vs mes anterior</span></div>
+          <div class="card"><p>Sem avaliacao</p><strong>${averageSending}%</strong><span>${formatDelta(chatSendingDelta, ' p.p.')} vs mes anterior</span></div>
+          <div class="card"><p>Atendimentos</p><strong>${totals.tickets}</strong><span>${averageTickets} media por analista</span></div>
+        </div>
+
+        <h2>Resumo executivo</h2>
+        <div class="callout">
+          <p><strong>${escapeHtml(chatExecutiveStatus)}</strong></p>
+          <p>${escapeHtml(chatMainAlert)}</p>
+          <p><strong>Acao recomendada:</strong> ${escapeHtml(chatRecommendedAction)}</p>
+        </div>
+
+        <h2>Resumo operacional</h2>
+        <table>
+          <tr><th>Atendimentos</th><th>Validos</th><th>Inativos</th><th>Avaliacoes</th><th>Positivas</th><th>Negativas</th></tr>
+          <tr><td>${totals.tickets}</td><td>${totals.validTickets}</td><td>${totals.inactive}</td><td>${totals.reviews}</td><td>${totals.positives}</td><td>${totals.negatives}</td></tr>
+        </table>
+
+        <h2>Evolucao mensal do CSAT</h2>
+        <p class="muted">Linha escura marca a referencia de 90% usada para podio.</p>
+        <div class="trend-panel">${trendBars}</div>
+
+        <h2>Podio do chat</h2>
+        <table>
+          <tr><th>Posicao</th><th>Analista</th><th>CSAT</th><th>Avaliacoes</th><th>Atendimentos</th></tr>
+          ${podiumRows}
+        </table>
+
+        <h2>Analistas em atencao</h2>
+        <table>
+          <tr><th>Analista</th><th>CSAT</th><th>Avaliacoes</th><th>Atendimentos</th><th>Motivo</th></tr>
+          ${attentionRows}
+        </table>
+
+        <h2>Base do periodo</h2>
+        <table>
+          <tr><th>Analista</th><th>Equipe</th><th>CSAT</th><th>Avaliacoes</th><th>Sem avaliacao</th><th>Atendimentos</th><th>Inativos</th></tr>
+          ${baseRows}
+        </table>
+      </body>
+    </html>
+  `
+  const blob = new Blob(['\ufeff', documentHtml], {
+    type: 'application/msword;charset=utf-8',
+  })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  const fileName = `chat-relatorio-${slugifyFileName(teamName)}-${slugifyFileName(periodLabel)}.doc`
+
+  link.href = url
+  link.download = fileName
+  link.style.display = 'none'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+
+  return fileName
+}
 function exportWordReport({
   analystName,
   periodLabel,
@@ -4982,6 +5270,8 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
+
 
 
 
