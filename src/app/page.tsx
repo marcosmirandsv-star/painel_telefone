@@ -5258,6 +5258,11 @@ function exportChatIndividualReport({
           .kpi-card span { display: block; color: #475569; font-size: 10px; margin-bottom: 5px; }
           .kpi-card strong { display: block; color: #0f172a; font-size: 18px; }
           .kpi-card em { display: block; color: #475569; font-size: 10px; font-style: normal; margin-top: 5px; }
+          .strategy-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 12px 0 14px; }
+          .strategy-card { border: 1px solid #cbd5e1; background: #ffffff; padding: 10px; page-break-inside: avoid; }
+          .strategy-card span { display: block; color: #475569; font-size: 10px; margin-bottom: 5px; }
+          .strategy-card strong { display: block; color: #0f172a; font-size: 13px; line-height: 1.35; }
+          .strategy-card em { display: block; color: #475569; font-size: 10px; font-style: normal; margin-top: 5px; }
           .coach h3 { margin-top: 0; color: #0f172a; }
         </style>
       </head>
@@ -5365,8 +5370,33 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
   const sendingDelta = round(Number(last.sending_percentage) - Number(first.sending_percentage))
   const ticketDelta = Number(last.total_tickets) - Number(first.total_tickets)
   const maxTickets = Math.max(...history.map((metric) => Number(metric.total_tickets)), 1)
+  const bestCsat = [...history].sort((a, b) => Number(b.csat) - Number(a.csat))[0]
+  const lowestCsat = [...history].sort((a, b) => Number(a.csat) - Number(b.csat))[0]
+  const bestReview = [...history].sort((a, b) => Number(b.review_percentage) - Number(a.review_percentage))[0]
   const deltaText = (value: number, suffix = '') => (value > 0 ? `+${value}${suffix}` : `${value}${suffix}`)
   const barWidth = (value: number, max = 100) => `${Math.max(3, Math.min(100, (value / max) * 100))}%`
+  const trendSignal =
+    history.length <= 1
+      ? 'Fotografia inicial'
+      : csatDelta >= 0 && reviewDelta >= 0
+        ? 'Evolucao favoravel'
+        : csatDelta < 0 && reviewDelta < 0
+          ? 'Queda combinada'
+          : 'Evolucao mista'
+  const focusText =
+    Number(last.csat) < 90
+      ? 'priorizar qualidade percebida e revisar causas de avaliacoes negativas.'
+      : Number(last.review_percentage) < 25
+        ? 'aumentar a amostra de avaliacoes para tornar a leitura mais sustentavel.'
+        : csatDelta < 0
+          ? 'entender o que mudou no ultimo ciclo para recuperar o patamar anterior.'
+          : reviewDelta < 0
+            ? 'preservar o CSAT e recuperar participacao dos clientes nas avaliacoes.'
+            : 'manter consistencia e compartilhar as praticas que sustentaram o resultado.'
+  const readText =
+    history.length > 1
+      ? `Entre ${first.month_label} e ${last.month_label}, o CSAT variou ${deltaText(csatDelta, ' p.p.')}, as avaliacoes variaram ${deltaText(reviewDelta, ' p.p.')}, o envio/sem avaliacao variou ${deltaText(sendingDelta, ' p.p.')} e o volume mudou ${deltaText(ticketDelta)} atendimentos.`
+      : 'Ha apenas um mes importado para este analista; a leitura funciona como fotografia do periodo.'
   const monthCards = history
     .map((metric) => {
       const month = escapeHtml(metric.month_label.replace(' 2026', ''))
@@ -5386,7 +5416,7 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
             <span class="indicator-value">${metric.review_percentage}%</span>
           </div>
           <div class="indicator-row">
-            <span class="indicator-label">Envio</span>
+            <span class="indicator-label">Sem avaliacao</span>
             <span class="indicator-track"><span class="indicator-fill sending" style="display:block;width:${barWidth(Number(metric.sending_percentage))};"></span></span>
             <span class="indicator-value">${metric.sending_percentage}%</span>
           </div>
@@ -5399,41 +5429,30 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
       `
     })
     .join('')
-  const tableRows = history
-    .map(
-      (metric) => `
-        <tr>
-          <td><strong>${escapeHtml(metric.month_label.replace(' 2026', ''))}</strong></td>
-          <td>${metric.csat}%</td>
-          <td>${metric.review_percentage}%</td>
-          <td>${metric.sending_percentage}%</td>
-          <td>${metric.total_tickets}</td>
-        </tr>
-      `,
-    )
-    .join('')
-  const readText =
-    history.length > 1
-      ? `No historico importado, o CSAT variou ${deltaText(csatDelta, ' p.p.')}, as avaliacoes variaram ${deltaText(reviewDelta, ' p.p.')}, o envio variou ${deltaText(sendingDelta, ' p.p.')} e o volume mudou ${deltaText(ticketDelta)} atendimentos entre ${first.month_label} e ${last.month_label}.`
-      : 'Ha apenas um mes importado para este analista; a leitura funciona como fotografia do periodo.'
 
   return `
     <div class="trend">
       <div class="trend-read"><p>${escapeHtml(readText)}</p></div>
-      <p class="chart-title">Evolucao visual por mes</p>
-      <p class="chart-legend">Barras percentuais mostram CSAT, avaliacoes e envio. A barra de atendimentos usa escala relativa ao maior volume do historico exibido.</p>
+      <div class="strategy-grid">
+        <div class="strategy-card">
+          <span>Leitura do historico</span>
+          <strong>${escapeHtml(trendSignal)}</strong>
+          <em>Melhor CSAT: ${escapeHtml(bestCsat.month_label.replace(' 2026', ''))} (${bestCsat.csat}%).</em>
+        </div>
+        <div class="strategy-card">
+          <span>Ponto de atencao</span>
+          <strong>${escapeHtml(lowestCsat.month_label.replace(' 2026', ''))} teve o menor CSAT</strong>
+          <em>Maior amostra de avaliacoes: ${escapeHtml(bestReview.month_label.replace(' 2026', ''))} (${bestReview.review_percentage}%).</em>
+        </div>
+        <div class="strategy-card">
+          <span>Foco recomendado</span>
+          <strong>${escapeHtml(focusText)}</strong>
+          <em>Use esta leitura para orientar o proximo ciclo mensal.</em>
+        </div>
+      </div>
+      <p class="chart-title">Evolucao mensal em barras</p>
+      <p class="chart-legend">CSAT e avaliacoes usam escala percentual. Atendimentos usa escala relativa ao maior volume exibido.</p>
       ${monthCards}
-
-      <table class="trend-table">
-        <tr>
-          <th>Mes</th>
-          <th>CSAT</th>
-          <th>Avaliacoes</th>
-          <th>Envio</th>
-          <th>Atendimentos</th>
-        </tr>
-        ${tableRows}
-      </table>
     </div>
   `
 }
@@ -6632,6 +6651,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
