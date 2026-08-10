@@ -2155,9 +2155,44 @@ function ChatModuleDashboard({
       </section>
 
       <div className={chatActiveTab === 'podium' ? 'grid gap-6 xl:grid-cols-2' : 'hidden'}>
-                <section className="panel">
-          <h2 className="section-title">Ranking mensal do chat</h2>
-          <p className="section-subtitle">Lista final do periodo, do primeiro ao ultimo. Criterios: CSAT minimo 90%, avaliacoes a partir de 25% e volume acima da media do periodo ({averageTickets} atendimentos). Excecoes manuais preservam o historico e apenas removem a elegibilidade ao podio.</p>
+        <section className="panel xl:col-span-2">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h2 className="section-title">Ranking mensal do chat</h2>
+              <p className="section-subtitle">
+                Lista final do periodo, do primeiro ao ultimo. Criterios: CSAT minimo 90%, avaliacoes a partir de 25% e volume acima da media do periodo.
+              </p>
+            </div>
+            <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">
+              Media exigida: {averageTickets} atendimentos
+            </span>
+          </div>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-4">
+            <div className="rounded-lg bg-slate-900 p-4">
+              <p className="text-sm text-slate-400">Elegiveis</p>
+              <p className="mt-2 text-2xl font-bold text-emerald-300">{chatEligibleCount}</p>
+            </div>
+            <div className="rounded-lg bg-slate-900 p-4">
+              <p className="text-sm text-slate-400">Fora por volume</p>
+              <p className="mt-2 text-2xl font-bold text-amber-200">
+                {chatRanking.filter((item) => item.reasons.some((reason) => reason.includes('volume abaixo'))).length}
+              </p>
+            </div>
+            <div className="rounded-lg bg-slate-900 p-4">
+              <p className="text-sm text-slate-400">Fora por CSAT</p>
+              <p className="mt-2 text-2xl font-bold text-amber-200">
+                {chatRanking.filter((item) => item.reasons.some((reason) => reason.includes('CSAT abaixo'))).length}
+              </p>
+            </div>
+            <div className="rounded-lg bg-slate-900 p-4">
+              <p className="text-sm text-slate-400">Fora por avaliacoes</p>
+              <p className="mt-2 text-2xl font-bold text-amber-200">
+                {chatRanking.filter((item) => item.reasons.some((reason) => reason.includes('avaliacoes abaixo'))).length}
+              </p>
+            </div>
+          </div>
+
           <div className="mt-5 overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="text-slate-400">
@@ -2167,32 +2202,47 @@ function ChatModuleDashboard({
                   <th className="pb-3 pr-4 font-medium">CSAT</th>
                   <th className="pb-3 pr-4 font-medium">Avaliacoes</th>
                   <th className="pb-3 pr-4 font-medium">Atendimentos</th>
+                  <th className="pb-3 pr-4 font-medium">Volume vs media</th>
                   <th className="pb-3 pr-4 font-medium">Status</th>
+                  <th className="pb-3 pr-4 font-medium">Motivo</th>
                   <th className="pb-3 font-medium">Podio</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/10">
-                {chatRanking.map((item, index) => (
-                  <tr key={item.metric.id}>
-                    <td className="py-3 pr-4 font-bold text-cyan-300">{index + 1}o</td>
-                    <td className="py-3 pr-4">{getChatAnalystName(item.metric)}</td>
-                    <td className="py-3 pr-4">{item.metric.csat}%</td>
-                    <td className="py-3 pr-4">{item.metric.review_percentage}%</td>
-                    <td className="py-3 pr-4">{item.metric.total_tickets}</td>
-                    <td className="py-3 pr-4">
-                      {item.eligible ? (
-                        <span className="text-emerald-300">Elegivel</span>
-                      ) : (
-                        <span className="text-slate-400">{item.reasons.join(', ')}</span>
-                      )}
-                    </td>
-                    <td className="py-3">
-                      <button className="small-button" type="button" onClick={() => handleToggleChatPodiumExclusion(item.metric)}>
-                        {getChatPodiumExclusion(item.metric) ? 'Permitir' : 'Tirar'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {chatRanking.map((item, index) => {
+                  const volumeGap = Number(item.metric.total_tickets) - averageTickets
+                  const excluded = Boolean(getChatPodiumExclusion(item.metric))
+
+                  return (
+                    <tr key={item.metric.id}>
+                      <td className="py-3 pr-4 font-bold text-cyan-300">{index + 1}o</td>
+                      <td className="py-3 pr-4 font-semibold">{getChatAnalystName(item.metric)}</td>
+                      <td className="py-3 pr-4">{item.metric.csat}%</td>
+                      <td className="py-3 pr-4">{item.metric.review_percentage}%</td>
+                      <td className="py-3 pr-4">{item.metric.total_tickets}</td>
+                      <td className={`py-3 pr-4 font-semibold ${volumeGap >= 0 ? 'text-emerald-300' : 'text-amber-200'}`}>
+                        {volumeGap >= 0 ? '+' : ''}{volumeGap}
+                      </td>
+                      <td className="py-3 pr-4">
+                        {item.eligible ? (
+                          <span className="text-emerald-300">Elegivel</span>
+                        ) : excluded ? (
+                          <span className="text-amber-200">Excecao manual</span>
+                        ) : (
+                          <span className="text-slate-400">Nao elegivel</span>
+                        )}
+                      </td>
+                      <td className="py-3 pr-4 text-slate-300">
+                        {item.eligible ? 'Cumpriu todos os criterios.' : item.reasons.join(', ')}
+                      </td>
+                      <td className="py-3">
+                        <button className="small-button" type="button" onClick={() => handleToggleChatPodiumExclusion(item.metric)}>
+                          {excluded ? 'Permitir' : 'Tirar'}
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
 
@@ -6556,6 +6606,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
