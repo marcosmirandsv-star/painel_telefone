@@ -2365,14 +2365,14 @@ function ChatModuleDashboard({
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Relatorio individual</p>
-            <h2 className="section-title">Analise mensal por analista</h2>
+            <h2 className="section-title">Fechamento mensal por analista</h2>
             <p className="section-subtitle">
-              Gera um documento individual no modelo de fechamento: esperado, atingido, analise tecnica e feedback de performance.
+              Fluxo guiado: confira os dados, gere o feedback, revise o texto final e exporte o documento individual.
             </p>
           </div>
 
           <div className="grid flex-1 gap-3 md:grid-cols-2">
-            <Field label="Analista">
+            <Field label="1. Analista">
               <select
                 className="form-input"
                 value={selectedChatReportMetric?.id ?? ''}
@@ -2388,7 +2388,7 @@ function ChatModuleDashboard({
                 ))}
               </select>
             </Field>
-            <Field label="Modelo do feedback">
+            <Field label="2. Modelo do feedback">
               <select
                 className="form-input"
                 value={chatFeedbackStyle}
@@ -2405,13 +2405,40 @@ function ChatModuleDashboard({
           </div>
         </div>
 
+        {selectedChatReportMetric ? (
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <MetricCard label="CSAT" value={`${selectedChatReportMetric.csat}%`} />
+            <MetricCard label="Avaliacoes" value={`${selectedChatReportMetric.review_percentage}%`} />
+            <MetricCard label="Atendimentos" value={selectedChatReportMetric.total_tickets} />
+            <MetricCard label="Volume vs media" value={`${Number(selectedChatReportMetric.total_tickets) - averageTickets >= 0 ? '+' : ''}${Number(selectedChatReportMetric.total_tickets) - averageTickets}`} />
+            <MetricCard label="Podio" value={selectedChatPodiumPosition > 0 ? `${selectedChatPodiumPosition}o lugar` : 'Fora'} />
+          </div>
+        ) : (
+          <EmptyState text="Selecione um analista com dados para gerar o relatorio." />
+        )}
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-3">
+          <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
+            <p className="font-semibold text-slate-100">1. Conferir</p>
+            <p className="mt-2">Verifique periodo, analista, CSAT, avaliacoes, volume e posicao no podio.</p>
+          </div>
+          <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
+            <p className="font-semibold text-slate-100">2. Revisar feedback</p>
+            <p className="mt-2">Use suas observacoes como contexto e ajuste o texto final antes de exportar.</p>
+          </div>
+          <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
+            <p className="font-semibold text-slate-100">3. Exportar</p>
+            <p className="mt-2">O arquivo individual sera gerado para envio ao colaborador no fechamento mensal.</p>
+          </div>
+        </div>
+
         <div className="mt-5 grid gap-4">
-          <Field label="Observacoes do gestor">
+          <Field label="3. Observacoes do gestor">
             <textarea
               className="form-input min-h-24"
               value={chatManagerNotes}
               onChange={(event) => setChatManagerNotes(event.target.value)}
-              placeholder="Inclua contexto do mes, combinados, pontos de atencao ou reconhecimento para entrar no feedback."
+              placeholder="Inclua contexto do mes, combinados, pontos de atencao ou reconhecimento para orientar o feedback."
             />
           </Field>
 
@@ -2422,7 +2449,7 @@ function ChatModuleDashboard({
               type="button"
               onClick={handleGenerateChatFeedbackDraft}
             >
-              Gerar sugestao
+              4. Gerar sugestao
             </button>
             <button
               className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
@@ -2430,19 +2457,19 @@ function ChatModuleDashboard({
               type="button"
               onClick={handleGenerateChatFeedbackWithAi}
             >
-              {chatAiSaving ? 'Gerando IA...' : 'Gerar com IA'}
+              {chatAiSaving ? 'Gerando...' : 'Gerar texto assistido'}
             </button>
             <p className="text-sm text-slate-300">
-              A sugestao usa os numeros do Zendesk e as regras do painel. Quando houver IA externa ativa, suas observacoes entram como contexto para refinar o texto.
+              O texto assistido usa as regras do painel e mantem o relatorio funcionando mesmo sem IA externa ativa.
             </p>
           </div>
 
-          <Field label="Texto final do feedback">
+          <Field label="5. Texto final do feedback">
             <textarea
               className="form-input min-h-56"
               value={chatFeedbackDraft}
               onChange={(event) => setChatFeedbackDraft(event.target.value)}
-              placeholder="Clique em Gerar sugestao, Gerar com IA ou escreva o feedback final do relatorio."
+              placeholder="Gere uma sugestao ou escreva aqui o feedback final que ira para o relatorio."
             />
           </Field>
 
@@ -2452,10 +2479,9 @@ function ChatModuleDashboard({
             type="button"
             onClick={handleExportChatIndividualReport}
           >
-            Exportar individual
+            6. Exportar relatorio individual
           </button>
         </div>
-      
 
         {chatExportMessage && <p className="mt-4 rounded-md bg-slate-900/70 px-4 py-3 text-sm text-slate-200">{chatExportMessage}</p>}
       </section>
@@ -6606,6 +6632,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
