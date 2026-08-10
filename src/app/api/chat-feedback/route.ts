@@ -153,21 +153,39 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Dados do analista nao foram enviados para a IA.' }, { status: 400 })
     }
 
-    const prompt = buildPrompt(body)
-    const feedback = await generateWithGitHubModels(prompt)
+    const fallbackFeedback = body.fallbackText?.trim()
 
-    if (!feedback) {
+    if (!fallbackFeedback) {
       return NextResponse.json(
         {
           error:
-            'A IA nao retornou texto. Tente novamente em alguns instantes.',
+            'Nao ha texto base suficiente para gerar o feedback. Gere uma sugestao local antes de exportar.',
         },
-        { status: 503 },
+        { status: 400 },
       )
     }
 
-    return NextResponse.json({ feedback })
+    if (process.env.CHAT_AI_PROVIDER === 'github-models') {
+      try {
+        const prompt = buildPrompt(body)
+        const feedback = await generateWithGitHubModels(prompt)
+
+        if (feedback) {
+          return NextResponse.json({ feedback, source: 'external-ai' })
+        }
+      } catch (providerError) {
+        console.warn('Chat feedback external AI unavailable:', getErrorText(providerError))
+      }
+    }
+
+    return NextResponse.json({
+      feedback: fallbackFeedback,
+      source: 'local-fallback',
+      warning:
+        'A IA externa nao esta disponivel no momento. Usei a sugestao local baseada nos numeros do Zendesk e nas regras do painel.',
+    })
   } catch (error) {
     return NextResponse.json({ error: getErrorText(error) }, { status: 500 })
   }
 }
+

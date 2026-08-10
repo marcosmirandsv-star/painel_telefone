@@ -1806,7 +1806,7 @@ function ChatModuleDashboard({
       }
 
       setChatFeedbackDraft(data.feedback)
-      setChatExportMessage('Feedback gerado com IA. Revise o texto antes de exportar.')
+      setChatExportMessage(data.warning || 'Feedback gerado com IA. Revise o texto antes de exportar.')
     } catch (error) {
       setChatExportMessage(getErrorMessage(error))
     } finally {
@@ -2334,7 +2334,7 @@ function ChatModuleDashboard({
               {chatAiSaving ? 'Gerando IA...' : 'Gerar com IA'}
             </button>
             <p className="text-sm text-slate-300">
-              A sugestao local nao usa IA. O botao com IA usa os numeros do Zendesk e suas observacoes para gerar um texto mais humano.
+              A sugestao usa os numeros do Zendesk e as regras do painel. Quando houver IA externa ativa, suas observacoes entram como contexto para refinar o texto.
             </p>
           </div>
 
@@ -6462,6 +6462,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
