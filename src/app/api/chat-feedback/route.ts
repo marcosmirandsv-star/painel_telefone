@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 export const runtime = 'nodejs'
 
 type ChatFeedbackRequest = {
+  serviceModule?: 'chat' | 'phone'
   feedbackStyle?: 'coach' | 'sare' | 'mimo'
   periodLabel?: string
   managerNotes?: string
@@ -24,6 +25,9 @@ type ChatFeedbackRequest = {
     csatGoal?: number
     reviewGoal?: number
     status?: string | null
+    teamPerformance?: number
+    teamAnsweredCalls?: number
+    teamTotalCalls?: number
   }
   monthlyHistory?: {
     monthLabel: string
@@ -78,13 +82,22 @@ function getPublicProviderError(error: unknown) {
 function buildPrompt(body: ChatFeedbackRequest) {
   const metric = body.metric
   const feedbackStyle = body.feedbackStyle ?? 'coach'
+  const serviceModule = body.serviceModule ?? 'chat'
+  const moduleName = serviceModule === 'phone' ? 'telefone' : 'chat'
+  const sourceName = serviceModule === 'phone' ? 'lançamentos do painel de telefone' : 'dados do Zendesk'
+  const cadenceRule = serviceModule === 'phone'
+    ? '- O módulo telefone é alimentado semanalmente, mas a devolutiva final é mensal. Pode orientar acompanhamento semanal quando isso ajudar o fechamento.'
+    : '- Não diga para acompanhar semanalmente, porque o módulo do chat é analisado mensalmente.'
 
   return `
-Você e um coach senior de atendimento ao cliente e editor de relatórios de performance. Sua tarefa principal e melhorar o texto base do sistema, preservando a estrutura, os numeros e a logica calculada, mas elevando a qualidade humana, gerencial e pratica da devolutiva.
+Você é um coach sênior de atendimento ao cliente e editor de relatórios de performance. Sua tarefa principal é melhorar o texto base do sistema, preservando a estrutura, os números e a lógica calculada, mas elevando a qualidade humana, gerencial e prática da devolutiva.
+
+Módulo analisado: ${moduleName}
+Fonte dos dados: ${sourceName}
 
 Regras obrigatorias:
 - Escreva em portugues do Brasil.
-- Não diga para acompanhar semanalmente, porque o módulo do chat e analisado mensalmente.
+${cadenceRule}
 - Não comece com parabens generico. Comece com uma leitura profissional do ciclo.
 - Use o texto base do sistema como esqueleto obrigatorio; refine, aprofunde e humanize, mas nao substitua por um texto curto.
 - Preserve todos os numeros relevantes; nao invente dados e nao mude calculos.
@@ -339,11 +352,15 @@ export async function POST(request: Request) {
       const publicReason = getPublicProviderError(providerError)
       console.warn('Chat feedback external AI unavailable:', getErrorText(providerError))
 
+      const fallbackSource = body.serviceModule === 'phone'
+        ? 'Usei a sugestão local baseada nos lançamentos do telefone e nas regras do painel.'
+        : 'Usei a sugestão local baseada nos números do Zendesk e nas regras do painel.'
+
       return NextResponse.json({
         feedback: fallbackFeedback,
         source: 'local-fallback',
         warning:
-          `A IA externa não gerou um texto válido agora. Motivo: ${publicReason} Usei a sugestão local baseada nos números do Zendesk e nas regras do painel.`,
+          `A IA externa não gerou um texto válido agora. Motivo: ${publicReason} ${fallbackSource}`,
       })
     }
   } catch (error) {

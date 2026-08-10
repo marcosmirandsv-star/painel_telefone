@@ -3423,6 +3423,9 @@ function ReportsView({
   const [phonePodiumRanking, setPhonePodiumRanking] = useState<PhonePodiumRankingRow[]>([])
   const [selectedAnalystId, setSelectedAnalystId] = useState('')
   const [exportMessage, setExportMessage] = useState('')
+  const [phoneManagerNotes, setPhoneManagerNotes] = useState('')
+  const [phoneFeedbackDraft, setPhoneFeedbackDraft] = useState('')
+  const [phoneAiSaving, setPhoneAiSaving] = useState(false)
   const isManagementUser = role !== 'analyst'
   const reportAnalysts = useMemo(
     () => (analysts.length ? analysts : buildAnalystsFromMetrics(individualMetrics)),
@@ -3435,6 +3438,12 @@ function ReportsView({
       setSelectedAnalystId(reportAnalysts[0].id)
     }
   }, [reportAnalysts, selectedAnalystId])
+
+  useEffect(() => {
+    setPhoneFeedbackDraft('')
+    setExportMessage('')
+  }, [periodFilter.start, periodFilter.end, selectedAnalystId])
+
 
   const selectedAnalyst =
     reportAnalysts.find((analyst) => analyst.id === selectedAnalystId) ?? reportAnalysts[0] ?? null
@@ -3513,6 +3522,22 @@ function ReportsView({
       ? `${selectedAnalyst?.name ?? 'Analista'} esta elegivel ao podio no periodo. O foco recomendado e preservar consistencia, volume de avaliações e acompanhamento semanal.`
       : `${selectedAnalyst?.name ?? 'Analista'} ainda nao sustenta elegibilidade ao podio neste periodo. O foco recomendado e atuar sobre: ${analystResult.reasons.join(', ')}.`
     : ''
+  const phoneFeedbackSuggestion = selectedAnalyst && analystResult
+    ? buildPhoneSareFeedbackText({
+        analystName: selectedAnalyst.name,
+        periodLabel,
+        analystResult,
+        podiumCsatGoal,
+        reviewGoal,
+        csatDelta,
+        teamPerformance,
+        teamPerformanceGoal,
+        teamAnsweredCalls,
+        teamTotalCalls,
+        rankingPosition: selectedRankingPosition,
+        managerNotes: phoneManagerNotes,
+      })
+    : ''
 
   const hasSelectedAnalyst = Boolean(selectedAnalyst)
   const hasAnalystLaunch = Boolean(analystResult)
@@ -3541,6 +3566,82 @@ function ReportsView({
     setPeriodFilter(createPeriodFilter(mode))
   }
 
+  function handleGeneratePhoneFeedbackDraft() {
+    if (!selectedAnalyst || !analystResult) {
+      setExportMessage('Selecione um analista e um periodo com lancamento antes de gerar o feedback.')
+      return
+    }
+
+    setPhoneFeedbackDraft(phoneFeedbackSuggestion)
+    setExportMessage('Sugestao local gerada. Revise o texto antes de exportar.')
+  }
+
+  async function handleGeneratePhoneFeedbackWithAi() {
+    if (!selectedAnalyst || !analystResult) {
+      setExportMessage('Selecione um analista e um periodo com lancamento antes de acionar a IA.')
+      return
+    }
+
+    setPhoneAiSaving(true)
+    setExportMessage('')
+
+    try {
+      const averageTickets =
+        podium.length > 0
+          ? round(podium.reduce((sum, item) => sum + item.totalTickets, 0) / podium.length)
+          : 0
+      const response = await fetch('/api/chat-feedback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          serviceModule: 'phone',
+          feedbackStyle: 'sare',
+          periodLabel,
+          managerNotes: phoneManagerNotes,
+          fallbackText: phoneFeedbackSuggestion,
+          averageTickets,
+          podiumPosition: selectedRankingPosition,
+          metric: {
+            analystName: selectedAnalyst.name,
+            teamName: 'Telefone',
+            csat: analystResult.averageCsat,
+            reviewPercentage: analystResult.reviewPercentage,
+            totalTickets: analystResult.totalTickets,
+            reviews: analystResult.totalReviews,
+            csatGoal: analystResult.individualGoal,
+            reviewGoal,
+            status: analystResult.eligible ? 'Elegivel ao podio' : 'Em acompanhamento',
+            teamPerformance,
+            teamAnsweredCalls,
+            teamTotalCalls,
+          },
+          monthlyHistory: weeklyEvolution.map((item) => ({
+            monthLabel: item.label,
+            csat: item.csat,
+            reviewPercentage: item.totalTickets ? round((item.totalReviews / item.totalTickets) * 100) : 0,
+            sendingPercentage: 0,
+            totalTickets: item.totalTickets,
+          })),
+        }),
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Nao foi possivel gerar texto com IA.')
+      }
+
+      setPhoneFeedbackDraft(normalizePhoneReportFeedback(data.feedback ?? '', phoneFeedbackSuggestion))
+      setExportMessage(data.warning || 'Feedback do telefone gerado com IA. Revise o texto antes de exportar.')
+    } catch (error) {
+      setPhoneFeedbackDraft(phoneFeedbackSuggestion)
+      setExportMessage(`A IA externa nao gerou um texto valido agora. Usei a sugestao local do telefone. Motivo: ${getErrorMessage(error)}`)
+    } finally {
+      setPhoneAiSaving(false)
+    }
+  }
+
   function handleExportWordReport() {
     if (!selectedAnalyst || !analystResult) {
       setExportMessage('Selecione um analista e um periodo com lancamento antes de exportar.')
@@ -3548,6 +3649,7 @@ function ReportsView({
     }
 
     try {
+      const finalPhoneFeedback = normalizePhoneReportFeedback(phoneFeedbackDraft, phoneFeedbackSuggestion)
       const fileName = exportWordReport({
         analystName: selectedAnalyst.name,
         periodLabel,
@@ -3580,6 +3682,7 @@ function ReportsView({
           evolution: evolutionText,
         },
         weeklyEvolution,
+        assistedFeedback: finalPhoneFeedback,
       })
 
       setExportMessage(`Relatorio gerado: ${fileName}. Verifique a pasta Downloads.`)
@@ -3712,6 +3815,48 @@ function ReportsView({
               <p className="text-sm text-slate-400">{periodLabel}</p>
             </div>
           )}
+        </div>
+
+        <div className="no-print mt-5 grid gap-4">
+          <Field label="Observações do gestor">
+            <textarea
+              className="form-input min-h-24"
+              value={phoneManagerNotes}
+              onChange={(event) => setPhoneManagerNotes(event.target.value)}
+              placeholder="Inclua contexto do período, combinados, reconhecimento ou pontos de atenção para orientar a IA."
+            />
+          </Field>
+
+          <div className="grid gap-3 lg:grid-cols-[auto_auto_1fr] lg:items-start">
+            <button
+              className="btn-secondary disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!selectedAnalyst || !analystResult}
+              type="button"
+              onClick={handleGeneratePhoneFeedbackDraft}
+            >
+              Gerar sugestão local
+            </button>
+            <button
+              className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!selectedAnalyst || !analystResult || phoneAiSaving}
+              type="button"
+              onClick={handleGeneratePhoneFeedbackWithAi}
+            >
+              {phoneAiSaving ? 'Gerando...' : 'Gerar texto assistido'}
+            </button>
+            <p className="text-sm text-slate-300">
+              A IA usa CSAT, avaliações, atendimentos, performance da equipe, pódio e suas observações para melhorar a devolutiva SARE.
+            </p>
+          </div>
+
+          <Field label="Texto final assistido">
+            <textarea
+              className="form-input min-h-48"
+              value={phoneFeedbackDraft}
+              onChange={(event) => setPhoneFeedbackDraft(event.target.value)}
+              placeholder="Gere uma sugestão, use a IA ou escreva aqui o texto final que irá para o relatório."
+            />
+          </Field>
         </div>
 
         <div className="no-print mt-4 flex flex-wrap gap-3">
@@ -5672,6 +5817,51 @@ function formatChatFeedbackForReport(text: string) {
     .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\r?\n/g, '<br />')}</p>`)
     .join('')
 }
+function buildPhoneSareFeedbackText({
+  analystName,
+  periodLabel,
+  analystResult,
+  podiumCsatGoal,
+  reviewGoal,
+  csatDelta,
+  teamPerformance,
+  teamPerformanceGoal,
+  teamAnsweredCalls,
+  teamTotalCalls,
+  rankingPosition,
+  managerNotes,
+}: {
+  analystName: string
+  periodLabel: string
+  analystResult: ReturnType<typeof buildPeriodPodium>[number]
+  podiumCsatGoal: number
+  reviewGoal: number
+  csatDelta: number
+  teamPerformance: number
+  teamPerformanceGoal: number
+  teamAnsweredCalls: number
+  teamTotalCalls: number
+  rankingPosition: number
+  managerNotes: string
+}) {
+  const statusText = analystResult.eligible ? 'elegível ao pódio' : 'em acompanhamento'
+  const reasonsText = analystResult.reasons.length ? analystResult.reasons.join(', ') : 'sem impeditivos principais'
+  const managerContext = managerNotes.trim()
+    ? ` Contexto do gestor: ${managerNotes.trim()}`
+    : ''
+
+  return [
+    `Situacao: ${analystName} fechou ${periodLabel} com CSAT de ${analystResult.averageCsat}%, ${analystResult.totalReviews} avaliações e ${analystResult.totalTickets} atendimentos. A posição atual é ${rankingPosition ? `${rankingPosition}º lugar no pódio` : 'fora do pódio'}, com status ${statusText}. A variação contra o período anterior foi de ${formatDelta(csatDelta, ' p.p.')}.`,
+    `Alinhamentos Realizados: a leitura deve considerar a meta individual de ${analystResult.individualGoal}%, a referência de pódio de ${podiumCsatGoal}% e a meta mínima de avaliações de ${reviewGoal}%. O ponto observado para conversa é: ${reasonsText}.${managerContext}`,
+    `Resultado Esperado: sustentar CSAT acima da referência, preservar ou recuperar volume de avaliações e manter comportamento de atendimento que gere boa experiência para o cliente. No contexto da equipe, a performance foi de ${teamPerformance}% para ${teamAnsweredCalls} ligações atendidas em ${teamTotalCalls} processadas, contra meta de ${teamPerformanceGoal}%.`,
+    `Expectativa e Plano de Desenvolvimento: transforme a leitura em ação semanal. Revise exemplos de atendimentos que influenciaram o CSAT, combine um comportamento observável para a próxima semana e acompanhe se avaliações e volume continuam sustentando a elegibilidade no fechamento mensal.`,
+  ].join('\n\n')
+}
+
+function normalizePhoneReportFeedback(text: string, fallbackText: string) {
+  return normalizeChatReportFeedback(text, fallbackText, 'sare')
+}
+
 function exportWordReport({
   analystName,
   periodLabel,
@@ -5679,6 +5869,7 @@ function exportWordReport({
   achieved,
   sare,
   weeklyEvolution,
+  assistedFeedback,
 }: {
   analystName: string
   periodLabel: string
@@ -5707,6 +5898,7 @@ function exportWordReport({
     evolution: string
   }
   weeklyEvolution: WeeklyIndividualTrend[]
+  assistedFeedback: string
 }) {
   const safeName = escapeHtml(analystName)
   const firstEvolution = weeklyEvolution[0] ?? null
@@ -5899,6 +6091,9 @@ function exportWordReport({
         <p>${escapeHtml(sare.result)}</p>
         <h3>E - Expectativa e Plano de Desenvolvimento</h3>
         <p>${escapeHtml(sare.evolution)}</p>
+
+        <h2>Devolutiva assistida para o colaborador</h2>
+        <div class="callout">${formatChatFeedbackForReport(assistedFeedback)}</div>
       </body>
     </html>
   `
