@@ -234,7 +234,7 @@ type AppModule = 'phone' | 'chat'
 
 type ChatFeedbackStyle = 'coach' | 'sare' | 'mimo'
 
-type ActiveTab = 'dashboard' | 'reports' | 'analysts' | 'goals' | 'entries'
+type ActiveTab = 'dashboard' | 'reports' | 'analysts' | 'goals' | 'entries' | 'users'
 
 const initialIndividualForm: IndividualForm = {
   analystId: '',
@@ -270,6 +270,14 @@ const initialGoalForm = {
   active: true,
 }
 
+const initialAccessUserForm = {
+  fullName: '',
+  email: '',
+  password: '',
+  role: 'analista',
+  analystId: '',
+}
+
 export default function Home() {
   const [user, setUser] = useState<User | null>(null)
   const [email, setEmail] = useState('')
@@ -278,6 +286,7 @@ export default function Home() {
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [goals, setGoals] = useState<Goal[]>([])
+  const [profiles, setProfiles] = useState<UserProfile[]>([])
   const [analysts, setAnalysts] = useState<Analyst[]>([])
   const [individualMetrics, setIndividualMetrics] = useState<IndividualMetric[]>([])
   const [teamMetrics, setTeamMetrics] = useState<TeamMetric[]>([])
@@ -292,6 +301,7 @@ export default function Home() {
   const [teamForm, setTeamForm] = useState(initialTeamForm)
   const [analystForm, setAnalystForm] = useState(initialAnalystForm)
   const [goalForm, setGoalForm] = useState(initialGoalForm)
+  const [accessUserForm, setAccessUserForm] = useState(initialAccessUserForm)
   const [editingAnalystId, setEditingAnalystId] = useState<string | null>(null)
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -341,8 +351,9 @@ export default function Home() {
     setLoading(true)
     setMessage('')
 
-    const [profileResult, goalsResult, analystsResult] = await Promise.all([
+    const [profileResult, profilesResult, goalsResult, analystsResult] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(),
+      supabase.from('profiles').select('*').order('full_name'),
       supabase.from('goals').select('id, key, label, value, unit, active').order('label'),
       supabase.from('analysts').select('id, name, active, csat_goal').order('name'),
     ])
@@ -354,6 +365,9 @@ export default function Home() {
 
     if (profileResult.error) setMessage(getSupabaseMessage(profileResult.error.message))
     else setProfile(loadedProfile)
+
+    if (profilesResult.error) setProfiles([])
+    else setProfiles((profilesResult.data ?? []) as UserProfile[])
 
     if (goalsResult.error) setMessage(getSupabaseMessage(goalsResult.error.message))
     else setGoals((goalsResult.data ?? []).filter((goal) => goal.key !== 'individual_csat'))
@@ -551,9 +565,66 @@ export default function Home() {
     setIsPasswordRecovery(false)
     setProfile(null)
     setGoals([])
+    setProfiles([])
     setAnalysts([])
     setIndividualMetrics([])
     setTeamMetrics([])
+  }
+
+  async function handleCreateAccessUser(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setSaving(true)
+    setMessage('Criando usuario de acesso...')
+
+    try {
+      if (accessUserForm.password.length < 6) {
+        setMessage('A senha temporaria precisa ter pelo menos 6 caracteres.')
+        return
+      }
+
+      if (accessUserForm.role === 'analista' && !accessUserForm.analystId) {
+        setMessage('Selecione o analista que sera vinculado a este usuario.')
+        return
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData.session?.access_token
+
+      if (!accessToken) {
+        setMessage('Sessao expirada. Entre novamente para criar usuarios.')
+        return
+      }
+
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          fullName: accessUserForm.fullName.trim(),
+          email: accessUserForm.email.trim(),
+          password: accessUserForm.password,
+          role: accessUserForm.role,
+          analystId: accessUserForm.role === 'analista' ? accessUserForm.analystId : null,
+        }),
+      })
+
+      const result = await response.json().catch(() => ({}))
+
+      if (!response.ok) {
+        setMessage(result.error ?? 'Nao foi possivel criar o usuario.')
+        return
+      }
+
+      setAccessUserForm(initialAccessUserForm)
+      setMessage(result.message ?? 'Usuario criado com sucesso.')
+      await loadData()
+    } catch (error) {
+      setMessage(getErrorMessage(error))
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function handleAnalystSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -1077,6 +1148,9 @@ export default function Home() {
               <TabButton active={activeTab === 'goals'} onClick={() => setActiveTab('goals')}>
                 Metas
               </TabButton>
+              <TabButton active={activeTab === 'users'} onClick={() => setActiveTab('users')}>
+                Usuarios
+              </TabButton>
             </>
           )}
           </nav>
@@ -1150,6 +1224,17 @@ export default function Home() {
             onEditAnalyst={handleEditAnalyst}
             onToggleAnalyst={handleToggleAnalyst}
             onDeleteAnalyst={handleDeleteAnalyst}
+          />
+        )}
+
+        {activeModule === 'phone' && isManagementUser && activeTab === 'users' && (
+          <UsersView
+            profiles={profiles}
+            analysts={analysts}
+            form={accessUserForm}
+            saving={saving}
+            onChange={setAccessUserForm}
+            onSubmit={handleCreateAccessUser}
           />
         )}
 
@@ -4895,6 +4980,140 @@ function AnalystsView({
           </table>
 
           {!analysts.length && <EmptyState text="Nenhum analista cadastrado." />}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function UsersView({
+  profiles,
+  analysts,
+  form,
+  saving,
+  onChange,
+  onSubmit,
+}: {
+  profiles: UserProfile[]
+  analysts: Analyst[]
+  form: typeof initialAccessUserForm
+  saving: boolean
+  onChange: (form: typeof initialAccessUserForm) => void
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
+}) {
+  const activeAnalysts = analysts.filter((analyst) => analyst.active)
+
+  return (
+    <div className="mt-8 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+      <section className="panel">
+        <h2 className="section-title">Criar acesso ao sistema</h2>
+        <p className="section-subtitle">
+          Crie o login, defina o perfil e vincule o usuario ao analista quando for acesso individual.
+        </p>
+
+        <form className="mt-5 grid gap-4" onSubmit={onSubmit}>
+          <Field label="Nome completo">
+            <input
+              className="form-input"
+              value={form.fullName}
+              onChange={(event) => onChange({ ...form, fullName: event.target.value })}
+              required
+            />
+          </Field>
+
+          <Field label="E-mail de acesso">
+            <input
+              className="form-input"
+              type="email"
+              value={form.email}
+              onChange={(event) => onChange({ ...form, email: event.target.value })}
+              required
+            />
+          </Field>
+
+          <Field label="Senha temporaria">
+            <input
+              className="form-input"
+              minLength={6}
+              type="password"
+              value={form.password}
+              onChange={(event) => onChange({ ...form, password: event.target.value })}
+              required
+            />
+          </Field>
+
+          <Field label="Perfil">
+            <select
+              className="form-input"
+              value={form.role}
+              onChange={(event) =>
+                onChange({
+                  ...form,
+                  role: event.target.value,
+                  analystId: event.target.value === 'analista' ? form.analystId : '',
+                })
+              }
+            >
+              <option value="analista">Analista</option>
+              <option value="coordenadora">Coordenadora / Supervisao</option>
+              <option value="master">Master</option>
+            </select>
+          </Field>
+
+          {form.role === 'analista' && (
+            <Field label="Vincular ao analista">
+              <select
+                className="form-input"
+                value={form.analystId}
+                onChange={(event) => onChange({ ...form, analystId: event.target.value })}
+                required
+              >
+                <option value="">Selecione</option>
+                {activeAnalysts.map((analyst) => (
+                  <option key={analyst.id} value={analyst.id}>
+                    {analyst.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+
+          <button className="primary-button" disabled={saving} type="submit">
+            {saving ? 'Criando...' : 'Criar usuario'}
+          </button>
+        </form>
+      </section>
+
+      <section className="panel">
+        <h2 className="section-title">Usuarios vinculados</h2>
+        <p className="section-subtitle">
+          Estes registros controlam o que cada pessoa pode visualizar apos entrar no sistema.
+        </p>
+
+        <div className="mt-5 overflow-x-auto">
+          <table className="min-w-full text-left text-sm">
+            <thead className="text-slate-400">
+              <tr>
+                <th className="pb-3 pr-4 font-medium">Nome</th>
+                <th className="pb-3 pr-4 font-medium">Perfil</th>
+                <th className="pb-3 pr-4 font-medium">Analista vinculado</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10">
+              {profiles.map((profile) => {
+                const analyst = analysts.find((item) => item.id === profile.analyst_id)
+                return (
+                  <tr key={profile.id}>
+                    <td className="py-3 pr-4">{profile.full_name || profile.name || profile.id}</td>
+                    <td className="py-3 pr-4">{profile.role ?? '-'}</td>
+                    <td className="py-3 pr-4">{analyst?.name ?? '-'}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+
+          {!profiles.length && <EmptyState text="Nenhum usuario vinculado encontrado." />}
         </div>
       </section>
     </div>

@@ -7,10 +7,23 @@ Este manual orienta o uso do sistema de performance para os modulos Telefone e C
 - Producao: https://central-performance.vercel.app
 - O acesso e feito por e-mail e senha cadastrados no Supabase.
 - Se esquecer a senha, use a opcao de recuperacao na tela de login.
+- Usuarios de gestao podem criar novos acessos na aba Usuarios do modulo Telefone.
 - Perfis:
   - Master: acesso completo.
   - Coordenadora: acesso de gestao.
   - Analista: visao individual do telefone.
+
+### Criacao de usuarios
+
+Use a aba Usuarios para criar acesso de novas pessoas:
+
+- Nome completo.
+- E-mail.
+- Senha temporaria.
+- Perfil de acesso.
+- Analista vinculado, quando o perfil for Analista.
+
+Por seguranca, a criacao de usuarios depende da variavel secreta SUPABASE_SERVICE_ROLE_KEY configurada na Vercel. Esta chave deve ficar apenas nas variaveis de ambiente do servidor e nunca deve ser exibida na tela ou enviada a usuarios.
 
 ## Visao geral
 
@@ -173,6 +186,19 @@ O relatorio traz:
 - Analise tecnica.
 - Evolucao mensal.
 - Feedback final para envio ao colaborador.
+
+## Configuracao de producao
+
+Variaveis obrigatorias na Vercel:
+
+- NEXT_PUBLIC_SUPABASE_URL
+- NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+- SUPABASE_SERVICE_ROLE_KEY
+
+Variaveis opcionais/recomendadas:
+
+- GEMINI_API_KEY, para feedback assistido por IA.
+- NEXT_PUBLIC_APP_URL, para links de recuperacao de senha.
 
 ## Uso da IA
 
