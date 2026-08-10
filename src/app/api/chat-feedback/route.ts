@@ -62,7 +62,9 @@ Regras:
 - Preserve os numeros; nao invente dados.
 - Nao exponha raciocinio interno.
 - Traga reconhecimento quando houver pontos fortes e plano pratico quando houver oportunidade.
-- Mantenha entre 180 e 280 palavras.
+- Explique como o analista pode colocar as recomendacoes em pratica.
+- Nao copie literalmente as observacoes do gestor; use-as para ajustar contexto, tom e prioridade.
+- Mantenha entre 180 e 300 palavras.
 - ${styleInstructions[feedbackStyle]}
 
 Periodo: ${body.periodLabel ?? 'Periodo nao informado'}
@@ -102,6 +104,63 @@ function extractChatCompletionText(data: unknown) {
   }
 
   return response.choices?.[0]?.message?.content ?? ''
+}
+
+function extractGeminiText(data: unknown) {
+  const response = data as {
+    candidates?: {
+      content?: {
+        parts?: {
+          text?: string
+        }[]
+      }
+    }[]
+  }
+
+  return response.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('').trim() ?? ''
+}
+
+async function generateWithGemini(prompt: string) {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY
+
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY nao configurada. Adicione a chave da Gemini nas variaveis de ambiente da Vercel.')
+  }
+
+  const model = process.env.GEMINI_MODEL || 'gemini-flash-latest'
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey,
+    },
+    body: JSON.stringify({
+      systemInstruction: {
+        parts: [
+          {
+            text: 'Voce escreve devolutivas mensais de gestao, com tom humano, pratico e profissional.',
+          },
+        ],
+      },
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: prompt }],
+        },
+      ],
+      generationConfig: {
+        maxOutputTokens: 900,
+      },
+    }),
+  })
+  const data = await response.json()
+
+  if (!response.ok) {
+    const message = data?.error?.message || data?.message || 'Nao foi possivel gerar feedback com Gemini.'
+    throw new Error(message)
+  }
+
+  return extractGeminiText(data)
 }
 
 async function generateWithGitHubModels(prompt: string) {
@@ -145,6 +204,14 @@ async function generateWithGitHubModels(prompt: string) {
   return extractChatCompletionText(data).trim()
 }
 
+async function generateExternalFeedback(prompt: string) {
+  if (process.env.CHAT_AI_PROVIDER === 'github-models') {
+    return { feedback: await generateWithGitHubModels(prompt), source: 'github-models' }
+  }
+
+  return { feedback: await generateWithGemini(prompt), source: 'gemini' }
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as ChatFeedbackRequest
@@ -165,17 +232,15 @@ export async function POST(request: Request) {
       )
     }
 
-    if (process.env.CHAT_AI_PROVIDER === 'github-models') {
-      try {
-        const prompt = buildPrompt(body)
-        const feedback = await generateWithGitHubModels(prompt)
+    try {
+      const prompt = buildPrompt(body)
+      const result = await generateExternalFeedback(prompt)
 
-        if (feedback) {
-          return NextResponse.json({ feedback, source: 'external-ai' })
-        }
-      } catch (providerError) {
-        console.warn('Chat feedback external AI unavailable:', getErrorText(providerError))
+      if (result.feedback) {
+        return NextResponse.json({ feedback: result.feedback, source: result.source })
       }
+    } catch (providerError) {
+      console.warn('Chat feedback external AI unavailable:', getErrorText(providerError))
     }
 
     return NextResponse.json({
@@ -188,4 +253,3 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: getErrorText(error) }, { status: 500 })
   }
 }
-
