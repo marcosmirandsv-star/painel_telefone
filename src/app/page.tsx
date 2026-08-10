@@ -1470,8 +1470,20 @@ function ChatModuleDashboard({
           : attention.length
             ? 'Priorizar os analistas listados em atencao antes do proximo fechamento.'
             : 'Manter rotina atual e acompanhar se o resultado se sustenta no mes seguinte.'
+  const chatEligibleCount = chatRanking.filter((item) => item.eligible).length
+  const chatTopHighlight = chatRanking.find((item) => item.eligible)?.metric ?? chatRanking[0]?.metric ?? null
+  const chatAttentionHighlight = chatOpportunities[0]?.metric ?? null
+  const chatAttentionText = chatOpportunities[0]?.reasons.join(', ') ?? 'Sem alerta critico no periodo.'
+  const chatClosureReading =
+    !visibleMetrics.length
+      ? 'Ainda nao ha base suficiente para leitura executiva.'
+      : chatEligibleCount >= 3 && !chatCriticalCount
+        ? 'Fechamento forte: ha pÃ³dio completo e nenhum caso critico no periodo.'
+        : chatEligibleCount > 0
+          ? 'Fechamento positivo, com oportunidade de ampliar a quantidade de elegiveis ao podio.'
+          : 'Fechamento pede atencao: nenhum analista ficou plenamente elegivel ao podio.'
 
-    function resetChatAnalystForm() {
+  function resetChatAnalystForm() {
     setEditingChatAnalystId(null)
     setChatAnalystForm({ teamId: teams[0]?.id ?? '', name: '', csatGoal: '86' })
   }
@@ -2003,6 +2015,40 @@ function ChatModuleDashboard({
           <div className="rounded-lg bg-slate-900 p-4">
             <p className="text-sm text-slate-400">Criterio legado</p>
             <p className="mt-2 font-semibold">CSAT 90%, avaliacoes 25% e volume acima da media.</p>
+          </div>
+        </div>
+      </section>
+
+      <section className={chatActiveTab === 'overview' ? 'panel' : 'hidden'}>
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Fechamento mensal</p>
+            <h2 className="mt-2 text-2xl font-bold">{chatClosureReading}</h2>
+          </div>
+          <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">
+            {chatEligibleCount} elegiveis de {visibleMetrics.length}
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-3">
+          <div className="rounded-lg bg-slate-900 p-4">
+            <p className="text-sm text-slate-400">Destaque do periodo</p>
+            <p className="mt-2 text-lg font-bold">{chatTopHighlight ? getChatAnalystName(chatTopHighlight) : 'Aguardando dados'}</p>
+            <p className="mt-1 text-sm text-slate-300">
+              {chatTopHighlight ? `CSAT ${chatTopHighlight.csat}% | ${chatTopHighlight.review_percentage}% avaliacoes | ${chatTopHighlight.total_tickets} atendimentos` : 'Importe um mes para liberar a leitura.'}
+            </p>
+          </div>
+          <div className="rounded-lg bg-slate-900 p-4">
+            <p className="text-sm text-slate-400">Principal ponto de atencao</p>
+            <p className="mt-2 text-lg font-bold">{chatAttentionHighlight ? getChatAnalystName(chatAttentionHighlight) : 'Sem prioridade aberta'}</p>
+            <p className="mt-1 text-sm text-slate-300">{chatAttentionText}</p>
+          </div>
+          <div className="rounded-lg bg-slate-900 p-4">
+            <p className="text-sm text-slate-400">Media de volume para podio</p>
+            <p className="mt-2 text-lg font-bold">{averageTickets} atendimentos</p>
+            <p className="mt-1 text-sm text-slate-300">
+              Quem fica abaixo dessa media aparece como volume abaixo da media no ranking.
+            </p>
           </div>
         </div>
       </section>
@@ -6462,6 +6508,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
