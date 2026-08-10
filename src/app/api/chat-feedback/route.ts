@@ -48,26 +48,31 @@ function getErrorText(error: unknown) {
   return 'Erro inesperado ao gerar feedback com IA.'
 }
 
+function sanitizeProviderMessage(message: string) {
+  return message
+    .replace(/AIza[0-9A-Za-z_-]{20,}/g, 'AIza***')
+    .replace(/Bearer\s+[0-9A-Za-z._-]+/gi, 'Bearer ***')
+    .replace(/[0-9A-Za-z_-]{32,}/g, '***')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function getPublicProviderError(error: unknown) {
-  const message = getErrorText(error)
+  const message = sanitizeProviderMessage(getErrorText(error))
 
-  if (/api[_ -]?key|token|secret|credential/i.test(message)) {
-    return 'chave de IA ausente, inválida ou sem permissão.'
+  if (/GEMINI_API_KEY nao configurada/i.test(message)) {
+    return 'a variável GEMINI_API_KEY não chegou ao deploy ativo.'
   }
 
-  if (/not found|404|model/i.test(message)) {
-    return 'modelo de IA não encontrado ou indisponível.'
+  if (/curto|incompleto|truncado|MAX_TOKENS/i.test(message)) {
+    return 'a Gemini respondeu, mas o texto veio curto ou incompleto e foi bloqueado para proteger o relatório.'
   }
 
-  if (/quota|rate|limit|429/i.test(message)) {
-    return 'limite temporário da IA atingido.'
+  if (/Nenhum modelo Gemini/i.test(message)) {
+    return message.slice(0, 420)
   }
 
-  if (/short|incompleto|truncado|MAX_TOKENS/i.test(message)) {
-    return 'a IA devolveu um texto curto ou incompleto.'
-  }
-
-  return message.slice(0, 180)
+  return `Gemini respondeu: ${message.slice(0, 320)}`
 }
 
 function buildPrompt(body: ChatFeedbackRequest) {
@@ -234,14 +239,15 @@ async function generateWithGemini(prompt: string, style: ChatFeedbackRequest['fe
     const data = await response.json()
 
     if (!response.ok) {
+      const code = data?.error?.status || data?.error?.code || response.status
       const message = data?.error?.message || data?.message || 'Nao foi possivel gerar feedback com Gemini.'
-      errors.push(`${model}: ${message}`)
+      errors.push(`${model}: HTTP ${response.status} / ${code} - ${sanitizeProviderMessage(message)}`)
 
       if (response.status === 404 || /not found|model/i.test(message)) {
         continue
       }
 
-      throw new Error(message)
+      throw new Error(`Gemini ${model} respondeu HTTP ${response.status}: ${sanitizeProviderMessage(message)}`)
     }
 
     return assertCompleteFeedback(extractGeminiText(data), style)
