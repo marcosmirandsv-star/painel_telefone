@@ -1,4 +1,4 @@
-﻿import { NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
 
@@ -155,9 +155,6 @@ function extractGeminiText(data: unknown) {
   const candidate = response.candidates?.[0]
   const text = candidate?.content?.parts?.map((part) => part.text ?? '').join('').trim() ?? ''
 
-  if (candidate?.finishReason === 'MAX_TOKENS') {
-    throw new Error('A Gemini devolveu um texto incompleto. Usei a sugestao local para evitar relatorio truncado.')
-  }
 
   return text
 }
