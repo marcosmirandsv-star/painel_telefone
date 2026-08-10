@@ -53,19 +53,21 @@ function buildPrompt(body: ChatFeedbackRequest) {
   const feedbackStyle = body.feedbackStyle ?? 'coach'
 
   return `
-Voce e um coach senior de atendimento ao cliente e deve escrever um feedback profissional, humano e objetivo para um relatorio mensal individual do time de chat.
+Voce e um coach senior de atendimento ao cliente e editor de relatorios de performance. Sua tarefa principal e melhorar o texto base do sistema, preservando a estrutura, os numeros e a logica calculada, mas elevando a qualidade humana, gerencial e pratica da devolutiva.
 
-Regras:
+Regras obrigatorias:
 - Escreva em portugues do Brasil.
 - Nao diga para acompanhar semanalmente, porque o modulo do chat e analisado mensalmente.
-- Use linguagem de desenvolvimento profissional, sem soar generico ou tecnico demais.
+- Nao comece com parabens generico. Comece com uma leitura profissional do ciclo.
+- Use o texto base do sistema como esqueleto obrigatorio; refine, aprofunde e humanize, mas nao substitua por um texto curto.
+- Preserve todos os numeros relevantes; nao invente dados e nao mude calculos.
 - Nao use Markdown, asteriscos, bullets soltos ou titulos decorativos. Escreva em texto limpo, com nomes de secoes seguidos de dois-pontos.
-- Preserve os numeros; nao invente dados.
-- Nao exponha raciocinio interno.
-- Traga reconhecimento quando houver pontos fortes e plano pratico quando houver oportunidade.
-- Explique como o analista pode colocar as recomendacoes em pratica.
-- Nao copie literalmente as observacoes do gestor; use-as para ajustar contexto, tom e prioridade.
-- Mantenha entre 220 e 340 palavras.
+- Mantenha todas as secoes do modelo escolhido e escreva pelo menos 2 frases em cada secao.
+- Transforme as observacoes do gestor em contexto de gestao; nao copie literalmente e ignore observacoes que sejam apenas teste tecnico.
+- Traga reconhecimento especifico quando houver pontos fortes, conectando o elogio ao comportamento observado.
+- Traga orientacao pratica: diga o que o analista deve repetir, observar, ajustar ou levar como evidencia no proximo fechamento mensal.
+- Nao termine frase pela metade. Entregue um texto completo, pronto para colar no relatorio.
+- Mantenha entre 260 e 380 palavras.
 - ${styleInstructions[feedbackStyle]}
 
 Periodo: ${body.periodLabel ?? 'Periodo nao informado'}
@@ -90,8 +92,11 @@ ${JSON.stringify(body.monthlyHistory ?? [], null, 2)}
 Observacoes do gestor:
 ${body.managerNotes?.trim() || 'Sem observacoes adicionais.'}
 
-Texto base do sistema, caso ajude:
+Texto base do sistema que deve ser melhorado e preservado como estrutura:
 ${body.fallbackText ?? ''}
+
+Saida esperada:
+Entregue apenas o feedback final, sem introducao, sem comentarios sobre a tarefa e sem Markdown.
 `
 }
 
@@ -186,7 +191,7 @@ async function generateWithGemini(prompt: string, style: ChatFeedbackRequest['fe
         },
       ],
       generationConfig: {
-        maxOutputTokens: 1400,
+        maxOutputTokens: 1800,
       },
     }),
   })
@@ -290,4 +295,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: getErrorText(error) }, { status: 500 })
   }
 }
+
 
