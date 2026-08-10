@@ -59,12 +59,13 @@ Regras:
 - Escreva em portugues do Brasil.
 - Nao diga para acompanhar semanalmente, porque o modulo do chat e analisado mensalmente.
 - Use linguagem de desenvolvimento profissional, sem soar generico ou tecnico demais.
+- Nao use Markdown, asteriscos, bullets soltos ou titulos decorativos. Escreva em texto limpo, com nomes de secoes seguidos de dois-pontos.
 - Preserve os numeros; nao invente dados.
 - Nao exponha raciocinio interno.
 - Traga reconhecimento quando houver pontos fortes e plano pratico quando houver oportunidade.
 - Explique como o analista pode colocar as recomendacoes em pratica.
 - Nao copie literalmente as observacoes do gestor; use-as para ajustar contexto, tom e prioridade.
-- Mantenha entre 180 e 300 palavras.
+- Mantenha entre 220 e 340 palavras.
 - ${styleInstructions[feedbackStyle]}
 
 Periodo: ${body.periodLabel ?? 'Periodo nao informado'}
@@ -114,13 +115,49 @@ function extractGeminiText(data: unknown) {
           text?: string
         }[]
       }
+      finishReason?: string
     }[]
   }
 
-  return response.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('').trim() ?? ''
+  const candidate = response.candidates?.[0]
+  const text = candidate?.content?.parts?.map((part) => part.text ?? '').join('').trim() ?? ''
+
+  if (candidate?.finishReason === 'MAX_TOKENS') {
+    throw new Error('A Gemini devolveu um texto incompleto. Usei a sugestao local para evitar relatorio truncado.')
+  }
+
+  return text
 }
 
-async function generateWithGemini(prompt: string) {
+function cleanFeedbackText(text: string) {
+  return text
+    .replace(/\*\*/g, '')
+    .replace(/^#+\s*/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+function assertCompleteFeedback(text: string, style: ChatFeedbackRequest['feedbackStyle']) {
+  const cleanText = cleanFeedbackText(text)
+  const minLength = 700
+  const requiredSections =
+    style === 'sare'
+      ? ['Situacao', 'Alinhamentos', 'Resultado', 'Expectativa']
+      : style === 'mimo'
+        ? ['Momento', 'Impacto', 'Melhoria', 'Orientacao']
+        : ['Leitura', 'Forcas', 'Plano', 'Expectativa']
+
+  const normalizedText = cleanText.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  const hasSections = requiredSections.every((section) => normalizedText.includes(section.toLowerCase()))
+
+  if (cleanText.length < minLength || !hasSections) {
+    throw new Error('A IA devolveu um feedback curto ou incompleto. Usei a sugestao local para preservar a qualidade do relatorio.')
+  }
+
+  return cleanText
+}
+
+async function generateWithGemini(prompt: string, style: ChatFeedbackRequest['feedbackStyle']) {
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY
 
   if (!apiKey) {
@@ -149,7 +186,7 @@ async function generateWithGemini(prompt: string) {
         },
       ],
       generationConfig: {
-        maxOutputTokens: 900,
+        maxOutputTokens: 1400,
       },
     }),
   })
@@ -160,7 +197,7 @@ async function generateWithGemini(prompt: string) {
     throw new Error(message)
   }
 
-  return extractGeminiText(data)
+  return assertCompleteFeedback(extractGeminiText(data), style)
 }
 
 async function generateWithGitHubModels(prompt: string) {
@@ -204,12 +241,12 @@ async function generateWithGitHubModels(prompt: string) {
   return extractChatCompletionText(data).trim()
 }
 
-async function generateExternalFeedback(prompt: string) {
+async function generateExternalFeedback(prompt: string, style: ChatFeedbackRequest['feedbackStyle']) {
   if (process.env.CHAT_AI_PROVIDER === 'github-models') {
-    return { feedback: await generateWithGitHubModels(prompt), source: 'github-models' }
+    return { feedback: assertCompleteFeedback(await generateWithGitHubModels(prompt), style), source: 'github-models' }
   }
 
-  return { feedback: await generateWithGemini(prompt), source: 'gemini' }
+  return { feedback: await generateWithGemini(prompt, style), source: 'gemini' }
 }
 
 export async function POST(request: Request) {
@@ -234,7 +271,7 @@ export async function POST(request: Request) {
 
     try {
       const prompt = buildPrompt(body)
-      const result = await generateExternalFeedback(prompt)
+      const result = await generateExternalFeedback(prompt, body.feedbackStyle ?? 'coach')
 
       if (result.feedback) {
         return NextResponse.json({ feedback: result.feedback, source: result.source })
@@ -253,3 +290,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: getErrorText(error) }, { status: 500 })
   }
 }
+
