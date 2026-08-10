@@ -5478,46 +5478,42 @@ function buildChatFeedbackText({
   const reviewGap = round(Number(metric.review_percentage) - reviewGoal)
   const productivityGap = averageTickets ? round(((Number(metric.total_tickets) - averageTickets) / averageTickets) * 100) : 0
   const podiumText = podiumPosition > 0 ? `${podiumPosition}o lugar no podio` : 'fora do podio neste fechamento'
-  const contextLine = `${analystName} fechou o ciclo com CSAT de ${metric.csat}%, avaliacoes de ${metric.review_percentage}%, envio/sem avaliacao de ${metric.sending_percentage}% e ${metric.total_tickets} atendimentos. Status: ${status}.`
-  const notesLine = managerNotes.trim() ? 'As observacoes do gestor foram consideradas na leitura e devem orientar os combinados do proximo ciclo.' : ''
-  const strengths: string[] = []
-  const actions: string[] = []
-
-  if (csatGap >= 0) {
-    strengths.push(`qualidade percebida acima da meta individual de ${csatGoal}%`)
-    actions.push('manter o padrao de abordagem que sustentou a satisfacao do cliente')
-  } else {
-    actions.push('revisar os atendimentos que geraram avaliacao negativa e transformar os principais pontos em combinados praticos')
-  }
-
-  if (reviewGap >= 0) {
-    strengths.push(`volume de avaliacoes suficiente, ${formatDelta(reviewGap, ' p.p.')} acima da referencia`)
-    actions.push('preservar a rotina de encerramento que estimula resposta do cliente')
-  } else {
-    actions.push('reforcar a coleta de feedback no encerramento, buscando elevar a amostra de avaliacoes')
-  }
-
-  if (productivityGap >= 0) {
-    strengths.push(`volume ${formatDelta(productivityGap, '%')} acima da media da operacao`)
-  } else {
-    actions.push('validar se o volume abaixo da media veio de distribuicao, ausencias, emprestimo para outro setor ou oportunidade de produtividade')
-  }
-
-  const strengthText = strengths.length ? strengths.join('; ') : 'ha oportunidade de consolidar padroes de qualidade, volume e coleta de feedback'
-  const actionText = actions.join('; ')
-  const resultText =
+  const notesLine = managerNotes.trim()
+    ? 'As observacoes do gestor devem calibrar o reconhecimento, os combinados e o tom da devolutiva.'
+    : ''
+  const qualityReading =
+    csatGap >= 0
+      ? `A satisfacao ficou ${formatDelta(csatGap, ' p.p.')} em relacao a meta individual de ${csatGoal}%, sinal de boa percepcao do cliente sobre a entrega.`
+      : `A satisfacao ficou ${formatDelta(csatGap, ' p.p.')} em relacao a meta individual de ${csatGoal}%, ponto que pede revisao qualitativa dos atendimentos com avaliacao negativa.`
+  const reviewReading =
+    reviewGap >= 0
+      ? `A amostra de avaliacoes ficou ${formatDelta(reviewGap, ' p.p.')} acima da referencia de ${reviewGoal}%, aumentando a confiabilidade da leitura do mes.`
+      : `A amostra de avaliacoes ficou ${formatDelta(reviewGap, ' p.p.')} abaixo da referencia de ${reviewGoal}%, entao o proximo ciclo precisa ampliar a participacao dos clientes.`
+  const volumeReading =
+    productivityGap >= 0
+      ? `O volume ficou ${formatDelta(productivityGap, '%')} acima da media da operacao, demonstrando capacidade de sustentar entrega mesmo com demanda elevada.`
+      : `O volume ficou ${formatDelta(productivityGap, '%')} abaixo da media da operacao; vale validar se houve distribuicao de fila, ausencia, emprestimo para outro setor ou oportunidade de produtividade.`
+  const recognition =
     status === 'Meta Superada'
-      ? 'O resultado esperado e preservar a consistencia e usar o ciclo como referencia positiva para o proximo fechamento mensal.'
+      ? `${analystName} encerrou o ciclo em patamar de reconhecimento. O resultado combina qualidade percebida, amostra suficiente de avaliacoes e volume competitivo dentro da operacao.`
       : status === 'Critico'
-        ? 'O resultado esperado e recuperar previsibilidade no proximo fechamento, priorizando poucos ajustes de alto impacto.'
-        : 'O resultado esperado e transformar os bons sinais do ciclo em consistencia suficiente para superar todos os criterios no proximo fechamento.'
+        ? `${analystName} encerrou o ciclo com sinais que pedem acompanhamento mais proximo. A prioridade e escolher poucos combinados praticos, acompanhar execucao e reduzir dispersao no proximo fechamento.`
+        : `${analystName} apresentou bons sinais no ciclo, mas ainda ha criterios que precisam ganhar consistencia para sustentar elegibilidade e reconhecimento no fechamento mensal.`
+  const development =
+    status === 'Meta Superada'
+      ? 'O combinado recomendado e proteger o padrao que funcionou, compartilhar boas praticas com o time e evitar acomodacao apos um ciclo positivo.'
+      : csatGap < 0
+        ? 'O combinado recomendado e revisar exemplos concretos de interacoes com menor satisfacao, identificar causa raiz e escolher uma acao simples de melhoria para o proximo mes.'
+        : reviewGap < 0
+          ? 'O combinado recomendado e fortalecer o fechamento dos atendimentos, explicando ao cliente a importancia da avaliacao sem transformar isso em fala mecanica.'
+          : 'O combinado recomendado e investigar o fator de volume, separar o que e contexto operacional do que e oportunidade individual e definir um alvo realista para o proximo ciclo.'
 
   if (style === 'sare') {
     return [
-      `Situacao: ${contextLine}`,
-      notesLine ? `Alinhamentos Realizados: ${actionText}. ${notesLine}` : `Alinhamentos Realizados: ${actionText}.`,
-      `Resultado Esperado: ${resultText} Posicao atual: ${podiumText}.`,
-      `Expectativa e Plano de Desenvolvimento: para o proximo ciclo mensal, acompanhar a manutencao do CSAT, ampliar a qualidade da amostra de avaliacoes quando necessario e proteger o volume valido de atendimentos.`,
+      `Situacao: ${recognition} No periodo, o resultado foi CSAT ${metric.csat}%, avaliacoes ${metric.review_percentage}%, envio/sem avaliacao ${metric.sending_percentage}% e ${metric.total_tickets} atendimentos. A posicao atual e ${podiumText}.`,
+      `Alinhamentos Realizados: ${qualityReading} ${reviewReading} ${volumeReading} ${notesLine}`.trim(),
+      'Resultado Esperado: manter o que ja gera boa experiencia para o cliente e transformar os pontos de atencao em comportamento observavel no proximo fechamento mensal.',
+      `Expectativa e Plano de Desenvolvimento: ${development}`,
     ]
       .filter(Boolean)
       .join('\n\n')
@@ -5525,20 +5521,21 @@ function buildChatFeedbackText({
 
   if (style === 'mimo') {
     return [
-      `Momento observado: ${contextLine}`,
-      `Impacto: ${strengthText}. A leitura coloca o colaborador ${podiumText}.`,
-      notesLine ? `Melhoria ou manutencao: ${actionText}. ${notesLine}` : `Melhoria ou manutencao: ${actionText}.`,
-      `Orientacao: ${resultText}`,
+      `Momento observado: ${analystName} fechou o ciclo com status ${status}, CSAT ${metric.csat}%, avaliacoes ${metric.review_percentage}% e ${metric.total_tickets} atendimentos.`,
+      `Impacto: ${recognition} ${qualityReading}`,
+      `Melhoria ou manutencao: ${reviewReading} ${volumeReading} ${notesLine}`.trim(),
+      `Orientacao: ${development} Posicao atual: ${podiumText}.`,
     ]
       .filter(Boolean)
       .join('\n\n')
   }
 
   return [
-    `Leitura do ciclo: ${contextLine}`,
-    `Forcas observadas: ${strengthText}.`,
-    notesLine ? `Plano de desenvolvimento: ${actionText}. ${notesLine}` : `Plano de desenvolvimento: ${actionText}.`,
-    `Expectativa para o proximo ciclo mensal: ${resultText} Posicao atual: ${podiumText}.`,
+    `Leitura do ciclo: ${recognition} No fechamento, os indicadores mostram CSAT de ${metric.csat}%, avaliacoes de ${metric.review_percentage}%, envio/sem avaliacao de ${metric.sending_percentage}% e ${metric.total_tickets} atendimentos. A posicao atual e ${podiumText}.`,
+    `Evidencias observadas: ${qualityReading} ${reviewReading} ${volumeReading}`,
+    notesLine ? `Contexto do gestor: ${notesLine}` : '',
+    `Plano de desenvolvimento: ${development}`,
+    'Expectativa para o proximo ciclo mensal: chegar ao proximo fechamento com um comportamento-chave protegido, um ponto de melhoria acompanhado e clareza sobre o impacto desses indicadores na experiencia do cliente.',
   ]
     .filter(Boolean)
     .join('\n\n')
