@@ -95,7 +95,7 @@ Regras obrigatorias:
 - Traga reconhecimento especifico quando houver pontos fortes, conectando o elogio ao comportamento observado.
 - Traga orientacao pratica: diga o que o analista deve repetir, observar, ajustar ou levar como evidencia no proximo fechamento mensal.
 - Nao termine frase pela metade. Entregue um texto completo, pronto para colar no relatorio.
-- Mantenha entre 260 e 380 palavras.
+- Mantenha entre 180 e 320 palavras. Prefira clareza e completude em vez de texto longo.
 - ${styleInstructions[feedbackStyle]}
 
 Periodo: ${body.periodLabel ?? 'Periodo nao informado'}
@@ -237,7 +237,8 @@ async function generateWithGemini(prompt: string, style: ChatFeedbackRequest['fe
           },
         ],
         generationConfig: {
-          maxOutputTokens: 1800,
+          maxOutputTokens: 4096,
+          temperature: 0.35,
         },
       }),
     })
