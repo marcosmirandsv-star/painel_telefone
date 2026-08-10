@@ -5507,13 +5507,21 @@ function buildChatFeedbackText({
         : reviewGap < 0
           ? 'O combinado recomendado e fortalecer o fechamento dos atendimentos, explicando ao cliente a importancia da avaliacao sem transformar isso em fala mecanica.'
           : 'O combinado recomendado e investigar o fator de volume, separar o que e contexto operacional do que e oportunidade individual e definir um alvo realista para o proximo ciclo.'
+  const practicalSteps =
+    status === 'Meta Superada'
+      ? 'Como colocar em pratica: escolha dois atendimentos bem avaliados do mes e registre o que se repetiu neles; transforme esse padrao em uma rotina curta de atendimento; compartilhe uma pratica com a equipe; no proximo fechamento, compare se CSAT, avaliacoes e volume continuaram consistentes.'
+      : csatGap < 0
+        ? 'Como colocar em pratica: separe de dois a tres atendimentos com avaliacao negativa ou neutra; identifique se a causa foi clareza, prazo, empatia, solucao ou encerramento; escolha uma mudanca de abordagem para testar no proximo ciclo; leve ao gestor um exemplo antes e depois para validar a evolucao.'
+        : reviewGap < 0
+          ? 'Como colocar em pratica: revise o encerramento dos atendimentos e crie uma frase natural para convidar o cliente a avaliar; use essa frase nos casos resolvidos com boa percepcao; acompanhe se a quantidade de avaliacoes aumenta no fechamento seguinte; ajuste a abordagem se a fala parecer mecanica.'
+          : 'Como colocar em pratica: confirme com o gestor se o volume menor veio de fila, ausencia, emprestimo ou distribuicao operacional; quando for oportunidade individual, defina um alvo de produtividade realista; acompanhe a quantidade de atendimentos validos ao longo do mes; preserve qualidade para nao trocar volume por perda de CSAT.'
 
   if (style === 'sare') {
     return [
       `Situacao: ${recognition} No periodo, o resultado foi CSAT ${metric.csat}%, avaliacoes ${metric.review_percentage}%, envio/sem avaliacao ${metric.sending_percentage}% e ${metric.total_tickets} atendimentos. A posicao atual e ${podiumText}.`,
       `Alinhamentos Realizados: ${qualityReading} ${reviewReading} ${volumeReading} ${notesLine}`.trim(),
       'Resultado Esperado: manter o que ja gera boa experiencia para o cliente e transformar os pontos de atencao em comportamento observavel no proximo fechamento mensal.',
-      `Expectativa e Plano de Desenvolvimento: ${development}`,
+      `Expectativa e Plano de Desenvolvimento: ${development} ${practicalSteps}`,
     ]
       .filter(Boolean)
       .join('\n\n')
@@ -5524,7 +5532,7 @@ function buildChatFeedbackText({
       `Momento observado: ${analystName} fechou o ciclo com status ${status}, CSAT ${metric.csat}%, avaliacoes ${metric.review_percentage}% e ${metric.total_tickets} atendimentos.`,
       `Impacto: ${recognition} ${qualityReading}`,
       `Melhoria ou manutencao: ${reviewReading} ${volumeReading} ${notesLine}`.trim(),
-      `Orientacao: ${development} Posicao atual: ${podiumText}.`,
+      `Orientacao: ${development} ${practicalSteps} Posicao atual: ${podiumText}.`,
     ]
       .filter(Boolean)
       .join('\n\n')
@@ -5535,7 +5543,7 @@ function buildChatFeedbackText({
     `Evidencias observadas: ${qualityReading} ${reviewReading} ${volumeReading}`,
     notesLine ? `Contexto do gestor: ${notesLine}` : '',
     `Plano de desenvolvimento: ${development}`,
-    'Expectativa para o proximo ciclo mensal: chegar ao proximo fechamento com um comportamento-chave protegido, um ponto de melhoria acompanhado e clareza sobre o impacto desses indicadores na experiencia do cliente.',
+    `Como fazer no proximo ciclo: ${practicalSteps}`,
   ]
     .filter(Boolean)
     .join('\n\n')
