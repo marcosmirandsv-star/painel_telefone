@@ -1,4 +1,4 @@
--- Regras de seguranca por perfil para o Painel Telefone.
+-- Regras de seguranca por perfil para o Central Performance.
 -- Rode este arquivo no Supabase SQL Editor usando o role postgres.
 
 create or replace function public.current_user_role()

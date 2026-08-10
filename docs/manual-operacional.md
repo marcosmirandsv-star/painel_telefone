@@ -4,7 +4,7 @@ Este manual orienta o uso do sistema de performance para os modulos Telefone e C
 
 ## Acesso
 
-- Producao: https://painel-telefone.vercel.app
+- Producao: https://central-performance.vercel.app
 - O acesso e feito por e-mail e senha cadastrados no Supabase.
 - Se esquecer a senha, use a opcao de recuperacao na tela de login.
 - Perfis:
