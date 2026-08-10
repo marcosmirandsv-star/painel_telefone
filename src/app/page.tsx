@@ -5384,31 +5384,10 @@ function exportChatIndividualReport({
             <p>>= ${csatGoal}% de Satisfacao</p>
           </div>
           <div class="box">
-            <h2>Atingido:</h2>
-            <p>CSAT: <span class="metric">${metric.csat}%</span></p>
-            <p>Avaliacoes: <span class="metric">${metric.review_percentage}%</span> (${metric.positive_reviews} positivos + ${metric.negative_reviews} negativos = ${metric.reviews})</p>
-            <p>% Envio: <span class="metric">${metric.sending_percentage}%</span></p>
-            <p>Atendidos: ${metric.total_tickets} - ${metric.inactive_tickets} = <span class="metric">${metric.valid_tickets}</span></p>
-            <p>Media por agente: ${averageTickets}</p>
+            <h2>Sintese do ciclo:</h2>
+            <p>Status geral: <span class="metric">${escapeHtml(status)}</span></p>
             <p>Posicao no Podio: ${escapeHtml(podiumText)}</p>
-          </div>
-        </div>
-
-        <div class="kpi-grid">
-          <div class="kpi-card">
-            <span>Qualidade percebida</span>
-            <strong>${metric.csat}%</strong>
-            <em>Meta individual: ${csatGoal}% (${formatDelta(csatGap, ' p.p.')})</em>
-          </div>
-          <div class="kpi-card">
-            <span>Participacao em avaliacoes</span>
-            <strong>${metric.review_percentage}%</strong>
-            <em>Referencia: ${reviewGoal}% (${formatDelta(reviewGap, ' p.p.')})</em>
-          </div>
-          <div class="kpi-card">
-            <span>Volume mensal</span>
-            <strong>${metric.total_tickets}</strong>
-            <em>Media da operacao: ${averageTickets} (${formatDelta(productivityGap, '%')})</em>
+            <p>Leitura rapida: os detalhes de CSAT, avaliacoes, envio e volume estao consolidados na analise tecnica abaixo.</p>
           </div>
         </div>
 
