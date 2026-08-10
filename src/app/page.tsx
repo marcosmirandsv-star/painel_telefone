@@ -1859,7 +1859,8 @@ function ChatModuleDashboard({
         throw new Error(data?.error || 'Nao foi possivel gerar feedback com IA.')
       }
 
-      setChatFeedbackDraft(data.feedback)
+      const safeFeedback = normalizeChatReportFeedback(data.feedback, chatReportFeedbackSuggestion, chatFeedbackStyle)
+      setChatFeedbackDraft(safeFeedback)
       setChatExportMessage(data.warning || 'Feedback gerado com IA. Revise o texto antes de exportar.')
     } catch (error) {
       setChatExportMessage(getErrorMessage(error))
@@ -1875,7 +1876,7 @@ function ChatModuleDashboard({
     }
 
     try {
-      const finalFeedbackText = (chatFeedbackDraft || chatReportFeedbackSuggestion).trim()
+      const finalFeedbackText = normalizeChatReportFeedback(chatFeedbackDraft, chatReportFeedbackSuggestion, chatFeedbackStyle)
       const fileName = exportChatIndividualReport({
         metric: selectedChatReportMetric,
         periodLabel: selectedPeriod?.label ?? 'Periodo',
@@ -5537,6 +5538,31 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
   `
 }
 
+function cleanChatReportFeedbackText(text: string) {
+  return text
+    .replace(/\*\*/g, '')
+    .replace(/^#+\s*/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+function isChatReportFeedbackComplete(text: string, style: ChatFeedbackStyle) {
+  const cleanText = cleanChatReportFeedbackText(text)
+  const normalizedText = cleanText.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  const requiredSections =
+    style === 'sare'
+      ? ['situacao', 'alinhamentos', 'resultado', 'expectativa']
+      : style === 'mimo'
+        ? ['momento', 'impacto', 'melhoria', 'orientacao']
+        : ['leitura', 'forcas', 'plano', 'expectativa']
+
+  return cleanText.length >= 650 && requiredSections.every((section) => normalizedText.includes(section))
+}
+
+function normalizeChatReportFeedback(text: string, fallbackText: string, style: ChatFeedbackStyle) {
+  const cleanText = cleanChatReportFeedbackText(text)
+  return isChatReportFeedbackComplete(cleanText, style) ? cleanText : cleanChatReportFeedbackText(fallbackText)
+}
 function buildChatFeedbackText({
   metric,
   averageTickets,
@@ -6736,6 +6762,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
