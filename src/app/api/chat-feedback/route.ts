@@ -191,40 +191,63 @@ async function generateWithGemini(prompt: string, style: ChatFeedbackRequest['fe
     throw new Error('GEMINI_API_KEY nao configurada. Adicione a chave da Gemini nas variaveis de ambiente da Vercel.')
   }
 
-  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': apiKey,
-    },
-    body: JSON.stringify({
-      systemInstruction: {
-        parts: [
+  const configuredModel = process.env.GEMINI_MODEL?.trim()
+  const models = Array.from(
+    new Set(
+      [
+        configuredModel,
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',
+        'gemini-2.0-flash',
+        'gemini-1.5-flash',
+      ].filter(Boolean) as string[],
+    ),
+  )
+  const errors: string[] = []
+
+  for (const model of models) {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [
+            {
+              text: 'Voce escreve devolutivas mensais de gestao, com tom humano, pratico e profissional.',
+            },
+          ],
+        },
+        contents: [
           {
-            text: 'Voce escreve devolutivas mensais de gestao, com tom humano, pratico e profissional.',
+            role: 'user',
+            parts: [{ text: prompt }],
           },
         ],
-      },
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: prompt }],
+        generationConfig: {
+          maxOutputTokens: 1800,
         },
-      ],
-      generationConfig: {
-        maxOutputTokens: 1800,
-      },
-    }),
-  })
-  const data = await response.json()
+      }),
+    })
+    const data = await response.json()
 
-  if (!response.ok) {
-    const message = data?.error?.message || data?.message || 'Nao foi possivel gerar feedback com Gemini.'
-    throw new Error(message)
+    if (!response.ok) {
+      const message = data?.error?.message || data?.message || 'Nao foi possivel gerar feedback com Gemini.'
+      errors.push(`${model}: ${message}`)
+
+      if (response.status === 404 || /not found|model/i.test(message)) {
+        continue
+      }
+
+      throw new Error(message)
+    }
+
+    return assertCompleteFeedback(extractGeminiText(data), style)
   }
 
-  return assertCompleteFeedback(extractGeminiText(data), style)
+  throw new Error(`Nenhum modelo Gemini disponivel respondeu para gerar o feedback. Tentativas: ${errors.join(' | ')}`)
 }
 
 async function generateWithGitHubModels(prompt: string) {
