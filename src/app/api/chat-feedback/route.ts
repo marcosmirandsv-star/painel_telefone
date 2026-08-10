@@ -65,7 +65,7 @@ function getPublicProviderError(error: unknown) {
   }
 
   if (/curto|incompleto|truncado|MAX_TOKENS/i.test(message)) {
-    return 'a Gemini respondeu, mas o texto veio curto ou incompleto e foi bloqueado para proteger o relatório.'
+    return `a Gemini respondeu, mas o texto foi rejeitado pelo controle de qualidade. Detalhe: ${message.slice(0, 260)}`
   }
 
   if (/Nenhum modelo Gemini/i.test(message)) {
@@ -90,7 +90,7 @@ Regras obrigatorias:
 - Preserve todos os numeros relevantes; nao invente dados e nao mude calculos.
 - Nao use Markdown, asteriscos, bullets soltos ou titulos decorativos. Escreva em texto limpo, com nomes de secoes seguidos de dois-pontos.
 - Mantenha todas as secoes do modelo escolhido e escreva pelo menos 2 frases em cada secao.
-- O feedback deve ter no minimo 550 caracteres uteis; se ficar menor que isso, desenvolva melhor as orientacoes praticas.
+- O feedback deve ser completo e útil. Se for direto, ainda assim precisa conter leitura do ciclo, orientação prática e expectativa para o próximo fechamento.
 - Transforme as observacoes do gestor em contexto de gestao; nao copie literalmente e ignore observacoes que sejam apenas teste tecnico.
 - Traga reconhecimento especifico quando houver pontos fortes, conectando o elogio ao comportamento observado.
 - Traga orientacao pratica: diga o que o analista deve repetir, observar, ajustar ou levar como evidencia no proximo fechamento mensal.
@@ -172,7 +172,7 @@ function cleanFeedbackText(text: string) {
 
 function assertCompleteFeedback(text: string, style: ChatFeedbackRequest['feedbackStyle']) {
   const cleanText = cleanFeedbackText(text)
-  const minLength = 480
+  const minLength = 260
   const requiredSections =
     style === 'sare'
       ? ['Situacao', 'Alinhamentos', 'Resultado', 'Expectativa']
@@ -182,7 +182,7 @@ function assertCompleteFeedback(text: string, style: ChatFeedbackRequest['feedba
 
   const normalizedText = cleanText.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
   const matchedSections = requiredSections.filter((section) => normalizedText.includes(section.toLowerCase())).length
-  const hasSections = matchedSections >= requiredSections.length - 1
+  const hasSections = matchedSections >= 2 || cleanText.length >= 380
 
   if (cleanText.length < minLength || !hasSections) {
     throw new Error(`A IA devolveu um feedback curto ou incompleto (${cleanText.length} caracteres, ${matchedSections}/${requiredSections.length} secoes reconhecidas). Usei a sugestao local para preservar a qualidade do relatorio.`)
