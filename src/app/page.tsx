@@ -1479,51 +1479,75 @@ function ChatModuleDashboard({
   const chatAttentionText = chatOpportunities[0]?.reasons.join(', ') ?? 'Sem alerta critico no periodo.'
   const chatClosureReading =
     !visibleMetrics.length
-      ? 'Ainda nao ha base suficiente para leitura executiva.'
+      ? 'Ainda não há base suficiente para leitura executiva.'
       : chatEligibleCount >= 3 && !chatCriticalCount
-        ? 'Fechamento forte: ha pÃ³dio completo e nenhum caso critico no periodo.'
+        ? 'Fechamento forte: há pódio completo e nenhum caso crítico no período.'
         : chatEligibleCount > 0
-          ? 'Fechamento positivo, com oportunidade de ampliar a quantidade de elegiveis ao podio.'
-          : 'Fechamento pede atencao: nenhum analista ficou plenamente elegivel ao podio.'
+          ? 'Fechamento positivo, com oportunidade de ampliar a quantidade de elegíveis ao pódio.'
+          : 'Fechamento pede atenção: nenhum analista ficou plenamente elegível ao pódio.'
 
-  const chatBelowVolumeCount = chatRanking.filter((item) => item.reasons.some((reason) => reason.includes('volume abaixo'))).length
-  const chatBelowCsatCount = visibleMetrics.filter((metric) => Number(metric.csat) < 90).length
-  const chatBelowReviewCount = visibleMetrics.filter((metric) => Number(metric.review_percentage) < Number(metric.general_review_goal)).length
+  const chatBelowVolumeItems = chatRanking.filter((item) => item.reasons.some((reason) => reason.includes('volume abaixo')))
+  const chatBelowCsatMetrics = visibleMetrics.filter((metric) => Number(metric.csat) < 90)
+  const chatBelowReviewMetrics = visibleMetrics.filter((metric) => Number(metric.review_percentage) < Number(metric.general_review_goal))
+  const chatCriticalMetrics = visibleMetrics.filter((metric) => metric.status === 'Critico')
+  const chatEligibleItems = chatRanking.filter((item) => item.eligible)
+  const chatBelowVolumeCount = chatBelowVolumeItems.length
+  const chatBelowCsatCount = chatBelowCsatMetrics.length
+  const chatBelowReviewCount = chatBelowReviewMetrics.length
+  const chatNameList = (names: string[]) => {
+    if (!names.length) return 'nenhum analista'
+    if (names.length === 1) return names[0]
+    if (names.length === 2) return `${names[0]} e ${names[1]}`
+    return `${names.slice(0, -1).join(', ')} e ${names[names.length - 1]}`
+  }
+  const chatBelowCsatNames = chatBelowCsatMetrics.slice(0, 3).map(getChatAnalystName)
+  const chatBelowReviewNames = chatBelowReviewMetrics.slice(0, 3).map(getChatAnalystName)
+  const chatBelowVolumeNames = chatBelowVolumeItems.slice(0, 3).map((item) => getChatAnalystName(item.metric))
+  const chatCriticalNames = chatCriticalMetrics.slice(0, 3).map(getChatAnalystName)
+  const chatEligibleNames = chatEligibleItems.slice(0, 3).map((item) => getChatAnalystName(item.metric))
   const chatManagementDiagnosis =
     !visibleMetrics.length
-      ? 'Sem base importada para o periodo selecionado.'
-      : averageCsat < 90
-        ? 'A camada operacional indica risco de qualidade percebida: o CSAT medio esta abaixo da referencia de podio.'
-        : averageReviews < 25
-          ? 'A camada operacional indica risco de leitura: a amostra de avaliacoes ainda esta abaixo do minimo esperado.'
-          : chatBelowVolumeCount > chatEligibleCount
-            ? 'A camada operacional indica concentracao de risco em volume: ha analistas com boa qualidade, mas abaixo da media de atendimentos.'
-            : 'A camada operacional indica fechamento saudavel: qualidade, amostra e volume estao sustentando a leitura do periodo.'
+      ? 'Sem base importada para o período selecionado.'
+      : chatCriticalCount > 0
+        ? `Há risco real de fechamento: ${chatNameList(chatCriticalNames)} precisam de tratativa antes da comunicação final.`
+        : averageCsat < 90
+          ? `O principal risco está na qualidade percebida. ${chatBelowCsatCount} analista(s) ficaram abaixo de 90% de CSAT, começando por ${chatNameList(chatBelowCsatNames)}.`
+          : averageReviews < 25
+            ? `A qualidade está legível, mas a amostra de avaliações está baixa. Priorize aumento de respostas com ${chatNameList(chatBelowReviewNames)}.`
+            : chatBelowVolumeCount > 0
+              ? `O fechamento geral é saudável, mas o pódio depende de contexto operacional: ${chatBelowVolumeCount} analista(s) ficaram abaixo da média de ${averageTickets} atendimentos.`
+              : 'Fechamento saudável: qualidade, amostra de avaliações e volume sustentam a leitura do período.'
   const chatTacticalPlan = !visibleMetrics.length
-    ? ['Importar as planilhas do Zendesk.', 'Conferir base importada.', 'Selecionar equipe e periodo para liberar a leitura.']
+    ? ['Importar as planilhas do Zendesk.', 'Conferir se mês, equipe e analistas foram reconhecidos.', 'Selecionar equipe e período para liberar a leitura de gestão.']
     : [
-        chatBelowCsatCount ? `Revisar qualidade com ${chatBelowCsatCount} analista(s) abaixo de 90% de CSAT.` : 'Usar os melhores CSATs como referencia de pratica para o time.',
-        chatBelowReviewCount ? `Aumentar amostra de avaliacoes com ${chatBelowReviewCount} analista(s) abaixo da referencia.` : 'Preservar o ritual de encerramento que gerou boa amostra de avaliacoes.',
-        chatBelowVolumeCount ? `Validar volume de ${chatBelowVolumeCount} analista(s): fila, ausencia, emprestimo ou produtividade.` : 'Manter distribuicao atual de volume e monitorar apenas excecoes.',
+        chatBelowCsatCount
+          ? `Qualidade: ouvir 2 interações mal avaliadas de ${chatNameList(chatBelowCsatNames)} e registrar uma orientação objetiva por pessoa.`
+          : `Qualidade: usar ${chatNameList(chatEligibleNames)} como referência de abordagem e encerramento para o próximo ciclo.`,
+        chatBelowReviewCount
+          ? `Avaliações: reforçar com ${chatNameList(chatBelowReviewNames)} a frase de encerramento e conferir se o convite está sendo enviado no momento correto.`
+          : 'Avaliações: manter o ritual de encerramento que preservou a amostra acima da referência de 25%.',
+        chatBelowVolumeCount
+          ? `Volume: validar ${chatNameList(chatBelowVolumeNames)} contra escala, ausência, empréstimo para outro setor ou distribuição de fila antes de fechar o pódio.`
+          : 'Volume: manter a distribuição atual e monitorar apenas exceções operacionais.',
       ]
   const chatStrategicDecision =
     !visibleMetrics.length
-      ? 'Decisao recomendada: aguardar a importacao mensal antes de definir plano de gestao.'
+      ? 'Decisão recomendada: aguardar a importação mensal antes de definir plano de gestão.'
       : chatCriticalCount > 0
-        ? 'Decisao recomendada: abrir plano de acompanhamento para casos criticos antes de comunicar o fechamento final.'
+        ? `Decisão recomendada: tratar ${chatNameList(chatCriticalNames)} como prioridade de gestão antes de publicar o fechamento.`
         : chatEligibleCount >= 3
-          ? 'Decisao recomendada: validar o podio, reconhecer publicamente os destaques e transformar boas praticas em padrao do proximo ciclo.'
-          : 'Decisao recomendada: validar as excecoes operacionais e focar o proximo ciclo em ampliar elegiveis ao podio.'
+          ? `Decisão recomendada: validar o pódio, reconhecer ${chatNameList(chatEligibleNames)} e transformar as práticas vencedoras em padrão do próximo ciclo.`
+          : 'Decisão recomendada: separar exceções operacionais de desempenho real e focar o próximo ciclo em ampliar elegíveis ao pódio.'
   const chatStrategicTrend =
     !visibleMetrics.length
-      ? 'Sem tendencia calculada.'
+      ? 'Sem tendência calculada.'
       : chatCsatDelta >= 0 && chatReviewDelta >= 0
-        ? 'Tendencia favoravel: qualidade e amostra caminham na direcao certa.'
+        ? 'Tendência favorável: qualidade e amostra melhoraram contra o mês anterior; preserve o que funcionou.'
         : chatCsatDelta < 0 && chatReviewDelta < 0
-          ? 'Tendencia de atencao: qualidade e amostra pioraram contra o mes anterior.'
+          ? 'Tendência de atenção: qualidade e amostra pioraram juntas; faça revisão de causa antes do fechamento.'
           : chatCsatDelta < 0
-            ? 'Tendencia de qualidade pede leitura dos atendimentos mal avaliados.'
-            : 'Tendencia de amostra pede reforco no convite de avaliacao.'
+            ? 'Tendência de qualidade: priorize leitura dos atendimentos negativos e alinhe comportamento de atendimento.'
+            : 'Tendência de amostra: o desafio não é só qualidade, é conseguir mais clientes respondendo à avaliação.'
 
   function resetChatAnalystForm() {
     setEditingChatAnalystId(null)
@@ -2064,29 +2088,29 @@ function ChatModuleDashboard({
 
       <section className={chatActiveTab === 'overview' ? 'panel' : 'hidden'}>
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Inteligencia de gestao</p>
-          <h2 className="mt-2 text-2xl font-bold">Tres camadas para decidir o proximo movimento</h2>
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Inteligência de gestão</p>
+          <h2 className="mt-2 text-2xl font-bold">Três camadas para decidir o próximo movimento</h2>
           <p className="section-subtitle">
-            Leitura preditiva local baseada no Zendesk: diagnostico operacional, plano tatico e decisao estrategica para o fechamento mensal.
+            Leitura preditiva local baseada no Zendesk: diagnóstico operacional, plano tático e decisão estratégica para o fechamento mensal.
           </p>
         </div>
 
         <div className="mt-5 grid gap-4 xl:grid-cols-3">
           <div className="rounded-lg bg-slate-900 p-5">
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">1. Operacional</p>
-            <h3 className="mt-3 text-xl font-bold">Diagnostico</h3>
+            <h3 className="mt-3 text-xl font-bold">Diagnóstico</h3>
             <p className="mt-3 text-sm leading-6 text-slate-300">{chatManagementDiagnosis}</p>
             <div className="mt-4 grid gap-2 text-sm text-slate-300">
               <span>CSAT medio: <strong>{averageCsat}%</strong></span>
-              <span>Avaliacoes: <strong>{averageReviews}%</strong></span>
-              <span>Envio/sem avaliacao: <strong>{averageSending}%</strong></span>
+              <span>Avaliações: <strong>{averageReviews}%</strong></span>
+              <span>Sem avaliação: <strong>{averageSending}%</strong></span>
               <span>Inativos: <strong>{chatInactiveRate}%</strong></span>
             </div>
           </div>
 
           <div className="rounded-lg bg-slate-900 p-5">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">2. Tatica</p>
-            <h3 className="mt-3 text-xl font-bold">Plano de acao</h3>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">2. Tática</p>
+            <h3 className="mt-3 text-xl font-bold">Plano de ação</h3>
             <ul className="mt-3 space-y-3 text-sm leading-6 text-slate-300">
               {chatTacticalPlan.map((item) => (
                 <li key={item} className="rounded-md bg-slate-950/70 px-3 py-2">{item}</li>
@@ -2095,8 +2119,8 @@ function ChatModuleDashboard({
           </div>
 
           <div className="rounded-lg bg-slate-900 p-5">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">3. Estrategica</p>
-            <h3 className="mt-3 text-xl font-bold">Decisao recomendada</h3>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">3. Estratégica</p>
+            <h3 className="mt-3 text-xl font-bold">Decisão recomendada</h3>
             <p className="mt-3 text-sm leading-6 text-slate-300">{chatStrategicDecision}</p>
             <p className="mt-4 rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-100">{chatStrategicTrend}</p>
           </div>
@@ -2110,25 +2134,25 @@ function ChatModuleDashboard({
             <h2 className="mt-2 text-2xl font-bold">{chatClosureReading}</h2>
           </div>
           <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">
-            {chatEligibleCount} elegiveis de {visibleMetrics.length}
+            {chatEligibleCount} elegíveis de {visibleMetrics.length}
           </span>
         </div>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-3">
           <div className="rounded-lg bg-slate-900 p-4">
-            <p className="text-sm text-slate-400">Destaque do periodo</p>
+            <p className="text-sm text-slate-400">Destaque do período</p>
             <p className="mt-2 text-lg font-bold">{chatTopHighlight ? getChatAnalystName(chatTopHighlight) : 'Aguardando dados'}</p>
             <p className="mt-1 text-sm text-slate-300">
               {chatTopHighlight ? `CSAT ${chatTopHighlight.csat}% | ${chatTopHighlight.review_percentage}% avaliacoes | ${chatTopHighlight.total_tickets} atendimentos` : 'Importe um mes para liberar a leitura.'}
             </p>
           </div>
           <div className="rounded-lg bg-slate-900 p-4">
-            <p className="text-sm text-slate-400">Principal ponto de atencao</p>
+            <p className="text-sm text-slate-400">Principal ponto de atenção</p>
             <p className="mt-2 text-lg font-bold">{chatAttentionHighlight ? getChatAnalystName(chatAttentionHighlight) : 'Sem prioridade aberta'}</p>
             <p className="mt-1 text-sm text-slate-300">{chatAttentionText}</p>
           </div>
           <div className="rounded-lg bg-slate-900 p-4">
-            <p className="text-sm text-slate-400">Media de volume para podio</p>
+            <p className="text-sm text-slate-400">Média de volume para pódio</p>
             <p className="mt-2 text-lg font-bold">{averageTickets} atendimentos</p>
             <p className="mt-1 text-sm text-slate-300">
               Quem fica abaixo dessa media aparece como volume abaixo da media no ranking.
@@ -4907,7 +4931,7 @@ function getGoalImpactText(goal: Goal) {
   const key = goal.key.toLowerCase()
   const label = goal.label.toLowerCase()
 
-  if (key.includes('podium') || label.includes('podio') || label.includes('pÃ³dio')) {
+  if (key.includes('podium') || label.includes('podio') || label.includes('pódio')) {
     return 'Define elegibilidade para o podio e relatorios SARE.'
   }
 
