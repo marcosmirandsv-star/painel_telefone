@@ -1486,6 +1486,45 @@ function ChatModuleDashboard({
           ? 'Fechamento positivo, com oportunidade de ampliar a quantidade de elegiveis ao podio.'
           : 'Fechamento pede atencao: nenhum analista ficou plenamente elegivel ao podio.'
 
+  const chatBelowVolumeCount = chatRanking.filter((item) => item.reasons.some((reason) => reason.includes('volume abaixo'))).length
+  const chatBelowCsatCount = visibleMetrics.filter((metric) => Number(metric.csat) < 90).length
+  const chatBelowReviewCount = visibleMetrics.filter((metric) => Number(metric.review_percentage) < Number(metric.general_review_goal)).length
+  const chatManagementDiagnosis =
+    !visibleMetrics.length
+      ? 'Sem base importada para o periodo selecionado.'
+      : averageCsat < 90
+        ? 'A camada operacional indica risco de qualidade percebida: o CSAT medio esta abaixo da referencia de podio.'
+        : averageReviews < 25
+          ? 'A camada operacional indica risco de leitura: a amostra de avaliacoes ainda esta abaixo do minimo esperado.'
+          : chatBelowVolumeCount > chatEligibleCount
+            ? 'A camada operacional indica concentracao de risco em volume: ha analistas com boa qualidade, mas abaixo da media de atendimentos.'
+            : 'A camada operacional indica fechamento saudavel: qualidade, amostra e volume estao sustentando a leitura do periodo.'
+  const chatTacticalPlan = !visibleMetrics.length
+    ? ['Importar as planilhas do Zendesk.', 'Conferir base importada.', 'Selecionar equipe e periodo para liberar a leitura.']
+    : [
+        chatBelowCsatCount ? `Revisar qualidade com ${chatBelowCsatCount} analista(s) abaixo de 90% de CSAT.` : 'Usar os melhores CSATs como referencia de pratica para o time.',
+        chatBelowReviewCount ? `Aumentar amostra de avaliacoes com ${chatBelowReviewCount} analista(s) abaixo da referencia.` : 'Preservar o ritual de encerramento que gerou boa amostra de avaliacoes.',
+        chatBelowVolumeCount ? `Validar volume de ${chatBelowVolumeCount} analista(s): fila, ausencia, emprestimo ou produtividade.` : 'Manter distribuicao atual de volume e monitorar apenas excecoes.',
+      ]
+  const chatStrategicDecision =
+    !visibleMetrics.length
+      ? 'Decisao recomendada: aguardar a importacao mensal antes de definir plano de gestao.'
+      : chatCriticalCount > 0
+        ? 'Decisao recomendada: abrir plano de acompanhamento para casos criticos antes de comunicar o fechamento final.'
+        : chatEligibleCount >= 3
+          ? 'Decisao recomendada: validar o podio, reconhecer publicamente os destaques e transformar boas praticas em padrao do proximo ciclo.'
+          : 'Decisao recomendada: validar as excecoes operacionais e focar o proximo ciclo em ampliar elegiveis ao podio.'
+  const chatStrategicTrend =
+    !visibleMetrics.length
+      ? 'Sem tendencia calculada.'
+      : chatCsatDelta >= 0 && chatReviewDelta >= 0
+        ? 'Tendencia favoravel: qualidade e amostra caminham na direcao certa.'
+        : chatCsatDelta < 0 && chatReviewDelta < 0
+          ? 'Tendencia de atencao: qualidade e amostra pioraram contra o mes anterior.'
+          : chatCsatDelta < 0
+            ? 'Tendencia de qualidade pede leitura dos atendimentos mal avaliados.'
+            : 'Tendencia de amostra pede reforco no convite de avaliacao.'
+
   function resetChatAnalystForm() {
     setEditingChatAnalystId(null)
     setChatAnalystForm({ teamId: teams[0]?.id ?? '', name: '', csatGoal: '86' })
@@ -2018,6 +2057,47 @@ function ChatModuleDashboard({
           <div className="rounded-lg bg-slate-900 p-4">
             <p className="text-sm text-slate-400">Criterio legado</p>
             <p className="mt-2 font-semibold">CSAT 90%, avaliacoes 25% e volume acima da media.</p>
+          </div>
+        </div>
+      </section>
+
+      <section className={chatActiveTab === 'overview' ? 'panel' : 'hidden'}>
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Inteligencia de gestao</p>
+          <h2 className="mt-2 text-2xl font-bold">Tres camadas para decidir o proximo movimento</h2>
+          <p className="section-subtitle">
+            Leitura preditiva local baseada no Zendesk: diagnostico operacional, plano tatico e decisao estrategica para o fechamento mensal.
+          </p>
+        </div>
+
+        <div className="mt-5 grid gap-4 xl:grid-cols-3">
+          <div className="rounded-lg bg-slate-900 p-5">
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">1. Operacional</p>
+            <h3 className="mt-3 text-xl font-bold">Diagnostico</h3>
+            <p className="mt-3 text-sm leading-6 text-slate-300">{chatManagementDiagnosis}</p>
+            <div className="mt-4 grid gap-2 text-sm text-slate-300">
+              <span>CSAT medio: <strong>{averageCsat}%</strong></span>
+              <span>Avaliacoes: <strong>{averageReviews}%</strong></span>
+              <span>Envio/sem avaliacao: <strong>{averageSending}%</strong></span>
+              <span>Inativos: <strong>{chatInactiveRate}%</strong></span>
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-slate-900 p-5">
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">2. Tatica</p>
+            <h3 className="mt-3 text-xl font-bold">Plano de acao</h3>
+            <ul className="mt-3 space-y-3 text-sm leading-6 text-slate-300">
+              {chatTacticalPlan.map((item) => (
+                <li key={item} className="rounded-md bg-slate-950/70 px-3 py-2">{item}</li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="rounded-lg bg-slate-900 p-5">
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">3. Estrategica</p>
+            <h3 className="mt-3 text-xl font-bold">Decisao recomendada</h3>
+            <p className="mt-3 text-sm leading-6 text-slate-300">{chatStrategicDecision}</p>
+            <p className="mt-4 rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-100">{chatStrategicTrend}</p>
           </div>
         </div>
       </section>
