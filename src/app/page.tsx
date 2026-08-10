@@ -1335,6 +1335,9 @@ function ChatModuleDashboard({
   const averageCsat = calculateChatAverage(visibleMetrics, 'csat')
   const averageReviews = calculateChatAverage(visibleMetrics, 'review_percentage')
   const averageSending = calculateChatAverage(visibleMetrics, 'sending_percentage')
+  const chatReviewRate = totals.validTickets ? round((totals.reviews / totals.validTickets) * 100) : 0
+  const chatSendingRate = totals.validTickets ? round(((totals.validTickets - totals.reviews) / totals.validTickets) * 100) : 0
+  const chatInactiveRate = totals.tickets ? round((totals.inactive / totals.tickets) * 100) : 0
   const previousPeriodIndex = selectedPeriod
     ? periods.findIndex((period) => period.year === selectedPeriod.year && period.monthNumber === selectedPeriod.monthNumber)
     : -1
@@ -2523,10 +2526,42 @@ function ChatModuleDashboard({
         </div>
       </section>
       <section className={chatActiveTab === 'base' ? 'panel' : 'hidden'}>
-        <h2 className="section-title">Base importada</h2>
-        <p className="section-subtitle">
-          {metrics.length} registros carregados entre historico e importacoes mensais do Zendesk. O % envio avaliacao segue a regra do painel antigo: atendimentos validos sem avaliacao dividido por atendimentos validos. A inatividade e apenas apoio operacional: inativos dividido por atendimentos totais.
-        </p>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <h2 className="section-title">Base importada</h2>
+            <p className="section-subtitle">
+              {metrics.length} registros carregados entre historico e importacoes mensais do Zendesk. Esta aba serve para conferir se a importacao mensal bate com o fechamento antes de olhar ranking e relatorios.
+            </p>
+          </div>
+          <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">
+            {selectedPeriod?.label ?? 'Periodo'} - {selectedTeamName}
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+          <MetricCard label="Atendidos" value={totals.tickets} />
+          <MetricCard label="Inativos" value={`${totals.inactive} (${chatInactiveRate}%)`} />
+          <MetricCard label="Validos" value={totals.validTickets} />
+          <MetricCard label="Avaliacoes" value={`${totals.reviews} (${chatReviewRate}%)`} />
+          <MetricCard label="Sem avaliacao" value={`${Math.max(totals.validTickets - totals.reviews, 0)} (${chatSendingRate}%)`} />
+          <MetricCard label="CSAT consolidado" value={`${averageCsat}%`} />
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-3">
+          <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
+            <p className="font-semibold text-slate-100">Formula de avaliacoes</p>
+            <p className="mt-2">Avaliacoes recebidas / atendimentos validos x 100.</p>
+          </div>
+          <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
+            <p className="font-semibold text-slate-100">Formula de envio avaliacao</p>
+            <p className="mt-2">Validos sem avaliacao / atendimentos validos x 100.</p>
+          </div>
+          <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
+            <p className="font-semibold text-slate-100">Formula de inatividade</p>
+            <p className="mt-2">Inativos / atendimentos totais x 100. Este numero e apoio operacional.</p>
+          </div>
+        </div>
+
         <div className="mt-5 overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="text-slate-400">
@@ -2535,7 +2570,7 @@ function ChatModuleDashboard({
                 <th className="px-3 py-2">Equipe</th>
                 <th className="px-3 py-2">CSAT</th>
                 <th className="px-3 py-2">Avaliacoes</th>
-                <th className="px-3 py-2">Atendimentos</th>
+                <th className="px-3 py-2">Atendidos</th>
                 <th className="px-3 py-2">Validos</th>
                 <th className="px-3 py-2">Inativos</th>
                 <th className="px-3 py-2">% inatividade</th>
@@ -2557,7 +2592,20 @@ function ChatModuleDashboard({
                 </tr>
               ))}
             </tbody>
+            <tfoot className="border-t border-cyan-400/30 font-semibold text-cyan-100">
+              <tr>
+                <td className="px-3 py-3" colSpan={2}>Total do filtro</td>
+                <td className="px-3 py-3">{averageCsat}%</td>
+                <td className="px-3 py-3">{chatReviewRate}%</td>
+                <td className="px-3 py-3">{totals.tickets}</td>
+                <td className="px-3 py-3">{totals.validTickets}</td>
+                <td className="px-3 py-3">{totals.inactive}</td>
+                <td className="px-3 py-3">{chatInactiveRate}%</td>
+                <td className="px-3 py-3">{chatSendingRate}%</td>
+              </tr>
+            </tfoot>
           </table>
+          {!visibleMetrics.length && <EmptyState text="Nenhum dado importado para o filtro selecionado." />}
         </div>
       </section>
     </div>
@@ -6508,6 +6556,7 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
 
 
 
