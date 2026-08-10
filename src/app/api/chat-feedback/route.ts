@@ -36,11 +36,11 @@ type ChatFeedbackRequest = {
 
 const styleInstructions = {
   coach:
-    'Use formato Coach com secoes: Leitura do ciclo, Forcas observadas, Plano de desenvolvimento, Expectativa para o proximo ciclo mensal.',
+    'Use formato Coach com seções: Leitura do ciclo, Forcas observadas, Plano de desenvolvimento, Expectativa para o próximo ciclo mensal.',
   sare:
-    'Use formato SARE com secoes: Situacao, Alinhamentos Realizados, Resultado Esperado, Expectativa e Plano de Desenvolvimento.',
+    'Use formato SARE com seções: Situacao, Alinhamentos Realizados, Resultado Esperado, Expectativa e Plano de Desenvolvimento.',
   mimo:
-    'Use formato MIMO com secoes: Momento observado, Impacto, Melhoria ou manutencao, Orientacao.',
+    'Use formato MIMO com seções: Momento observado, Impacto, Melhoria ou manutencao, Orientacao.',
 }
 
 function getErrorText(error: unknown) {
@@ -80,28 +80,28 @@ function buildPrompt(body: ChatFeedbackRequest) {
   const feedbackStyle = body.feedbackStyle ?? 'coach'
 
   return `
-Voce e um coach senior de atendimento ao cliente e editor de relatorios de performance. Sua tarefa principal e melhorar o texto base do sistema, preservando a estrutura, os numeros e a logica calculada, mas elevando a qualidade humana, gerencial e pratica da devolutiva.
+Você e um coach senior de atendimento ao cliente e editor de relatórios de performance. Sua tarefa principal e melhorar o texto base do sistema, preservando a estrutura, os numeros e a logica calculada, mas elevando a qualidade humana, gerencial e pratica da devolutiva.
 
 Regras obrigatorias:
 - Escreva em portugues do Brasil.
-- Nao diga para acompanhar semanalmente, porque o modulo do chat e analisado mensalmente.
-- Nao comece com parabens generico. Comece com uma leitura profissional do ciclo.
+- Não diga para acompanhar semanalmente, porque o módulo do chat e analisado mensalmente.
+- Não comece com parabens generico. Comece com uma leitura profissional do ciclo.
 - Use o texto base do sistema como esqueleto obrigatorio; refine, aprofunde e humanize, mas nao substitua por um texto curto.
 - Preserve todos os numeros relevantes; nao invente dados e nao mude calculos.
-- Nao use Markdown, asteriscos, bullets soltos ou titulos decorativos. Escreva em texto limpo, com nomes de secoes seguidos de dois-pontos.
-- Mantenha todas as secoes do modelo escolhido e escreva pelo menos 2 frases em cada secao.
+- Não use Markdown, asteriscos, bullets soltos ou titulos decorativos. Escreva em texto limpo, com nomes de seções seguidos de dois-pontos.
+- Mantenha todas as seções do modelo escolhido e escreva pelo menos 2 frases em cada secao.
 - O feedback deve ser completo e útil. Se for direto, ainda assim precisa conter leitura do ciclo, orientação prática e expectativa para o próximo fechamento.
-- Transforme as observacoes do gestor em contexto de gestao; nao copie literalmente e ignore observacoes que sejam apenas teste tecnico.
+- Transforme as observações do gestor em contexto de gestão; nao copie literalmente e ignore observações que sejam apenas teste tecnico.
 - Traga reconhecimento especifico quando houver pontos fortes, conectando o elogio ao comportamento observado.
-- Traga orientacao pratica: diga o que o analista deve repetir, observar, ajustar ou levar como evidencia no proximo fechamento mensal.
-- Nao termine frase pela metade. Entregue um texto completo, pronto para colar no relatorio.
+- Traga orientação pratica: diga o que o analista deve repetir, observar, ajustar ou levar como evidencia no próximo fechamento mensal.
+- Não termine frase pela metade. Entregue um texto completo, pronto para colar no relatório.
 - Mantenha entre 180 e 320 palavras. Prefira clareza e completude em vez de texto longo.
 - ${styleInstructions[feedbackStyle]}
 
 Periodo: ${body.periodLabel ?? 'Periodo nao informado'}
 Analista: ${metric?.analystName}
 Equipe: ${metric?.teamName ?? 'Equipe nao informada'}
-Status: ${metric?.status ?? 'Nao informado'}
+Status: ${metric?.status ?? 'Não informado'}
 CSAT: ${metric?.csat}% | Meta CSAT: ${metric?.csatGoal}%
 Avaliacoes: ${metric?.reviewPercentage}% | Meta avaliacoes: ${metric?.reviewGoal ?? 25}%
 Envio/sem avaliacao: ${metric?.sendingPercentage}%
@@ -118,13 +118,13 @@ Historico mensal:
 ${JSON.stringify(body.monthlyHistory ?? [], null, 2)}
 
 Observacoes do gestor:
-${body.managerNotes?.trim() || 'Sem observacoes adicionais.'}
+${body.managerNotes?.trim() || 'Sem observações adicionais.'}
 
 Texto base do sistema que deve ser melhorado e preservado como estrutura:
 ${body.fallbackText ?? ''}
 
 Saida esperada:
-Entregue apenas o feedback final, sem introducao, sem comentarios sobre a tarefa e sem Markdown.
+Entregue apenas o feedback final, sem introdução, sem comentários sobre a tarefa e sem Markdown.
 `
 }
 
@@ -182,7 +182,7 @@ function assertCompleteFeedback(text: string, style: ChatFeedbackRequest['feedba
   const hasSections = matchedSections >= 2 || cleanText.length >= 380
 
   if (cleanText.length < minLength || !hasSections) {
-    throw new Error(`A IA devolveu um feedback curto ou incompleto (${cleanText.length} caracteres, ${matchedSections}/${requiredSections.length} secoes reconhecidas). Usei a sugestao local para preservar a qualidade do relatorio.`)
+    throw new Error(`A IA devolveu um feedback curto ou incompleto (${cleanText.length} caracteres, ${matchedSections}/${requiredSections.length} seções reconhecidas). Usei a sugestão local para preservar a qualidade do relatório.`)
   }
 
   return cleanText
@@ -223,7 +223,7 @@ async function generateWithGemini(prompt: string, style: ChatFeedbackRequest['fe
         systemInstruction: {
           parts: [
             {
-              text: 'Voce escreve devolutivas mensais de gestao, com tom humano, pratico e profissional.',
+              text: 'Você escreve devolutivas mensais de gestão, com tom humano, pratico e profissional.',
             },
           ],
         },
@@ -243,7 +243,7 @@ async function generateWithGemini(prompt: string, style: ChatFeedbackRequest['fe
 
     if (!response.ok) {
       const code = data?.error?.status || data?.error?.code || response.status
-      const message = data?.error?.message || data?.message || 'Nao foi possivel gerar feedback com Gemini.'
+      const message = data?.error?.message || data?.message || 'Não foi possivel gerar feedback com Gemini.'
       errors.push(`${model}: HTTP ${response.status} / ${code} - ${sanitizeProviderMessage(message)}`)
 
       if (response.status === 404 || /not found|model/i.test(message)) {
@@ -279,7 +279,7 @@ async function generateWithGitHubModels(prompt: string) {
       messages: [
         {
           role: 'system',
-          content: 'Voce escreve feedbacks profissionais para relatorios mensais de atendimento.',
+          content: 'Você escreve feedbacks profissionais para relatórios mensais de atendimento.',
         },
         {
           role: 'user',
@@ -293,7 +293,7 @@ async function generateWithGitHubModels(prompt: string) {
   const data = await response.json()
 
   if (!response.ok) {
-    const message = data?.message || data?.error?.message || 'Nao foi possivel gerar feedback com GitHub Models.'
+    const message = data?.message || data?.error?.message || 'Não foi possivel gerar feedback com GitHub Models.'
     throw new Error(message)
   }
 
@@ -313,7 +313,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as ChatFeedbackRequest
 
     if (!body.metric?.analystName) {
-      return NextResponse.json({ error: 'Dados do analista nao foram enviados para a IA.' }, { status: 400 })
+      return NextResponse.json({ error: 'Dados do analista não foram enviados para a IA.' }, { status: 400 })
     }
 
     const fallbackFeedback = body.fallbackText?.trim()
@@ -322,7 +322,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            'Nao ha texto base suficiente para gerar o feedback. Gere uma sugestao local antes de exportar.',
+            'Não ha texto base suficiente para gerar o feedback. Gere uma sugestão local antes de exportar.',
         },
         { status: 400 },
       )

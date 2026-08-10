@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import * as XLSX from 'xlsx'
@@ -763,7 +763,7 @@ export default function Home() {
       }
 
       if (totalReviews > totalTickets) {
-        setMessage('O total de avaliacoes nao pode ser maior que o total de atendimentos.')
+        setMessage('O total de avaliações nao pode ser maior que o total de atendimentos.')
         return
       }
 
@@ -1053,7 +1053,7 @@ export default function Home() {
             type="button"
             onClick={() => setActiveModule('chat')}
           >
-            <span>Modulo chat</span>
+            <span>Módulo chat</span>
             <strong>Performance de atendimento via chat</strong>
             <small>Dados do Zendesk, importacao mensal, ranking, podio e relatorios individuais.</small>
           </button>
@@ -1064,7 +1064,7 @@ export default function Home() {
             Dashboard
           </TabButton>
           <TabButton active={activeTab === 'reports'} onClick={() => setActiveTab('reports')}>
-            Relatorios
+            Relatórios
           </TabButton>
           {isManagementUser && (
             <>
@@ -1275,7 +1275,7 @@ function ChatModuleDashboard({
 
       await onImportComplete()
       setSelectedPeriodKey(`${year}-${monthNumber}`)
-      setChatImportMessage(`Importacao concluida: ${importRows.length} analistas processados para ${period.label}.`)
+      setChatImportMessage(`Importação concluida: ${importRows.length} analistas processados para ${period.label}.`)
     } catch (error) {
       setChatImportMessage(getErrorMessage(error))
     } finally {
@@ -1299,7 +1299,7 @@ function ChatModuleDashboard({
       <div className="mt-8 space-y-7">
 
       <section className="panel">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Modulo chat</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Módulo chat</p>
           <h2 className="mt-3 text-3xl font-bold">Acesso restrito a gestao</h2>
           <p className="mt-3 max-w-3xl text-slate-300">
             O modulo chat sera usado para importacao mensal, calculos consolidados, ranking, podio e relatorios individuais.
@@ -1458,7 +1458,7 @@ function ChatModuleDashboard({
           : averageReviews < 20
             ? 'A participacao dos clientes nas pesquisas precisa ser ampliada.'
             : averageReviews < 25
-              ? 'Avaliacoes abaixo do minimo usado para elegibilidade ao podio.'
+              ? 'Avaliações abaixo do minimo usado para elegibilidade ao podio.'
               : attention.length
                 ? 'Ha analistas com pelo menos um criterio fora da referencia.'
                 : 'Equipe alinhada com os criterios principais do periodo.'
@@ -1914,7 +1914,7 @@ function ChatModuleDashboard({
         feedbackText: finalFeedbackText,
       })
 
-      setChatExportMessage(`Relatorio individual gerado: ${fileName}. Verifique a pasta Downloads.`)
+      setChatExportMessage(`Relatório individual gerado: ${fileName}. Verifique a pasta Downloads.`)
     } catch {
       setChatExportMessage('Nao foi possivel gerar o relatorio individual. Tente novamente ou use outro navegador.')
     }
@@ -1925,10 +1925,10 @@ function ChatModuleDashboard({
       <section className="panel">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Modulo chat</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Módulo chat</p>
             <h2 className="mt-3 text-3xl font-bold">Performance mensal do chat</h2>
             <p className="section-subtitle">
-              Leitura consolidada dos dados historicos e das importacoes mensais do Zendesk.
+              Leitura consolidada dos dados históricos e das importações mensais do Zendesk.
             </p>
           </div>
 
@@ -1961,16 +1961,16 @@ function ChatModuleDashboard({
           Painel
         </TabButton>
         <TabButton active={chatActiveTab === 'podium'} onClick={() => setChatActiveTab('podium')}>
-          Ranking e podio
+          Ranking e pódio
         </TabButton>
         <TabButton active={chatActiveTab === 'analysis'} onClick={() => setChatActiveTab('analysis')}>
-          Analise
+          Análise
         </TabButton>
         <TabButton active={chatActiveTab === 'reports'} onClick={() => setChatActiveTab('reports')}>
-          Relatorios
+          Relatórios
         </TabButton>
         <TabButton active={chatActiveTab === 'import'} onClick={() => setChatActiveTab('import')}>
-          Importacao
+          Importação
         </TabButton>
         <TabButton active={chatActiveTab === 'settings'} onClick={() => setChatActiveTab('settings')}>
           Cadastros
@@ -1983,10 +1983,10 @@ function ChatModuleDashboard({
       <section className={chatActiveTab === 'import' ? 'panel' : 'hidden'}>
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Importacao mensal</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Importação mensal</p>
             <h3 className="mt-2 text-2xl font-bold">Atualizar base do chat</h3>
             <p className="section-subtitle">
-              Use as planilhas de satisfacao e inatividade baixadas do Zendesk. O calculo segue a regra original do painel do chat.
+              Use as planilhas de satisfação e inatividade baixadas do Zendesk. O cálculo segue a regra original do painel do chat.
             </p>
           </div>
 
@@ -2027,7 +2027,7 @@ function ChatModuleDashboard({
               />
             </Field>
             <button className="btn-primary self-end" disabled={chatImportSaving} type="submit">
-              {chatImportSaving ? 'Importando...' : 'Importar mes'}
+              {chatImportSaving ? 'Importando...' : 'Importar mês'}
             </button>
           </form>
         </div>
@@ -2036,8 +2036,8 @@ function ChatModuleDashboard({
       </section>
       <div className={chatActiveTab === 'overview' ? 'grid gap-4 md:grid-cols-4' : 'hidden'}>
         <MetricCard label="Equipe" value={selectedTeamName} />
-        <MetricCard label="CSAT medio" value={loading ? '...' : `${averageCsat}%`} />
-        <MetricCard label="% avaliacoes" value={`${averageReviews}%`} />
+        <MetricCard label="CSAT médio" value={loading ? '...' : `${averageCsat}%`} />
+        <MetricCard label="% avaliações" value={`${averageReviews}%`} />
         <MetricCard label="Atendimentos" value={totals.tickets} />
       </div>
 
@@ -2053,17 +2053,17 @@ function ChatModuleDashboard({
 
           <div className="grid flex-1 gap-4 md:grid-cols-3">
             <div className="executive-card">
-              <p>CSAT vs mes anterior</p>
+              <p>CSAT vs mês anterior</p>
               <strong>{formatDelta(chatCsatDelta, ' p.p.')}</strong>
               <span>Atual: {averageCsat}%</span>
             </div>
             <div className="executive-card">
-              <p>Avaliacoes vs mes anterior</p>
+              <p>Avaliações vs mês anterior</p>
               <strong>{formatDelta(chatReviewDelta, ' p.p.')}</strong>
               <span>Atual: {averageReviews}%</span>
             </div>
             <div className="executive-card">
-              <p>Envio/sem avaliacao</p>
+              <p>% sem avaliação</p>
               <strong>{averageSending}%</strong>
               <span>{formatDelta(chatSendingDelta, ' p.p.')} vs anterior</span>
             </div>
@@ -2076,12 +2076,12 @@ function ChatModuleDashboard({
             <p className="mt-2 font-semibold">{chatMainAlert}</p>
           </div>
           <div className="rounded-lg bg-slate-900 p-4">
-            <p className="text-sm text-slate-400">Acao recomendada</p>
+            <p className="text-sm text-slate-400">Ação recomendada</p>
             <p className="mt-2 font-semibold">{chatRecommendedAction}</p>
           </div>
           <div className="rounded-lg bg-slate-900 p-4">
-            <p className="text-sm text-slate-400">Criterio legado</p>
-            <p className="mt-2 font-semibold">CSAT 90%, avaliacoes 25% e volume acima da media.</p>
+            <p className="text-sm text-slate-400">Critério legado</p>
+            <p className="mt-2 font-semibold">CSAT 90%, avaliações 25% e volume acima da média.</p>
           </div>
         </div>
       </section>
@@ -2101,7 +2101,7 @@ function ChatModuleDashboard({
             <h3 className="mt-3 text-xl font-bold">Diagnóstico</h3>
             <p className="mt-3 text-sm leading-6 text-slate-300">{chatManagementDiagnosis}</p>
             <div className="mt-4 grid gap-2 text-sm text-slate-300">
-              <span>CSAT medio: <strong>{averageCsat}%</strong></span>
+              <span>CSAT médio: <strong>{averageCsat}%</strong></span>
               <span>Avaliações: <strong>{averageReviews}%</strong></span>
               <span>Sem avaliação: <strong>{averageSending}%</strong></span>
               <span>Inativos: <strong>{chatInactiveRate}%</strong></span>
@@ -2143,7 +2143,7 @@ function ChatModuleDashboard({
             <p className="text-sm text-slate-400">Destaque do período</p>
             <p className="mt-2 text-lg font-bold">{chatTopHighlight ? getChatAnalystName(chatTopHighlight) : 'Aguardando dados'}</p>
             <p className="mt-1 text-sm text-slate-300">
-              {chatTopHighlight ? `CSAT ${chatTopHighlight.csat}% | ${chatTopHighlight.review_percentage}% avaliacoes | ${chatTopHighlight.total_tickets} atendimentos` : 'Importe um mes para liberar a leitura.'}
+              {chatTopHighlight ? `CSAT ${chatTopHighlight.csat}% | ${chatTopHighlight.review_percentage}% avaliações | ${chatTopHighlight.total_tickets} atendimentos` : 'Importe um mês para liberar a leitura.'}
             </p>
           </div>
           <div className="rounded-lg bg-slate-900 p-4">
@@ -2155,7 +2155,7 @@ function ChatModuleDashboard({
             <p className="text-sm text-slate-400">Média de volume para pódio</p>
             <p className="mt-2 text-lg font-bold">{averageTickets} atendimentos</p>
             <p className="mt-1 text-sm text-slate-300">
-              Quem fica abaixo dessa media aparece como volume abaixo da media no ranking.
+              Quem fica abaixo dessa média aparece como volume abaixo da média no ranking.
             </p>
           </div>
         </div>
@@ -2164,15 +2164,15 @@ function ChatModuleDashboard({
       <section className={chatActiveTab === 'overview' ? 'panel' : 'hidden'}>
         <div className="grid gap-6 xl:grid-cols-3">
           <div className="xl:col-span-2">
-            <h2 className="section-title">Evolucao mensal</h2>
-            <p className="section-subtitle">CSAT medio consolidado por mes no filtro selecionado.</p>
+            <h2 className="section-title">Evolução mensal</h2>
+            <p className="section-subtitle">CSAT médio consolidado por mes no filtro selecionado.</p>
             <div className="mt-5">
               <GroupedPercentTrendChart
                 points={monthlyUnifiedTrend}
                 series={[
                   { key: 'csat', label: 'CSAT', color: 'bg-cyan-300' },
-                  { key: 'reviews', label: 'Avaliacoes', color: 'bg-emerald-300' },
-                  { key: 'sending', label: 'Envio/sem avaliacao', color: 'bg-amber-300' },
+                  { key: 'reviews', label: 'Avaliações', color: 'bg-emerald-300' },
+                  { key: 'sending', label: '% sem avaliação', color: 'bg-amber-300' },
                 ]}
               />
             </div>
@@ -2180,13 +2180,13 @@ function ChatModuleDashboard({
           <div className="rounded-lg bg-slate-900 p-5">
             <h3 className="text-xl font-bold">Resumo operacional</h3>
             <div className="mt-4 space-y-3 text-sm text-slate-300">
-              <p>Validos: <strong>{totals.validTickets}</strong></p>
+              <p>Válidos: <strong>{totals.validTickets}</strong></p>
               <p>Inativos: <strong>{totals.inactive}</strong></p>
-              <p>Avaliacoes: <strong>{totals.reviews}</strong></p>
-              <p>Envio/sem avaliacao medio: <strong>{averageSending}%</strong></p>
-              <p>Media por analista: <strong>{averageTickets}</strong></p>
+              <p>Avaliações: <strong>{totals.reviews}</strong></p>
+              <p>% sem avaliação medio: <strong>{averageSending}%</strong></p>
+              <p>Média por analista: <strong>{averageTickets}</strong></p>
               <p>Metas superadas: <strong>{chatGoalsReachedCount}</strong></p>
-              <p>Criticos: <strong>{chatCriticalCount}</strong></p>
+              <p>Críticos: <strong>{chatCriticalCount}</strong></p>
             </div>
           </div>
         </div>
@@ -2195,14 +2195,14 @@ function ChatModuleDashboard({
       <section className={chatActiveTab === 'podium' ? 'panel' : 'hidden'}>
         <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
           <div>
-            <h2 className="section-title">Podio final do chat</h2>
+            <h2 className="section-title">Pódio final do chat</h2>
             <p className="section-subtitle">
-              Usa o ranking automatico, mas permite ajuste manual por equipe e periodo quando houver emprestimo, cobertura ou excecao operacional.
+              Usa o ranking automático, mas permite ajuste manual por equipe e período quando houver empréstimo, cobertura ou exceção operacional.
             </p>
           </div>
           {activeManualPodium.length > 0 && (
             <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">
-              Podio manual ativo
+              Pódio manual ativo
             </span>
           )}
         </div>
@@ -2217,10 +2217,10 @@ function ChatModuleDashboard({
                 {winner ? (
                   <>
                     <p className="mt-3 text-lg font-bold">{getChatAnalystName(winner)}</p>
-                    <p className="mt-2 text-sm text-slate-300">CSAT {winner.csat}% | {winner.review_percentage}% avaliacoes | {winner.total_tickets} atendimentos</p>
+                    <p className="mt-2 text-sm text-slate-300">CSAT {winner.csat}% | {winner.review_percentage}% avaliações | {winner.total_tickets} atendimentos</p>
                   </>
                 ) : (
-                  <p className="mt-3 text-slate-400">Aguardando elegivel</p>
+                  <p className="mt-3 text-slate-400">Aguardando elegível</p>
                 )}
               </div>
             )
@@ -2236,7 +2236,7 @@ function ChatModuleDashboard({
                 value={getManualPodiumDraftValue(position)}
                 onChange={(event) => setManualPodiumDraft((current) => ({ ...current, [position]: event.target.value }))}
               >
-                <option value="">Automatico</option>
+                <option value="">Automático</option>
                 {visibleMetrics.map((metric) => (
                   <option key={metric.id} value={metric.analyst_id}>
                     {getChatAnalystName(metric)}
@@ -2246,7 +2246,7 @@ function ChatModuleDashboard({
             </Field>
           ))}
           <button className="btn-primary self-end" type="button" onClick={handleSaveChatManualPodium}>
-            Salvar podio
+            Salvar pódio
           </button>
           <button className="secondary-button self-end" type="button" onClick={handleResetChatManualPodium}>
             Resetar
@@ -2254,7 +2254,7 @@ function ChatModuleDashboard({
         </div>
 
         {selectedTeamId === 'all' && (
-          <p className="mt-3 text-sm text-slate-400">Para ajustar manualmente, selecione uma equipe especifica no filtro do modulo chat.</p>
+          <p className="mt-3 text-sm text-slate-400">Para ajustar manualmente, selecione uma equipe específica no filtro do módulo chat.</p>
         )}
         {chatPodiumMessage && <p className="mt-4 rounded-md bg-slate-900/70 px-4 py-3 text-sm text-slate-200">{chatPodiumMessage}</p>}
       </section>
@@ -2265,17 +2265,17 @@ function ChatModuleDashboard({
             <div>
               <h2 className="section-title">Ranking mensal do chat</h2>
               <p className="section-subtitle">
-                Lista final do periodo, do primeiro ao ultimo. Criterios: CSAT minimo 90%, avaliacoes a partir de 25% e volume acima da media do periodo.
+                Lista final do período, do primeiro ao último. Critérios: CSAT mínimo 90%, avaliações a partir de 25% e volume acima da média do período.
               </p>
             </div>
             <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">
-              Media exigida: {averageTickets} atendimentos
+              Média exigida: {averageTickets} atendimentos
             </span>
           </div>
 
           <div className="mt-5 grid gap-4 md:grid-cols-4">
             <div className="rounded-lg bg-slate-900 p-4">
-              <p className="text-sm text-slate-400">Elegiveis</p>
+              <p className="text-sm text-slate-400">Elegíveis</p>
               <p className="mt-2 text-2xl font-bold text-emerald-300">{chatEligibleCount}</p>
             </div>
             <div className="rounded-lg bg-slate-900 p-4">
@@ -2291,9 +2291,9 @@ function ChatModuleDashboard({
               </p>
             </div>
             <div className="rounded-lg bg-slate-900 p-4">
-              <p className="text-sm text-slate-400">Fora por avaliacoes</p>
+              <p className="text-sm text-slate-400">Fora por avaliações</p>
               <p className="mt-2 text-2xl font-bold text-amber-200">
-                {chatRanking.filter((item) => item.reasons.some((reason) => reason.includes('avaliacoes abaixo'))).length}
+                {chatRanking.filter((item) => item.reasons.some((reason) => reason.includes('avaliações abaixo'))).length}
               </p>
             </div>
           </div>
@@ -2302,12 +2302,12 @@ function ChatModuleDashboard({
             <table className="min-w-full text-left text-sm">
               <thead className="text-slate-400">
                 <tr>
-                  <th className="pb-3 pr-4 font-medium">Posicao</th>
+                  <th className="pb-3 pr-4 font-medium">Posição</th>
                   <th className="pb-3 pr-4 font-medium">Analista</th>
                   <th className="pb-3 pr-4 font-medium">CSAT</th>
-                  <th className="pb-3 pr-4 font-medium">Avaliacoes</th>
+                  <th className="pb-3 pr-4 font-medium">Avaliações</th>
                   <th className="pb-3 pr-4 font-medium">Atendimentos</th>
-                  <th className="pb-3 pr-4 font-medium">Volume vs media</th>
+                  <th className="pb-3 pr-4 font-medium">Volume vs média</th>
                   <th className="pb-3 pr-4 font-medium">Status</th>
                   <th className="pb-3 pr-4 font-medium">Motivo</th>
                   <th className="pb-3 font-medium">Podio</th>
@@ -2330,15 +2330,15 @@ function ChatModuleDashboard({
                       </td>
                       <td className="py-3 pr-4">
                         {item.eligible ? (
-                          <span className="text-emerald-300">Elegivel</span>
+                          <span className="text-emerald-300">Elegível</span>
                         ) : excluded ? (
-                          <span className="text-amber-200">Excecao manual</span>
+                          <span className="text-amber-200">Exceção manual</span>
                         ) : (
-                          <span className="text-slate-400">Nao elegivel</span>
+                          <span className="text-slate-400">Não elegível</span>
                         )}
                       </td>
                       <td className="py-3 pr-4 text-slate-300">
-                        {item.eligible ? 'Cumpriu todos os criterios.' : item.reasons.join(', ')}
+                        {item.eligible ? 'Cumpriu todos os critérios.' : item.reasons.join(', ')}
                       </td>
                       <td className="py-3">
                         <button className="small-button" type="button" onClick={() => handleToggleChatPodiumExclusion(item.metric)}>
@@ -2351,12 +2351,12 @@ function ChatModuleDashboard({
               </tbody>
             </table>
 
-            {!chatRanking.length && <EmptyState text="Nenhum dado de chat encontrado neste periodo." />}
+            {!chatRanking.length && <EmptyState text="Nenhum dado de chat encontrado neste período." />}
           </div>
         </section>
 
         <section className="panel">
-          <h2 className="section-title">Analistas em atencao</h2>
+          <h2 className="section-title">Analistas em atenção</h2>
           <p className="section-subtitle">Lista objetiva para orientar acompanhamento mensal.</p>
           <div className="mt-5 space-y-3">
             {attention.length ? (
@@ -2370,7 +2370,7 @@ function ChatModuleDashboard({
                 </div>
               ))
             ) : (
-              <EmptyState text="Nenhum ponto critico encontrado neste filtro." />
+              <EmptyState text="Nenhum ponto crítico encontrado neste filtro." />
             )}
           </div>
         </section>
@@ -2379,10 +2379,10 @@ function ChatModuleDashboard({
 
       <section className={chatActiveTab === 'analysis' ? 'panel' : 'hidden'}>
         <div className="flex flex-col gap-2">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Analise detalhada</p>
-          <h2 className="section-title">Leitura por criterios do painel antigo</h2>
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Análise detalhada</p>
+          <h2 className="section-title">Leitura por critérios do painel antigo</h2>
           <p className="section-subtitle">
-            Mostra delta de CSAT contra a meta individual, delta de avaliacoes contra 25%, envio/sem avaliacao contra 80% e volume contra a media do periodo.
+            Mostra delta de CSAT contra a meta individual, delta de avaliações contra 25%, % sem avaliação contra 80% e volume contra a média do período.
           </p>
         </div>
 
@@ -2401,12 +2401,12 @@ function ChatModuleDashboard({
                       <strong>{item.metric.csat}%</strong>
                     </div>
                     <p className="mt-2 text-sm text-slate-400">
-                      Avaliacoes {item.metric.review_percentage}%, atendimento {item.metric.total_tickets} e meta CSAT {item.metric.csat_goal}%.
+                      Avaliações {item.metric.review_percentage}%, atendimento {item.metric.total_tickets} e meta CSAT {item.metric.csat_goal}%.
                     </p>
                   </div>
                 ))
               ) : (
-                <EmptyState text="Ainda nao ha destaque no filtro selecionado." />
+                <EmptyState text="Ainda não há destaque no filtro selecionado." />
               )}
             </div>
           </div>
@@ -2423,12 +2423,12 @@ function ChatModuleDashboard({
                     </div>
                     <p className="mt-2 text-sm text-slate-400">{item.reasons.length ? item.reasons.join(', ') : 'Acompanhar estabilidade dos indicadores.'}</p>
                     <p className="mt-2 text-sm text-slate-300">
-                      CSAT {formatDelta(item.csatDelta, ' p.p.')}, avaliacoes {formatDelta(item.reviewDelta, ' p.p.')} e envio {formatDelta(item.sendingDelta, ' p.p.')}.
+                      CSAT {formatDelta(item.csatDelta, ' p.p.')}, avaliações {formatDelta(item.reviewDelta, ' p.p.')} e envio {formatDelta(item.sendingDelta, ' p.p.')}.
                     </p>
                   </div>
                 ))
               ) : (
-                <EmptyState text="Nenhuma oportunidade critica encontrada neste periodo." />
+                <EmptyState text="Nenhuma oportunidade crítica encontrada neste período." />
               )}
             </div>
           </div>
@@ -2442,7 +2442,7 @@ function ChatModuleDashboard({
                 <th className="pb-3 pr-4 font-medium">Status</th>
                 <th className="pb-3 pr-4 font-medium">CSAT</th>
                 <th className="pb-3 pr-4 font-medium">Delta CSAT</th>
-                <th className="pb-3 pr-4 font-medium">Avaliacoes</th>
+                <th className="pb-3 pr-4 font-medium">Avaliações</th>
                 <th className="pb-3 pr-4 font-medium">Delta aval.</th>
                 <th className="pb-3 pr-4 font-medium">Envio</th>
                 <th className="pb-3 pr-4 font-medium">Atendimentos</th>
@@ -2469,7 +2469,7 @@ function ChatModuleDashboard({
       <section className={chatActiveTab === 'reports' ? 'panel' : 'hidden'}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Relatorio individual</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Relatório individual</p>
             <h2 className="section-title">Fechamento mensal por analista</h2>
             <p className="section-subtitle">
               Fluxo guiado: confira os dados, gere o feedback, revise o texto final e exporte o documento individual.
@@ -2513,9 +2513,9 @@ function ChatModuleDashboard({
         {selectedChatReportMetric ? (
           <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             <MetricCard label="CSAT" value={`${selectedChatReportMetric.csat}%`} />
-            <MetricCard label="Avaliacoes" value={`${selectedChatReportMetric.review_percentage}%`} />
+            <MetricCard label="Avaliações" value={`${selectedChatReportMetric.review_percentage}%`} />
             <MetricCard label="Atendimentos" value={selectedChatReportMetric.total_tickets} />
-            <MetricCard label="Volume vs media" value={`${Number(selectedChatReportMetric.total_tickets) - averageTickets >= 0 ? '+' : ''}${Number(selectedChatReportMetric.total_tickets) - averageTickets}`} />
+            <MetricCard label="Volume vs média" value={`${Number(selectedChatReportMetric.total_tickets) - averageTickets >= 0 ? '+' : ''}${Number(selectedChatReportMetric.total_tickets) - averageTickets}`} />
             <MetricCard label="Podio" value={selectedChatPodiumPosition > 0 ? `${selectedChatPodiumPosition}o lugar` : 'Fora'} />
           </div>
         ) : (
@@ -2525,7 +2525,7 @@ function ChatModuleDashboard({
         <div className="mt-5 grid gap-4 lg:grid-cols-3">
           <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
             <p className="font-semibold text-slate-100">1. Conferir</p>
-            <p className="mt-2">Verifique periodo, analista, CSAT, avaliacoes, volume e posicao no podio.</p>
+            <p className="mt-2">Verifique periodo, analista, CSAT, avaliações, volume e posicao no podio.</p>
           </div>
           <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
             <p className="font-semibold text-slate-100">2. Revisar feedback</p>
@@ -2574,7 +2574,7 @@ function ChatModuleDashboard({
               className="form-input min-h-56"
               value={chatFeedbackDraft}
               onChange={(event) => setChatFeedbackDraft(event.target.value)}
-              placeholder="Gere uma sugestao ou escreva aqui o feedback final que ira para o relatorio."
+              placeholder="Gere uma sugestão ou escreva aqui o feedback final que irá para o relatório."
             />
           </Field>
 
@@ -2584,7 +2584,7 @@ function ChatModuleDashboard({
             type="button"
             onClick={handleExportChatIndividualReport}
           >
-            6. Exportar relatorio individual
+            6. Exportar relatório individual
           </button>
         </div>
 
@@ -2597,7 +2597,7 @@ function ChatModuleDashboard({
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Cadastro do chat</p>
             <h2 className="section-title">{editingChatAnalystId ? 'Editar meta do analista' : 'Incluir analista do chat'}</h2>
             <p className="section-subtitle">
-              Cadastre analistas por equipe e mantenha a meta individual de CSAT usada nas importacoes e relatorios do chat.
+              Cadastre analistas por equipe e mantenha a meta individual de CSAT usada nas importações e relatórios do chat.
             </p>
 
             <form className="mt-5 grid gap-4" onSubmit={handleChatAnalystSubmit}>
@@ -2640,7 +2640,7 @@ function ChatModuleDashboard({
 
               <div className="flex flex-wrap gap-3">
                 <button className="btn-primary" disabled={chatAnalystSaving} type="submit">
-                  {chatAnalystSaving ? 'Salvando...' : editingChatAnalystId ? 'Salvar alteracoes' : 'Incluir analista'}
+                  {chatAnalystSaving ? 'Salvando...' : editingChatAnalystId ? 'Salvar alterações' : 'Incluir analista'}
                 </button>
 
                 {editingChatAnalystId && (
@@ -2659,7 +2659,7 @@ function ChatModuleDashboard({
           <div className="flex-1 overflow-x-auto">
             <h3 className="text-xl font-bold">Analistas e metas cadastradas</h3>
             <p className="section-subtitle">
-              Inative para preservar historico. Exclua apenas cadastros criados por engano.
+              Inative para preservar histórico. Exclua apenas cadastros criados por engano.
             </p>
             <table className="mt-5 min-w-full text-left text-sm">
               <thead className="text-slate-400">
@@ -2668,7 +2668,7 @@ function ChatModuleDashboard({
                   <th className="pb-3 pr-4 font-medium">Equipe</th>
                   <th className="pb-3 pr-4 font-medium">Meta CSAT</th>
                   <th className="pb-3 pr-4 font-medium">Status</th>
-                  <th className="pb-3 font-medium">Acoes</th>
+                  <th className="pb-3 font-medium">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/10">
@@ -2711,7 +2711,7 @@ function ChatModuleDashboard({
           <div>
             <h2 className="section-title">Base importada</h2>
             <p className="section-subtitle">
-              {metrics.length} registros carregados entre historico e importacoes mensais do Zendesk. Esta aba serve para conferir se a importacao mensal bate com o fechamento antes de olhar ranking e relatorios.
+              {metrics.length} registros carregados entre histórico e importações mensais do Zendesk. Esta aba serve para conferir se a importação mensal bate com o fechamento antes de olhar ranking e relatórios.
             </p>
           </div>
           <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">
@@ -2722,24 +2722,24 @@ function ChatModuleDashboard({
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
           <MetricCard label="Atendidos" value={totals.tickets} />
           <MetricCard label="Inativos" value={`${totals.inactive} (${chatInactiveRate}%)`} />
-          <MetricCard label="Validos" value={totals.validTickets} />
-          <MetricCard label="Avaliacoes" value={`${totals.reviews} (${chatReviewRate}%)`} />
-          <MetricCard label="Sem avaliacao" value={`${Math.max(totals.validTickets - totals.reviews, 0)} (${chatSendingRate}%)`} />
+          <MetricCard label="Válidos" value={totals.validTickets} />
+          <MetricCard label="Avaliações" value={`${totals.reviews} (${chatReviewRate}%)`} />
+          <MetricCard label="Sem avaliação" value={`${Math.max(totals.validTickets - totals.reviews, 0)} (${chatSendingRate}%)`} />
           <MetricCard label="CSAT consolidado" value={`${averageCsat}%`} />
         </div>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-3">
           <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
-            <p className="font-semibold text-slate-100">Formula de avaliacoes</p>
-            <p className="mt-2">Avaliacoes recebidas / atendimentos validos x 100.</p>
+            <p className="font-semibold text-slate-100">Fórmula de avaliações</p>
+            <p className="mt-2">Avaliações recebidas / atendimentos validos x 100.</p>
           </div>
           <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
-            <p className="font-semibold text-slate-100">Formula de envio avaliacao</p>
-            <p className="mt-2">Validos sem avaliacao / atendimentos validos x 100.</p>
+            <p className="font-semibold text-slate-100">Fórmula de % sem avaliação</p>
+            <p className="mt-2">Válidos sem avaliacao / atendimentos validos x 100.</p>
           </div>
           <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
-            <p className="font-semibold text-slate-100">Formula de inatividade</p>
-            <p className="mt-2">Inativos / atendimentos totais x 100. Este numero e apoio operacional.</p>
+            <p className="font-semibold text-slate-100">Fórmula de inatividade</p>
+            <p className="mt-2">Inativos / atendimentos totais x 100. Este número é apoio operacional; o indicador principal do fechamento continua sendo o % sem avaliação.</p>
           </div>
         </div>
 
@@ -2750,9 +2750,9 @@ function ChatModuleDashboard({
                 <th className="px-3 py-2">Analista</th>
                 <th className="px-3 py-2">Equipe</th>
                 <th className="px-3 py-2">CSAT</th>
-                <th className="px-3 py-2">Avaliacoes</th>
+                <th className="px-3 py-2">Avaliações</th>
                 <th className="px-3 py-2">Atendidos</th>
-                <th className="px-3 py-2">Validos</th>
+                <th className="px-3 py-2">Válidos</th>
                 <th className="px-3 py-2">Inativos</th>
                 <th className="px-3 py-2">% inatividade</th>
                 <th className="px-3 py-2">% envio avaliacao</th>
@@ -2963,12 +2963,12 @@ function DashboardView({
   const analystRankingPosition = secureAnalystRanking?.position ?? (analystResult ? periodPodium.findIndex((item) => item.analystId === analystResult.analystId) + 1 : 0)
   const analystStatusText = analystResult
     ? analystResult.eligible
-      ? 'Elegivel para o podio'
+      ? 'Elegível para o podio'
       : 'Fora do podio neste periodo'
     : 'Sem lancamento no periodo'
   const analystFocusText = analystResult
     ? analystResult.eligible
-      ? 'Manter CSAT, volume e percentual de avaliacoes ate o fechamento.'
+      ? 'Manter CSAT, volume e percentual de avaliações ate o fechamento.'
       : analystResult.reasons.join(', ')
     : 'Selecione outro periodo ou aguarde o lancamento semanal.'
   const analystActionText = analystResult
@@ -3077,9 +3077,9 @@ function DashboardView({
               <span>{formatDelta(teamPerformanceDelta, ' p.p.')} vs anterior</span>
             </div>
             <div className="executive-card">
-              <p>{isAnalystDashboard ? 'Minhas avaliacoes' : 'Cobertura de avaliacoes'}</p>
+              <p>{isAnalystDashboard ? 'Minhas avaliações' : 'Cobertura de avaliações'}</p>
               <strong>{reviewCoverage}%</strong>
-              <span>{totalReviews} avaliacoes em {totalTickets} atendimentos</span>
+              <span>{totalReviews} avaliações em {totalTickets} atendimentos</span>
             </div>
           </div>
         </div>
@@ -3091,7 +3091,7 @@ function DashboardView({
               <p className="mt-2 text-xs leading-5 text-slate-500">{executivePriority}</p>
             </div>
             <div className="rounded-lg bg-slate-900 p-4">
-              <p className="text-sm text-slate-400">Acao recomendada</p>
+              <p className="text-sm text-slate-400">Ação recomendada</p>
               <p className="mt-2 font-semibold">{executiveNextAction}</p>
             </div>
             <div className="rounded-lg bg-slate-900 p-4">
@@ -3117,7 +3117,7 @@ function DashboardView({
             value={`${predictiveGoalProbability}%`}
             detail={
               hasPeriodData
-                ? `CSAT, performance, avaliacoes e podio combinados. ${eligibleCount} de ${periodPodium.length} elegiveis.`
+                ? `CSAT, performance, avaliações e podio combinados. ${eligibleCount} de ${periodPodium.length} elegiveis.`
                 : 'Sem base de dados no periodo.'
             }
             tone={predictiveGoalProbability >= 75 ? 'success' : predictiveGoalProbability >= 45 ? 'warning' : 'danger'}
@@ -3146,7 +3146,7 @@ function DashboardView({
           <p className="text-sm font-semibold text-slate-200">Como ler esta previsao</p>
           <div className="mt-3 grid gap-3 text-sm leading-6 text-slate-400 md:grid-cols-2">
             <p>
-              A chance de atingir metas combina CSAT do periodo, performance da equipe, cobertura de avaliacoes e
+              A chance de atingir metas combina CSAT do periodo, performance da equipe, cobertura de avaliações e
               quantidade de analistas elegiveis ao podio.
             </p>
             <p>
@@ -3177,7 +3177,7 @@ function DashboardView({
 
         <div className="mt-6 grid gap-6 xl:grid-cols-3">
           <TrendLineChart
-            label={isAnalystDashboard ? 'Meu CSAT semanal' : 'CSAT medio semanal'}
+            label={isAnalystDashboard ? 'Meu CSAT semanal' : 'CSAT médio semanal'}
             points={weeklyIndividualTrend.map((item) => ({
               label: item.label,
               value: item.csat,
@@ -3185,7 +3185,7 @@ function DashboardView({
             suffix="%"
           />
           <BarTrend
-            label={isAnalystDashboard ? 'Minhas avaliacoes por semana' : 'Avaliacoes por semana'}
+            label={isAnalystDashboard ? 'Minhas avaliações por semana' : 'Avaliações por semana'}
             points={weeklyIndividualTrend.map((item) => ({
               label: item.label,
               value: item.totalReviews,
@@ -3207,8 +3207,8 @@ function DashboardView({
             </h2>
             <p className="section-subtitle">
               {isAnalystDashboard
-                ? `Sua leitura no periodo ${periodLabel}: CSAT minimo ${podiumCsatGoal}%, avaliacoes ${reviewGoal}% e atendimentos dentro da media.`
-                : `Ranking de ${periodLabel}: CSAT minimo ${podiumCsatGoal}%, avaliacoes ${reviewGoal}% e atendimentos dentro da media da equipe.`}
+                ? `Sua leitura no periodo ${periodLabel}: CSAT minimo ${podiumCsatGoal}%, avaliações ${reviewGoal}% e atendimentos dentro da media.`
+                : `Ranking de ${periodLabel}: CSAT minimo ${podiumCsatGoal}%, avaliações ${reviewGoal}% e atendimentos dentro da media da equipe.`}
             </p>
           </div>
         </div>
@@ -3224,17 +3224,17 @@ function DashboardView({
             </div>
 
             <div className="rounded-lg bg-slate-900 p-5">
-              <p className="text-sm text-slate-400">CSAT e avaliacoes</p>
+              <p className="text-sm text-slate-400">CSAT e avaliações</p>
               <p className="mt-2 text-3xl font-bold text-cyan-300">
                 {analystResult?.averageCsat ?? 0}%
               </p>
               <p className="mt-2 text-sm text-slate-400">
-                {analystResult?.reviewPercentage ?? 0}% avaliacoes | meta {reviewGoal}%
+                {analystResult?.reviewPercentage ?? 0}% avaliações | meta {reviewGoal}%
               </p>
             </div>
 
             <div className="rounded-lg bg-slate-900 p-5">
-              <p className="text-sm text-slate-400">Posicao no ranking</p>
+              <p className="text-sm text-slate-400">Posição no ranking</p>
               <p className="mt-2 text-3xl font-bold">{analystRankingPosition ? `${analystRankingPosition}o` : '-'}</p>
               <p className="mt-2 text-sm text-slate-400">
                 No filtro semanal, esta e sua posicao parcial; no mensal, mostra a leitura acumulada.
@@ -3255,11 +3255,11 @@ function DashboardView({
                         <h3 className="mt-2 text-xl font-bold">{winner.analystName}</h3>
                         <p className="mt-3 text-3xl font-bold text-cyan-300">{winner.averageCsat}%</p>
                         <p className="mt-2 text-sm text-slate-400">
-                          {winner.reviewPercentage}% avaliacoes | {winner.totalTickets} atendimentos
+                          {winner.reviewPercentage}% avaliações | {winner.totalTickets} atendimentos
                         </p>
                       </>
                     ) : (
-                      <p className="mt-5 text-sm text-slate-500">Aguardando elegivel</p>
+                      <p className="mt-5 text-sm text-slate-500">Aguardando elegível</p>
                     )}
                   </div>
                 )
@@ -3270,10 +3270,10 @@ function DashboardView({
               <table className="min-w-full text-left text-sm">
                 <thead className="text-slate-400">
                   <tr>
-                    <th className="pb-3 pr-4 font-medium">Posicao</th>
+                    <th className="pb-3 pr-4 font-medium">Posição</th>
                     <th className="pb-3 pr-4 font-medium">Analista</th>
                     <th className="pb-3 pr-4 font-medium">CSAT periodo</th>
-                    <th className="pb-3 pr-4 font-medium">Avaliacoes</th>
+                    <th className="pb-3 pr-4 font-medium">Avaliações</th>
                     <th className="pb-3 pr-4 font-medium">Atendimentos</th>
                     <th className="pb-3 font-medium">Status</th>
                   </tr>
@@ -3290,7 +3290,7 @@ function DashboardView({
                       <td className="py-3 pr-4">{item.totalTickets}</td>
                       <td className="py-3">
                         {item.eligible ? (
-                          <span className="text-emerald-300">Elegivel</span>
+                          <span className="text-emerald-300">Elegível</span>
                         ) : (
                           <span className="text-slate-400">{item.reasons.join(', ')}</span>
                         )}
@@ -3361,7 +3361,7 @@ function DashboardView({
                   <h3 className="mt-2 text-xl font-bold">{bestPerformer.analystName}</h3>
                   <p className="mt-2 text-3xl font-bold text-cyan-300">{bestPerformer.averageCsat}%</p>
                   <p className="mt-2 text-sm text-slate-400">
-                    {bestPerformer.reviewPercentage}% avaliacoes no periodo
+                    {bestPerformer.reviewPercentage}% avaliações no periodo
                   </p>
                 </>
               ) : (
@@ -3493,24 +3493,24 @@ function ReportsView({
   const teamLossPercentage = teamTotalCalls ? round((teamAbandonedCalls / teamTotalCalls) * 100) : 0
   const weeklyEvolution = aggregateIndividualByWeek(analystMetrics)
   const situationText = selectedAnalyst && analystResult
-    ? `${selectedAnalyst.name} fechou ${periodLabel} com CSAT de ${analystResult.averageCsat}%, ${analystResult.totalReviews} avaliacoes e ${analystResult.totalTickets} atendimentos registrados. A meta individual e ${analystResult.individualGoal}% e a referencia para podio e ${podiumCsatGoal}%. A variacao contra o periodo anterior foi de ${formatDelta(csatDelta, ' p.p.')}.`
+    ? `${selectedAnalyst.name} fechou ${periodLabel} com CSAT de ${analystResult.averageCsat}%, ${analystResult.totalReviews} avaliações e ${analystResult.totalTickets} atendimentos registrados. A meta individual e ${analystResult.individualGoal}% e a referencia para podio e ${podiumCsatGoal}%. A variacao contra o periodo anterior foi de ${formatDelta(csatDelta, ' p.p.')}.`
     : ''
   const actionText = analystResult
     ? analystResult.eligible
-      ? 'Foram alinhadas a manutencao das praticas atuais, a preservacao do volume de avaliacoes e o acompanhamento semanal de qualquer oscilacao antes do fechamento do ciclo.'
+      ? 'Foram alinhadas a manutencao das praticas atuais, a preservacao do volume de avaliações e o acompanhamento semanal de qualquer oscilacao antes do fechamento do ciclo.'
       : `Foram alinhadas a priorizacao dos pontos: ${analystResult.reasons.join(', ')}. A recomendacao inicial e revisar atendimentos de menor satisfacao, reforcar o convite para avaliacao e acompanhar o indicador semanalmente.`
     : ''
   const resultText = analystResult
     ? analystResult.eligible
-      ? `Resultado esperado: manter CSAT acima de ${podiumCsatGoal}%, preservar elegibilidade ao podio e sustentar volume de avaliacoes igual ou superior a ${reviewGoal}% dos atendimentos.`
+      ? `Resultado esperado: manter CSAT acima de ${podiumCsatGoal}%, preservar elegibilidade ao podio e sustentar volume de avaliações igual ou superior a ${reviewGoal}% dos atendimentos.`
       : `Resultado esperado: recuperar os pontos impeditivos para aproximar o desempenho da referencia de podio (${podiumCsatGoal}%) e elevar a consistencia do indicador no proximo ciclo.`
     : ''
   const evolutionText = analystResult
-    ? `Expectativa e plano de desenvolvimento: ${buildDevelopmentFocus(analystResult, csatDelta)} Perguntas sugeridas para 1:1: o que ajudou ou atrapalhou o CSAT no periodo? quais atendimentos merecem revisao? qual acao simples pode aumentar avaliacoes na proxima semana?`
+    ? `Expectativa e plano de desenvolvimento: ${buildDevelopmentFocus(analystResult, csatDelta)} Perguntas sugeridas para 1:1: o que ajudou ou atrapalhou o CSAT no periodo? quais atendimentos merecem revisao? qual acao simples pode aumentar avaliações na proxima semana?`
     : ''
   const feedbackSummary = analystResult
     ? analystResult.eligible
-      ? `${selectedAnalyst?.name ?? 'Analista'} esta elegivel ao podio no periodo. O foco recomendado e preservar consistencia, volume de avaliacoes e acompanhamento semanal.`
+      ? `${selectedAnalyst?.name ?? 'Analista'} esta elegivel ao podio no periodo. O foco recomendado e preservar consistencia, volume de avaliações e acompanhamento semanal.`
       : `${selectedAnalyst?.name ?? 'Analista'} ainda nao sustenta elegibilidade ao podio neste periodo. O foco recomendado e atuar sobre: ${analystResult.reasons.join(', ')}.`
     : ''
 
@@ -3603,7 +3603,7 @@ function ReportsView({
       <section className="panel">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="section-title">Relatorios e IA analitica</h2>
+            <h2 className="section-title">Relatórios e IA analitica</h2>
             <p className="section-subtitle">
               Primeira camada SARE gerada a partir dos lancamentos do periodo. A API de IA entra na proxima etapa.
             </p>
@@ -3748,7 +3748,7 @@ function ReportsView({
                 </strong>
               </div>
               <div className="report-summary-card">
-                <p>Avaliacoes</p>
+                <p>Avaliações</p>
                 <strong>{analystResult.totalReviews}</strong>
               </div>
               <div className="report-summary-card">
@@ -3898,7 +3898,7 @@ function ReportsView({
             <p className="text-sm text-slate-400">Roteiro sugerido para 1:1</p>
             <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm text-slate-300">
               <li>Comecar pela situacao do periodo e confirmar se os numeros refletem a realidade operacional.</li>
-              <li>Discutir o principal ponto de variacao: CSAT, avaliacoes ou volume de atendimentos.</li>
+              <li>Discutir o principal ponto de variacao: CSAT, avaliações ou volume de atendimentos.</li>
               <li>Definir uma acao objetiva para a proxima semana, com comportamento observavel.</li>
               <li>Registrar a expectativa do proximo ciclo e revisar no fechamento seguinte.</li>
             </ol>
@@ -3923,7 +3923,7 @@ function ReportsView({
               )
             ) : (
               <p className="mt-4 text-sm text-slate-300">
-                Acompanhar sua evolucao semanal, proteger o volume de avaliacoes e revisar atendimentos que possam impactar o CSAT.
+                Acompanhar sua evolucao semanal, proteger o volume de avaliações e revisar atendimentos que possam impactar o CSAT.
               </p>
             )}
           </div>
@@ -4082,7 +4082,7 @@ function EntriesView({
         <section className="panel">
         <h2 className="section-title">Lancamento individual</h2>
         <p className="section-subtitle">
-          Registre resultado real, avaliacoes e atendimentos da semana anterior.
+          Registre resultado real, avaliações e atendimentos da semana anterior.
         </p>
 
         <form className="mt-5 grid gap-4" onSubmit={onIndividualSubmit}>
@@ -4114,7 +4114,7 @@ function EntriesView({
               {individualDateInvalid && <p>A data final nao pode ser menor que a data inicial.</p>}
               {individualDuplicate && <p>Ja existe lancamento para este analista neste periodo.</p>}
               {individualReviewsInvalid && (
-                <p>O total de avaliacoes nao pode ser maior que o total de atendimentos.</p>
+                <p>O total de avaliações nao pode ser maior que o total de atendimentos.</p>
               )}
             </div>
           )}
@@ -4174,7 +4174,7 @@ function EntriesView({
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Avaliacoes positivas">
+            <Field label="Avaliações positivas">
               <input
                 className="form-input"
                 min="0"
@@ -4186,7 +4186,7 @@ function EntriesView({
                 required
               />
             </Field>
-            <Field label="Avaliacoes negativas">
+            <Field label="Avaliações negativas">
               <input
                 className="form-input"
                 min="0"
@@ -4225,8 +4225,8 @@ function EntriesView({
           </Field>
 
           <div className="rounded-md bg-slate-900 p-4 text-sm text-slate-300">
-            <p>Total de avaliacoes: <strong>{totalReviews}</strong></p>
-            <p>Percentual de avaliacoes: <strong>{reviewPercentage}%</strong></p>
+            <p>Total de avaliações: <strong>{totalReviews}</strong></p>
+            <p>Percentual de avaliações: <strong>{reviewPercentage}%</strong></p>
             <p>
               CSAT informado: <strong>{toNumber(individualForm.csat)}%</strong>
             </p>
@@ -4490,11 +4490,11 @@ function EntriesHistory({
           <p className="mt-2 text-2xl font-bold">{filteredIndividualMetrics.length}</p>
         </div>
         <div className="rounded-lg bg-slate-900 p-4">
-          <p className="text-sm text-slate-400">CSAT medio filtrado</p>
+          <p className="text-sm text-slate-400">CSAT médio filtrado</p>
           <p className="mt-2 text-2xl font-bold">{averageHistoryCsat}%</p>
         </div>
         <div className="rounded-lg bg-slate-900 p-4">
-          <p className="text-sm text-slate-400">Avaliacoes / atendimentos</p>
+          <p className="text-sm text-slate-400">Avaliações / atendimentos</p>
           <p className="mt-2 text-2xl font-bold">{totalIndividualReviews}/{totalIndividualTickets}</p>
         </div>
         <div className="rounded-lg bg-slate-900 p-4">
@@ -4514,7 +4514,7 @@ function EntriesHistory({
                     <th className="pb-3 pr-4 font-medium">Analista</th>
                     <th className="pb-3 pr-4 font-medium">Semana</th>
                     <th className="pb-3 pr-4 font-medium">CSAT</th>
-                    <th className="pb-3 pr-4 font-medium">Avaliacoes</th>
+                    <th className="pb-3 pr-4 font-medium">Avaliações</th>
                     <th className="pb-3 pr-4 font-medium">Atendimentos</th>
                     <th className="pb-3 pr-4 font-medium">Evidencia</th>
                     <th className="pb-3 font-medium">Acao</th>
@@ -4681,7 +4681,7 @@ function AnalystsView({
 
           <div className="flex flex-wrap gap-3">
             <button className="primary-button" disabled={saving} type="submit">
-              {saving ? 'Salvando...' : editingAnalystId ? 'Salvar alteracoes' : 'Incluir analista'}
+              {saving ? 'Salvando...' : editingAnalystId ? 'Salvar alterações' : 'Incluir analista'}
             </button>
 
             {editingAnalystId && (
@@ -4696,7 +4696,7 @@ function AnalystsView({
       <section className="panel">
         <h2 className="section-title">Analistas cadastrados</h2>
         <p className="section-subtitle">
-          Inative para preservar historico. Exclua apenas cadastros criados por engano.
+          Inative para preservar histórico. Exclua apenas cadastros criados por engano.
         </p>
 
         <div className="mt-5 overflow-x-auto">
@@ -4706,7 +4706,7 @@ function AnalystsView({
                 <th className="pb-3 pr-4 font-medium">Nome</th>
                 <th className="pb-3 pr-4 font-medium">Meta CSAT</th>
                 <th className="pb-3 pr-4 font-medium">Status</th>
-                <th className="pb-3 font-medium">Acoes</th>
+                <th className="pb-3 font-medium">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
@@ -4786,14 +4786,14 @@ function GoalsView({
         <div className="mt-5 grid gap-4 lg:grid-cols-3">
           <GoalImpactCard
             title="Podio mensal"
-            text="Usa CSAT minimo para podio, percentual minimo de avaliacoes e volume de atendimentos dentro da media da equipe."
+            text="Usa CSAT minimo para podio, percentual minimo de avaliações e volume de atendimentos dentro da media da equipe."
           />
           <GoalImpactCard
             title="Performance da equipe"
             text="Define a referencia operacional compartilhada por todos e usada nos alertas executivos."
           />
           <GoalImpactCard
-            title="Relatorios e IA"
+            title="Relatórios e IA"
             text="As metas aparecem no SARE, nos planos de desenvolvimento e na inteligencia preditiva do dashboard."
           />
         </div>
@@ -4936,7 +4936,7 @@ function getGoalImpactText(goal: Goal) {
   }
 
   if (key.includes('review') || label.includes('avalia')) {
-    return 'Define o minimo de avaliacoes esperado por atendimento.'
+    return 'Define o minimo de avaliações esperado por atendimento.'
   }
 
   if (key.includes('performance') || key.includes('team') || label.includes('performance') || label.includes('desempenho')) {
@@ -5289,16 +5289,16 @@ function exportChatIndividualReport({
   const reviewGap = round(Number(metric.review_percentage) - reviewGoal)
   const productivityGap = averageTickets ? round(((Number(metric.total_tickets) - averageTickets) / averageTickets) * 100) : 0
   const podiumText = podiumPosition > 0
-    ? `${podiumPosition}o Lugar - CSAT: ${metric.csat}% | ${metric.total_tickets} atendimentos | ${metric.review_percentage}% avaliacoes`
-    : 'Nao elegivel ao podio neste periodo'
+    ? `${podiumPosition}o Lugar - CSAT: ${metric.csat}% | ${metric.total_tickets} atendimentos | ${metric.review_percentage}% avaliações`
+    : 'Não elegível ao podio neste periodo'
   const status = metric.status || (Number(metric.csat) >= csatGoal && Number(metric.review_percentage) >= reviewGoal ? 'Meta Superada' : 'Em acompanhamento')
   const statusColor = status === 'Meta Superada' ? '#059669' : status === 'Critico' ? '#dc2626' : '#d97706'
   const csatText = csatGap >= 0
     ? `O resultado superou a referencia de ${csatGoal}% em ${formatDelta(csatGap, ' p.p.')}.`
     : `O resultado ficou ${formatDelta(csatGap, ' p.p.')} abaixo da referencia de ${csatGoal}%.`
   const reviewText = reviewGap >= 0
-    ? `O resultado superou a meta de avaliacoes em ${formatDelta(reviewGap, ' p.p.')}.`
-    : `O resultado ficou ${formatDelta(reviewGap, ' p.p.')} abaixo da meta minima de avaliacoes.`
+    ? `O resultado superou a meta de avaliações em ${formatDelta(reviewGap, ' p.p.')}.`
+    : `O resultado ficou ${formatDelta(reviewGap, ' p.p.')} abaixo da meta minima de avaliações.`
   const productivityText = productivityGap >= 0
     ? `${analystName} absorveu uma demanda ${formatDelta(productivityGap, '%')} superior a media da operacao.`
     : `${analystName} ficou ${formatDelta(productivityGap, '%')} abaixo da media de atendimentos da operacao.`
@@ -5312,7 +5312,7 @@ function exportChatIndividualReport({
     <html>
       <head>
         <meta charset="utf-8" />
-        <title>Analise individual - ${safeName}</title>
+        <title>Análise individual - ${safeName}</title>
         <style>
           body { font-family: Arial, sans-serif; color: #111827; margin: 34px; }
           h1 { font-size: 26px; margin: 0 0 6px; color: #0f172a; }
@@ -5373,37 +5373,37 @@ function exportChatIndividualReport({
       </head>
       <body>
         <div class="header">
-          <h1>Relatorio de Performance - ${safeName}</h1>
-          <p class="subtitle">Periodo: ${escapeHtml(periodLabel)} | Fonte: Zendesk</p>
+          <h1>Relatório de Performance - ${safeName}</h1>
+          <p class="subtitle">Período: ${escapeHtml(periodLabel)} | Fonte: Zendesk</p>
         </div>
 
         <div class="grid">
           <div class="box">
             <h2>Esperado:</h2>
-            <p>>= ${reviewGoal}% de avaliacoes</p>
+            <p>>= ${reviewGoal}% de avaliações</p>
             <p>>= ${csatGoal}% de Satisfacao</p>
           </div>
           <div class="box">
-            <h2>Sintese do ciclo:</h2>
+            <h2>Síntese do ciclo:</h2>
             <p>Status geral: <span class="metric">${escapeHtml(status)}</span></p>
-            <p>Posicao no Podio: ${escapeHtml(podiumText)}</p>
-            <p>Leitura rapida: os detalhes de CSAT, avaliacoes, envio e volume estao consolidados na analise tecnica abaixo.</p>
+            <p>Posição no Podio: ${escapeHtml(podiumText)}</p>
+            <p>Leitura rápida: os detalhes de CSAT, avaliações, % sem avaliação e volume estão consolidados na análise técnica abaixo.</p>
           </div>
         </div>
 
-        <h2>Analise Tecnica de Desempenho</h2>
-        <h3>Qualidade e Satisfacao do Cliente (CSAT)</h3>
+        <h2>Análise Tecnica de Desempenho</h2>
+        <h3>Qualidade e Satisfação do Cliente (CSAT)</h3>
         <p>O(A) colaborador(a) registrou um indice de <strong>Satisfacao (CSAT) de ${metric.csat}%</strong>.</p>
         <ul>
           <li><strong>Comparativo com a meta:</strong> ${escapeHtml(csatText)}</li>
-          <li><strong>Analise detalhada:</strong> Do volume total de feedbacks recebidos (${metric.reviews}), <strong>${metric.positive_reviews} foram positivos</strong>. Houve ${metric.negative_reviews} registros negativos.</li>
+          <li><strong>Análise detalhada:</strong> Do volume total de feedbacks recebidos (${metric.reviews}), <strong>${metric.positive_reviews} foram positivos</strong>. Houve ${metric.negative_reviews} registros negativos.</li>
         </ul>
 
         <h3>Engajamento e Coleta de Feedback</h3>
-        <p>O(A) colaborador(a) alcancou uma <strong>taxa de avaliacoes de ${metric.review_percentage}%</strong>.</p>
+        <p>O(A) colaborador(a) alcancou uma <strong>taxa de avaliações de ${metric.review_percentage}%</strong>.</p>
         <ul>
           <li><strong>Comparativo com a meta:</strong> ${escapeHtml(reviewText)}</li>
-          <li><strong>Calculo:</strong> A taxa foi calculada sobre ${metric.reviews} avaliacoes divididas por ${metric.valid_tickets} atendimentos validos.</li>
+          <li><strong>Calculo:</strong> A taxa foi calculada sobre ${metric.reviews} avaliações divididas por ${metric.valid_tickets} atendimentos validos.</li>
         </ul>
 
         <h3>Produtividade e Volumetria</h3>
@@ -5413,8 +5413,8 @@ function exportChatIndividualReport({
           <li><strong>Destaque:</strong> ${escapeHtml(podiumText)}.</li>
         </ul>
 
-        <h2>Evolucao mensal</h2>
-        <p class="muted">Leitura comparativa dos meses importados. O objetivo e enxergar rapidamente melhora, queda ou estabilidade em CSAT, avaliacoes e volume.</p>
+        <h2>Evolução mensal</h2>
+        <p class="muted">Leitura comparativa dos meses importados. O objetivo e enxergar rapidamente melhora, queda ou estabilidade em CSAT, avaliações e volume.</p>
         ${evolutionRows}
 
         ${managerNotesHtml}
@@ -5469,17 +5469,17 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
           : 'Evolucao mista'
   const focusText =
     Number(last.csat) < 90
-      ? 'priorizar qualidade percebida e revisar causas de avaliacoes negativas.'
+      ? 'priorizar qualidade percebida e revisar causas de avaliações negativas.'
       : Number(last.review_percentage) < 25
-        ? 'aumentar a amostra de avaliacoes para tornar a leitura mais sustentavel.'
+        ? 'aumentar a amostra de avaliações para tornar a leitura mais sustentavel.'
         : csatDelta < 0
           ? 'entender o que mudou no ultimo ciclo para recuperar o patamar anterior.'
           : reviewDelta < 0
-            ? 'preservar o CSAT e recuperar participacao dos clientes nas avaliacoes.'
+            ? 'preservar o CSAT e recuperar participacao dos clientes nas avaliações.'
             : 'manter consistencia e compartilhar as praticas que sustentaram o resultado.'
   const readText =
     history.length > 1
-      ? `Entre ${first.month_label} e ${last.month_label}, o CSAT variou ${deltaText(csatDelta, ' p.p.')}, as avaliacoes variaram ${deltaText(reviewDelta, ' p.p.')}, o envio/sem avaliacao variou ${deltaText(sendingDelta, ' p.p.')} e o volume mudou ${deltaText(ticketDelta)} atendimentos.`
+      ? `Entre ${first.month_label} e ${last.month_label}, o CSAT variou ${deltaText(csatDelta, ' p.p.')}, as avaliações variaram ${deltaText(reviewDelta, ' p.p.')}, o envio/sem avaliacao variou ${deltaText(sendingDelta, ' p.p.')} e o volume mudou ${deltaText(ticketDelta)} atendimentos.`
       : 'Ha apenas um mes importado para este analista; a leitura funciona como fotografia do periodo.'
   const monthCards = history
     .map((metric) => {
@@ -5495,12 +5495,12 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
             <span class="indicator-value">${metric.csat}%</span>
           </div>
           <div class="indicator-row">
-            <span class="indicator-label">Avaliacoes</span>
+            <span class="indicator-label">Avaliações</span>
             <span class="indicator-track"><span class="indicator-fill review" style="display:block;width:${barWidth(Number(metric.review_percentage))};"></span></span>
             <span class="indicator-value">${metric.review_percentage}%</span>
           </div>
           <div class="indicator-row">
-            <span class="indicator-label">Sem avaliacao</span>
+            <span class="indicator-label">Sem avaliação</span>
             <span class="indicator-track"><span class="indicator-fill sending" style="display:block;width:${barWidth(Number(metric.sending_percentage))};"></span></span>
             <span class="indicator-value">${metric.sending_percentage}%</span>
           </div>
@@ -5526,7 +5526,7 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
         <div class="strategy-card">
           <span>Ponto de atencao</span>
           <strong>${escapeHtml(lowestCsat.month_label.replace(' 2026', ''))} teve o menor CSAT</strong>
-          <em>Maior amostra de avaliacoes: ${escapeHtml(bestReview.month_label.replace(' 2026', ''))} (${bestReview.review_percentage}%).</em>
+          <em>Maior amostra de avaliações: ${escapeHtml(bestReview.month_label.replace(' 2026', ''))} (${bestReview.review_percentage}%).</em>
         </div>
         <div class="strategy-card">
           <span>Foco recomendado</span>
@@ -5534,8 +5534,8 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
           <em>Use esta leitura para orientar o proximo ciclo mensal.</em>
         </div>
       </div>
-      <p class="chart-title">Evolucao mensal em barras</p>
-      <p class="chart-legend">CSAT e avaliacoes usam escala percentual. Atendimentos usa escala relativa ao maior volume exibido.</p>
+      <p class="chart-title">Evolução mensal em barras</p>
+      <p class="chart-legend">CSAT e avaliações usam escala percentual. Atendimentos usa escala relativa ao maior volume exibido.</p>
       ${monthCards}
     </div>
   `
@@ -5596,15 +5596,15 @@ function buildChatFeedbackText({
       : `A satisfacao ficou ${formatDelta(csatGap, ' p.p.')} em relacao a meta individual de ${csatGoal}%, ponto que pede revisao qualitativa dos atendimentos com avaliacao negativa.`
   const reviewReading =
     reviewGap >= 0
-      ? `A amostra de avaliacoes ficou ${formatDelta(reviewGap, ' p.p.')} acima da referencia de ${reviewGoal}%, aumentando a confiabilidade da leitura do mes.`
-      : `A amostra de avaliacoes ficou ${formatDelta(reviewGap, ' p.p.')} abaixo da referencia de ${reviewGoal}%, entao o proximo ciclo precisa ampliar a participacao dos clientes.`
+      ? `A amostra de avaliações ficou ${formatDelta(reviewGap, ' p.p.')} acima da referencia de ${reviewGoal}%, aumentando a confiabilidade da leitura do mes.`
+      : `A amostra de avaliações ficou ${formatDelta(reviewGap, ' p.p.')} abaixo da referencia de ${reviewGoal}%, entao o proximo ciclo precisa ampliar a participacao dos clientes.`
   const volumeReading =
     productivityGap >= 0
       ? `O volume ficou ${formatDelta(productivityGap, '%')} acima da media da operacao, demonstrando capacidade de sustentar entrega mesmo com demanda elevada.`
       : `O volume ficou ${formatDelta(productivityGap, '%')} abaixo da media da operacao; vale validar se houve distribuicao de fila, ausencia, emprestimo para outro setor ou oportunidade de produtividade.`
   const recognition =
     status === 'Meta Superada'
-      ? `${analystName} encerrou o ciclo em patamar de reconhecimento. O resultado combina qualidade percebida, amostra suficiente de avaliacoes e volume competitivo dentro da operacao.`
+      ? `${analystName} encerrou o ciclo em patamar de reconhecimento. O resultado combina qualidade percebida, amostra suficiente de avaliações e volume competitivo dentro da operacao.`
       : status === 'Critico'
         ? `${analystName} encerrou o ciclo com sinais que pedem acompanhamento mais proximo. A prioridade e escolher poucos combinados praticos, acompanhar execucao e reduzir dispersao no proximo fechamento.`
         : `${analystName} apresentou bons sinais no ciclo, mas ainda ha criterios que precisam ganhar consistencia para sustentar elegibilidade e reconhecimento no fechamento mensal.`
@@ -5618,16 +5618,16 @@ function buildChatFeedbackText({
           : 'O combinado recomendado e investigar o fator de volume, separar o que e contexto operacional do que e oportunidade individual e definir um alvo realista para o proximo ciclo.'
   const practicalSteps =
     status === 'Meta Superada'
-      ? 'Como colocar em pratica: escolha dois atendimentos bem avaliados do mes e registre o que se repetiu neles; transforme esse padrao em uma rotina curta de atendimento; compartilhe uma pratica com a equipe; no proximo fechamento, compare se CSAT, avaliacoes e volume continuaram consistentes.'
+      ? 'Como colocar em pratica: escolha dois atendimentos bem avaliados do mes e registre o que se repetiu neles; transforme esse padrao em uma rotina curta de atendimento; compartilhe uma pratica com a equipe; no proximo fechamento, compare se CSAT, avaliações e volume continuaram consistentes.'
       : csatGap < 0
         ? 'Como colocar em pratica: separe de dois a tres atendimentos com avaliacao negativa ou neutra; identifique se a causa foi clareza, prazo, empatia, solucao ou encerramento; escolha uma mudanca de abordagem para testar no proximo ciclo; leve ao gestor um exemplo antes e depois para validar a evolucao.'
         : reviewGap < 0
-          ? 'Como colocar em pratica: revise o encerramento dos atendimentos e crie uma frase natural para convidar o cliente a avaliar; use essa frase nos casos resolvidos com boa percepcao; acompanhe se a quantidade de avaliacoes aumenta no fechamento seguinte; ajuste a abordagem se a fala parecer mecanica.'
+          ? 'Como colocar em pratica: revise o encerramento dos atendimentos e crie uma frase natural para convidar o cliente a avaliar; use essa frase nos casos resolvidos com boa percepcao; acompanhe se a quantidade de avaliações aumenta no fechamento seguinte; ajuste a abordagem se a fala parecer mecanica.'
           : 'Como colocar em pratica: confirme com o gestor se o volume menor veio de fila, ausencia, emprestimo ou distribuicao operacional; quando for oportunidade individual, defina um alvo de produtividade realista; acompanhe a quantidade de atendimentos validos ao longo do mes; preserve qualidade para nao trocar volume por perda de CSAT.'
 
   if (style === 'sare') {
     return [
-      `Situacao: ${recognition} No periodo, o resultado foi CSAT ${metric.csat}%, avaliacoes ${metric.review_percentage}%, envio/sem avaliacao ${metric.sending_percentage}% e ${metric.total_tickets} atendimentos. A posicao atual e ${podiumText}.`,
+      `Situacao: ${recognition} No periodo, o resultado foi CSAT ${metric.csat}%, avaliações ${metric.review_percentage}%, envio/sem avaliacao ${metric.sending_percentage}% e ${metric.total_tickets} atendimentos. A posicao atual e ${podiumText}.`,
       `Alinhamentos Realizados: ${qualityReading} ${reviewReading} ${volumeReading} ${notesLine}`.trim(),
       'Resultado Esperado: manter o que ja gera boa experiencia para o cliente e transformar os pontos de atencao em comportamento observavel no proximo fechamento mensal.',
       `Expectativa e Plano de Desenvolvimento: ${development} ${practicalSteps}`,
@@ -5638,17 +5638,17 @@ function buildChatFeedbackText({
 
   if (style === 'mimo') {
     return [
-      `Momento observado: ${analystName} fechou o ciclo com status ${status}, CSAT ${metric.csat}%, avaliacoes ${metric.review_percentage}% e ${metric.total_tickets} atendimentos.`,
+      `Momento observado: ${analystName} fechou o ciclo com status ${status}, CSAT ${metric.csat}%, avaliações ${metric.review_percentage}% e ${metric.total_tickets} atendimentos.`,
       `Impacto: ${recognition} ${qualityReading}`,
       `Melhoria ou manutencao: ${reviewReading} ${volumeReading} ${notesLine}`.trim(),
-      `Orientacao: ${development} ${practicalSteps} Posicao atual: ${podiumText}.`,
+      `Orientacao: ${development} ${practicalSteps} Posição atual: ${podiumText}.`,
     ]
       .filter(Boolean)
       .join('\n\n')
   }
 
   return [
-    `Leitura do ciclo: ${recognition} No fechamento, os indicadores mostram CSAT de ${metric.csat}%, avaliacoes de ${metric.review_percentage}%, envio/sem avaliacao de ${metric.sending_percentage}% e ${metric.total_tickets} atendimentos. A posicao atual e ${podiumText}.`,
+    `Leitura do ciclo: ${recognition} No fechamento, os indicadores mostram CSAT de ${metric.csat}%, avaliações de ${metric.review_percentage}%, envio/sem avaliacao de ${metric.sending_percentage}% e ${metric.total_tickets} atendimentos. A posicao atual e ${podiumText}.`,
     `Evidencias observadas: ${qualityReading} ${reviewReading} ${volumeReading}`,
     notesLine ? `Contexto do gestor: ${notesLine}` : '',
     `Plano de desenvolvimento: ${development}`,
@@ -5831,15 +5831,15 @@ function exportWordReport({
           <div class="box">
             <h2>Esperado</h2>
             <p>CSAT maior ou igual a ${expected.csat}%</p>
-            <p>${expected.review}% de avaliacoes dos atendimentos</p>
+            <p>${expected.review}% de avaliações dos atendimentos</p>
           </div>
           <div class="box">
             <h2>Atingido</h2>
             <p>CSAT: ${achieved.csat}% (${goalGapText})</p>
-            <p>Avaliacoes: ${achieved.reviewPercentage}% (${achieved.reviewCount} respondidas, ${reviewGapText})</p>
+            <p>Avaliações: ${achieved.reviewPercentage}% (${achieved.reviewCount} respondidas, ${reviewGapText})</p>
             <p>Atendimentos: ${achieved.answeredTickets}</p>
             <p>Media por colaborador: ${achieved.averageTickets}</p>
-            <p>Posicao podio: ${achieved.rankingPosition || '-'}</p>
+            <p>Posição podio: ${achieved.rankingPosition || '-'}</p>
           </div>
         </div>
 
@@ -5865,7 +5865,7 @@ function exportWordReport({
             <div class="insight-note">ponto mais alto do periodo</div>
           </div>
           <div class="insight">
-            <div class="insight-label">Avaliacoes respondidas</div>
+            <div class="insight-label">Avaliações respondidas</div>
             <div class="insight-value">${achieved.reviewCount}</div>
             <div class="insight-note">${achieved.reviewPercentage}% dos atendimentos</div>
           </div>
@@ -5880,7 +5880,7 @@ function exportWordReport({
             <tr>
               <th>Semana</th>
               <th>CSAT</th>
-              <th>Avaliacoes</th>
+              <th>Avaliações</th>
               <th>Atendimentos</th>
             </tr>
           </thead>
@@ -5890,7 +5890,7 @@ function exportWordReport({
         <p>Performance da equipe no periodo: ${achieved.teamPerformance}%.</p>
         <p>Ligacoes atendidas pela equipe: ${achieved.teamAnsweredCalls}. Total processado: ${achieved.teamTotalCalls}.</p>
 
-        <h2>Analise SARE</h2>
+        <h2>Análise SARE</h2>
         <h3>S - Situacao</h3>
         <p>${escapeHtml(sare.situation)}</p>
         <h3>A - Alinhamentos Realizados</h3>
@@ -6035,7 +6035,7 @@ function buildPeriodPodium(
 
       if (averageCsat < individualGoal) reasons.push('abaixo da meta individual')
       if (averageCsat < podiumCsatGoal) reasons.push('abaixo do podio')
-      if (reviewPercentage < reviewGoal) reasons.push('avaliacoes abaixo da meta')
+      if (reviewPercentage < reviewGoal) reasons.push('avaliações abaixo da meta')
       if (metric.totalTickets < averageTickets) reasons.push('atendimentos abaixo da media')
 
       return {
@@ -6502,7 +6502,7 @@ function getChatMetricStatus(csat: number, reviewPercentage: number, csatGoal: n
 function getChatAttentionReasons(metric: ChatMonthlyMetric, averageTickets: number) {
   const reasons: string[] = []
   if (Number(metric.csat) < 90) reasons.push('CSAT abaixo de 90%')
-  if (Number(metric.review_percentage) < 25) reasons.push('avaliacoes abaixo de 25%')
+  if (Number(metric.review_percentage) < 25) reasons.push('avaliações abaixo de 25%')
   if (Number(metric.total_tickets) < averageTickets) reasons.push('volume abaixo da media (' + averageTickets + ' atend.)')
   return reasons
 }
@@ -6639,11 +6639,11 @@ function getTrendText(delta: number) {
 
 function buildDevelopmentFocus(result: MonthlyPodiumResult, delta: number) {
   if (result.eligible && delta >= 0) {
-    return 'manter consistencia, proteger volume de avaliacoes e preparar boas praticas para compartilhar com a equipe.'
+    return 'manter consistencia, proteger volume de avaliações e preparar boas praticas para compartilhar com a equipe.'
   }
 
   if (result.reviewPercentage < 25) {
-    return 'aumentar o percentual de avaliacoes, reforcando o convite ao final dos atendimentos e acompanhando o volume semanal.'
+    return 'aumentar o percentual de avaliações, reforcando o convite ao final dos atendimentos e acompanhando o volume semanal.'
   }
 
   if (result.averageCsat < result.individualGoal) {
