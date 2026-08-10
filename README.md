@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Sistema de Performance de Atendimento
 
-## Getting Started
+Painel interno para acompanhamento de performance dos modulos Telefone e Chat.
 
-First, run the development server:
+## Modulos
 
-```bash
+- Telefone: lancamentos semanais, performance da equipe, ranking, podio, relatorios SARE e texto assistido por IA.
+- Chat: importacao mensal do Zendesk, conferencia da base, ranking, podio manual, metas por analista e relatorio individual com IA.
+
+## Manual operacional
+
+O manual de uso esta em:
+
+[docs/manual-operacional.md](docs/manual-operacional.md)
+
+Ele cobre:
+
+- Como lancar dados do telefone.
+- Como importar dados do chat.
+- Como conferir ranking e podio.
+- Como gerar relatorios.
+- Como usar a IA assistida.
+- Checklist de fechamento mensal.
+
+## Desenvolvimento local
+
+```powershell
+cd C:\Users\marcos.miranda\Documents\painel_telefone
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Acesse:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```text
+http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Validacao
 
-## Learn More
+Antes de publicar alteracoes:
 
-To learn more about Next.js, take a look at the following resources:
+```powershell
+npm run build
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Publicacao
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+O deploy de producao e feito automaticamente pela Vercel quando as alteracoes sao enviadas para a branch main.
