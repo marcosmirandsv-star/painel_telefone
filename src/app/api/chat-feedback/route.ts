@@ -48,6 +48,28 @@ function getErrorText(error: unknown) {
   return 'Erro inesperado ao gerar feedback com IA.'
 }
 
+function getPublicProviderError(error: unknown) {
+  const message = getErrorText(error)
+
+  if (/api[_ -]?key|token|secret|credential/i.test(message)) {
+    return 'chave de IA ausente, inválida ou sem permissão.'
+  }
+
+  if (/not found|404|model/i.test(message)) {
+    return 'modelo de IA não encontrado ou indisponível.'
+  }
+
+  if (/quota|rate|limit|429/i.test(message)) {
+    return 'limite temporário da IA atingido.'
+  }
+
+  if (/short|incompleto|truncado|MAX_TOKENS/i.test(message)) {
+    return 'a IA devolveu um texto curto ou incompleto.'
+  }
+
+  return message.slice(0, 180)
+}
+
 function buildPrompt(body: ChatFeedbackRequest) {
   const metric = body.metric
   const feedbackStyle = body.feedbackStyle ?? 'coach'
@@ -169,7 +191,7 @@ async function generateWithGemini(prompt: string, style: ChatFeedbackRequest['fe
     throw new Error('GEMINI_API_KEY nao configurada. Adicione a chave da Gemini nas variaveis de ambiente da Vercel.')
   }
 
-  const model = process.env.GEMINI_MODEL || 'gemini-flash-latest'
+  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: 'POST',
     headers: {
@@ -282,15 +304,16 @@ export async function POST(request: Request) {
         return NextResponse.json({ feedback: result.feedback, source: result.source })
       }
     } catch (providerError) {
+      const publicReason = getPublicProviderError(providerError)
       console.warn('Chat feedback external AI unavailable:', getErrorText(providerError))
-    }
 
-    return NextResponse.json({
-      feedback: fallbackFeedback,
-      source: 'local-fallback',
-      warning:
-        'A IA externa nao esta disponivel no momento. Usei a sugestao local baseada nos numeros do Zendesk e nas regras do painel.',
-    })
+      return NextResponse.json({
+        feedback: fallbackFeedback,
+        source: 'local-fallback',
+        warning:
+          `A IA externa não gerou um texto válido agora. Motivo: ${publicReason} Usei a sugestão local baseada nos números do Zendesk e nas regras do painel.`,
+      })
+    }
   } catch (error) {
     return NextResponse.json({ error: getErrorText(error) }, { status: 500 })
   }
