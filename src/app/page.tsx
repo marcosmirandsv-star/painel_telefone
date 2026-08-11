@@ -3169,9 +3169,25 @@ function DashboardView({
     : 'Aguardar lancamento do periodo para liberar recomendacao individual.'
   const analystPulseText = analystResult
     ? analystResult.eligible
-      ? 'Voce esta dentro dos criterios para disputar o podio neste recorte.'
+      ? analystRankingPosition > 0 && analystRankingPosition <= 3
+        ? 'Voce esta no podio neste recorte. O foco e sustentar os criterios ate o fechamento.'
+        : 'Voce cumpre os criterios, mas ainda esta fora do top 3 neste recorte.'
       : 'Sua posicao aparece no ranking, mas ainda existe criterio pendente para entrar no podio.'
     : 'Ainda nao ha dados individuais para este filtro.'
+  const analystPodiumPositionStatus = analystResult
+    ? !analystResult.eligible
+      ? 'Fora do podio por criterio pendente'
+      : analystRankingPosition > 0 && analystRankingPosition <= 3
+        ? 'No podio agora'
+        : 'Elegivel, fora do top 3 agora'
+    : 'Sem posicao calculada'
+  const analystPodiumProjectionText = analystResult
+    ? !analystResult.eligible
+      ? `Para projetar entrada no podio, primeiro regularize: ${analystResult.reasons.join(', ') || 'criterios pendentes'}.`
+      : periodFilter.mode === 'month'
+        ? `Se mantiver este ritmo ate o fechamento, a tendencia atual e terminar em ${analystRankingPosition ? `${analystRankingPosition}o lugar` : 'posicao calculada'}; a posicao muda conforme os novos lancamentos do time.`
+        : `Neste recorte, a posicao atual e ${analystRankingPosition ? `${analystRankingPosition}o lugar` : 'calculada pelo ranking'}; no mensal, ela sera recalculada com todos os lancamentos.`
+    : 'Aguardando lancamento para calcular posicao e tendencia.'
   const podiumAverageSource = phonePodiumRanking.length
     ? phonePodiumRanking.map((item) => Number(item.total_tickets))
     : periodPodium.map((item) => item.totalTickets)
@@ -3506,10 +3522,13 @@ function DashboardView({
             </div>
 
             <div className="rounded-lg bg-slate-900 p-5">
-              <p className="text-sm text-slate-400">Posicao no ranking do periodo</p>
+              <p className="text-sm text-slate-400">Posicao e previsao</p>
               <p className="mt-2 text-3xl font-bold">{analystRankingPosition ? `${analystRankingPosition}o` : '-'}</p>
+              <p className={`mt-2 text-sm font-semibold ${analystResult?.eligible && analystRankingPosition <= 3 ? 'text-emerald-300' : analystResult?.eligible ? 'text-cyan-300' : 'text-amber-200'}`}>
+                {analystPodiumPositionStatus}
+              </p>
               <p className="mt-2 text-sm text-slate-400">
-                {analystRankingRead} Ranking mostra posicao; podio depende de cumprir todos os criterios.
+                {analystRankingRead} {analystPodiumProjectionText}
               </p>
             </div>
 
