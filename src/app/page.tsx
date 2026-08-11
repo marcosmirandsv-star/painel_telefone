@@ -3254,6 +3254,41 @@ function DashboardView({
       ? 'Voce ja cumpre os criterios objetivos. Agora o foco e preservar qualidade, avaliacoes e volume ate o fechamento.'
       : 'Para entrar no podio, priorize os criterios abaixo que ainda estao pendentes neste recorte.'
     : 'Sem lancamento no periodo para calcular distancia ate o podio.'
+  const analystActionPlan = analystResult
+    ? [
+        {
+          label: '1. Qualidade percebida',
+          title: analystCsatGap > 0 ? `Recuperar ${analystCsatGap} p.p. de CSAT` : 'Proteger o CSAT atual',
+          text:
+            analystCsatGap > 0
+              ? 'Nos proximos atendimentos, confirme o problema antes de orientar, valide se a solucao ficou clara e encerre perguntando se ainda ficou alguma duvida. A meta e reduzir motivos de avaliacao negativa antes do proximo fechamento.'
+              : 'Seu CSAT esta acima da referencia. Mantenha o mesmo padrao de abertura, diagnostico e fechamento para evitar queda de qualidade no restante do periodo.',
+        },
+        {
+          label: '2. Avaliacoes respondidas',
+          title: analystReviewGap > 0 ? `Buscar mais ${analystReviewGap} p.p. em avaliacoes` : 'Manter boa amostra de avaliacoes',
+          text:
+            analystReviewGap > 0
+              ? 'Ao perceber que o cliente teve o problema resolvido, faca um fechamento simples e objetivo pedindo a avaliacao. O foco nao e forcar resposta, e aumentar a amostra para o resultado representar melhor sua entrega.'
+              : 'A amostra de avaliacoes esta saudavel. Continue encerrando os contatos com clareza, porque um bom volume de respostas protege a leitura do seu CSAT.',
+        },
+        {
+          label: '3. Volume de atendimento',
+          title: analystVolumeGap > 0 ? `Faltam ${analystVolumeGap} atendimentos para a media` : 'Volume dentro da media do time',
+          text:
+            analystVolumeGap > 0
+              ? `A media do time no recorte e ${podiumAverageTickets}. Combine com a gestao se houve fila, pausa, ausencia ou apoio a outro setor. Se a distribuicao estiver normal, o alvo e recuperar volume mantendo qualidade.`
+              : `Voce esta com ${analystResult.totalTickets} atendimentos contra media de ${podiumAverageTickets}. O cuidado agora e nao ganhar volume sacrificando CSAT ou avaliacao.`,
+        },
+      ]
+    : []
+  const analystNextTargetText = analystResult
+    ? analystResult.eligible
+      ? analystRankingPosition > 0 && analystRankingPosition <= 3
+        ? 'Meta imediata: preservar os tres criterios e evitar queda ate o proximo lancamento.'
+        : 'Meta imediata: manter elegibilidade e buscar ganho em CSAT, avaliacoes ou volume para aproximar do top 3.'
+      : 'Meta imediata: resolver primeiro os criterios pendentes antes de pensar em posicao no podio.'
+    : 'Meta imediata: aguardar o lancamento do periodo para liberar o plano.'
   const phoneVisualRows = periodPodium.slice(0, 10).map((item) => ({
     label: item.analystName,
     primary: item.averageCsat,
@@ -3639,6 +3674,37 @@ function DashboardView({
           </>
           )}
       </section>
+
+      {isAnalystDashboard && (
+        <section className="panel">
+          <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="eyebrow">Plano de acao individual</p>
+              <h2 className="section-title">Minha proxima jogada</h2>
+              <p className="section-subtitle">
+                Orientacao pratica para transformar a leitura do podio em comportamento no proximo ciclo.
+              </p>
+            </div>
+            <div className="rounded-lg bg-slate-900 p-4 text-sm font-semibold text-cyan-200 md:max-w-md">
+              {analystNextTargetText}
+            </div>
+          </div>
+
+          {analystActionPlan.length ? (
+            <div className="mt-6 grid gap-4 lg:grid-cols-3">
+              {analystActionPlan.map((item) => (
+                <div key={item.label} className="rounded-lg bg-slate-900 p-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">{item.label}</p>
+                  <h3 className="mt-3 text-xl font-bold">{item.title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-slate-300">{item.text}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState text="Assim que houver lancamento no periodo, o plano de acao individual aparece aqui." />
+          )}
+        </section>
+      )}
 
       <section className="panel">
         <h2 className="section-title">
