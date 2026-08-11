@@ -3170,8 +3170,48 @@ function DashboardView({
   const analystPulseText = analystResult
     ? analystResult.eligible
       ? 'Voce esta dentro dos criterios para disputar o podio neste recorte.'
-      : 'Sua posição aparece no ranking, mas ainda existe criterio pendente para entrar no podio.'
+      : 'Sua posicao aparece no ranking, mas ainda existe criterio pendente para entrar no podio.'
     : 'Ainda nao ha dados individuais para este filtro.'
+  const podiumAverageTickets = periodPodium.length
+    ? round(periodPodium.reduce((sum, item) => sum + item.totalTickets, 0) / periodPodium.length)
+    : 0
+  const analystCsatGap = analystResult ? round(Math.max(podiumCsatGoal - analystResult.averageCsat, 0)) : 0
+  const analystReviewGap = analystResult ? round(Math.max(reviewGoal - analystResult.reviewPercentage, 0)) : 0
+  const analystVolumeGap = analystResult ? Math.max(podiumAverageTickets - analystResult.totalTickets, 0) : 0
+  const analystPodiumChecklist = [
+    {
+      label: 'CSAT minimo',
+      value: analystResult
+        ? analystCsatGap > 0
+          ? `faltam ${analystCsatGap} p.p. para ${podiumCsatGoal}%`
+          : `cumprido: ${analystResult.averageCsat}%`
+        : 'sem dados',
+      ok: Boolean(analystResult && analystCsatGap === 0),
+    },
+    {
+      label: 'Avaliacoes',
+      value: analystResult
+        ? analystReviewGap > 0
+          ? `faltam ${analystReviewGap} p.p. para ${reviewGoal}%`
+          : `cumprido: ${analystResult.reviewPercentage}%`
+        : 'sem dados',
+      ok: Boolean(analystResult && analystReviewGap === 0),
+    },
+    {
+      label: 'Volume',
+      value: analystResult
+        ? analystVolumeGap > 0
+          ? `faltam ${analystVolumeGap} atendimentos para a media de ${podiumAverageTickets}`
+          : `cumprido: ${analystResult.totalTickets} atendimentos`
+        : 'sem dados',
+      ok: Boolean(analystResult && analystVolumeGap === 0),
+    },
+  ]
+  const analystPodiumGapText = analystResult
+    ? analystResult.eligible
+      ? 'Voce ja cumpre os criterios objetivos. Agora o foco e preservar qualidade, avaliacoes e volume ate o fechamento.'
+      : 'Para entrar no podio, priorize os criterios abaixo que ainda estao pendentes neste recorte.'
+    : 'Sem lancamento no periodo para calcular distancia ate o podio.'
   const phoneVisualRows = periodPodium.slice(0, 10).map((item) => ({
     label: item.analystName,
     primary: item.averageCsat,
@@ -3463,11 +3503,29 @@ function DashboardView({
             </div>
 
             <div className="rounded-lg bg-slate-900 p-5">
-              <p className="text-sm text-slate-400">Posição no ranking do periodo</p>
+              <p className="text-sm text-slate-400">Posicao no ranking do periodo</p>
               <p className="mt-2 text-3xl font-bold">{analystRankingPosition ? `${analystRankingPosition}o` : '-'}</p>
               <p className="mt-2 text-sm text-slate-400">
-                {analystRankingRead} Ranking mostra posição; pódio depende de cumprir todos os critérios.
+                {analystRankingRead} Ranking mostra posicao; podio depende de cumprir todos os criterios.
               </p>
+            </div>
+
+            <div className="rounded-lg bg-slate-900 p-5 lg:col-span-3">
+              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="text-sm text-slate-400">O que falta para o podio?</p>
+                  <h3 className="mt-2 text-2xl font-bold text-cyan-300">{analystResult?.eligible ? 'Voce esta dentro dos criterios' : 'Distancia ate o podio'}</h3>
+                </div>
+                <p className="max-w-2xl text-sm leading-6 text-slate-400">{analystPodiumGapText}</p>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                {analystPodiumChecklist.map((item) => (
+                  <div key={item.label} className="rounded-md bg-slate-950/60 p-4">
+                    <p className="text-sm text-slate-400">{item.label}</p>
+                    <p className={`mt-2 font-semibold ${item.ok ? 'text-emerald-300' : 'text-amber-200'}`}>{item.value}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         ) : (
