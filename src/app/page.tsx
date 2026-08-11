@@ -3927,6 +3927,28 @@ function ReportsView({
   const supervisorFollowUpText = analystResult
     ? `No proximo ciclo, acompanhar CSAT ${analystResult.averageCsat}% (${formatDelta(supervisorCsatGap, ' p.p.')} vs podio), avaliacoes ${analystResult.reviewPercentage}% (${formatDelta(supervisorReviewGap, ' p.p.')} vs meta) e volume ${analystResult.totalTickets} (${formatDelta(supervisorVolumeGap, '')} vs media ${supervisorAverageTickets}).`
     : 'Sem acompanhamento definido.'
+  const supervisorPeriodTypeText =
+    periodFilter.mode === 'week'
+      ? 'Leitura semanal'
+      : periodFilter.mode === 'month'
+        ? 'Leitura mensal acumulada'
+        : periodFilter.mode === 'year'
+          ? 'Leitura anual acumulada'
+          : 'Leitura personalizada'
+  const supervisorPeriodStatusText =
+    periodFilter.mode === 'month'
+      ? 'O mes e recalculado conforme novas semanas forem lancadas.'
+      : periodFilter.mode === 'year'
+        ? 'O ano e recalculado conforme novos meses e semanas forem lancados.'
+        : periodFilter.mode === 'week'
+          ? 'A semana representa o recorte selecionado para acompanhamento.'
+          : 'O resultado segue exatamente o intervalo escolhido.'
+  const supervisorComparisonText = `Comparativo contra periodo anterior equivalente: ${formatPeriodLabel(previousPeriod)}.`
+  const supervisorContextCards = [
+    { label: 'Recorte analisado', value: periodLabel, detail: supervisorPeriodTypeText },
+    { label: 'Base da leitura', value: selectedAnalyst?.name ?? 'Sem analista', detail: supervisorPeriodStatusText },
+    { label: 'Comparativo usado', value: formatPeriodLabel(previousPeriod), detail: supervisorComparisonText },
+  ]
   const supervisorActionCards = [
     {
       label: 'Diagnostico',
@@ -4234,6 +4256,16 @@ function ReportsView({
           <span className={`rounded-full px-4 py-2 text-sm font-semibold ${analystResult?.eligible ? 'bg-emerald-400/10 text-emerald-300' : 'bg-amber-400/10 text-amber-200'}`}>
             {supervisorCaseStatus}
           </span>
+        </div>
+
+        <div className="mt-5 grid gap-3 lg:grid-cols-3">
+          {supervisorContextCards.map((item) => (
+            <div key={item.label} className="rounded-lg border border-cyan-400/20 bg-cyan-400/5 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">{item.label}</p>
+              <p className="mt-2 text-lg font-bold">{item.value}</p>
+              <p className="mt-2 text-sm leading-5 text-slate-300">{item.detail}</p>
+            </div>
+          ))}
         </div>
 
         <div className="mt-5 grid gap-3 lg:grid-cols-4">
