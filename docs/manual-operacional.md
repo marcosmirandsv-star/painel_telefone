@@ -4,7 +4,8 @@ Este manual orienta o uso do sistema de performance para os modulos Telefone e C
 
 ## Acesso
 
-- Producao: https://central-performance.vercel.app
+- Producao: https://painel-telefone.vercel.app
+- Nome do projeto na Vercel: central-performance
 - O acesso e feito por e-mail e senha cadastrados no Supabase.
 - Se esquecer a senha, use a opcao de recuperacao na tela de login.
 - Usuarios de gestao podem criar novos acessos na aba Usuarios do modulo Telefone.
@@ -198,7 +199,8 @@ Variaveis obrigatorias na Vercel:
 Variaveis opcionais/recomendadas:
 
 - GEMINI_API_KEY, para feedback assistido por IA.
-- NEXT_PUBLIC_APP_URL, para links de recuperacao de senha.
+- NEXT_PUBLIC_APP_URL, para links de recuperacao de senha. Use o dominio de producao: https://painel-telefone.vercel.app
+- GITHUB_MODELS_TOKEN e GITHUB_MODELS_MODEL, apenas se a integracao antiga do GitHub Models voltar a ser usada.
 
 ## Uso da IA
 
