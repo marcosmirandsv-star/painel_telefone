@@ -3241,10 +3241,10 @@ function DashboardView({
       <div className="grid gap-4 md:grid-cols-4">
         {isAnalystDashboard ? (
           <>
-            <MetricCard label="Perfil" value="Analista" tone="success" />
-            <MetricCard label="Analista" value={analystProfile?.name ?? 'Nao vinculado'} />
+            <MetricCard label="Analista" value={analystProfile?.name ?? 'Nao vinculado'} tone="success" />
+            <MetricCard label="Atendimentos no periodo" value={totalTickets} />
             <MetricCard label="Meu CSAT" value={`${analystResult?.averageCsat ?? 0}%`} />
-            <MetricCard label="Meta individual" value={`${analystProfile?.csat_goal ?? 0}%`} />
+            <MetricCard label="Avaliacoes" value={`${totalReviews} (${reviewCoverage}%)`} />
           </>
         ) : (
           <>
@@ -3274,9 +3274,13 @@ function DashboardView({
 
           <div className="grid flex-1 gap-4 md:grid-cols-3">
             <div className="executive-card">
-              <p>{isAnalystDashboard ? 'Meu CSAT vs periodo anterior' : 'CSAT vs periodo anterior'}</p>
-              <strong>{formatDelta(csatDelta, ' p.p.')}</strong>
-              <span>Atual: {periodAverageCsat || 0}%</span>
+              <p>{isAnalystDashboard ? 'Atendimentos no periodo' : 'CSAT vs periodo anterior'}</p>
+              <strong>{isAnalystDashboard ? totalTickets : formatDelta(csatDelta, ' p.p.')}</strong>
+              <span>
+                {isAnalystDashboard
+                  ? `${totalReviews} avaliacoes registradas em ${launchedPeriodLabel}`
+                  : `Atual: ${periodAverageCsat || 0}%`}
+              </span>
             </div>
             <div className="executive-card">
               <p>Performance equipe</p>
@@ -3284,9 +3288,9 @@ function DashboardView({
               <span>{formatDelta(teamPerformanceDelta, ' p.p.')} vs anterior</span>
             </div>
             <div className="executive-card">
-              <p>{isAnalystDashboard ? 'Minhas avaliações' : 'Cobertura de avaliações'}</p>
+              <p>{isAnalystDashboard ? 'Minhas avaliacoes' : 'Cobertura de avaliacoes'}</p>
               <strong>{reviewCoverage}%</strong>
-              <span>{totalReviews} avaliações em {totalTickets} atendimentos</span>
+              <span>{totalReviews} avaliacoes respondidas de {totalTickets} atendimentos</span>
             </div>
           </div>
         </div>
