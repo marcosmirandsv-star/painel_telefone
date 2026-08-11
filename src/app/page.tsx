@@ -3899,6 +3899,58 @@ function ReportsView({
   const teamTotalCalls = periodTeamMetrics.reduce((sum, metric) => sum + Number(metric.total_calls), 0)
   const teamLossPercentage = teamTotalCalls ? round((teamAbandonedCalls / teamTotalCalls) * 100) : 0
   const weeklyEvolution = aggregateIndividualByWeek(analystMetrics)
+  const supervisorAverageTickets = podium.length
+    ? round(podium.reduce((sum, item) => sum + item.totalTickets, 0) / podium.length)
+    : 0
+  const supervisorVolumeGap = analystResult ? analystResult.totalTickets - supervisorAverageTickets : 0
+  const supervisorReviewGap = analystResult ? round(analystResult.reviewPercentage - reviewGoal) : 0
+  const supervisorCsatGap = analystResult ? round(analystResult.averageCsat - podiumCsatGoal) : 0
+  const supervisorCaseStatus = analystResult
+    ? analystResult.eligible
+      ? selectedRankingPosition > 0 && selectedRankingPosition <= 3
+        ? 'Caso de reconhecimento e preservacao'
+        : 'Caso elegivel para desenvolvimento competitivo'
+      : 'Caso de acompanhamento ativo'
+    : 'Sem leitura disponivel'
+  const supervisorDecisionText = analystResult
+    ? analystResult.eligible
+      ? selectedRankingPosition > 0 && selectedRankingPosition <= 3
+        ? 'Reconhecer o resultado, registrar as praticas que sustentaram o desempenho e combinar como proteger o padrao ate o fechamento.'
+        : 'Manter elegibilidade, comparar com o top 3 e escolher um ganho objetivo em CSAT, avaliacoes ou volume para disputar posicao.'
+      : `Tratar os criterios pendentes antes de falar em podio: ${analystResult.reasons.join(', ') || 'revisar indicadores'}.`
+    : 'Selecione um analista com lancamento no periodo para liberar recomendacao.'
+  const supervisorOneToOneText = analystResult
+    ? analystResult.eligible
+      ? 'Use a conversa 1:1 para perguntar quais comportamentos ajudaram o resultado, quais atendimentos devem virar referencia e qual rotina precisa ser repetida.'
+      : 'Use a conversa 1:1 para identificar causa raiz: qualidade do atendimento, encerramento sem pedido de avaliacao, volume abaixo da media ou contexto operacional.'
+    : 'Aguardando dados para sugerir roteiro de conversa.'
+  const supervisorFollowUpText = analystResult
+    ? `No proximo ciclo, acompanhar CSAT ${analystResult.averageCsat}% (${formatDelta(supervisorCsatGap, ' p.p.')} vs podio), avaliacoes ${analystResult.reviewPercentage}% (${formatDelta(supervisorReviewGap, ' p.p.')} vs meta) e volume ${analystResult.totalTickets} (${formatDelta(supervisorVolumeGap, '')} vs media ${supervisorAverageTickets}).`
+    : 'Sem acompanhamento definido.'
+  const supervisorActionCards = [
+    {
+      label: 'Diagnostico',
+      title: supervisorCaseStatus,
+      text: analystResult
+        ? `Ranking atual: ${selectedRankingPosition || '-'}o. CSAT ${analystResult.averageCsat}%, avaliacoes ${analystResult.reviewPercentage}% e ${analystResult.totalTickets} atendimentos contra media ${supervisorAverageTickets}.`
+        : 'Selecione um analista e periodo com dados para calcular a leitura.',
+    },
+    {
+      label: 'Acao recomendada',
+      title: analystResult?.eligible ? 'Preservar ou competir' : 'Corrigir impeditivos',
+      text: supervisorDecisionText,
+    },
+    {
+      label: 'Conversa 1:1',
+      title: 'Pergunta que destrava acao',
+      text: supervisorOneToOneText,
+    },
+    {
+      label: 'Proximo acompanhamento',
+      title: 'Indicadores para revisar',
+      text: supervisorFollowUpText,
+    },
+  ]
   const situationText = selectedAnalyst && analystResult
     ? `${selectedAnalyst.name} fechou ${periodLabel} com CSAT de ${analystResult.averageCsat}%, ${analystResult.totalReviews} avaliações e ${analystResult.totalTickets} atendimentos registrados. A meta individual e ${analystResult.individualGoal}% e a referencia para podio e ${podiumCsatGoal}%. A variacao contra o periodo anterior foi de ${formatDelta(csatDelta, ' p.p.')}.`
     : ''
@@ -4169,6 +4221,33 @@ function ReportsView({
         <MetricCard label="Variacao vs periodo anterior" value={formatDelta(csatDelta, '%')} />
         <MetricCard label="Performance equipe" value={`${teamPerformance}%`} />
       </div>
+
+      <section className="panel no-print">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="eyebrow">Inteligencia de gestao</p>
+            <h2 className="section-title">Leitura do supervisor para o analista</h2>
+            <p className="section-subtitle">
+              Diagnostico e acoes sugeridas para apoiar acompanhamento individual antes do fechamento.
+            </p>
+          </div>
+          <span className={`rounded-full px-4 py-2 text-sm font-semibold ${analystResult?.eligible ? 'bg-emerald-400/10 text-emerald-300' : 'bg-amber-400/10 text-amber-200'}`}>
+            {supervisorCaseStatus}
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-3 lg:grid-cols-4">
+          {supervisorActionCards.map((item) => (
+            <div key={item.label} className="rounded-lg bg-slate-900 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">{item.label}</p>
+              <h3 className="mt-3 text-lg font-bold">{item.title}</h3>
+              <p className="mt-3 text-sm leading-6 text-slate-300">{item.text}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+
 
       <section className="panel no-print">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
