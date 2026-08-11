@@ -302,6 +302,8 @@ export default function Home() {
   const [analystForm, setAnalystForm] = useState(initialAnalystForm)
   const [goalForm, setGoalForm] = useState(initialGoalForm)
   const [accessUserForm, setAccessUserForm] = useState(initialAccessUserForm)
+  const [editingProfileNameId, setEditingProfileNameId] = useState<string | null>(null)
+  const [profileNameForm, setProfileNameForm] = useState('')
   const [editingAnalystId, setEditingAnalystId] = useState<string | null>(null)
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -625,6 +627,47 @@ export default function Home() {
     } finally {
       setSaving(false)
     }
+  }
+
+  function handleEditProfileName(profile: UserProfile) {
+    setEditingProfileNameId(profile.id)
+    setProfileNameForm(profile.full_name || profile.name || '')
+    setMessage('')
+  }
+
+  function handleCancelProfileNameEdit() {
+    setEditingProfileNameId(null)
+    setProfileNameForm('')
+    setMessage('')
+  }
+
+  async function handleSaveProfileName(profileId: string) {
+    const fullName = profileNameForm.trim()
+
+    if (!fullName) {
+      setMessage('Informe o nome exibido do usuario.')
+      return
+    }
+
+    setSaving(true)
+    setMessage('Atualizando nome do usuario...')
+
+    const { error } = await supabase
+      .from('profiles')
+      .update({ full_name: fullName })
+      .eq('id', profileId)
+
+    setSaving(false)
+
+    if (error) {
+      setMessage(getSupabaseMessage(error.message))
+      return
+    }
+
+    setEditingProfileNameId(null)
+    setProfileNameForm('')
+    setMessage('Nome do usuario atualizado com sucesso.')
+    await loadData()
   }
 
   async function handleAnalystSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -1232,9 +1275,15 @@ export default function Home() {
             profiles={profiles}
             analysts={analysts}
             form={accessUserForm}
+            editingProfileNameId={editingProfileNameId}
+            profileNameForm={profileNameForm}
             saving={saving}
             onChange={setAccessUserForm}
+            onProfileNameChange={setProfileNameForm}
             onSubmit={handleCreateAccessUser}
+            onEditProfileName={handleEditProfileName}
+            onCancelProfileNameEdit={handleCancelProfileNameEdit}
+            onSaveProfileName={handleSaveProfileName}
           />
         )}
 
@@ -4990,16 +5039,28 @@ function UsersView({
   profiles,
   analysts,
   form,
+  editingProfileNameId,
+  profileNameForm,
   saving,
   onChange,
+  onProfileNameChange,
   onSubmit,
+  onEditProfileName,
+  onCancelProfileNameEdit,
+  onSaveProfileName,
 }: {
   profiles: UserProfile[]
   analysts: Analyst[]
   form: typeof initialAccessUserForm
+  editingProfileNameId: string | null
+  profileNameForm: string
   saving: boolean
   onChange: (form: typeof initialAccessUserForm) => void
+  onProfileNameChange: (value: string) => void
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
+  onEditProfileName: (profile: UserProfile) => void
+  onCancelProfileNameEdit: () => void
+  onSaveProfileName: (profileId: string) => void
 }) {
   const activeAnalysts = analysts.filter((analyst) => analyst.active)
 
@@ -5097,6 +5158,7 @@ function UsersView({
                 <th className="pb-3 pr-4 font-medium">Nome</th>
                 <th className="pb-3 pr-4 font-medium">Perfil</th>
                 <th className="pb-3 pr-4 font-medium">Analista vinculado</th>
+                <th className="pb-3 font-medium">Acoes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
@@ -5104,9 +5166,40 @@ function UsersView({
                 const analyst = analysts.find((item) => item.id === profile.analyst_id)
                 return (
                   <tr key={profile.id}>
-                    <td className="py-3 pr-4">{profile.full_name || profile.name || profile.id}</td>
+                    <td className="py-3 pr-4">
+                      {editingProfileNameId === profile.id ? (
+                        <input
+                          className="form-input min-w-52 py-2"
+                          value={profileNameForm}
+                          onChange={(event) => onProfileNameChange(event.target.value)}
+                        />
+                      ) : (
+                        profile.full_name || profile.name || profile.id
+                      )}
+                    </td>
                     <td className="py-3 pr-4">{profile.role ?? '-'}</td>
                     <td className="py-3 pr-4">{analyst?.name ?? '-'}</td>
+                    <td className="py-3">
+                      {editingProfileNameId === profile.id ? (
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            className="small-button"
+                            disabled={saving}
+                            type="button"
+                            onClick={() => onSaveProfileName(profile.id)}
+                          >
+                            Salvar
+                          </button>
+                          <button className="secondary-button" type="button" onClick={onCancelProfileNameEdit}>
+                            Cancelar
+                          </button>
+                        </div>
+                      ) : (
+                        <button className="small-button" type="button" onClick={() => onEditProfileName(profile)}>
+                          Editar nome
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 )
               })}
