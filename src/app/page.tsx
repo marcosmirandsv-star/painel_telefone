@@ -488,8 +488,9 @@ export default function Home() {
 
   useEffect(() => {
     if (isManagementUser) return
-    if (!['dashboard', 'reports'].includes(activeTab)) setActiveTab('dashboard')
-  }, [activeTab, isManagementUser])
+    if (activeModule !== 'phone') setActiveModule('phone')
+    if (activeTab !== 'dashboard') setActiveTab('dashboard')
+  }, [activeModule, activeTab, isManagementUser])
 
   async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -1149,37 +1150,41 @@ export default function Home() {
           </button>
         </header>
 
-        <div className="mt-6 grid gap-3 md:grid-cols-2">
-          <button
-            className={activeModule === 'phone' ? 'module-card-active' : 'module-card'}
-            type="button"
-            onClick={() => {
-              setActiveModule('phone')
-              setActiveTab('dashboard')
-            }}
-          >
-            <span>Modulo telefone</span>
-            <strong>Performance de atendimento</strong>
-            <small>Dashboard, lancamentos, metas, podio, SARE e IA preditiva.</small>
-          </button>
-          <button
-            className={activeModule === 'chat' ? 'module-card-active' : 'module-card'}
-            type="button"
-            onClick={() => setActiveModule('chat')}
-          >
-            <span>Módulo chat</span>
-            <strong>Performance de atendimento via chat</strong>
-            <small>Dados do Zendesk, importacao mensal, ranking, podio e relatorios individuais.</small>
-          </button>
-        </div>
+        {isManagementUser && (
+          <div className="mt-6 grid gap-3 md:grid-cols-2">
+            <button
+              className={activeModule === 'phone' ? 'module-card-active' : 'module-card'}
+              type="button"
+              onClick={() => {
+                setActiveModule('phone')
+                setActiveTab('dashboard')
+              }}
+            >
+              <span>Modulo telefone</span>
+              <strong>Performance de atendimento</strong>
+              <small>Dashboard, lancamentos, metas, podio, SARE e IA preditiva.</small>
+            </button>
+            <button
+              className={activeModule === 'chat' ? 'module-card-active' : 'module-card'}
+              type="button"
+              onClick={() => setActiveModule('chat')}
+            >
+              <span>Modulo chat</span>
+              <strong>Performance de atendimento via chat</strong>
+              <small>Dados do Zendesk, importacao mensal, ranking, podio e relatorios individuais.</small>
+            </button>
+          </div>
+        )}
         {activeModule === 'phone' && (
           <nav className="mt-6 flex flex-wrap gap-2">
           <TabButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')}>
             Dashboard
           </TabButton>
-          <TabButton active={activeTab === 'reports'} onClick={() => setActiveTab('reports')}>
-            Relatórios
-          </TabButton>
+          {isManagementUser && (
+            <TabButton active={activeTab === 'reports'} onClick={() => setActiveTab('reports')}>
+              Relatorios
+            </TabButton>
+          )}
           {isManagementUser && (
             <>
               <TabButton active={activeTab === 'entries'} onClick={() => setActiveTab('entries')}>
@@ -1226,7 +1231,7 @@ export default function Home() {
           />
         )}
 
-        {activeModule === 'phone' && activeTab === 'reports' && (
+        {activeModule === 'phone' && isManagementUser && activeTab === 'reports' && (
           <ReportsView
             analysts={visibleAnalysts}
             goals={goals}
