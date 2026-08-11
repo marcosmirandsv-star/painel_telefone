@@ -1608,6 +1608,20 @@ function ChatModuleDashboard({
             ? 'Priorizar os analistas listados em atencao antes do proximo fechamento.'
             : 'Manter rotina atual e acompanhar se o resultado se sustenta no mes seguinte.'
   const chatEligibleCount = chatRanking.filter((item) => item.eligible).length
+  const chatVisualRows = chatRanking.slice(0, 10).map((item) => ({
+    label: getChatAnalystName(item.metric),
+    primary: Number(item.metric.csat),
+    secondary: Number(item.metric.review_percentage),
+    volume: Number(item.metric.total_tickets),
+    status: item.eligible ? 'Elegivel' : item.reasons.join(', '),
+  }))
+  const chatVisualPoints = chatRanking.map((item) => ({
+    label: getChatAnalystName(item.metric),
+    x: Number(item.metric.total_tickets),
+    y: Number(item.metric.csat),
+    tone: item.eligible ? 'success' : Number(item.metric.csat) < 90 ? 'danger' : 'warning',
+    detail: `${item.metric.review_percentage}% avaliacoes`,
+  }))
   const chatTopHighlight = chatRanking.find((item) => item.eligible)?.metric ?? chatRanking[0]?.metric ?? null
   const chatAttentionHighlight = chatOpportunities[0]?.metric ?? null
   const chatAttentionText = chatOpportunities[0]?.reasons.join(', ') ?? 'Sem alerta critico no periodo.'
@@ -2292,6 +2306,26 @@ function ChatModuleDashboard({
               Quem fica abaixo dessa média aparece como volume abaixo da média no ranking.
             </p>
           </div>
+        </div>
+      </section>
+
+      <section className={chatActiveTab === 'overview' ? 'panel' : 'hidden'}>
+        <div className="grid gap-6 xl:grid-cols-2">
+          <ComparisonBars
+            title="Comparativo visual dos analistas"
+            subtitle="Mostra rapidamente quem combina qualidade, amostra de avaliacoes e volume no periodo."
+            rows={chatVisualRows}
+            primaryGoal={90}
+            secondaryGoal={25}
+            volumeReference={averageTickets}
+          />
+          <VolumeQualityMap
+            title="Mapa volume x CSAT"
+            subtitle="Quanto mais para a direita, maior o volume. Quanto mais para cima, melhor o CSAT."
+            points={chatVisualPoints}
+            xReference={averageTickets}
+            yReference={90}
+          />
         </div>
       </section>
 
@@ -3113,6 +3147,20 @@ function DashboardView({
       ? 'Voce esta dentro da leitura esperada para disputar o podio.'
       : 'Existe pelo menos um ponto objetivo para recuperar antes do fechamento.'
     : 'Ainda nao ha dados individuais para este filtro.'
+  const phoneVisualRows = periodPodium.slice(0, 10).map((item) => ({
+    label: item.analystName,
+    primary: item.averageCsat,
+    secondary: item.reviewPercentage,
+    volume: item.totalTickets,
+    status: item.eligible ? 'Elegivel' : item.reasons.join(', '),
+  }))
+  const phoneVisualPoints = periodPodium.map((item) => ({
+    label: item.analystName,
+    x: item.totalTickets,
+    y: item.averageCsat,
+    tone: item.eligible ? 'success' : item.averageCsat < podiumCsatGoal ? 'danger' : 'warning',
+    detail: `${item.reviewPercentage}% avaliacoes`,
+  }))
 
   return (
     <div className="mt-8 space-y-7">
@@ -3275,6 +3323,24 @@ function DashboardView({
             tone={predictiveRiskLevel === 'Baixo' ? 'success' : predictiveRiskLevel === 'Medio' ? 'warning' : 'danger'}
           />
         </div>
+
+        {!isAnalystDashboard && (
+          <div className="mt-6 grid gap-6 xl:grid-cols-2">
+            <ComparisonBars
+              title="Comparativo visual dos analistas"
+              subtitle="Mostra rapidamente quem combina CSAT, avaliacoes e volume de atendimentos no periodo."
+              rows={phoneVisualRows}
+              primaryGoal={podiumCsatGoal}
+              secondaryGoal={reviewGoal}
+            />
+            <VolumeQualityMap
+              title="Mapa volume x CSAT"
+              subtitle="Quanto mais para a direita, maior o volume. Quanto mais para cima, melhor o CSAT."
+              points={phoneVisualPoints}
+              yReference={podiumCsatGoal}
+            />
+          </div>
+        )}
 
         <div className="mt-5 rounded-lg bg-slate-900 p-5">
           <p className="text-sm font-semibold text-slate-200">Como ler esta previsao</p>
@@ -5562,6 +5628,135 @@ function GroupedPercentTrendChart({
           </div>
         ))}
         {!points.length && <EmptyState text="Sem dados suficientes para o grafico." />}
+      </div>
+    </div>
+  )
+}
+
+function ComparisonBars({
+  title,
+  subtitle,
+  rows,
+  primaryGoal,
+  secondaryGoal,
+  volumeReference,
+}: {
+  title: string
+  subtitle: string
+  rows: Array<{ label: string; primary: number; secondary: number; volume: number; status?: string }>
+  primaryGoal: number
+  secondaryGoal: number
+  volumeReference?: number
+}) {
+  const maxVolume = Math.max(...rows.map((row) => row.volume), volumeReference ?? 0, 1)
+
+  return (
+    <div className="rounded-lg bg-slate-900 p-5">
+      <h3 className="text-xl font-bold">{title}</h3>
+      <p className="mt-2 text-sm leading-6 text-slate-400">{subtitle}</p>
+      <div className="mt-5 space-y-4">
+        {rows.map((row) => (
+          <div key={row.label} className="rounded-md bg-slate-950/60 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="font-semibold">{row.label}</p>
+              <span className="text-xs text-slate-400">{row.status}</span>
+            </div>
+            <div className="mt-3 grid gap-2">
+              <ProgressMetric label="CSAT" value={row.primary} goal={primaryGoal} suffix="%" tone="cyan" />
+              <ProgressMetric label="Avaliacoes" value={row.secondary} goal={secondaryGoal} suffix="%" tone="emerald" />
+              <ProgressMetric label="Volume" value={row.volume} goal={volumeReference} max={maxVolume} tone="amber" />
+            </div>
+          </div>
+        ))}
+        {!rows.length && <EmptyState text="Sem dados suficientes para o grafico." />}
+      </div>
+    </div>
+  )
+}
+
+function ProgressMetric({
+  label,
+  value,
+  goal,
+  max = 100,
+  suffix = '',
+  tone,
+}: {
+  label: string
+  value: number
+  goal?: number
+  max?: number
+  suffix?: string
+  tone: 'cyan' | 'emerald' | 'amber'
+}) {
+  const color = tone === 'cyan' ? 'bg-cyan-300' : tone === 'emerald' ? 'bg-emerald-300' : 'bg-amber-300'
+  const percent = Math.min((value / Math.max(max, 1)) * 100, 100)
+
+  return (
+    <div className="grid grid-cols-[88px_1fr_84px] items-center gap-3 text-xs">
+      <span className="text-slate-400">{label}</span>
+      <div className="relative h-3 rounded-full bg-slate-800">
+        <div className={`h-3 rounded-full ${color}`} style={{ width: `${Math.max(percent, value > 0 ? 4 : 0)}%` }} />
+        {goal !== undefined && max === 100 && (
+          <span className="absolute top-[-3px] h-5 w-px bg-white/60" style={{ left: `${Math.min(goal, 100)}%` }} />
+        )}
+      </div>
+      <strong className="text-right">
+        {value}
+        {suffix}
+      </strong>
+    </div>
+  )
+}
+
+function VolumeQualityMap({
+  title,
+  subtitle,
+  points,
+  xReference,
+  yReference,
+}: {
+  title: string
+  subtitle: string
+  points: Array<{ label: string; x: number; y: number; tone: string; detail?: string }>
+  xReference?: number
+  yReference: number
+}) {
+  const maxX = Math.max(...points.map((point) => point.x), xReference ?? 0, 1)
+  const minY = Math.min(...points.map((point) => point.y), yReference, 80)
+  const maxY = Math.max(...points.map((point) => point.y), yReference, 100)
+  const yRange = Math.max(maxY - minY, 1)
+
+  return (
+    <div className="rounded-lg bg-slate-900 p-5">
+      <h3 className="text-xl font-bold">{title}</h3>
+      <p className="mt-2 text-sm leading-6 text-slate-400">{subtitle}</p>
+      <div className="relative mt-5 h-80 overflow-hidden rounded-lg border border-white/10 bg-slate-950/60 p-4">
+        <div className="absolute inset-x-4 bottom-10 border-t border-white/10" />
+        <div className="absolute bottom-4 left-4 top-4 border-l border-white/10" />
+        {xReference !== undefined && (
+          <div className="absolute bottom-10 top-4 border-l border-cyan-300/30" style={{ left: `${Math.max(12, Math.min(92, (xReference / maxX) * 86 + 4))}%` }} />
+        )}
+        <div className="absolute left-4 right-4 border-t border-emerald-300/30" style={{ bottom: `${Math.max(12, Math.min(88, ((yReference - minY) / yRange) * 76 + 10))}%` }} />
+        {points.map((point) => {
+          const left = Math.max(8, Math.min(92, (point.x / maxX) * 86 + 6))
+          const bottom = Math.max(12, Math.min(88, ((point.y - minY) / yRange) * 76 + 10))
+          const color = point.tone === 'success' ? 'bg-emerald-300' : point.tone === 'danger' ? 'bg-rose-300' : 'bg-amber-300'
+
+          return (
+            <div key={point.label} className="group absolute -translate-x-1/2 translate-y-1/2" style={{ left: `${left}%`, bottom: `${bottom}%` }}>
+              <span className={`block h-3.5 w-3.5 rounded-full shadow-lg ring-4 ring-slate-900 ${color}`} />
+              <div className="pointer-events-none absolute left-4 top-[-14px] z-10 hidden min-w-44 rounded-md bg-slate-800 px-3 py-2 text-xs text-slate-100 shadow-xl group-hover:block">
+                <strong>{point.label}</strong>
+                <p>CSAT {point.y}% | Volume {point.x}</p>
+                {point.detail && <p>{point.detail}</p>}
+              </div>
+            </div>
+          )
+        })}
+        <span className="absolute bottom-3 right-4 text-xs text-slate-500">Volume</span>
+        <span className="absolute left-5 top-3 text-xs text-slate-500">CSAT</span>
+        {!points.length && <EmptyState text="Sem dados suficientes para o mapa." />}
       </div>
     </div>
   )
