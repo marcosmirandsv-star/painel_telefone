@@ -1703,6 +1703,66 @@ function ChatModuleDashboard({
             ? 'Tendência de qualidade: priorize leitura dos atendimentos negativos e alinhe comportamento de atendimento.'
             : 'Tendência de amostra: o desafio não é só qualidade, é conseguir mais clientes respondendo à avaliação.'
 
+  const chatMonthlyContextCards = [
+    {
+      label: 'Mes analisado',
+      value: selectedPeriod?.label ?? 'Periodo',
+      detail: selectedTeamName,
+    },
+    {
+      label: 'Comparativo',
+      value: previousPeriod?.label ?? 'Sem mes anterior',
+      detail: previousPeriod
+        ? 'Leitura comparada com o fechamento mensal anterior da mesma equipe.'
+        : 'Importe meses anteriores para liberar tendencia e comparacao.',
+    },
+    {
+      label: 'Base Zendesk',
+      value: `${visibleMetrics.length} analista(s)`,
+      detail: `${totals.tickets} atendimentos, ${totals.validTickets} validos e ${totals.reviews} avaliacoes.`,
+    },
+  ]
+
+  const chatMonthlyManagementCards = [
+    {
+      label: 'Reconhecimento',
+      title:
+        chatEligibleCount >= 3
+          ? 'Podio sustentado'
+          : chatEligibleCount > 0
+            ? 'Ha destaques para reconhecer'
+            : 'Reconhecimento seletivo',
+      text:
+        chatEligibleCount >= 3
+          ? `Reconhecer o podio e usar ${chatNameList(chatEligibleNames)} como referencia de comportamento para o proximo mes.`
+          : chatEligibleCount > 0
+            ? `Reconhecer ${chatNameList(chatEligibleNames)} e separar o que foi pratica individual do que foi contexto operacional.`
+            : 'Sem podio completo no periodo; reconhecer evolucoes pontuais e evitar premiar sem cumprir os criterios.',
+    },
+    {
+      label: 'Acompanhamento',
+      title: chatOpportunities.length ? 'Priorizar analistas em atencao' : 'Sem fila critica de acompanhamento',
+      text: chatOpportunities.length
+        ? `Comecar por ${chatNameList(chatOpportunities.slice(0, 3).map((item) => getChatAnalystName(item.metric)))} e registrar uma acao objetiva por indicador pendente.`
+        : 'Manter acompanhamento leve e preservar o padrao que sustentou o fechamento.',
+    },
+    {
+      label: 'Excecoes operacionais',
+      title: chatBelowVolumeCount ? 'Validar volume antes do podio' : 'Volume sem excecao relevante',
+      text: chatBelowVolumeCount
+        ? `Antes de fechar o podio, validar se ${chatNameList(chatBelowVolumeNames)} tiveram emprestimo, ausencia, cobertura ou distribuicao diferente de fila.`
+        : 'Nao ha alerta relevante de volume abaixo da media para justificar excecao operacional.',
+    },
+    {
+      label: 'Proximo fechamento',
+      title: averageCsat >= 90 && averageReviews >= 25 ? 'Proteger padrao' : 'Corrigir base do indicador',
+      text:
+        averageCsat >= 90 && averageReviews >= 25
+          ? 'No proximo mes, acompanhar se CSAT e amostra continuam sustentados sem depender apenas de um ou dois destaques.'
+          : 'No proximo mes, definir uma prioridade: qualidade se CSAT caiu, amostra se avaliacoes ficaram baixas, ou volume se houve distorcao operacional.',
+    },
+  ]
+
   function resetChatAnalystForm() {
     setEditingChatAnalystId(null)
     setChatAnalystForm({ teamId: teams[0]?.id ?? '', name: '', csatGoal: '86' })
@@ -2249,6 +2309,16 @@ function ChatModuleDashboard({
           </p>
         </div>
 
+        <div className="mt-5 grid gap-3 lg:grid-cols-3">
+          {chatMonthlyContextCards.map((card) => (
+            <div key={card.label} className="rounded-lg border border-cyan-400/15 bg-cyan-400/5 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-300">{card.label}</p>
+              <p className="mt-2 text-lg font-bold">{card.value}</p>
+              <p className="mt-1 text-sm leading-6 text-slate-300">{card.detail}</p>
+            </div>
+          ))}
+        </div>
+
         <div className="mt-5 grid gap-4 xl:grid-cols-3">
           <div className="rounded-lg bg-slate-900 p-5">
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">1. Operacional</p>
@@ -2278,6 +2348,26 @@ function ChatModuleDashboard({
             <p className="mt-3 text-sm leading-6 text-slate-300">{chatStrategicDecision}</p>
             <p className="mt-4 rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-100">{chatStrategicTrend}</p>
           </div>
+        </div>
+      </section>
+
+      <section className={chatActiveTab === 'overview' ? 'panel' : 'hidden'}>
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Inteligencia do fechamento mensal</p>
+          <h2 className="mt-2 text-2xl font-bold">Acoes de gestao para o proximo ciclo</h2>
+          <p className="section-subtitle">
+            Leitura desenhada para o uso real do chat: fechamento mensal, reconhecimento, excecoes operacionais e plano do proximo mes.
+          </p>
+        </div>
+
+        <div className="mt-5 grid gap-4 xl:grid-cols-4">
+          {chatMonthlyManagementCards.map((card) => (
+            <div key={card.label} className="rounded-lg bg-slate-900 p-5">
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">{card.label}</p>
+              <h3 className="mt-3 text-lg font-bold">{card.title}</h3>
+              <p className="mt-3 text-sm leading-6 text-slate-300">{card.text}</p>
+            </div>
+          ))}
         </div>
       </section>
 
