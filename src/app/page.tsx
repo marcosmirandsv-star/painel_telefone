@@ -221,6 +221,7 @@ type PhonePodiumRankingRow = {
   individual_goal: number
   eligible: boolean
   reasons: string[] | null
+  team_average_tickets?: number
 }
 type PeriodMode = 'week' | 'month' | 'year' | 'custom'
 
@@ -3011,13 +3012,32 @@ function DashboardView({
     let active = true
 
     async function loadPhonePodiumRanking() {
-      const { data, error } = await supabase.rpc('get_phone_podium_ranking', {
-        p_start: periodFilter.start,
-        p_end: periodFilter.end,
-      })
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        if (active) setPhonePodiumRanking([])
+        return
+      }
+
+      const response = await fetch(
+        `/api/phone-podium?start=${periodFilter.start}&end=${periodFilter.end}`,
+        {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        },
+      )
 
       if (!active) return
-      setPhonePodiumRanking(error ? [] : ((data ?? []) as PhonePodiumRankingRow[]))
+      if (!response.ok) {
+        setPhonePodiumRanking([])
+        return
+      }
+
+      const data = (await response.json()) as PhonePodiumRankingRow[]
+      setPhonePodiumRanking(data ?? [])
     }
 
     loadPhonePodiumRanking()
@@ -3188,12 +3208,15 @@ function DashboardView({
         ? `Se mantiver este ritmo ate o fechamento, a tendencia atual e terminar em ${analystRankingPosition ? `${analystRankingPosition}o lugar` : 'posicao calculada'}; a posicao muda conforme os novos lancamentos do time.`
         : `Neste recorte, a posicao atual e ${analystRankingPosition ? `${analystRankingPosition}o lugar` : 'calculada pelo ranking'}; no mensal, ela sera recalculada com todos os lancamentos.`
     : 'Aguardando lancamento para calcular posicao e tendencia.'
+  const podiumAverageFromSecureRanking = phonePodiumRanking.find((item) => Number(item.team_average_tickets) > 0)?.team_average_tickets
   const podiumAverageSource = phonePodiumRanking.length
     ? phonePodiumRanking.map((item) => Number(item.total_tickets))
     : periodPodium.map((item) => item.totalTickets)
-  const podiumAverageTickets = podiumAverageSource.length
-    ? round(podiumAverageSource.reduce((sum, totalTickets) => sum + totalTickets, 0) / podiumAverageSource.length)
-    : 0
+  const podiumAverageTickets = podiumAverageFromSecureRanking
+    ? Number(podiumAverageFromSecureRanking)
+    : podiumAverageSource.length
+      ? round(podiumAverageSource.reduce((sum, totalTickets) => sum + totalTickets, 0) / podiumAverageSource.length)
+      : 0
   const analystCsatGap = analystResult ? round(Math.max(podiumCsatGoal - analystResult.averageCsat, 0)) : 0
   const analystReviewGap = analystResult ? round(Math.max(reviewGoal - analystResult.reviewPercentage, 0)) : 0
   const analystVolumeGap = analystResult ? Math.max(podiumAverageTickets - analystResult.totalTickets, 0) : 0
