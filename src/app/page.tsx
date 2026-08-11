@@ -3172,8 +3172,11 @@ function DashboardView({
       ? 'Voce esta dentro dos criterios para disputar o podio neste recorte.'
       : 'Sua posicao aparece no ranking, mas ainda existe criterio pendente para entrar no podio.'
     : 'Ainda nao ha dados individuais para este filtro.'
-  const podiumAverageTickets = periodPodium.length
-    ? round(periodPodium.reduce((sum, item) => sum + item.totalTickets, 0) / periodPodium.length)
+  const podiumAverageSource = phonePodiumRanking.length
+    ? phonePodiumRanking.map((item) => Number(item.total_tickets))
+    : periodPodium.map((item) => item.totalTickets)
+  const podiumAverageTickets = podiumAverageSource.length
+    ? round(podiumAverageSource.reduce((sum, totalTickets) => sum + totalTickets, 0) / podiumAverageSource.length)
     : 0
   const analystCsatGap = analystResult ? round(Math.max(podiumCsatGoal - analystResult.averageCsat, 0)) : 0
   const analystReviewGap = analystResult ? round(Math.max(reviewGoal - analystResult.reviewPercentage, 0)) : 0
@@ -3201,10 +3204,10 @@ function DashboardView({
       label: 'Volume',
       value: analystResult
         ? analystVolumeGap > 0
-          ? `faltam ${analystVolumeGap} atendimentos para a media de ${podiumAverageTickets}`
-          : `cumprido: ${analystResult.totalTickets} atendimentos`
+          ? `${analystResult.totalTickets} atendimentos; faltam ${analystVolumeGap} para a media do time (${podiumAverageTickets})`
+          : `${analystResult.totalTickets} atendimentos; media do time: ${podiumAverageTickets}`
         : 'sem dados',
-      ok: Boolean(analystResult && analystVolumeGap === 0),
+      ok: Boolean(analystResult && podiumAverageTickets > 0 && analystVolumeGap === 0),
     },
   ]
   const analystPodiumGapText = analystResult
