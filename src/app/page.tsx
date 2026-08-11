@@ -3131,9 +3131,29 @@ function DashboardView({
   }
   const isAnalystDashboard = role === 'analyst'
   const analystProfile = isAnalystDashboard ? analysts[0] ?? null : null
-  const analystResult = isAnalystDashboard ? periodPodium[0] ?? null : null
+  const localAnalystResult = isAnalystDashboard ? periodPodium[0] ?? null : null
   const secureAnalystRanking = isAnalystDashboard ? phonePodiumRanking[0] ?? null : null
-  const analystRankingPosition = secureAnalystRanking?.position ?? (analystResult ? periodPodium.findIndex((item) => item.analystId === analystResult.analystId) + 1 : 0)
+  const analystResult = secureAnalystRanking
+    ? {
+        analystId: secureAnalystRanking.analyst_id,
+        analystName: secureAnalystRanking.analyst_name,
+        averageCsat: Number(secureAnalystRanking.average_csat),
+        totalReviews: Number(secureAnalystRanking.total_reviews),
+        totalTickets: Number(secureAnalystRanking.total_tickets),
+        reviewPercentage: Number(secureAnalystRanking.review_percentage),
+        individualGoal: Number(secureAnalystRanking.individual_goal),
+        eligible: Boolean(secureAnalystRanking.eligible),
+        reasons: secureAnalystRanking.reasons ?? [],
+      }
+    : localAnalystResult
+  const analystRankingPosition = secureAnalystRanking?.position ?? (localAnalystResult ? periodPodium.findIndex((item) => item.analystId === localAnalystResult.analystId) + 1 : 0)
+  const launchedPeriodLabel = formatLaunchedPeriodLabel(filteredIndividualMetrics, periodFilter)
+  const analystRankingRead =
+    periodFilter.mode === 'month'
+      ? `Ranking parcial do mês, calculado com os lançamentos já feitos em ${launchedPeriodLabel}.`
+      : periodFilter.mode === 'week'
+        ? `Ranking semanal calculado com os lançamentos de ${launchedPeriodLabel}.`
+        : `Ranking calculado com os lançamentos de ${launchedPeriodLabel}.`
   const analystStatusText = analystResult
     ? analystResult.eligible
       ? 'Elegível para o podio'
@@ -3149,8 +3169,8 @@ function DashboardView({
     : 'Aguardar lancamento do periodo para liberar recomendacao individual.'
   const analystPulseText = analystResult
     ? analystResult.eligible
-      ? 'Voce esta dentro da leitura esperada para disputar o podio.'
-      : 'Existe pelo menos um ponto objetivo para recuperar antes do fechamento.'
+      ? 'Voce esta dentro dos criterios para disputar o podio neste recorte.'
+      : 'Sua posição aparece no ranking, mas ainda existe criterio pendente para entrar no podio.'
     : 'Ainda nao ha dados individuais para este filtro.'
   const phoneVisualRows = periodPodium.slice(0, 10).map((item) => ({
     label: item.analystName,
@@ -3412,7 +3432,7 @@ function DashboardView({
             </h2>
             <p className="section-subtitle">
               {isAnalystDashboard
-                ? `Sua leitura no periodo ${periodLabel}: CSAT minimo ${podiumCsatGoal}%, avaliações ${reviewGoal}% e atendimentos dentro da media.`
+                ? `Sua leitura em ${launchedPeriodLabel}: CSAT minimo ${podiumCsatGoal}%, avaliações ${reviewGoal}% e volume comparado com a média dos analistas lançados.`
                 : `Ranking de ${periodLabel}: CSAT minimo ${podiumCsatGoal}%, avaliações ${reviewGoal}% e atendimentos dentro da media da equipe.`}
             </p>
           </div>
@@ -3439,10 +3459,10 @@ function DashboardView({
             </div>
 
             <div className="rounded-lg bg-slate-900 p-5">
-              <p className="text-sm text-slate-400">Posição no ranking</p>
+              <p className="text-sm text-slate-400">Posição no ranking do periodo</p>
               <p className="mt-2 text-3xl font-bold">{analystRankingPosition ? `${analystRankingPosition}o` : '-'}</p>
               <p className="mt-2 text-sm text-slate-400">
-                No filtro semanal, esta e sua posicao parcial; no mensal, mostra a leitura acumulada.
+                {analystRankingRead} Ranking mostra posição; pódio depende de cumprir todos os critérios.
               </p>
             </div>
           </div>
@@ -7305,6 +7325,18 @@ function getPeriodModeLabel(mode: PeriodMode) {
 function formatPeriodLabel(period: PeriodFilter) {
   if (!period.start || !period.end) return 'todo o historico'
   return `${formatDate(period.start)} a ${formatDate(period.end)}`
+}
+
+function formatLaunchedPeriodLabel(metrics: IndividualMetric[], period: PeriodFilter) {
+  if (!metrics.length) return formatPeriodLabel(period)
+
+  const starts = metrics.map((metric) => metric.week_start).sort()
+  const ends = metrics.map((metric) => metric.week_end).sort()
+  const firstLaunch = starts[0]
+  const lastLaunch = ends[ends.length - 1]
+
+  if (!firstLaunch || !lastLaunch) return formatPeriodLabel(period)
+  return `${formatDate(firstLaunch)} a ${formatDate(lastLaunch)}`
 }
 
 function getPreviousPeriod(period: PeriodFilter): PeriodFilter {
