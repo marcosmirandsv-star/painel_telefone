@@ -3077,6 +3077,9 @@ function DashboardView({
 }) {
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>(() => createPeriodFilter('month'))
   const [phonePodiumRanking, setPhonePodiumRanking] = useState<PhonePodiumRankingRow[]>([])
+  const isPhoneDailyUnsupported = isPhonePeriodShorterThanWeeklyLaunch(periodFilter)
+  const phoneWeeklyLaunchMessage =
+    'Os dados do telefone são lançados por semana. Para leitura diária, seria necessário lançar os atendimentos por dia.'
   const filteredIndividualMetrics = useMemo(
     () => filterIndividualMetricsByPeriod(individualMetrics, periodFilter),
     [individualMetrics, periodFilter],
@@ -3421,6 +3424,12 @@ function DashboardView({
             ))}
           </div>
         </div>
+
+        {isPhoneDailyUnsupported && (
+          <div className="mt-5 rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm leading-6 text-amber-100">
+            {phoneWeeklyLaunchMessage}
+          </div>
+        )}
 
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <Field label="Inicio">
@@ -3916,6 +3925,9 @@ function ReportsView({
   const [phoneFeedbackDraft, setPhoneFeedbackDraft] = useState('')
   const [phoneFeedbackStyle, setPhoneFeedbackStyle] = useState<ChatFeedbackStyle>('mimo')
   const [phoneAiSaving, setPhoneAiSaving] = useState(false)
+  const isPhoneDailyUnsupported = isPhonePeriodShorterThanWeeklyLaunch(periodFilter)
+  const phoneWeeklyLaunchMessage =
+    'Os dados do telefone são lançados por semana. Para leitura diária, seria necessário lançar os atendimentos por dia.'
   const isManagementUser = role !== 'analyst'
   const reportAnalysts = useMemo(
     () => (analysts.length ? analysts : buildAnalystsFromMetrics(individualMetrics)),
@@ -4290,6 +4302,12 @@ function ReportsView({
             ))}
           </div>
         </div>
+
+        {isPhoneDailyUnsupported && (
+          <div className="mt-5 rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm leading-6 text-amber-100">
+            {phoneWeeklyLaunchMessage}
+          </div>
+        )}
 
         <div className="mt-5 grid gap-4 lg:grid-cols-3">
           {isManagementUser && (
@@ -7266,8 +7284,20 @@ function filterTeamMetricsByPeriod(metrics: TeamMetric[], period: PeriodFilter) 
   return metrics.filter((metric) => isMetricInPeriod(metric.week_start, metric.week_end, period))
 }
 
+function isPhonePeriodShorterThanWeeklyLaunch(period: PeriodFilter) {
+  if (!period.start || !period.end) return false
+  if (period.mode !== 'custom') return false
+
+  const start = new Date(period.start + 'T00:00:00')
+  const end = new Date(period.end + 'T00:00:00')
+  const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1)
+
+  return days < 5
+}
+
 function isMetricInPeriod(weekStart: string, weekEnd: string, period: PeriodFilter) {
   if (!period.start || !period.end) return true
+  if (isPhonePeriodShorterThanWeeklyLaunch(period)) return false
 
   return weekStart <= period.end && weekEnd >= period.start
 }
