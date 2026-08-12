@@ -35,11 +35,11 @@ export async function GET(request: NextRequest) {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
   if (!supabaseUrl || !serviceRoleKey) {
-    return NextResponse.json({ error: 'Ranking seguro nao configurado.' }, { status: 500 })
+    return NextResponse.json({ error: 'Ranking seguro não configurado.' }, { status: 500 })
   }
 
   const token = request.headers.get('authorization')?.replace('Bearer ', '').trim()
-  if (!token) return NextResponse.json({ error: 'Sessao nao encontrada.' }, { status: 401 })
+  if (!token) return NextResponse.json({ error: 'Sessão não encontrada.' }, { status: 401 })
 
   const start = request.nextUrl.searchParams.get('start')
   const end = request.nextUrl.searchParams.get('end')
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
   } = await admin.auth.getUser(token)
 
   if (userError || !user) {
-    return NextResponse.json({ error: 'Sessao invalida.' }, { status: 401 })
+    return NextResponse.json({ error: 'Sessão invalida.' }, { status: 401 })
   }
 
   const { data: profile, error: profileError } = await admin
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
 
   const role = normalizeRole(profile?.role)
   if (profileError || !role) {
-    return NextResponse.json({ error: 'Perfil nao encontrado.' }, { status: 403 })
+    return NextResponse.json({ error: 'Perfil não encontrado.' }, { status: 403 })
   }
 
   const [analystsResult, metricsResult, goalsResult] = await Promise.all([
@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
   ])
 
   if (analystsResult.error || metricsResult.error || goalsResult.error) {
-    return NextResponse.json({ error: 'Nao foi possivel calcular o ranking.' }, { status: 500 })
+    return NextResponse.json({ error: 'Não foi possível calcular o ranking.' }, { status: 500 })
   }
 
   const analysts = (analystsResult.data ?? []) as AnalystRow[]
@@ -143,9 +143,9 @@ export async function GET(request: NextRequest) {
       const reasons: string[] = []
 
       if (averageCsat < individualGoal) reasons.push('abaixo da meta individual')
-      if (averageCsat < podiumGoal) reasons.push('abaixo do podio')
+      if (averageCsat < podiumGoal) reasons.push('abaixo do pódio')
       if (reviewPercentage < reviewGoal) reasons.push('avaliações abaixo da meta')
-      if (metric.totalTickets < teamAverageTickets) reasons.push('atendimentos abaixo da media')
+      if (metric.totalTickets < teamAverageTickets) reasons.push('atendimentos abaixo da média')
 
       return {
         analyst_id: analyst.id,

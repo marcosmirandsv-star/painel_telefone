@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          'Criacao de usuarios ainda nao configurada. Adicione SUPABASE_SERVICE_ROLE_KEY nas variaveis de ambiente da Vercel.',
+          'Criacao de usuários ainda não configurada. Adicione SUPABASE_SERVICE_ROLE_KEY nas variaveis de ambiente da Vercel.',
       },
       { status: 500 },
     )
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
   const token = request.headers.get('authorization')?.replace('Bearer ', '').trim()
 
   if (!token) {
-    return NextResponse.json({ error: 'Sessao nao encontrada. Entre novamente.' }, { status: 401 })
+    return NextResponse.json({ error: 'Sessão não encontrada. Entre novamente.' }, { status: 401 })
   }
 
   const admin = createClient(supabaseUrl, serviceRoleKey, {
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
   } = await admin.auth.getUser(token)
 
   if (userError || !user) {
-    return NextResponse.json({ error: 'Sessao invalida. Entre novamente.' }, { status: 401 })
+    return NextResponse.json({ error: 'Sessão invalida. Entre novamente.' }, { status: 401 })
   }
 
   const { data: requesterProfile, error: profileError } = await admin
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
 
   if (profileError || !isManagementRole(requesterProfile?.role)) {
     return NextResponse.json(
-      { error: 'Apenas usuarios de gestao podem criar novos acessos.' },
+      { error: 'Apenas usuários de gestão podem criar novos acessos.' },
       { status: 403 },
     )
   }
@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
 
   if (role === 'analista' && !analystId) {
     return NextResponse.json(
-      { error: 'Usuarios analistas precisam ser vinculados a um cadastro de analista.' },
+      { error: 'Usuários analistas precisam ser vinculados a um cadastro de analista.' },
       { status: 400 },
     )
   }
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
       {
         error:
           createError?.message ??
-          'Nao foi possivel criar o usuario. Verifique se este e-mail ja existe no Supabase.',
+          'Não foi possível criar o usuario. Verifique se este e-mail já existe no Supabase.',
       },
       { status: 400 },
     )
@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          'O login foi criado, mas nao consegui vincular o perfil. Revise a tabela profiles no Supabase.',
+          'O login foi criado, mas não consegui vincular o perfil. Revise a tabela profiles no Supabase.',
       },
       { status: 500 },
     )

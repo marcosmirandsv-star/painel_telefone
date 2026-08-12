@@ -44,7 +44,7 @@ const styleInstructions = {
   sare:
     'Use formato SARE com seções: Situacao, Alinhamentos Realizados, Resultado Esperado, Expectativa e Plano de Desenvolvimento.',
   mimo:
-    'Use formato MIMO com seções: Momento observado, Impacto, Melhoria ou manutencao, Orientacao.',
+    'Use formato MIMO com seções: Momento observado, Impacto, Melhoria ou manutenção, Orientação.',
 }
 
 function getErrorText(error: unknown) {
@@ -64,7 +64,7 @@ function sanitizeProviderMessage(message: string) {
 function getPublicProviderError(error: unknown) {
   const message = sanitizeProviderMessage(getErrorText(error))
 
-  if (/GEMINI_API_KEY nao configurada/i.test(message)) {
+  if (/GEMINI_API_KEY não configurada/i.test(message)) {
     return 'a variável GEMINI_API_KEY não chegou ao deploy ativo.'
   }
 
@@ -99,33 +99,33 @@ Regras obrigatorias:
 - Escreva em portugues do Brasil.
 ${cadenceRule}
 - Não comece com parabens generico. Comece com uma leitura profissional do ciclo.
-- Use o texto base do sistema como esqueleto obrigatorio; refine, aprofunde e humanize, mas nao substitua por um texto curto.
-- Preserve todos os numeros relevantes; nao invente dados e nao mude calculos.
+- Use o texto base do sistema como esqueleto obrigatorio; refine, aprofunde e humanize, mas não substitua por um texto curto.
+- Preserve todos os numeros relevantes; não invente dados e não mude cálculos.
 - Não use Markdown, asteriscos, bullets soltos ou titulos decorativos. Escreva em texto limpo, com nomes de seções seguidos de dois-pontos.
 - Mantenha todas as seções do modelo escolhido e escreva pelo menos 2 frases em cada secao.
 - O feedback deve ser completo e útil. Se for direto, ainda assim precisa conter leitura do ciclo, orientação prática e expectativa para o próximo fechamento.
-- Transforme as observações do gestor em contexto de gestão; nao copie literalmente e ignore observações que sejam apenas teste tecnico.
+- Transforme as observações do gestor em contexto de gestão; não copie literalmente e ignore observações que sejam apenas teste tecnico.
 - Traga reconhecimento especifico quando houver pontos fortes, conectando o elogio ao comportamento observado.
 - Traga orientação pratica: diga o que o analista deve repetir, observar, ajustar ou levar como evidencia no próximo fechamento mensal.
 - Não termine frase pela metade. Entregue um texto completo, pronto para colar no relatório.
 - Mantenha entre 180 e 320 palavras. Prefira clareza e completude em vez de texto longo.
 - ${styleInstructions[feedbackStyle]}
 
-Periodo: ${body.periodLabel ?? 'Periodo nao informado'}
+Periodo: ${body.periodLabel ?? 'Periodo não informado'}
 Analista: ${metric?.analystName}
-Equipe: ${metric?.teamName ?? 'Equipe nao informada'}
+Equipe: ${metric?.teamName ?? 'Equipe não informada'}
 Status: ${metric?.status ?? 'Não informado'}
 CSAT: ${metric?.csat}% | Meta CSAT: ${metric?.csatGoal}%
-Avaliacoes: ${metric?.reviewPercentage}% | Meta avaliacoes: ${metric?.reviewGoal ?? 25}%
-Envio/sem avaliacao: ${metric?.sendingPercentage}%
+Avaliações: ${metric?.reviewPercentage}% | Meta avaliações: ${metric?.reviewGoal ?? 25}%
+Envio/sem avaliação: ${metric?.sendingPercentage}%
 Atendimentos totais: ${metric?.totalTickets}
 Atendimentos inativos: ${metric?.inactiveTickets}
-Atendimentos validos: ${metric?.validTickets}
+Atendimentos válidos: ${metric?.validTickets}
 Avaliacoes recebidas: ${metric?.reviews}
 Positivas: ${metric?.positiveReviews}
 Negativas: ${metric?.negativeReviews}
 Media de atendimentos da operacao: ${body.averageTickets}
-Posicao no podio: ${body.podiumPosition && body.podiumPosition > 0 ? `${body.podiumPosition}o lugar` : 'fora do podio'}
+Posição no pódio: ${body.podiumPosition && body.podiumPosition > 0 ? `${body.podiumPosition}o lugar` : 'fora do pódio'}
 
 Historico mensal:
 ${JSON.stringify(body.monthlyHistory ?? [], null, 2)}
@@ -205,7 +205,7 @@ async function generateWithGemini(prompt: string, style: ChatFeedbackRequest['fe
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY
 
   if (!apiKey) {
-    throw new Error('GEMINI_API_KEY nao configurada. Adicione a chave da Gemini nas variaveis de ambiente da Vercel.')
+    throw new Error('GEMINI_API_KEY não configurada. Adicione a chave da Gemini nas variaveis de ambiente da Vercel.')
   }
 
   const configuredModel = process.env.GEMINI_MODEL?.trim()
@@ -256,7 +256,7 @@ async function generateWithGemini(prompt: string, style: ChatFeedbackRequest['fe
 
     if (!response.ok) {
       const code = data?.error?.status || data?.error?.code || response.status
-      const message = data?.error?.message || data?.message || 'Não foi possivel gerar feedback com Gemini.'
+      const message = data?.error?.message || data?.message || 'Não foi possível gerar feedback com Gemini.'
       errors.push(`${model}: HTTP ${response.status} / ${code} - ${sanitizeProviderMessage(message)}`)
 
       if (response.status === 404 || /not found|model/i.test(message)) {
@@ -269,14 +269,14 @@ async function generateWithGemini(prompt: string, style: ChatFeedbackRequest['fe
     return assertCompleteFeedback(extractGeminiText(data), style)
   }
 
-  throw new Error(`Nenhum modelo Gemini disponivel respondeu para gerar o feedback. Tentativas: ${errors.join(' | ')}`)
+  throw new Error(`Nenhum modelo Gemini disponível respondeu para gerar o feedback. Tentativas: ${errors.join(' | ')}`)
 }
 
 async function generateWithGitHubModels(prompt: string) {
   const token = process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN
 
   if (!token) {
-    throw new Error('GITHUB_MODELS_TOKEN nao configurado. Adicione na Vercel um token do GitHub com permissao models: read.')
+    throw new Error('GITHUB_MODELS_TOKEN não configurado. Adicione na Vercel um token do GitHub com permissão models: read.')
   }
 
   const response = await fetch('https://models.github.ai/inference/chat/completions', {
@@ -306,7 +306,7 @@ async function generateWithGitHubModels(prompt: string) {
   const data = await response.json()
 
   if (!response.ok) {
-    const message = data?.message || data?.error?.message || 'Não foi possivel gerar feedback com GitHub Models.'
+    const message = data?.message || data?.error?.message || 'Não foi possível gerar feedback com GitHub Models.'
     throw new Error(message)
   }
 

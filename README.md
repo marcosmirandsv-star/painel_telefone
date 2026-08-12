@@ -1,15 +1,15 @@
 # Sistema de Performance de Atendimento
 
-Painel interno para acompanhamento de performance dos modulos Telefone e Chat.
+Painel interno para acompanhamento de performance dos módulos Telefone e Chat.
 
 ## Modulos
 
-- Telefone: lancamentos semanais, performance da equipe, ranking, podio, relatorios SARE e texto assistido por IA.
-- Chat: importacao mensal do Zendesk, conferencia da base, ranking, podio manual, metas por analista e relatorio individual com IA.
+- Telefone: lançamentos semanais, performance da equipe, ranking, pódio, relatórios MIMO/SARE e texto assistido por IA.
+- Chat: importação mensal do Zendesk, conferência da base, ranking, pódio manual, metas por analista e relatório individual com IA.
 
 ## Manual operacional
 
-O manual de uso esta em:
+O manual de uso está em:
 
 [docs/manual-operacional.md](docs/manual-operacional.md)
 
@@ -17,8 +17,8 @@ Ele cobre:
 
 - Como lancar dados do telefone.
 - Como importar dados do chat.
-- Como conferir ranking e podio.
-- Como gerar relatorios.
+- Como conferir ranking e pódio.
+- Como gerar relatórios.
 - Como usar a IA assistida.
 - Checklist de fechamento mensal.
 
@@ -45,4 +45,4 @@ npm run build
 
 ## Publicacao
 
-O deploy de producao e feito automaticamente pela Vercel quando as alteracoes sao enviadas para a branch main.
+O deploy de produção e feito automaticamente pela Vercel quando as alteracoes são enviadas para a branch main.

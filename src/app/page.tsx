@@ -323,7 +323,7 @@ export default function Home() {
       setUser(data.user)
       if (cameFromRecoveryLink) {
         setIsPasswordRecovery(true)
-        setMessage('Digite uma nova senha para concluir a recuperacao.')
+        setMessage('Digite uma nova senha para concluir a recuperação.')
       }
       setLoading(false)
     }
@@ -334,7 +334,7 @@ export default function Home() {
       if (event === 'PASSWORD_RECOVERY') {
         setUser(session?.user ?? null)
         setIsPasswordRecovery(true)
-        setMessage('Digite uma nova senha para concluir a recuperacao.')
+        setMessage('Digite uma nova senha para concluir a recuperação.')
       }
     })
 
@@ -617,7 +617,7 @@ export default function Home() {
       const result = await response.json().catch(() => ({}))
 
       if (!response.ok) {
-        setMessage(result.error ?? 'Nao foi possivel criar o usuario.')
+        setMessage(result.error ?? 'Não foi possível criar o usuario.')
         return
       }
 
@@ -762,7 +762,7 @@ export default function Home() {
 
   async function handleDeleteAnalyst(analyst: Analyst) {
     const confirmed = window.confirm(
-      `Excluir ${analyst.name}? Se ele tiver historico de lancamentos, prefira inativar para preservar os relatorios.`,
+      `Excluir ${analyst.name}? Se ele tiver historico de lançamentos, prefira inativar para preservar os relatórios.`,
     )
 
     if (!confirmed) return
@@ -777,7 +777,7 @@ export default function Home() {
       )
 
       if (error) {
-        setMessage('Nao foi possivel excluir. Se existir historico, use Inativar para preservar os dados.')
+        setMessage('Não foi possível excluir. Se existir historico, use Inativar para preservar os dados.')
       } else {
         setMessage('Analista excluido com sucesso.')
         if (editingAnalystId === analyst.id) handleCancelAnalystEdit()
@@ -891,7 +891,7 @@ export default function Home() {
       )
 
       if (alreadyExists) {
-        setMessage('Ja existe lancamento para este analista neste mesmo periodo.')
+        setMessage('Já existe lançamento para este analista neste mesmo período.')
         return
       }
 
@@ -922,7 +922,7 @@ export default function Home() {
         await loadData()
       }
     } catch (error) {
-      setMessage(`Nao foi possivel salvar a evidencia ou o lancamento: ${getErrorMessage(error)}`)
+      setMessage(`Não foi possível salvar a evidencia ou o lançamento: ${getErrorMessage(error)}`)
     } finally {
       setSaving(false)
     }
@@ -943,7 +943,7 @@ export default function Home() {
       }
 
       if (answeredCalls > totalCalls) {
-        setMessage('Ligacoes atendidas nao pode ser maior que o total processado.')
+        setMessage('Ligações atendidas nao pode ser maior que o total processado.')
         return
       }
 
@@ -954,7 +954,7 @@ export default function Home() {
       )
 
       if (alreadyExists) {
-        setMessage('Ja existe performance da equipe neste mesmo periodo.')
+        setMessage('Já existe performance da equipe neste mesmo período.')
         return
       }
 
@@ -984,7 +984,7 @@ export default function Home() {
         await loadData()
       }
     } catch (error) {
-      setMessage(`Nao foi possivel salvar a evidencia ou a performance: ${getErrorMessage(error)}`)
+      setMessage(`Não foi possível salvar a evidencia ou a performance: ${getErrorMessage(error)}`)
     } finally {
       setSaving(false)
     }
@@ -993,7 +993,7 @@ export default function Home() {
   async function handleDeleteIndividualMetric(metric: IndividualMetric) {
     const analystName = getAnalystName(metric.analysts)
     const confirmed = window.confirm(
-      `Excluir o lancamento individual de ${analystName} da semana ${formatWeek(metric.week_start, metric.week_end)}?`,
+      `Excluir o lançamento individual de ${analystName} da semana ${formatWeek(metric.week_start, metric.week_end)}?`,
     )
 
     if (!confirmed) return
@@ -1004,7 +1004,7 @@ export default function Home() {
     try {
       const { error } = await withTimeout(
         supabase.from('weekly_individual_metrics').delete().eq('id', metric.id),
-        'O Supabase demorou para excluir o lancamento. Tente novamente.',
+        'O Supabase demorou para excluir o lançamento. Tente novamente.',
       )
 
       if (error) setMessage(error.message)
@@ -1130,8 +1130,8 @@ export default function Home() {
               Gestao de Performance de Atendimento
             </h1>
             <p className="mt-3 max-w-3xl text-slate-300">
-              Painel interno para acompanhar metas, analistas, lancamentos semanais,
-              performance da equipe e proximas analises com IA.
+              Painel interno para acompanhar metas, analistas, lançamentos semanais,
+              performance da equipe e próximas análises com IA.
             </p>
             <p className="mt-3 text-sm text-slate-400">
               Perfil: <strong>{getRoleLabel(userRole)}</strong>
@@ -1163,7 +1163,7 @@ export default function Home() {
             >
               <span>Modulo telefone</span>
               <strong>Performance de atendimento</strong>
-              <small>Dashboard, lancamentos, metas, podio, SARE e IA preditiva.</small>
+              <small>Dashboard, lançamentos, metas, pódio, SARE e IA preditiva.</small>
             </button>
             <button
               className={activeModule === 'chat' ? 'module-card-active' : 'module-card'}
@@ -1172,7 +1172,7 @@ export default function Home() {
             >
               <span>Modulo chat</span>
               <strong>Performance de atendimento via chat</strong>
-              <small>Dados do Zendesk, importacao mensal, ranking, podio e relatorios individuais.</small>
+              <small>Dados do Zendesk, importação mensal, ranking, pódio e relatórios individuais.</small>
             </button>
           </div>
         )}
@@ -1371,7 +1371,7 @@ function ChatModuleDashboard({
     setChatImportMessage('')
 
     if (!chatSatisfactionFile || !chatInactiveFile) {
-      setChatImportMessage('Selecione a planilha de satisfacao e a planilha de inativos antes de importar.')
+      setChatImportMessage('Selecione a planilha de satisfação e a planilha de inativos antes de importar.')
       return
     }
 
@@ -1379,7 +1379,7 @@ function ChatModuleDashboard({
     const monthNumber = Number(chatImportMonth)
 
     if (!year || !monthNumber || monthNumber < 1 || monthNumber > 12) {
-      setChatImportMessage('Informe um mes e ano validos para a importacao.')
+      setChatImportMessage('Informe um mes e ano válidos para a importação.')
       return
     }
 
@@ -1440,9 +1440,9 @@ function ChatModuleDashboard({
 
       <section className="panel">
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Módulo chat</p>
-          <h2 className="mt-3 text-3xl font-bold">Acesso restrito a gestao</h2>
+          <h2 className="mt-3 text-3xl font-bold">Acesso restrito a gestão</h2>
           <p className="mt-3 max-w-3xl text-slate-300">
-            O modulo chat sera usado para importacao mensal, calculos consolidados, ranking, podio e relatorios individuais.
+            O modulo chat sera usado para importação mensal, calculos consolidados, ranking, pódio e relatórios individuais.
           </p>
         </section>
       </div>
@@ -1574,12 +1574,12 @@ function ChatModuleDashboard({
     : ''
   const chatExecutiveStatus =
     !visibleMetrics.length
-      ? 'Sem dados no periodo'
+      ? 'Sem dados no período'
       : averageCsat >= 90 && averageReviews >= 25
-        ? 'Operacao saudavel'
+        ? 'Operação saudavel'
         : averageCsat < 85 || averageReviews < 20 || attention.length >= 3
           ? 'Acompanhamento prioritario'
-          : 'Periodo em atencao'
+          : 'Periodo em atenção'
   const chatExecutiveTone =
     !visibleMetrics.length
       ? 'text-slate-300'
@@ -1590,28 +1590,28 @@ function ChatModuleDashboard({
           : 'text-amber-300'
   const chatMainAlert =
     !visibleMetrics.length
-      ? 'Selecione outro periodo ou aguarde a importacao mensal.'
+      ? 'Selecione outro período ou aguarde a importação mensal.'
       : averageCsat < 85
-        ? 'A qualidade do atendimento tem espaco para evolucao.'
+        ? 'A qualidade do atendimento tem espaco para evolução.'
         : averageCsat < 90
-          ? 'CSAT abaixo da referencia de podio do chat.'
+          ? 'CSAT abaixo da referência de pódio do chat.'
           : averageReviews < 20
-            ? 'A participacao dos clientes nas pesquisas precisa ser ampliada.'
+            ? 'A participação dos clientes nas pesquisas precisa ser ampliada.'
             : averageReviews < 25
-              ? 'Avaliações abaixo do minimo usado para elegibilidade ao podio.'
+              ? 'Avaliações abaixo do mínimo usado para elegibilidade ao pódio.'
               : attention.length
-                ? 'Ha analistas com pelo menos um criterio fora da referencia.'
-                : 'Equipe alinhada com os criterios principais do periodo.'
+                ? 'Há analistas com pelo menos um critério fora da referência.'
+                : 'Equipe alinhada com os critérios principais do período.'
 
   const chatRecommendedAction =
     !visibleMetrics.length
       ? 'Importar ou selecionar um mes com dados.'
       : averageCsat < 90
-        ? 'Revisar atendimentos negativos e direcionar feedback dos analistas em atencao.'
+        ? 'Revisar atendimentos negativos e direcionar feedback dos analistas em atenção.'
         : averageReviews < 25
-          ? 'Reforcar convite para avaliacao e acompanhar volume de respostas no proximo ciclo.'
+          ? 'Reforcar convite para avaliação e acompanhar volume de respostas no próximo ciclo.'
           : attention.length
-            ? 'Priorizar os analistas listados em atencao antes do proximo fechamento.'
+            ? 'Priorizar os analistas listados em atenção antes do próximo fechamento.'
             : 'Manter rotina atual e acompanhar se o resultado se sustenta no mes seguinte.'
   const chatEligibleCount = chatRanking.filter((item) => item.eligible).length
   const chatVisualRows = chatRanking.slice(0, 10).map((item) => ({
@@ -1626,11 +1626,11 @@ function ChatModuleDashboard({
     x: Number(item.metric.total_tickets),
     y: Number(item.metric.csat),
     tone: item.eligible ? 'success' : Number(item.metric.csat) < 90 ? 'danger' : 'warning',
-    detail: `${item.metric.review_percentage}% avaliacoes`,
+    detail: `${item.metric.review_percentage}% avaliações`,
   }))
   const chatTopHighlight = chatRanking.find((item) => item.eligible)?.metric ?? chatRanking[0]?.metric ?? null
   const chatAttentionHighlight = chatOpportunities[0]?.metric ?? null
-  const chatAttentionText = chatOpportunities[0]?.reasons.join(', ') ?? 'Sem alerta critico no periodo.'
+  const chatAttentionText = chatOpportunities[0]?.reasons.join(', ') ?? 'Sem alerta crítico no período.'
   const chatClosureReading =
     !visibleMetrics.length
       ? 'Ainda não há base suficiente para leitura executiva.'
@@ -1714,12 +1714,12 @@ function ChatModuleDashboard({
       value: previousPeriod?.label ?? 'Sem mes anterior',
       detail: previousPeriod
         ? 'Leitura comparada com o fechamento mensal anterior da mesma equipe.'
-        : 'Importe meses anteriores para liberar tendencia e comparacao.',
+        : 'Importe meses anteriores para liberar tendencia e comparação.',
     },
     {
       label: 'Base Zendesk',
       value: `${visibleMetrics.length} analista(s)`,
-      detail: `${totals.tickets} atendimentos, ${totals.validTickets} validos e ${totals.reviews} avaliacoes.`,
+      detail: `${totals.tickets} atendimentos, ${totals.validTickets} válidos e ${totals.reviews} avaliações.`,
     },
   ]
 
@@ -1730,36 +1730,36 @@ function ChatModuleDashboard({
         chatEligibleCount >= 3
           ? 'Podio sustentado'
           : chatEligibleCount > 0
-            ? 'Ha destaques para reconhecer'
+            ? 'Há destaques para reconhecer'
             : 'Reconhecimento seletivo',
       text:
         chatEligibleCount >= 3
-          ? `Reconhecer o podio e usar ${chatNameList(chatEligibleNames)} como referencia de comportamento para o proximo mes.`
+          ? `Reconhecer o pódio e usar ${chatNameList(chatEligibleNames)} como referência de comportamento para o próximo mes.`
           : chatEligibleCount > 0
             ? `Reconhecer ${chatNameList(chatEligibleNames)} e separar o que foi pratica individual do que foi contexto operacional.`
-            : 'Sem podio completo no periodo; reconhecer evolucoes pontuais e evitar premiar sem cumprir os criterios.',
+            : 'Sem pódio completo no período; reconhecer evolucoes pontuais e evitar premiar sem cumprir os critérios.',
     },
     {
       label: 'Acompanhamento',
-      title: chatOpportunities.length ? 'Priorizar analistas em atencao' : 'Sem fila critica de acompanhamento',
+      title: chatOpportunities.length ? 'Priorizar analistas em atenção' : 'Sem fila crítica de acompanhamento',
       text: chatOpportunities.length
-        ? `Comecar por ${chatNameList(chatOpportunities.slice(0, 3).map((item) => getChatAnalystName(item.metric)))} e registrar uma acao objetiva por indicador pendente.`
+        ? `Comecar por ${chatNameList(chatOpportunities.slice(0, 3).map((item) => getChatAnalystName(item.metric)))} e registrar uma ação objetiva por indicador pendente.`
         : 'Manter acompanhamento leve e preservar o padrao que sustentou o fechamento.',
     },
     {
       label: 'Excecoes operacionais',
-      title: chatBelowVolumeCount ? 'Validar volume antes do podio' : 'Volume sem excecao relevante',
+      title: chatBelowVolumeCount ? 'Validar volume antes do pódio' : 'Volume sem excecao relevante',
       text: chatBelowVolumeCount
-        ? `Antes de fechar o podio, validar se ${chatNameList(chatBelowVolumeNames)} tiveram emprestimo, ausencia, cobertura ou distribuicao diferente de fila.`
-        : 'Nao ha alerta relevante de volume abaixo da media para justificar excecao operacional.',
+        ? `Antes de fechar o pódio, validar se ${chatNameList(chatBelowVolumeNames)} tiveram emprestimo, ausencia, cobertura ou distribuicao diferente de fila.`
+        : 'Não ha alerta relevante de volume abaixo da média para justificar excecao operacional.',
     },
     {
       label: 'Proximo fechamento',
       title: averageCsat >= 90 && averageReviews >= 25 ? 'Proteger padrao' : 'Corrigir base do indicador',
       text:
         averageCsat >= 90 && averageReviews >= 25
-          ? 'No proximo mes, acompanhar se CSAT e amostra continuam sustentados sem depender apenas de um ou dois destaques.'
-          : 'No proximo mes, definir uma prioridade: qualidade se CSAT caiu, amostra se avaliacoes ficaram baixas, ou volume se houve distorcao operacional.',
+          ? 'No próximo mes, acompanhar se CSAT e amostra continuam sustentados sem depender apenas de um ou dois destaques.'
+          : 'No próximo mes, definir uma prioridade: qualidade se CSAT caiu, amostra se avaliações ficaram baixas, ou volume se houve distorcao operacional.',
     },
   ]
 
@@ -1913,12 +1913,12 @@ function ChatModuleDashboard({
     setChatPodiumMessage('')
 
     if (!selectedPeriod) {
-      setChatPodiumMessage('Selecione um periodo antes de salvar o podio manual.')
+      setChatPodiumMessage('Selecione um período antes de salvar o pódio manual.')
       return
     }
 
     if (selectedTeamId === 'all') {
-      setChatPodiumMessage('Selecione uma equipe especifica para salvar o podio manual.')
+      setChatPodiumMessage('Selecione uma equipe especifica para salvar o pódio manual.')
       return
     }
 
@@ -1938,12 +1938,12 @@ function ChatModuleDashboard({
       .filter((row): row is NonNullable<typeof row> => Boolean(row))
 
     if (!rows.length) {
-      setChatPodiumMessage('Selecione pelo menos um analista para salvar o podio manual.')
+      setChatPodiumMessage('Selecione pelo menos um analista para salvar o pódio manual.')
       return
     }
 
     if (new Set(rows.map((row) => row.analyst_id)).size !== rows.length) {
-      setChatPodiumMessage('O mesmo analista nao pode ocupar mais de uma posicao.')
+      setChatPodiumMessage('O mesmo analista nao pode ocupar mais de uma posição.')
       return
     }
 
@@ -1962,9 +1962,9 @@ function ChatModuleDashboard({
       if (error) throw error
 
       await onImportComplete()
-      setChatPodiumMessage('Podio manual salvo para este periodo.')
+      setChatPodiumMessage('Podio manual salvo para este período.')
     } catch (error) {
-      setChatPodiumMessage(`Erro ao salvar podio manual: ${getErrorMessage(error)}`)
+      setChatPodiumMessage(`Erro ao salvar pódio manual: ${getErrorMessage(error)}`)
     }
   }
 
@@ -1972,7 +1972,7 @@ function ChatModuleDashboard({
     setChatPodiumMessage('')
 
     if (!selectedPeriod || selectedTeamId === 'all') {
-      setChatPodiumMessage('Selecione uma equipe especifica para resetar o podio manual.')
+      setChatPodiumMessage('Selecione uma equipe especifica para resetar o pódio manual.')
       return
     }
 
@@ -2003,10 +2003,10 @@ function ChatModuleDashboard({
       if (currentExclusion) {
         const { error } = await supabase.from('chat_podium_exclusions').delete().eq('id', currentExclusion.id)
         if (error) throw error
-        setChatExportMessage(`${getChatAnalystName(metric)} voltou a concorrer ao podio deste periodo.`)
+        setChatExportMessage(`${getChatAnalystName(metric)} voltou a concorrer ao pódio deste período.`)
       } else {
         const reason = window.prompt(
-          `Motivo para tirar ${getChatAnalystName(metric)} do podio deste periodo:`,
+          `Motivo para tirar ${getChatAnalystName(metric)} do pódio deste período:`,
           'Emprestimo para outro setor / volume atipico',
         )
 
@@ -2023,7 +2023,7 @@ function ChatModuleDashboard({
           { onConflict: 'team_id,analyst_id,year,month_number' },
         )
         if (error) throw error
-        setChatExportMessage(`${getChatAnalystName(metric)} ficou fora do podio deste periodo por excecao operacional.`)
+        setChatExportMessage(`${getChatAnalystName(metric)} ficou fora do pódio deste período por excecao operacional.`)
       }
 
       await onImportComplete()
@@ -2039,7 +2039,7 @@ function ChatModuleDashboard({
     }
 
     setChatFeedbackDraft(chatReportFeedbackSuggestion)
-    setChatExportMessage('Sugestao de feedback gerada. Revise o texto antes de exportar.')
+    setChatExportMessage('Sugestão de feedback gerada. Revise o texto antes de exportar.')
   }
 
   async function handleGenerateChatFeedbackWithAi() {
@@ -2094,7 +2094,7 @@ function ChatModuleDashboard({
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data?.error || 'Nao foi possivel gerar feedback com IA.')
+        throw new Error(data?.error || 'Não foi possível gerar feedback com IA.')
       }
 
       const safeFeedback = normalizeChatReportFeedback(data.feedback, chatReportFeedbackSuggestion, chatFeedbackStyle)
@@ -2109,7 +2109,7 @@ function ChatModuleDashboard({
 
   function handleExportChatIndividualReport() {
     if (!selectedChatReportMetric) {
-      setChatExportMessage('Selecione um analista com dados antes de exportar o relatorio individual.')
+      setChatExportMessage('Selecione um analista com dados antes de exportar o relatório individual.')
       return
     }
 
@@ -2130,7 +2130,7 @@ function ChatModuleDashboard({
 
       setChatExportMessage(`Relatório individual gerado: ${fileName}. Verifique a pasta Downloads.`)
     } catch {
-      setChatExportMessage('Nao foi possivel gerar o relatorio individual. Tente novamente ou use outro navegador.')
+      setChatExportMessage('Não foi possível gerar o relatório individual. Tente novamente ou use outro navegador.')
     }
   }
 
@@ -2224,7 +2224,7 @@ function ChatModuleDashboard({
                 onChange={(event) => setChatImportYear(event.target.value)}
               />
             </Field>
-            <Field label="Satisfacao">
+            <Field label="Satisfação">
               <input
                 accept=".xlsx,.xls,.csv,text/csv"
                 className="form-input"
@@ -2353,10 +2353,10 @@ function ChatModuleDashboard({
 
       <section className={chatActiveTab === 'overview' ? 'panel' : 'hidden'}>
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Inteligencia do fechamento mensal</p>
-          <h2 className="mt-2 text-2xl font-bold">Acoes de gestao para o proximo ciclo</h2>
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Inteligência do fechamento mensal</p>
+          <h2 className="mt-2 text-2xl font-bold">Acoes de gestão para o próximo ciclo</h2>
           <p className="section-subtitle">
-            Leitura desenhada para o uso real do chat: fechamento mensal, reconhecimento, excecoes operacionais e plano do proximo mes.
+            Leitura desenhada para o uso real do chat: fechamento mensal, reconhecimento, excecoes operacionais e plano do próximo mes.
           </p>
         </div>
 
@@ -2409,7 +2409,7 @@ function ChatModuleDashboard({
         <div className="grid gap-6 xl:grid-cols-2">
           <ComparisonBars
             title="Comparativo visual dos analistas"
-            subtitle="Mostra rapidamente quem combina qualidade, amostra de avaliacoes e volume no periodo."
+            subtitle="Mostra rapidamente quem combina qualidade, amostra de avaliações e volume no período."
             rows={chatVisualRows}
             primaryGoal={90}
             secondaryGoal={25}
@@ -2722,12 +2722,12 @@ function ChatModuleDashboard({
                   <td className="py-3 pr-4">{item.metric.review_percentage}%</td>
                   <td className="py-3 pr-4">{formatDelta(round(Number(item.metric.review_percentage) - Number(item.metric.general_review_goal)), ' p.p.')}</td>
                   <td className="py-3 pr-4">{item.metric.sending_percentage}%</td>
-                  <td className="py-3 pr-4">{item.metric.total_tickets} / media {averageTickets}</td>
+                  <td className="py-3 pr-4">{item.metric.total_tickets} / média {averageTickets}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {!chatRanking.length && <EmptyState text="Nenhum dado para analise neste filtro." />}
+          {!chatRanking.length && <EmptyState text="Nenhum dado para análise neste filtro." />}
         </div>
       </section>
       <section className={chatActiveTab === 'reports' ? 'panel' : 'hidden'}>
@@ -2783,17 +2783,17 @@ function ChatModuleDashboard({
             <MetricCard label="Podio" value={selectedChatPodiumPosition > 0 ? `${selectedChatPodiumPosition}o lugar` : 'Fora'} />
           </div>
         ) : (
-          <EmptyState text="Selecione um analista com dados para gerar o relatorio." />
+          <EmptyState text="Selecione um analista com dados para gerar o relatório." />
         )}
 
         <div className="mt-5 grid gap-4 lg:grid-cols-3">
           <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
             <p className="font-semibold text-slate-100">1. Conferir</p>
-            <p className="mt-2">Verifique periodo, analista, CSAT, avaliações, volume e posicao no podio.</p>
+            <p className="mt-2">Verifique período, analista, CSAT, avaliações, volume e posição no pódio.</p>
           </div>
           <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
             <p className="font-semibold text-slate-100">2. Revisar feedback</p>
-            <p className="mt-2">Use suas observacoes como contexto e ajuste o texto final antes de exportar.</p>
+            <p className="mt-2">Use suas observações como contexto e ajuste o texto final antes de exportar.</p>
           </div>
           <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
             <p className="font-semibold text-slate-100">3. Exportar</p>
@@ -2802,14 +2802,15 @@ function ChatModuleDashboard({
         </div>
 
         <div className="mt-5 grid gap-4">
-          <Field label="3. Observacoes do gestor">
+          <Field label="3. Observações do gestor">
             <textarea
               className="form-input min-h-24"
               value={chatManagerNotes}
               onChange={(event) => setChatManagerNotes(event.target.value)}
-              placeholder="Inclua contexto do mes, combinados, pontos de atencao ou reconhecimento para orientar o feedback."
+              placeholder="Inclua contexto do mes, combinados, pontos de atenção ou reconhecimento para orientar o feedback."
             />
           </Field>
+
 
           <div className="grid gap-3 lg:grid-cols-[auto_auto_1fr] lg:items-start">
             <button
@@ -2818,7 +2819,7 @@ function ChatModuleDashboard({
               type="button"
               onClick={handleGenerateChatFeedbackDraft}
             >
-              4. Gerar sugestao
+              4. Gerar sugestão
             </button>
             <button
               className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
@@ -2829,7 +2830,7 @@ function ChatModuleDashboard({
               {chatAiSaving ? 'Gerando...' : 'Gerar texto assistido'}
             </button>
             <p className="text-sm text-slate-300">
-              O texto assistido usa as regras do painel e mantem o relatorio funcionando mesmo sem IA externa ativa.
+              O texto assistido usa as regras do painel e mantem o relatório funcionando mesmo sem IA externa ativa.
             </p>
           </div>
 
@@ -2995,11 +2996,11 @@ function ChatModuleDashboard({
         <div className="mt-5 grid gap-4 lg:grid-cols-3">
           <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
             <p className="font-semibold text-slate-100">Fórmula de avaliações</p>
-            <p className="mt-2">Avaliações recebidas / atendimentos validos x 100.</p>
+            <p className="mt-2">Avaliações recebidas / atendimentos válidos x 100.</p>
           </div>
           <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
             <p className="font-semibold text-slate-100">Fórmula de % sem avaliação</p>
-            <p className="mt-2">Válidos sem avaliacao / atendimentos validos x 100.</p>
+            <p className="mt-2">Válidos sem avaliação / atendimentos válidos x 100.</p>
           </div>
           <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
             <p className="font-semibold text-slate-100">Fórmula de inatividade</p>
@@ -3019,7 +3020,7 @@ function ChatModuleDashboard({
                 <th className="px-3 py-2">Válidos</th>
                 <th className="px-3 py-2">Inativos</th>
                 <th className="px-3 py-2">% inatividade</th>
-                <th className="px-3 py-2">% envio avaliacao</th>
+                <th className="px-3 py-2">% envio avaliação</th>
               </tr>
             </thead>
             <tbody>
@@ -3178,20 +3179,20 @@ function DashboardView({
   )
   const predictiveAction =
     !hasPeriodData
-      ? 'Aguardar novos lancamentos para liberar previsao.'
+      ? 'Aguardar novos lançamentos para liberar previsao.'
       : predictiveRiskLevel === 'Alto'
-        ? 'Priorizar feedback SARE e acompanhamento semanal dos indicadores criticos.'
+        ? 'Priorizar feedback SARE e acompanhamento semanal dos indicadores críticos.'
         : predictiveRiskLevel === 'Medio'
-          ? 'Monitorar variacoes e reforcar os pontos abaixo da meta antes do fechamento.'
+          ? 'Monitorar variações e reforcar os pontos abaixo da meta antes do fechamento.'
           : 'Manter rotina atual e preservar consistencia ate o fechamento.'
   const executiveStatus =
     !hasPeriodData
-      ? 'Sem dados no periodo'
+      ? 'Sem dados no período'
       : periodTeamPerformance >= teamPerformanceGoal && periodAverageCsat >= podiumCsatGoal
         ? 'Periodo saudavel'
         : attentionCount
           ? 'Periodo pede acompanhamento'
-          : 'Periodo em consolidacao'
+          : 'Periodo em consolidação'
   const executiveStatusTone =
     !hasPeriodData
       ? 'text-slate-300'
@@ -3202,7 +3203,7 @@ function DashboardView({
           : 'text-cyan-300'
   const executivePriority =
     !hasPeriodData
-      ? 'Selecionar outro periodo ou aguardar os lancamentos.'
+      ? 'Selecionar outro período ou aguardar os lançamentos.'
       : attentionList.length > 0
         ? `Priorizar ${attentionList.map((item) => item.analystName).join(', ')}.`
         : periodTeamPerformance < teamPerformanceGoal
@@ -3213,28 +3214,28 @@ function DashboardView({
     !hasPeriodData
       ? 'Sem dados suficientes para diagnostico.'
       : attentionList.length > 0
-        ? `${attentionCount} analista(s) abaixo dos criterios de podio.`
+        ? `${attentionCount} analista(s) abaixo dos critérios de pódio.`
         : periodAverageCsat < podiumCsatGoal
-          ? `CSAT do periodo abaixo da meta de podio (${podiumCsatGoal}%).`
+          ? `CSAT do período abaixo da meta de pódio (${podiumCsatGoal}%).`
           : periodTeamPerformance < teamPerformanceGoal
             ? `Performance da equipe abaixo da meta operacional (${teamPerformanceGoal}%).`
             : 'Indicadores principais dentro da faixa esperada.'
   const executiveNextAction =
     !hasPeriodData
-      ? 'Conferir se os lancamentos da semana/mes ja foram feitos.'
+      ? 'Conferir se os lançamentos da semana/mes ja foram feitos.'
       : attentionCount
-        ? 'Abrir feedback SARE dos analistas em atencao e acompanhar a semana seguinte.'
+        ? 'Abrir feedback SARE dos analistas em atenção e acompanhar a semana seguinte.'
         : periodTeamPerformance < teamPerformanceGoal
           ? 'Revisar abandonos, escala e gargalos antes do fechamento.'
-          : 'Comparar evolucao semanal e preservar a rotina atual.'
+          : 'Comparar evolução semanal e preservar a rotina atual.'
   const executiveClosingRead =
     !hasPeriodData
       ? 'Fechamento ainda nao liberado para leitura.'
       : predictiveRiskLevel === 'Alto'
-        ? 'Fechamento em risco: agir antes de consolidar o periodo.'
+        ? 'Fechamento em risco: agir antes de consolidar o período.'
         : predictiveRiskLevel === 'Medio'
-          ? 'Fechamento pede monitoramento: ha variacao que pode mudar o resultado.'
-          : 'Fechamento favoravel: manter acompanhamento ate concluir o periodo.'
+          ? 'Fechamento pede monitoramento: ha variação que pode mudar o resultado.'
+          : 'Fechamento favoravel: manter acompanhamento ate concluir o período.'
 
   function handlePeriodModeChange(mode: PeriodMode) {
     setPeriodFilter(createPeriodFilter(mode))
@@ -3266,38 +3267,38 @@ function DashboardView({
         : `Ranking calculado com os lançamentos de ${launchedPeriodLabel}.`
   const analystStatusText = analystResult
     ? analystResult.eligible
-      ? 'Elegível para o podio'
-      : 'Fora do podio neste periodo'
-    : 'Sem lancamento no periodo'
+      ? 'Elegível para o pódio'
+      : 'Fora do pódio neste período'
+    : 'Sem lançamento no período'
   const analystFocusText = analystResult
     ? analystResult.eligible
       ? 'Manter CSAT, volume e percentual de avaliações ate o fechamento.'
       : analystResult.reasons.join(', ')
-    : 'Selecione outro periodo ou aguarde o lancamento semanal.'
+    : 'Selecione outro período ou aguarde o lançamento semanal.'
   const analystActionText = analystResult
     ? buildDevelopmentFocus(analystResult, csatDelta)
-    : 'Aguardar lancamento do periodo para liberar recomendacao individual.'
+    : 'Aguardar lançamento do período para liberar recomendação individual.'
   const analystPulseText = analystResult
     ? analystResult.eligible
       ? analystRankingPosition > 0 && analystRankingPosition <= 3
-        ? 'Voce esta no podio neste recorte. O foco e sustentar os criterios ate o fechamento.'
-        : 'Voce cumpre os criterios, mas ainda esta fora do top 3 neste recorte.'
-      : 'Sua posicao aparece no ranking, mas ainda existe criterio pendente para entrar no podio.'
+        ? 'Você esta no pódio neste recorte. O foco e sustentar os critérios ate o fechamento.'
+        : 'Você cumpre os critérios, mas ainda esta fora do top 3 neste recorte.'
+      : 'Sua posição aparece no ranking, mas ainda existe critério pendente para entrar no pódio.'
     : 'Ainda nao ha dados individuais para este filtro.'
   const analystPodiumPositionStatus = analystResult
     ? !analystResult.eligible
-      ? 'Fora do podio por criterio pendente'
+      ? 'Fora do pódio por critério pendente'
       : analystRankingPosition > 0 && analystRankingPosition <= 3
-        ? 'No podio agora'
+        ? 'No pódio agora'
         : 'Elegivel, fora do top 3 agora'
-    : 'Sem posicao calculada'
+    : 'Sem posição calculada'
   const analystPodiumProjectionText = analystResult
     ? !analystResult.eligible
-      ? `Para projetar entrada no podio, primeiro regularize: ${analystResult.reasons.join(', ') || 'criterios pendentes'}.`
+      ? `Para projetar entrada no pódio, primeiro regularize: ${analystResult.reasons.join(', ') || 'critérios pendentes'}.`
       : periodFilter.mode === 'month'
-        ? `Se mantiver este ritmo ate o fechamento, a tendencia atual e terminar em ${analystRankingPosition ? `${analystRankingPosition}o lugar` : 'posicao calculada'}; a posicao muda conforme os novos lancamentos do time.`
-        : `Neste recorte, a posicao atual e ${analystRankingPosition ? `${analystRankingPosition}o lugar` : 'calculada pelo ranking'}; no mensal, ela sera recalculada com todos os lancamentos.`
-    : 'Aguardando lancamento para calcular posicao e tendencia.'
+        ? `Se mantiver este ritmo ate o fechamento, a tendencia atual e terminar em ${analystRankingPosition ? `${analystRankingPosition}o lugar` : 'posição calculada'}; a posição muda conforme os novos lançamentos do time.`
+        : `Neste recorte, a posição atual e ${analystRankingPosition ? `${analystRankingPosition}o lugar` : 'calculada pelo ranking'}; no mensal, ela sera recalculada com todos os lançamentos.`
+    : 'Aguardando lançamento para calcular posição e tendencia.'
   const podiumAverageFromSecureRanking = phonePodiumRanking.find((item) => Number(item.team_average_tickets) > 0)?.team_average_tickets
   const podiumAverageSource = phonePodiumRanking.length
     ? phonePodiumRanking.map((item) => Number(item.total_tickets))
@@ -3309,10 +3310,10 @@ function DashboardView({
       : 0
   const analystCsatGap = analystResult ? round(Math.max(podiumCsatGoal - analystResult.averageCsat, 0)) : 0
   const analystReviewGap = analystResult ? round(Math.max(reviewGoal - analystResult.reviewPercentage, 0)) : 0
-  const analystVolumeGap = analystResult ? Math.max(podiumAverageTickets - analystResult.totalTickets, 0) : 0
+  const analystVolumeGap = analystResult ? Math.ceil(Math.max(podiumAverageTickets - analystResult.totalTickets, 0)) : 0
   const analystPodiumChecklist = [
     {
-      label: 'CSAT minimo',
+      label: 'CSAT mínimo',
       value: analystResult
         ? analystCsatGap > 0
           ? `faltam ${analystCsatGap} p.p. para ${podiumCsatGoal}%`
@@ -3321,7 +3322,7 @@ function DashboardView({
       ok: Boolean(analystResult && analystCsatGap === 0),
     },
     {
-      label: 'Avaliacoes',
+      label: 'Avaliações',
       value: analystResult
         ? analystReviewGap > 0
           ? `faltam ${analystReviewGap} p.p. para ${reviewGoal}%`
@@ -3333,17 +3334,17 @@ function DashboardView({
       label: 'Volume',
       value: analystResult
         ? analystVolumeGap > 0
-          ? `${analystResult.totalTickets} atendimentos; faltam ${analystVolumeGap} para a media do time (${podiumAverageTickets})`
-          : `${analystResult.totalTickets} atendimentos; media do time: ${podiumAverageTickets}`
+          ? `${analystResult.totalTickets} atendimentos; faltam ${analystVolumeGap} para a média do time (${podiumAverageTickets})`
+          : `${analystResult.totalTickets} atendimentos; média do time: ${podiumAverageTickets}`
         : 'sem dados',
       ok: Boolean(analystResult && podiumAverageTickets > 0 && analystVolumeGap === 0),
     },
   ]
   const analystPodiumGapText = analystResult
     ? analystResult.eligible
-      ? 'Voce ja cumpre os criterios objetivos. Agora o foco e preservar qualidade, avaliacoes e volume ate o fechamento.'
-      : 'Para entrar no podio, priorize os criterios abaixo que ainda estao pendentes neste recorte.'
-    : 'Sem lancamento no periodo para calcular distancia ate o podio.'
+      ? 'Você ja cumpre os critérios objetivos. Agora o foco e preservar qualidade, avaliações e volume ate o fechamento.'
+      : 'Para entrar no pódio, priorize os critérios abaixo que ainda estao pendentes neste recorte.'
+    : 'Sem lançamento no período para calcular distancia ate o pódio.'
   const analystActionPlan = analystResult
     ? [
         {
@@ -3351,34 +3352,34 @@ function DashboardView({
           title: analystCsatGap > 0 ? `Recuperar ${analystCsatGap} p.p. de CSAT` : 'Proteger o CSAT atual',
           text:
             analystCsatGap > 0
-              ? 'Nos proximos atendimentos, confirme o problema antes de orientar, valide se a solucao ficou clara e encerre perguntando se ainda ficou alguma duvida. A meta e reduzir motivos de avaliacao negativa antes do proximo fechamento.'
-              : 'Seu CSAT esta acima da referencia. Mantenha o mesmo padrao de abertura, diagnostico e fechamento para evitar queda de qualidade no restante do periodo.',
+              ? 'Nos próximos atendimentos, confirme o problema antes de orientar, valide se a solucao ficou clara e encerre perguntando se ainda ficou alguma duvida. A meta e reduzir motivos de avaliação negativa antes do próximo fechamento.'
+              : 'Seu CSAT esta acima da referência. Mantenha o mesmo padrao de abertura, diagnostico e fechamento para evitar queda de qualidade no restante do período.',
         },
         {
-          label: '2. Avaliacoes respondidas',
-          title: analystReviewGap > 0 ? `Buscar mais ${analystReviewGap} p.p. em avaliacoes` : 'Manter boa amostra de avaliacoes',
+          label: '2. Avaliações respondidas',
+          title: analystReviewGap > 0 ? `Buscar mais ${analystReviewGap} p.p. em avaliações` : 'Manter boa amostra de avaliações',
           text:
             analystReviewGap > 0
-              ? 'Ao perceber que o cliente teve o problema resolvido, faca um fechamento simples e objetivo pedindo a avaliacao. O foco nao e forcar resposta, e aumentar a amostra para o resultado representar melhor sua entrega.'
-              : 'A amostra de avaliacoes esta saudavel. Continue encerrando os contatos com clareza, porque um bom volume de respostas protege a leitura do seu CSAT.',
+              ? 'Ao perceber que o cliente teve o problema resolvido, faca um fechamento simples e objetivo pedindo a avaliação. O foco nao e forcar resposta, e aumentar a amostra para o resultado representar melhor sua entrega.'
+              : 'A amostra de avaliações esta saudavel. Continue encerrando os contatos com clareza, porque um bom volume de respostas protege a leitura do seu CSAT.',
         },
         {
           label: '3. Volume de atendimento',
-          title: analystVolumeGap > 0 ? `Faltam ${analystVolumeGap} atendimentos para a media` : 'Volume dentro da media do time',
+          title: analystVolumeGap > 0 ? `Faltam ${analystVolumeGap} atendimentos para a média` : 'Volume dentro da média do time',
           text:
             analystVolumeGap > 0
-              ? `A media do time no recorte e ${podiumAverageTickets}. Combine com a gestao se houve fila, pausa, ausencia ou apoio a outro setor. Se a distribuicao estiver normal, o alvo e recuperar volume mantendo qualidade.`
-              : `Voce esta com ${analystResult.totalTickets} atendimentos contra media de ${podiumAverageTickets}. O cuidado agora e nao ganhar volume sacrificando CSAT ou avaliacao.`,
+              ? `A média do time no recorte e ${podiumAverageTickets}. Combine com a gestão se houve fila, pausa, ausencia ou apoio a outro setor. Se a distribuicao estiver normal, o alvo e recuperar volume mantendo qualidade.`
+              : `Você esta com ${analystResult.totalTickets} atendimentos contra média de ${podiumAverageTickets}. O cuidado agora e nao ganhar volume sacrificando CSAT ou avaliação.`,
         },
       ]
     : []
   const analystNextTargetText = analystResult
     ? analystResult.eligible
       ? analystRankingPosition > 0 && analystRankingPosition <= 3
-        ? 'Meta imediata: preservar os tres criterios e evitar queda ate o proximo lancamento.'
-        : 'Meta imediata: manter elegibilidade e buscar ganho em CSAT, avaliacoes ou volume para aproximar do top 3.'
-      : 'Meta imediata: resolver primeiro os criterios pendentes antes de pensar em posicao no podio.'
-    : 'Meta imediata: aguardar o lancamento do periodo para liberar o plano.'
+        ? 'Meta imédiata: preservar os tres critérios e evitar queda ate o próximo lançamento.'
+        : 'Meta imédiata: manter elegibilidade e buscar ganho em CSAT, avaliações ou volume para apróximar do top 3.'
+      : 'Meta imédiata: resolver primeiro os critérios pendentes antes de pensar em posição no pódio.'
+    : 'Meta imédiata: aguardar o lançamento do período para liberar o plano.'
   const phoneVisualRows = periodPodium.slice(0, 10).map((item) => ({
     label: item.analystName,
     primary: item.averageCsat,
@@ -3391,7 +3392,7 @@ function DashboardView({
     x: item.totalTickets,
     y: item.averageCsat,
     tone: item.eligible ? 'success' : item.averageCsat < podiumCsatGoal ? 'danger' : 'warning',
-    detail: `${item.reviewPercentage}% avaliacoes`,
+    detail: `${item.reviewPercentage}% avaliações`,
   }))
 
   return (
@@ -3399,11 +3400,11 @@ function DashboardView({
       <section className="panel">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="section-title">Periodo de analise</h2>
+            <h2 className="section-title">Periodo de análise</h2>
             <p className="section-subtitle">
               {isAnalystDashboard
                 ? 'Sua performance, graficos e elegibilidade seguem este filtro.'
-                : 'Os cards, graficos, podio e insights abaixo seguem este filtro.'}
+                : 'Os cards, graficos, pódio e insights abaixo seguem este filtro.'}
             </p>
           </div>
 
@@ -3448,16 +3449,16 @@ function DashboardView({
       <div className="grid gap-4 md:grid-cols-4">
         {isAnalystDashboard ? (
           <>
-            <MetricCard label="Analista" value={analystProfile?.name ?? 'Nao vinculado'} tone="success" />
-            <MetricCard label="Atendimentos no periodo" value={totalTickets} />
+            <MetricCard label="Analista" value={analystProfile?.name ?? 'Não vinculado'} tone="success" />
+            <MetricCard label="Atendimentos no período" value={totalTickets} />
             <MetricCard label="Meu CSAT" value={`${analystResult?.averageCsat ?? 0}%`} />
-            <MetricCard label="Avaliacoes" value={`${totalReviews} (${reviewCoverage}%)`} />
+            <MetricCard label="Avaliações" value={`${totalReviews} (${reviewCoverage}%)`} />
           </>
         ) : (
           <>
             <MetricCard label="Status" value="Supabase conectado" tone="success" />
             <MetricCard label="Analistas ativos" value={loading ? '...' : analystsCount} />
-            <MetricCard label="CSAT do periodo" value={`${periodAverageCsat || 0}%`} />
+            <MetricCard label="CSAT do período" value={`${periodAverageCsat || 0}%`} />
             <MetricCard label="Performance equipe" value={`${periodTeamPerformance || 0}%`} />
           </>
         )}
@@ -3475,17 +3476,17 @@ function DashboardView({
             <p className="mt-3 text-sm leading-6 text-slate-300">
               {isAnalystDashboard
                 ? analystFocusText
-                : `${periodLabel}: ${eligibleCount} de ${periodPodium.length} analistas elegiveis ao podio. ${executivePriority}`}
+                : `${periodLabel}: ${eligibleCount} de ${periodPodium.length} analistas elegiveis ao pódio. ${executivePriority}`}
             </p>
           </div>
 
           <div className="grid flex-1 gap-4 md:grid-cols-3">
             <div className="executive-card">
-              <p>{isAnalystDashboard ? 'Atendimentos no periodo' : 'CSAT vs periodo anterior'}</p>
+              <p>{isAnalystDashboard ? 'Atendimentos no período' : 'CSAT vs período anterior'}</p>
               <strong>{isAnalystDashboard ? totalTickets : formatDelta(csatDelta, ' p.p.')}</strong>
               <span>
                 {isAnalystDashboard
-                  ? `${totalReviews} avaliacoes registradas em ${launchedPeriodLabel}`
+                  ? `${totalReviews} avaliações registradas em ${launchedPeriodLabel}`
                   : `Atual: ${periodAverageCsat || 0}%`}
               </span>
             </div>
@@ -3495,16 +3496,16 @@ function DashboardView({
               <span>{formatDelta(teamPerformanceDelta, ' p.p.')} vs anterior</span>
             </div>
             <div className="executive-card">
-              <p>{isAnalystDashboard ? 'Minhas avaliacoes' : 'Cobertura de avaliacoes'}</p>
+              <p>{isAnalystDashboard ? 'Minhas avaliações' : 'Cobertura de avaliações'}</p>
               <strong>{reviewCoverage}%</strong>
-              <span>{totalReviews} avaliacoes respondidas de {totalTickets} atendimentos</span>
+              <span>{totalReviews} avaliações respondidas de {totalTickets} atendimentos</span>
             </div>
           </div>
         </div>
 
         {!isAnalystDashboard && (
           <div className="mt-5 grid gap-4 lg:grid-cols-3">            <div className="rounded-lg bg-slate-900 p-4">
-              <p className="text-sm text-slate-400">Ponto critico</p>
+              <p className="text-sm text-slate-400">Ponto crítico</p>
               <p className="mt-2 font-semibold">{executiveCriticalPoint}</p>
               <p className="mt-2 text-xs leading-5 text-slate-500">{executivePriority}</p>
             </div>
@@ -3524,9 +3525,9 @@ function DashboardView({
       </section>
 
       <section className="panel">
-        <h2 className="section-title">Inteligencia preditiva</h2>
+        <h2 className="section-title">Inteligência preditiva</h2>
         <p className="section-subtitle">
-          Projecao inicial baseada nos lancamentos, metas, variacao contra periodo anterior e risco operacional.
+          Projecao inicial baseada nos lançamentos, metas, variação contra período anterior e risco operacional.
         </p>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-4">
@@ -3535,15 +3536,15 @@ function DashboardView({
             value={`${predictiveGoalProbability}%`}
             detail={
               hasPeriodData
-                ? `CSAT, performance, avaliações e podio combinados. ${eligibleCount} de ${periodPodium.length} elegiveis.`
-                : 'Sem base de dados no periodo.'
+                ? `CSAT, performance, avaliações e pódio combinados. ${eligibleCount} de ${periodPodium.length} elegiveis.`
+                : 'Sem base de dados no período.'
             }
             tone={predictiveGoalProbability >= 75 ? 'success' : predictiveGoalProbability >= 45 ? 'warning' : 'danger'}
           />
           <PredictiveCard
             label="Previsao CSAT"
             value={`${projectedCsat}%`}
-            detail={`${formatDelta(csatDelta, ' p.p.')} vs periodo anterior`}
+            detail={`${formatDelta(csatDelta, ' p.p.')} vs período anterior`}
             tone={projectedCsat >= podiumCsatGoal ? 'success' : 'warning'}
           />
           <PredictiveCard
@@ -3564,7 +3565,7 @@ function DashboardView({
           <div className="mt-6 grid gap-6 xl:grid-cols-2">
             <ComparisonBars
               title="Comparativo visual dos analistas"
-              subtitle="Mostra rapidamente quem combina CSAT, avaliacoes e volume de atendimentos no periodo."
+              subtitle="Mostra rapidamente quem combina CSAT, avaliações e volume de atendimentos no período."
               rows={phoneVisualRows}
               primaryGoal={podiumCsatGoal}
               secondaryGoal={reviewGoal}
@@ -3582,11 +3583,11 @@ function DashboardView({
           <p className="text-sm font-semibold text-slate-200">Como ler esta previsao</p>
           <div className="mt-3 grid gap-3 text-sm leading-6 text-slate-400 md:grid-cols-2">
             <p>
-              A chance de atingir metas combina CSAT do periodo, performance da equipe, cobertura de avaliações e
-              quantidade de analistas elegiveis ao podio.
+              A chance de atingir metas combina CSAT do período, performance da equipe, cobertura de avaliações e
+              quantidade de analistas elegiveis ao pódio.
             </p>
             <p>
-              As previsoes usam o resultado atual e parte da variacao contra o periodo anterior. Quanto mais semanas
+              As previsoes usam o resultado atual e parte da variação contra o período anterior. Quanto mais semanas
               lancadas, mais confiavel fica a leitura.
             </p>
             <p>
@@ -3594,8 +3595,8 @@ function DashboardView({
               quando existem analistas em acompanhamento.
             </p>
             <p>
-              Esta leitura e um alerta de gestao: ela ajuda a decidir onde agir antes do fechamento, sem substituir a
-              analise do gestor.
+              Esta leitura e um alerta de gestão: ela ajuda a decidir onde agir antes do fechamento, sem substituir a
+              análise do gestor.
             </p>
           </div>
         </div>
@@ -3603,7 +3604,7 @@ function DashboardView({
 
       <section className="panel">
         <h2 className="section-title">
-          {isAnalystDashboard ? 'Minha evolucao recente' : 'Variacoes recentes'}
+          {isAnalystDashboard ? 'Minha evolução recente' : 'Variações recentes'}
         </h2>
         <p className="section-subtitle">
           {isAnalystDashboard
@@ -3639,12 +3640,12 @@ function DashboardView({
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h2 className="section-title">
-              {isAnalystDashboard ? 'Minha elegibilidade' : 'Ranking completo do periodo'}
+              {isAnalystDashboard ? 'Minha elegibilidade' : 'Ranking completo do período'}
             </h2>
             <p className="section-subtitle">
               {isAnalystDashboard
-                ? `Sua leitura em ${launchedPeriodLabel}: CSAT minimo ${podiumCsatGoal}%, avaliações ${reviewGoal}% e volume comparado com a média dos analistas lançados.`
-                : `Ranking de ${periodLabel}: CSAT minimo ${podiumCsatGoal}%, avaliações ${reviewGoal}% e atendimentos dentro da media da equipe.`}
+                ? `Sua leitura em ${launchedPeriodLabel}: CSAT mínimo ${podiumCsatGoal}%, avaliações ${reviewGoal}% e volume comparado com a média dos analistas lançados.`
+                : `Ranking de ${periodLabel}: CSAT mínimo ${podiumCsatGoal}%, avaliações ${reviewGoal}% e atendimentos dentro da média da equipe.`}
             </p>
           </div>
         </div>
@@ -3652,7 +3653,7 @@ function DashboardView({
         {isAnalystDashboard ? (
           <div className="mt-6 grid gap-4 lg:grid-cols-3">
             <div className="rounded-lg bg-slate-900 p-5">
-              <p className="text-sm text-slate-400">Status do periodo</p>
+              <p className="text-sm text-slate-400">Status do período</p>
               <h3 className={`mt-2 text-2xl font-bold ${analystResult?.eligible ? 'text-emerald-300' : 'text-cyan-300'}`}>
                 {analystStatusText}
               </h3>
@@ -3683,8 +3684,8 @@ function DashboardView({
             <div className="rounded-lg bg-slate-900 p-5 lg:col-span-3">
               <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                 <div>
-                  <p className="text-sm text-slate-400">O que falta para o podio?</p>
-                  <h3 className="mt-2 text-2xl font-bold text-cyan-300">{analystResult?.eligible ? 'Voce esta dentro dos criterios' : 'Distancia ate o podio'}</h3>
+                  <p className="text-sm text-slate-400">O que falta para o pódio?</p>
+                  <h3 className="mt-2 text-2xl font-bold text-cyan-300">{analystResult?.eligible ? 'Você esta dentro dos critérios' : 'Distancia ate o pódio'}</h3>
                 </div>
                 <p className="max-w-2xl text-sm leading-6 text-slate-400">{analystPodiumGapText}</p>
               </div>
@@ -3729,7 +3730,7 @@ function DashboardView({
                   <tr>
                     <th className="pb-3 pr-4 font-medium">Posição</th>
                     <th className="pb-3 pr-4 font-medium">Analista</th>
-                    <th className="pb-3 pr-4 font-medium">CSAT periodo</th>
+                    <th className="pb-3 pr-4 font-medium">CSAT período</th>
                     <th className="pb-3 pr-4 font-medium">Avaliações</th>
                     <th className="pb-3 pr-4 font-medium">Atendimentos</th>
                     <th className="pb-3 font-medium">Status</th>
@@ -3758,7 +3759,7 @@ function DashboardView({
               </table>
 
               {!periodPodium.length && (
-                <EmptyState text="Ainda nao ha lancamentos individuais no periodo selecionado." />
+                <EmptyState text="Ainda nao ha lançamentos individuais no período selecionado." />
               )}
             </div>
           </>
@@ -3769,10 +3770,10 @@ function DashboardView({
         <section className="panel">
           <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="eyebrow">Plano de acao individual</p>
-              <h2 className="section-title">Minha proxima jogada</h2>
+              <p className="eyebrow">Plano de ação individual</p>
+              <h2 className="section-title">Minha próxima jogada</h2>
               <p className="section-subtitle">
-                Orientacao pratica para transformar a leitura do podio em comportamento no proximo ciclo.
+                Orientação pratica para transformar a leitura do pódio em comportamento no próximo ciclo.
               </p>
             </div>
             <div className="rounded-lg bg-slate-900 p-4 text-sm font-semibold text-cyan-200 md:max-w-md">
@@ -3791,19 +3792,19 @@ function DashboardView({
               ))}
             </div>
           ) : (
-            <EmptyState text="Assim que houver lancamento no periodo, o plano de acao individual aparece aqui." />
+            <EmptyState text="Assim que houver lançamento no período, o plano de ação individual aparece aqui." />
           )}
         </section>
       )}
 
       <section className="panel">
         <h2 className="section-title">
-          {isAnalystDashboard ? 'Meus insights do periodo' : 'Insights do periodo'}
+          {isAnalystDashboard ? 'Meus insights do período' : 'Insights do período'}
         </h2>
         <p className="section-subtitle">
           {isAnalystDashboard
-            ? 'Leitura rapida para acompanhar seu desempenho sem abrir historico de lancamentos.'
-            : 'Leitura rapida para entender desempenho, riscos e prioridades sem abrir historico de lancamentos.'}
+            ? 'Leitura rapida para acompanhar seu desempenho sem abrir historico de lançamentos.'
+            : 'Leitura rapida para entender desempenho, riscos e prioridades sem abrir historico de lançamentos.'}
         </p>
 
         {isAnalystDashboard ? (
@@ -3821,22 +3822,22 @@ function DashboardView({
             </div>
 
             <div className="rounded-lg bg-slate-900 p-5">
-              <p className="text-sm text-slate-400">Ponto de atencao</p>
+              <p className="text-sm text-slate-400">Ponto de atenção</p>
               <p className="mt-2 text-xl font-bold">
-                {analystResult ? analystActionText : 'Sem dados no periodo'}
+                {analystResult ? analystActionText : 'Sem dados no período'}
               </p>
               <p className="mt-2 text-sm text-slate-400">
-                Esta recomendacao muda conforme o periodo selecionado no filtro.
+                Esta recomendação muda conforme o período selecionado no filtro.
               </p>
             </div>
 
             <div className="rounded-lg bg-slate-900 p-5">
-              <p className="text-sm text-slate-400">Equipe no periodo</p>
+              <p className="text-sm text-slate-400">Equipe no período</p>
               <p className="mt-2 text-3xl font-bold text-emerald-300">
                 {periodTeamPerformance || 0}%
               </p>
               <p className="mt-2 text-sm text-slate-400">
-                Referencia geral da operacao: {teamPerformanceGoal}%.
+                Referencia geral da operação: {teamPerformanceGoal}%.
               </p>
             </div>
           </div>
@@ -3849,11 +3850,11 @@ function DashboardView({
                   <h3 className="mt-2 text-xl font-bold">{bestPerformer.analystName}</h3>
                   <p className="mt-2 text-3xl font-bold text-cyan-300">{bestPerformer.averageCsat}%</p>
                   <p className="mt-2 text-sm text-slate-400">
-                    {bestPerformer.reviewPercentage}% avaliações no periodo
+                    {bestPerformer.reviewPercentage}% avaliações no período
                   </p>
                 </>
               ) : (
-                <p className="mt-4 text-sm text-slate-500">Aguardando dados do periodo.</p>
+                <p className="mt-4 text-sm text-slate-500">Aguardando dados do período.</p>
               )}
             </div>
 
@@ -3870,7 +3871,7 @@ function DashboardView({
                 </div>
               ) : (
                 <p className="mt-4 text-sm text-emerald-300">
-                  Nenhum alerta critico entre os analistas com lancamento.
+                  Nenhum alerta crítico entre os analistas com lançamento.
                 </p>
               )}
             </div>
@@ -3881,10 +3882,10 @@ function DashboardView({
                 {periodTeamPerformance || 0}%
               </p>
               <p className="mt-2 text-sm text-slate-400">
-                Meta de referencia: {teamPerformanceGoal}%
+                Meta de referência: {teamPerformanceGoal}%
               </p>
               <p className="mt-4 text-sm text-slate-300">
-                {eligibleCount} de {periodPodium.length} analistas estao elegiveis para o podio.
+                {eligibleCount} de {periodPodium.length} analistas estao elegiveis para o pódio.
               </p>
             </div>
           </div>
@@ -3913,6 +3914,7 @@ function ReportsView({
   const [exportMessage, setExportMessage] = useState('')
   const [phoneManagerNotes, setPhoneManagerNotes] = useState('')
   const [phoneFeedbackDraft, setPhoneFeedbackDraft] = useState('')
+  const [phoneFeedbackStyle, setPhoneFeedbackStyle] = useState<ChatFeedbackStyle>('mimo')
   const [phoneAiSaving, setPhoneAiSaving] = useState(false)
   const isManagementUser = role !== 'analyst'
   const reportAnalysts = useMemo(
@@ -3930,7 +3932,7 @@ function ReportsView({
   useEffect(() => {
     setPhoneFeedbackDraft('')
     setExportMessage('')
-  }, [periodFilter.start, periodFilter.end, selectedAnalystId])
+  }, [periodFilter.start, periodFilter.end, selectedAnalystId, phoneFeedbackStyle])
 
 
   const selectedAnalyst =
@@ -3959,8 +3961,8 @@ function ReportsView({
   const teamPerformance = calculateTeamPerformance(periodTeamMetrics)
   const teamStatus =
     teamPerformance >= teamPerformanceGoal
-      ? 'Operacao dentro da referencia.'
-      : 'Operacao abaixo da referencia definida.'
+      ? 'Operação dentro da referência.'
+      : 'Operação abaixo da referência definida.'
   const selectedRankingPosition = analystResult
     ? podium.findIndex((item) => item.analystId === analystResult.analystId) + 1
     : 0
@@ -3990,7 +3992,7 @@ function ReportsView({
   const teamLossPercentage = teamTotalCalls ? round((teamAbandonedCalls / teamTotalCalls) * 100) : 0
   const weeklyEvolution = aggregateIndividualByWeek(analystMetrics)
   const supervisorAverageTickets = podium.length
-    ? round(podium.reduce((sum, item) => sum + item.totalTickets, 0) / podium.length)
+    ? Math.ceil(podium.reduce((sum, item) => sum + item.totalTickets, 0) / podium.length)
     : 0
   const supervisorVolumeGap = analystResult ? analystResult.totalTickets - supervisorAverageTickets : 0
   const supervisorReviewGap = analystResult ? round(analystResult.reviewPercentage - reviewGoal) : 0
@@ -3998,24 +4000,24 @@ function ReportsView({
   const supervisorCaseStatus = analystResult
     ? analystResult.eligible
       ? selectedRankingPosition > 0 && selectedRankingPosition <= 3
-        ? 'Caso de reconhecimento e preservacao'
+        ? 'Caso de reconhecimento e preservação'
         : 'Caso elegivel para desenvolvimento competitivo'
       : 'Caso de acompanhamento ativo'
-    : 'Sem leitura disponivel'
+    : 'Sem leitura disponível'
   const supervisorDecisionText = analystResult
     ? analystResult.eligible
       ? selectedRankingPosition > 0 && selectedRankingPosition <= 3
         ? 'Reconhecer o resultado, registrar as praticas que sustentaram o desempenho e combinar como proteger o padrao ate o fechamento.'
-        : 'Manter elegibilidade, comparar com o top 3 e escolher um ganho objetivo em CSAT, avaliacoes ou volume para disputar posicao.'
-      : `Tratar os criterios pendentes antes de falar em podio: ${analystResult.reasons.join(', ') || 'revisar indicadores'}.`
-    : 'Selecione um analista com lancamento no periodo para liberar recomendacao.'
+        : 'Manter elegibilidade, comparar com o top 3 e escolher um ganho objetivo em CSAT, avaliações ou volume para disputar posição.'
+      : `Tratar os critérios pendentes antes de falar em pódio: ${analystResult.reasons.join(', ') || 'revisar indicadores'}.`
+    : 'Selecione um analista com lançamento no período para liberar recomendação.'
   const supervisorOneToOneText = analystResult
     ? analystResult.eligible
-      ? 'Use a conversa 1:1 para perguntar quais comportamentos ajudaram o resultado, quais atendimentos devem virar referencia e qual rotina precisa ser repetida.'
-      : 'Use a conversa 1:1 para identificar causa raiz: qualidade do atendimento, encerramento sem pedido de avaliacao, volume abaixo da media ou contexto operacional.'
+      ? 'Use a conversa 1:1 para perguntar quais comportamentos ajudaram o resultado, quais atendimentos devem virar referência e qual rotina precisa ser repetida.'
+      : 'Use a conversa 1:1 para identificar causa raiz: qualidade do atendimento, encerramento sem pedido de avaliação, volume abaixo da média ou contexto operacional.'
     : 'Aguardando dados para sugerir roteiro de conversa.'
   const supervisorFollowUpText = analystResult
-    ? `No proximo ciclo, acompanhar CSAT ${analystResult.averageCsat}% (${formatDelta(supervisorCsatGap, ' p.p.')} vs podio), avaliacoes ${analystResult.reviewPercentage}% (${formatDelta(supervisorReviewGap, ' p.p.')} vs meta) e volume ${analystResult.totalTickets} (${formatDelta(supervisorVolumeGap, '')} vs media ${supervisorAverageTickets}).`
+    ? `No próximo ciclo, acompanhar CSAT ${analystResult.averageCsat}% (${formatDelta(supervisorCsatGap, ' p.p.')} vs pódio), avaliações ${analystResult.reviewPercentage}% (${formatDelta(supervisorReviewGap, ' p.p.')} vs meta) e volume ${analystResult.totalTickets} (${formatDelta(supervisorVolumeGap, '')} vs média ${supervisorAverageTickets}).`
     : 'Sem acompanhamento definido.'
   const supervisorPeriodTypeText =
     periodFilter.mode === 'week'
@@ -4033,7 +4035,7 @@ function ReportsView({
         : periodFilter.mode === 'week'
           ? 'A semana representa o recorte selecionado para acompanhamento.'
           : 'O resultado segue exatamente o intervalo escolhido.'
-  const supervisorComparisonText = `Comparativo contra periodo anterior equivalente: ${formatPeriodLabel(previousPeriod)}.`
+  const supervisorComparisonText = `Comparativo contra período anterior equivalente: ${formatPeriodLabel(previousPeriod)}.`
   const supervisorContextCards = [
     { label: 'Recorte analisado', value: periodLabel, detail: supervisorPeriodTypeText },
     { label: 'Base da leitura', value: selectedAnalyst?.name ?? 'Sem analista', detail: supervisorPeriodStatusText },
@@ -4041,11 +4043,11 @@ function ReportsView({
   ]
   const supervisorActionCards = [
     {
-      label: 'Diagnostico',
+      label: 'Diagnóstico',
       title: supervisorCaseStatus,
       text: analystResult
-        ? `Ranking atual: ${selectedRankingPosition || '-'}o. CSAT ${analystResult.averageCsat}%, avaliacoes ${analystResult.reviewPercentage}% e ${analystResult.totalTickets} atendimentos contra media ${supervisorAverageTickets}.`
-        : 'Selecione um analista e periodo com dados para calcular a leitura.',
+        ? `Ranking atual: ${selectedRankingPosition || '-'}o. CSAT ${analystResult.averageCsat}%, avaliações ${analystResult.reviewPercentage}% e ${analystResult.totalTickets} atendimentos contra média ${supervisorAverageTickets}.`
+        : 'Selecione um analista e período com dados para calcular a leitura.',
     },
     {
       label: 'Acao recomendada',
@@ -4054,7 +4056,7 @@ function ReportsView({
     },
     {
       label: 'Conversa 1:1',
-      title: 'Pergunta que destrava acao',
+      title: 'Pergunta que destrava ação',
       text: supervisorOneToOneText,
     },
     {
@@ -4064,28 +4066,28 @@ function ReportsView({
     },
   ]
   const situationText = selectedAnalyst && analystResult
-    ? `${selectedAnalyst.name} fechou ${periodLabel} com CSAT de ${analystResult.averageCsat}%, ${analystResult.totalReviews} avaliações e ${analystResult.totalTickets} atendimentos registrados. A meta individual e ${analystResult.individualGoal}% e a referencia para podio e ${podiumCsatGoal}%. A variacao contra o periodo anterior foi de ${formatDelta(csatDelta, ' p.p.')}.`
+    ? `${selectedAnalyst.name} fechou ${periodLabel} com CSAT de ${analystResult.averageCsat}%, ${analystResult.totalReviews} avaliações e ${analystResult.totalTickets} atendimentos registrados. A meta individual e ${analystResult.individualGoal}% e a referência para pódio e ${podiumCsatGoal}%. A variação contra o período anterior foi de ${formatDelta(csatDelta, ' p.p.')}.`
     : ''
   const actionText = analystResult
     ? analystResult.eligible
-      ? 'Foram alinhadas a manutencao das praticas atuais, a preservacao do volume de avaliações e o acompanhamento semanal de qualquer oscilacao antes do fechamento do ciclo.'
-      : `Foram alinhadas a priorizacao dos pontos: ${analystResult.reasons.join(', ')}. A recomendacao inicial e revisar atendimentos de menor satisfacao, reforcar o convite para avaliacao e acompanhar o indicador semanalmente.`
+      ? 'Foram alinhadas a manutencao das praticas atuais, a preservação do volume de avaliações e o acompanhamento semanal de qualquer oscilação antes do fechamento do ciclo.'
+      : `Foram alinhadas a priorização dos pontos: ${analystResult.reasons.join(', ')}. A recomendação inicial e revisar atendimentos de menor satisfação, reforcar o convite para avaliação e acompanhar o indicador semanalmente.`
     : ''
   const resultText = analystResult
     ? analystResult.eligible
-      ? `Resultado esperado: manter CSAT acima de ${podiumCsatGoal}%, preservar elegibilidade ao podio e sustentar volume de avaliações igual ou superior a ${reviewGoal}% dos atendimentos.`
-      : `Resultado esperado: recuperar os pontos impeditivos para aproximar o desempenho da referencia de podio (${podiumCsatGoal}%) e elevar a consistencia do indicador no proximo ciclo.`
+      ? `Resultado esperado: manter CSAT acima de ${podiumCsatGoal}%, preservar elegibilidade ao pódio e sustentar volume de avaliações igual ou superior a ${reviewGoal}% dos atendimentos.`
+      : `Resultado esperado: recuperar os pontos impeditivos para apróximar o desempenho da referência de pódio (${podiumCsatGoal}%) e elevar a consistencia do indicador no próximo ciclo.`
     : ''
   const evolutionText = analystResult
-    ? `Expectativa e plano de desenvolvimento: ${buildDevelopmentFocus(analystResult, csatDelta)} Perguntas sugeridas para 1:1: o que ajudou ou atrapalhou o CSAT no periodo? quais atendimentos merecem revisao? qual acao simples pode aumentar avaliações na proxima semana?`
+    ? `Expectativa e plano de desenvolvimento: ${buildDevelopmentFocus(analystResult, csatDelta)} Perguntas sugeridas para 1:1: o que ajudou ou atrapalhou o CSAT no período? quais atendimentos merecem revisao? qual ação simples pode aumentar avaliações na próxima semana?`
     : ''
   const feedbackSummary = analystResult
     ? analystResult.eligible
-      ? `${selectedAnalyst?.name ?? 'Analista'} esta elegivel ao podio no periodo. O foco recomendado e preservar consistencia, volume de avaliações e acompanhamento semanal.`
-      : `${selectedAnalyst?.name ?? 'Analista'} ainda nao sustenta elegibilidade ao podio neste periodo. O foco recomendado e atuar sobre: ${analystResult.reasons.join(', ')}.`
+      ? `${selectedAnalyst?.name ?? 'Analista'} esta elegivel ao pódio no período. O foco recomendado e preservar consistencia, volume de avaliações e acompanhamento semanal.`
+      : `${selectedAnalyst?.name ?? 'Analista'} ainda nao sustenta elegibilidade ao pódio neste período. O foco recomendado e atuar sobre: ${analystResult.reasons.join(', ')}.`
     : ''
   const phoneFeedbackSuggestion = selectedAnalyst && analystResult
-    ? buildPhoneSareFeedbackText({
+    ? buildPhoneFeedbackText({
         analystName: selectedAnalyst.name,
         periodLabel,
         analystResult,
@@ -4098,6 +4100,7 @@ function ReportsView({
         teamTotalCalls,
         rankingPosition: selectedRankingPosition,
         managerNotes: phoneManagerNotes,
+        style: phoneFeedbackStyle,
       })
     : ''
 
@@ -4112,16 +4115,16 @@ function ReportsView({
       detail: selectedAnalyst ? selectedAnalyst.name : 'Selecione um analista para gerar o SARE.',
     },
     {
-      label: 'Lancamento individual no periodo',
+      label: 'Lancamento individual no período',
       done: hasAnalystLaunch,
-      detail: hasAnalystLaunch ? 'Dados individuais encontrados.' : 'Nao ha lancamento individual para este filtro.',
+      detail: hasAnalystLaunch ? 'Dados individuais encontrados.' : 'Não ha lançamento individual para este filtro.',
     },
     {
       label: 'Desempenho da equipe',
       done: hasTeamLaunch,
       detail: hasTeamLaunch
-        ? `${teamPerformance}% de performance no periodo.`
-        : 'Sem lancamento de equipe; o relatorio sai, mas a leitura operacional fica incompleta.',
+        ? `${teamPerformance}% de performance no período.`
+        : 'Sem lançamento de equipe; o relatório sai, mas a leitura operacional fica incompleta.',
     },
   ]
   function handlePeriodModeChange(mode: PeriodMode) {
@@ -4130,17 +4133,17 @@ function ReportsView({
 
   function handleGeneratePhoneFeedbackDraft() {
     if (!selectedAnalyst || !analystResult) {
-      setExportMessage('Selecione um analista e um periodo com lancamento antes de gerar o feedback.')
+      setExportMessage('Selecione um analista e um período com lançamento antes de gerar o feedback.')
       return
     }
 
     setPhoneFeedbackDraft(phoneFeedbackSuggestion)
-    setExportMessage('Sugestao local gerada. Revise o texto antes de exportar.')
+    setExportMessage('Sugestão local gerada. Revise o texto antes de exportar.')
   }
 
   async function handleGeneratePhoneFeedbackWithAi() {
     if (!selectedAnalyst || !analystResult) {
-      setExportMessage('Selecione um analista e um periodo com lancamento antes de acionar a IA.')
+      setExportMessage('Selecione um analista e um período com lançamento antes de acionar a IA.')
       return
     }
 
@@ -4159,7 +4162,7 @@ function ReportsView({
         },
         body: JSON.stringify({
           serviceModule: 'phone',
-          feedbackStyle: 'sare',
+          feedbackStyle: phoneFeedbackStyle,
           periodLabel,
           managerNotes: phoneManagerNotes,
           fallbackText: phoneFeedbackSuggestion,
@@ -4174,7 +4177,7 @@ function ReportsView({
             reviews: analystResult.totalReviews,
             csatGoal: analystResult.individualGoal,
             reviewGoal,
-            status: analystResult.eligible ? 'Elegivel ao podio' : 'Em acompanhamento',
+            status: analystResult.eligible ? 'Elegivel ao pódio' : 'Em acompanhamento',
             teamPerformance,
             teamAnsweredCalls,
             teamTotalCalls,
@@ -4191,14 +4194,14 @@ function ReportsView({
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Nao foi possivel gerar texto com IA.')
+        throw new Error(data.error || 'Não foi possível gerar texto com IA.')
       }
 
-      setPhoneFeedbackDraft(normalizePhoneReportFeedback(data.feedback ?? '', phoneFeedbackSuggestion))
+      setPhoneFeedbackDraft(normalizePhoneReportFeedback(data.feedback ?? '', phoneFeedbackSuggestion, phoneFeedbackStyle))
       setExportMessage(data.warning || 'Feedback do telefone gerado com IA. Revise o texto antes de exportar.')
     } catch (error) {
       setPhoneFeedbackDraft(phoneFeedbackSuggestion)
-      setExportMessage(`A IA externa nao gerou um texto valido agora. Usei a sugestao local do telefone. Motivo: ${getErrorMessage(error)}`)
+      setExportMessage(`A IA externa nao gerou um texto valido agora. Usei a sugestão local do telefone. Motivo: ${getErrorMessage(error)}`)
     } finally {
       setPhoneAiSaving(false)
     }
@@ -4206,12 +4209,12 @@ function ReportsView({
 
   function handleExportWordReport() {
     if (!selectedAnalyst || !analystResult) {
-      setExportMessage('Selecione um analista e um periodo com lancamento antes de exportar.')
+      setExportMessage('Selecione um analista e um período com lançamento antes de exportar.')
       return
     }
 
     try {
-      const finalPhoneFeedback = normalizePhoneReportFeedback(phoneFeedbackDraft, phoneFeedbackSuggestion)
+      const finalPhoneFeedback = normalizePhoneReportFeedback(phoneFeedbackDraft, phoneFeedbackSuggestion, phoneFeedbackStyle)
       const fileName = exportWordReport({
         analystName: selectedAnalyst.name,
         periodLabel,
@@ -4249,13 +4252,13 @@ function ReportsView({
 
       setExportMessage(`Relatorio gerado: ${fileName}. Verifique a pasta Downloads.`)
     } catch {
-      setExportMessage('Nao foi possivel gerar o arquivo. Tente novamente ou use outro navegador.')
+      setExportMessage('Não foi possível gerar o arquivo. Tente novamente ou use outro navegador.')
     }
   }
 
   function handlePrintReport() {
     if (!selectedAnalyst || !analystResult) {
-      setExportMessage('Selecione um analista e um periodo com lancamento antes de gerar PDF.')
+      setExportMessage('Selecione um analista e um período com lançamento antes de gerar PDF.')
       return
     }
 
@@ -4270,7 +4273,7 @@ function ReportsView({
           <div>
             <h2 className="section-title">Relatórios e IA analitica</h2>
             <p className="section-subtitle">
-              Primeira camada SARE gerada a partir dos lancamentos do periodo. A API de IA entra na proxima etapa.
+              Gere feedback MIMO ou SARE com base nos lançamentos do período, dados do pódio e observações da gestão.
             </p>
           </div>
 
@@ -4329,18 +4332,18 @@ function ReportsView({
 
       <div className="grid gap-4 md:grid-cols-4">
         <MetricCard label="Analista" value={selectedAnalyst?.name ?? 'Sem analista'} />
-        <MetricCard label="CSAT do periodo" value={`${analystResult?.averageCsat ?? 0}%`} />
-        <MetricCard label="Variacao vs periodo anterior" value={formatDelta(csatDelta, '%')} />
+        <MetricCard label="CSAT do período" value={`${analystResult?.averageCsat ?? 0}%`} />
+        <MetricCard label="Variação vs período anterior" value={formatDelta(csatDelta, '%')} />
         <MetricCard label="Performance equipe" value={`${teamPerformance}%`} />
       </div>
 
       <section className="panel no-print">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="eyebrow">Inteligencia de gestao</p>
+            <p className="eyebrow">Inteligência de gestão</p>
             <h2 className="section-title">Leitura do supervisor para o analista</h2>
             <p className="section-subtitle">
-              Diagnostico e acoes sugeridas para apoiar acompanhamento individual antes do fechamento.
+              Diagnóstico e ações sugeridas para apoiar acompanhamento individual antes do fechamento.
             </p>
           </div>
           <span className={`rounded-full px-4 py-2 text-sm font-semibold ${analystResult?.eligible ? 'bg-emerald-400/10 text-emerald-300' : 'bg-amber-400/10 text-amber-200'}`}>
@@ -4374,9 +4377,9 @@ function ReportsView({
       <section className="panel no-print">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h2 className="section-title">Prontidao do relatorio</h2>
+            <h2 className="section-title">Prontidão do relatório</h2>
             <p className="section-subtitle">
-              Confira se o SARE deste periodo ja tem base suficiente antes de exportar.
+              Confira se o relatório deste período já tem base suficiente antes de exportar.
             </p>
           </div>
           <span className={`rounded-full px-4 py-2 text-sm font-semibold ${reportReady ? 'bg-emerald-400/10 text-emerald-300' : 'bg-amber-400/10 text-amber-200'}`}>
@@ -4401,9 +4404,11 @@ function ReportsView({
             <p className="hidden print:block text-sm font-bold uppercase tracking-[0.18em] text-cyan-300">
               Central de Performance
             </p>
-            <h2 className="section-title">Relatorio mensal SARE</h2>
+            <h2 className="section-title">Relatório mensal {getChatFeedbackStyleLabel(phoneFeedbackStyle)}</h2>
             <p className="section-subtitle">
-              Estrutura correta: Situacao, Alinhamentos Realizados, Resultado Esperado e Expectativa.
+              {phoneFeedbackStyle === 'mimo'
+                ? 'Estrutura MIMO: Momento observado, Impacto, Melhoria ou manutenção e Orientação.'
+                : 'Estrutura SARE: Situação, Alinhamentos Realizados, Resultado Esperado e Expectativa.'}
             </p>
           </div>
 
@@ -4424,6 +4429,20 @@ function ReportsView({
               onChange={(event) => setPhoneManagerNotes(event.target.value)}
               placeholder="Inclua contexto do período, combinados, reconhecimento ou pontos de atenção para orientar a IA."
             />
+          </Field>
+
+          <Field label="Modelo do feedback">
+            <select
+              className="form-input"
+              value={phoneFeedbackStyle}
+              onChange={(event) => {
+                setPhoneFeedbackStyle(event.target.value as ChatFeedbackStyle)
+                setPhoneFeedbackDraft('')
+              }}
+            >
+              <option value="mimo">MIMO</option>
+              <option value="sare">SARE</option>
+            </select>
           </Field>
 
           <div className="grid gap-3 lg:grid-cols-[auto_auto_1fr] lg:items-start">
@@ -4465,7 +4484,7 @@ function ReportsView({
             type="button"
             onClick={handleExportWordReport}
           >
-            Exportar relatorio Word
+            Exportar relatório Word
           </button>
           <button
             className="secondary-button disabled:cursor-not-allowed disabled:opacity-60"
@@ -4486,7 +4505,7 @@ function ReportsView({
                 <strong>{analystResult.averageCsat}%</strong>
               </div>
               <div className="report-summary-card">
-                <p>Variacao</p>
+                <p>Variação</p>
                 <strong className={csatDelta >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
                   {formatDelta(csatDelta, ' p.p.')}
                 </strong>
@@ -4505,7 +4524,7 @@ function ReportsView({
               <div className="rounded-lg bg-slate-900 p-5">
                 <h3 className="text-lg font-bold">Evolucao visual</h3>
                 <p className="mt-1 text-sm text-slate-400">
-                  Leitura rapida de melhora, queda ou estabilidade no periodo.
+                  Leitura rapida de melhora, queda ou estabilidade no período.
                 </p>
                 <div className="mt-4 space-y-3">
                   {weeklyEvolution.map((item, index) => {
@@ -4533,7 +4552,7 @@ function ReportsView({
 
             <div className="grid gap-4 lg:grid-cols-2">
               <ReportBlock
-                title="S - Situacao"
+                title="S - Situação"
                 text={situationText}
               />
               <ReportBlock
@@ -4551,14 +4570,14 @@ function ReportsView({
             </div>
           </div>
         ) : (
-          <EmptyState text="Selecione um analista e um periodo com lancamento individual para liberar a exportacao." />
+          <EmptyState text="Selecione um analista e um período com lançamento individual para liberar a exportação." />
         )}
       </section>
 
       <section className="panel">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h2 className="section-title">Camadas de IA e plano de acao</h2>
+            <h2 className="section-title">Camadas de IA e plano de ação</h2>
             <p className="section-subtitle">
               Leitura automatica para apoiar feedback, acompanhamento e decisao da lideranca.
             </p>
@@ -4577,9 +4596,9 @@ function ReportsView({
                 <span className="text-slate-500">Leitura: </span>
                 {analystResult
                   ? analystResult.eligible
-                    ? 'desempenho sustentando elegibilidade ao podio no periodo.'
+                    ? 'desempenho sustentando elegibilidade ao pódio no período.'
                     : `desempenho pede ajuste em ${analystResult.reasons.join(', ')}.`
-                  : 'aguardando lancamentos no periodo.'}
+                  : 'aguardando lançamentos no período.'}
               </p>
               <p>
                 <span className="text-slate-500">Tendencia: </span>
@@ -4598,11 +4617,11 @@ function ReportsView({
               <div className="mt-4 space-y-3 text-sm text-slate-300">
                 <p>
                   <span className="text-slate-500">Reconhecer: </span>
-                  {strongestResult ? `${strongestResult.analystName}, com ${strongestResult.averageCsat}% de CSAT.` : 'aguardar dados do periodo.'}
+                  {strongestResult ? `${strongestResult.analystName}, com ${strongestResult.averageCsat}% de CSAT.` : 'aguardar dados do período.'}
                 </p>
                 <p>
                   <span className="text-slate-500">Acompanhar: </span>
-                  {attentionResults.length ? attentionResults.map((item) => item.analystName).join(', ') : 'sem alertas criticos entre os lancamentos atuais.'}
+                  {attentionResults.length ? attentionResults.map((item) => item.analystName).join(', ') : 'sem alertas críticos entre os lançamentos atuais.'}
                 </p>
                 <p>
                   <span className="text-slate-500">Evolucao: </span>
@@ -4611,27 +4630,27 @@ function ReportsView({
               </div>
             ) : (
               <p className="mt-4 text-sm text-slate-300">
-                A visao completa de equipe e exclusiva da gestao. Voce visualiza sua leitura individual e a performance geral compartilhada.
+                A visao completa de equipe e exclusiva da gestão. Você visualiza sua leitura individual e a performance geral compartilhada.
               </p>
             )}
           </div>
 
           <div className="rounded-lg bg-slate-900 p-5">
-            <p className="text-sm text-slate-400">IA Executiva operacao</p>
+            <p className="text-sm text-slate-400">IA Executiva operação</p>
             <div className="mt-4 space-y-3 text-sm text-slate-300">
               <p>
                 <span className="text-slate-500">Performance: </span>
-                {teamPerformance}% no periodo, meta {teamPerformanceGoal}%.
+                {teamPerformance}% no período, meta {teamPerformanceGoal}%.
               </p>
               <p>
                 <span className="text-slate-500">Previsao: </span>
                 {teamPerformance >= teamPerformanceGoal
-                  ? 'fechamento tende a permanecer dentro da referencia se o volume atual se mantiver.'
-                  : 'ha risco de fechamento abaixo da referencia se nao houver recuperacao.'}
+                  ? 'fechamento tende a permanecer dentro da referência se o volume atual se mantiver.'
+                  : 'ha risco de fechamento abaixo da referência se nao houver recuperação.'}
               </p>
               <p>
                 <span className="text-slate-500">Risco: </span>
-                {riskResults.length ? `${riskResults.length} analista(s) pedem acompanhamento no ciclo.` : 'nenhum risco individual evidente no periodo.'}
+                {riskResults.length ? `${riskResults.length} analista(s) pedem acompanhamento no ciclo.` : 'nenhum risco individual evidente no período.'}
               </p>
             </div>
           </div>
@@ -4641,15 +4660,15 @@ function ReportsView({
           <div className="rounded-lg bg-slate-900 p-5">
             <p className="text-sm text-slate-400">Roteiro sugerido para 1:1</p>
             <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm text-slate-300">
-              <li>Comecar pela situacao do periodo e confirmar se os numeros refletem a realidade operacional.</li>
-              <li>Discutir o principal ponto de variacao: CSAT, avaliações ou volume de atendimentos.</li>
-              <li>Definir uma acao objetiva para a proxima semana, com comportamento observavel.</li>
-              <li>Registrar a expectativa do proximo ciclo e revisar no fechamento seguinte.</li>
+              <li>Comecar pela situação do período e confirmar se os numeros refletem a realidade operacional.</li>
+              <li>Discutir o principal ponto de variação: CSAT, avaliações ou volume de atendimentos.</li>
+              <li>Definir uma ação objetiva para a próxima semana, com comportamento observavel.</li>
+              <li>Registrar a expectativa do próximo ciclo e revisar no fechamento seguinte.</li>
             </ol>
           </div>
 
           <div className="rounded-lg bg-slate-900 p-5">
-            <p className="text-sm text-slate-400">{isManagementUser ? 'Fila de acompanhamento' : 'Meu proximo ciclo'}</p>
+            <p className="text-sm text-slate-400">{isManagementUser ? 'Fila de acompanhamento' : 'Meu próximo ciclo'}</p>
             {isManagementUser ? (
               riskResults.length ? (
                 <div className="mt-4 space-y-3">
@@ -4662,12 +4681,12 @@ function ReportsView({
                 </div>
               ) : (
                 <p className="mt-4 text-sm text-emerald-300">
-                  Nenhum analista entrou em fila de acompanhamento neste periodo.
+                  Nenhum analista entrou em fila de acompanhamento neste período.
                 </p>
               )
             ) : (
               <p className="mt-4 text-sm text-slate-300">
-                Acompanhar sua evolucao semanal, proteger o volume de avaliações e revisar atendimentos que possam impactar o CSAT.
+                Acompanhar sua evolução semanal, proteger o volume de avaliações e revisar atendimentos que possam impactar o CSAT.
               </p>
             )}
           </div>
@@ -4764,7 +4783,7 @@ function EntriesView({
           <div>
             <h2 className="section-title">Fechamento semanal</h2>
             <p className="section-subtitle">
-              Use este resumo para conferir se todos os lancamentos da semana foram feitos antes de fechar o periodo.
+              Use este resumo para conferir se todos os lançamentos da semana foram feitos antes de fechar o período.
             </p>
           </div>
           <div className={`rounded-lg px-4 py-3 text-sm font-semibold ${checklistComplete ? 'bg-emerald-400/10 text-emerald-200' : 'bg-amber-400/10 text-amber-100'}`}>
@@ -4790,7 +4809,7 @@ function EntriesView({
             </p>
           </div>
           <div className="rounded-lg bg-slate-900 p-4">
-            <p className="text-sm text-slate-400">Proxima acao</p>
+            <p className="text-sm text-slate-400">Proxima ação</p>
             <p className="mt-2 font-semibold">
               {!checklistStart || !checklistEnd
                 ? 'Preencher inicio e fim da semana.'
@@ -4815,7 +4834,7 @@ function EntriesView({
                 ))}
               </div>
             ) : (
-              <p className="mt-3 text-sm text-emerald-300">Todos os analistas ativos ja possuem lancamento neste periodo.</p>
+              <p className="mt-3 text-sm text-emerald-300">Todos os analistas ativos ja possuem lançamento neste período.</p>
             )}
           </div>
         )}
@@ -4850,13 +4869,13 @@ function EntriesView({
           <div className="rounded-md bg-slate-900 p-3 text-sm text-slate-300">
             Meta individual: <strong>{selectedAnalyst?.csat_goal ?? 0}%</strong>
             <span className="mx-2 text-slate-600">|</span>
-            Minimo para podio: <strong>{podiumCsatGoal}%</strong>
+            Minimo para pódio: <strong>{podiumCsatGoal}%</strong>
           </div>
 
           {(individualDateInvalid || individualDuplicate || individualReviewsInvalid) && (
             <div className="rounded-md border border-amber-300/30 bg-amber-300/10 p-3 text-sm text-amber-100">
               {individualDateInvalid && <p>A data final nao pode ser menor que a data inicial.</p>}
-              {individualDuplicate && <p>Ja existe lancamento para este analista neste periodo.</p>}
+              {individualDuplicate && <p>Já existe lançamento para este analista neste período.</p>}
               {individualReviewsInvalid && (
                 <p>O total de avaliações nao pode ser maior que o total de atendimentos.</p>
               )}
@@ -4944,7 +4963,7 @@ function EntriesView({
             </Field>
           </div>
 
-          <Field label="Observacoes">
+          <Field label="Observações">
             <textarea
               className="form-input min-h-24"
               value={individualForm.notes}
@@ -4978,7 +4997,7 @@ function EntriesView({
 
           <div className="flex flex-wrap gap-3">
             <button className="primary-button" disabled={saving} type="submit">
-              {saving ? 'Salvando...' : 'Salvar lancamento individual'}
+              {saving ? 'Salvando...' : 'Salvar lançamento individual'}
             </button>
             <button
               className="secondary-button"
@@ -4997,16 +5016,16 @@ function EntriesView({
         <section className="panel">
         <h2 className="section-title">Performance da equipe</h2>
         <p className="section-subtitle">
-          Formula atual: ligacoes atendidas / total processado x 100.
+          Formula atual: ligações atendidas / total processado x 100.
         </p>
 
         <form className="mt-5 grid gap-4" onSubmit={onTeamSubmit}>
           {(teamDateInvalid || teamDuplicate || teamAnsweredInvalid || teamTotalMismatch) && (
             <div className="rounded-md border border-amber-300/30 bg-amber-300/10 p-3 text-sm text-amber-100">
               {teamDateInvalid && <p>A data final nao pode ser menor que a data inicial.</p>}
-              {teamDuplicate && <p>Ja existe performance da equipe neste periodo.</p>}
+              {teamDuplicate && <p>Já existe performance da equipe neste período.</p>}
               {teamAnsweredInvalid && (
-                <p>Ligacoes atendidas nao pode ser maior que o total processado.</p>
+                <p>Ligações atendidas nao pode ser maior que o total processado.</p>
               )}
               {teamTotalMismatch && (
                 <p>Conferencia: atendidas + abandonadas esta diferente do total processado.</p>
@@ -5035,7 +5054,7 @@ function EntriesView({
             </Field>
           </div>
 
-          <Field label="Ligacoes atendidas">
+          <Field label="Ligações atendidas">
             <input
               className="form-input"
               min="0"
@@ -5045,7 +5064,7 @@ function EntriesView({
               required
             />
           </Field>
-          <Field label="Ligacoes abandonadas">
+          <Field label="Ligações abandonadas">
             <input
               className="form-input"
               min="0"
@@ -5067,7 +5086,7 @@ function EntriesView({
               required
             />
           </Field>
-          <Field label="Observacoes">
+          <Field label="Observações">
             <textarea
               className="form-input min-h-24"
               value={teamForm.notes}
@@ -5173,9 +5192,9 @@ function EntriesHistory({
     <section className="panel">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h2 className="section-title">Historico de lancamentos</h2>
+          <h2 className="section-title">Historico de lançamentos</h2>
           <p className="section-subtitle">
-            Filtre registros por tipo, periodo e analista para revisar dados acumulados ou excluir lancamentos de teste.
+            Filtre registros por tipo, período e analista para revisar dados acumulados ou excluir lançamentos de teste.
           </p>
         </div>
         <button className="secondary-button self-start" type="button" onClick={clearHistoryFilters}>
@@ -5291,7 +5310,7 @@ function EntriesHistory({
               </table>
 
               {!filteredIndividualMetrics.length && (
-                <EmptyState text="Nenhum lancamento individual encontrado com estes filtros." />
+                <EmptyState text="Nenhum lançamento individual encontrado com estes filtros." />
               )}
             </div>
           </div>
@@ -5702,17 +5721,17 @@ function GoalsView({
       <section className="panel">
         <h2 className="section-title">Metas e impacto no sistema</h2>
         <p className="section-subtitle">
-          Estes parametros alimentam dashboard, podio, relatorios SARE e leituras preditivas. O CSAT individual continua no cadastro de cada analista.
+          Estes parametros alimentam dashboard, pódio, relatórios SARE e leituras preditivas. O CSAT individual continua no cadastro de cada analista.
         </p>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-3">
           <GoalImpactCard
             title="Podio mensal"
-            text="Usa CSAT minimo para podio, percentual minimo de avaliações e volume de atendimentos dentro da media da equipe."
+            text="Usa CSAT mínimo para pódio, percentual mínimo de avaliações e volume de atendimentos dentro da média da equipe."
           />
           <GoalImpactCard
             title="Performance da equipe"
-            text="Define a referencia operacional compartilhada por todos e usada nos alertas executivos."
+            text="Define a referência operacional compartilhada por todos e usada nos alertas executivos."
           />
           <GoalImpactCard
             title="Relatórios e IA"
@@ -5727,7 +5746,7 @@ function GoalsView({
             {editingGoalId ? 'Editar meta' : 'Selecione uma meta'}
           </h2>
           <p className="section-subtitle">
-            Ajuste metas gerais da operacao sem alterar codigo ou rodar query.
+            Ajuste metas gerais da operação sem alterar codigo ou rodar query.
           </p>
 
           <form className="mt-5 grid gap-4" onSubmit={onGoalSubmit}>
@@ -5795,7 +5814,7 @@ function GoalsView({
         <section className="panel">
           <h2 className="section-title">Metas configuradas</h2>
           <p className="section-subtitle">
-            O CSAT individual fica no cadastro de cada analista; aqui ficam metas da operacao.
+            O CSAT individual fica no cadastro de cada analista; aqui ficam metas da operação.
           </p>
 
           <div className="mt-5 overflow-x-auto">
@@ -5853,16 +5872,16 @@ function getGoalImpactText(goal: Goal) {
   const key = goal.key.toLowerCase()
   const label = goal.label.toLowerCase()
 
-  if (key.includes('podium') || label.includes('podio') || label.includes('pódio')) {
-    return 'Define elegibilidade para o podio e relatorios SARE.'
+  if (key.includes('podium') || label.includes('pódio') || label.includes('pódio')) {
+    return 'Define elegibilidade para o pódio e relatórios SARE.'
   }
 
   if (key.includes('review') || label.includes('avalia')) {
-    return 'Define o minimo de avaliações esperado por atendimento.'
+    return 'Define o mínimo de avaliações esperado por atendimento.'
   }
 
   if (key.includes('performance') || key.includes('team') || label.includes('performance') || label.includes('desempenho')) {
-    return 'Define a referencia da performance operacional da equipe.'
+    return 'Define a referência da performance operacional da equipe.'
   }
 
   return 'Parametro operacional usado nos calculos e leituras do painel.'
@@ -6062,7 +6081,7 @@ function ComparisonBars({
             </div>
             <div className="mt-3 grid gap-2">
               <ProgressMetric label="CSAT" value={row.primary} goal={primaryGoal} suffix="%" tone="cyan" />
-              <ProgressMetric label="Avaliacoes" value={row.secondary} goal={secondaryGoal} suffix="%" tone="emerald" />
+              <ProgressMetric label="Avaliações" value={row.secondary} goal={secondaryGoal} suffix="%" tone="emerald" />
               <ProgressMetric label="Volume" value={row.volume} goal={volumeReference} max={maxVolume} tone="amber" />
             </div>
           </div>
@@ -6341,21 +6360,21 @@ function exportChatIndividualReport({
   const productivityGap = averageTickets ? round(((Number(metric.total_tickets) - averageTickets) / averageTickets) * 100) : 0
   const podiumText = podiumPosition > 0
     ? `${podiumPosition}o Lugar - CSAT: ${metric.csat}% | ${metric.total_tickets} atendimentos | ${metric.review_percentage}% avaliações`
-    : 'Não elegível ao podio neste periodo'
+    : 'Não elegível ao pódio neste período'
   const status = metric.status || (Number(metric.csat) >= csatGoal && Number(metric.review_percentage) >= reviewGoal ? 'Meta Superada' : 'Em acompanhamento')
   const statusColor = status === 'Meta Superada' ? '#059669' : status === 'Critico' ? '#dc2626' : '#d97706'
   const csatText = csatGap >= 0
-    ? `O resultado superou a referencia de ${csatGoal}% em ${formatDelta(csatGap, ' p.p.')}.`
-    : `O resultado ficou ${formatDelta(csatGap, ' p.p.')} abaixo da referencia de ${csatGoal}%.`
+    ? `O resultado superou a referência de ${csatGoal}% em ${formatDelta(csatGap, ' p.p.')}.`
+    : `O resultado ficou ${formatDelta(csatGap, ' p.p.')} abaixo da referência de ${csatGoal}%.`
   const reviewText = reviewGap >= 0
     ? `O resultado superou a meta de avaliações em ${formatDelta(reviewGap, ' p.p.')}.`
     : `O resultado ficou ${formatDelta(reviewGap, ' p.p.')} abaixo da meta minima de avaliações.`
   const productivityText = productivityGap >= 0
-    ? `${analystName} absorveu uma demanda ${formatDelta(productivityGap, '%')} superior a media da operacao.`
-    : `${analystName} ficou ${formatDelta(productivityGap, '%')} abaixo da media de atendimentos da operacao.`
+    ? `${analystName} absorveu uma demanda ${formatDelta(productivityGap, '%')} superior a média da operação.`
+    : `${analystName} ficou ${formatDelta(productivityGap, '%')} abaixo da média de atendimentos da operação.`
   const finalFeedback = feedbackText.trim() || buildChatFeedbackText({ metric, averageTickets, podiumPosition, style: feedbackStyle, managerNotes })
   const feedbackTitle = getChatFeedbackStyleLabel(feedbackStyle)
-  const managerNotesHtml = managerNotes.trim() ? `<h2>Observacoes do gestor</h2><div class="note-box">${formatChatFeedbackForReport(managerNotes)}</div>` : ''
+  const managerNotesHtml = managerNotes.trim() ? `<h2>Observações do gestor</h2><div class="note-box">${formatChatFeedbackForReport(managerNotes)}</div>` : ''
   const evolutionRows = buildChatReportEvolutionRows(monthlyHistory)
 
   const documentHtml = `
@@ -6432,7 +6451,7 @@ function exportChatIndividualReport({
           <div class="box">
             <h2>Esperado:</h2>
             <p>>= ${reviewGoal}% de avaliações</p>
-            <p>>= ${csatGoal}% de Satisfacao</p>
+            <p>>= ${csatGoal}% de Satisfação</p>
           </div>
           <div class="box">
             <h2>Síntese do ciclo:</h2>
@@ -6444,7 +6463,7 @@ function exportChatIndividualReport({
 
         <h2>Análise Tecnica de Desempenho</h2>
         <h3>Qualidade e Satisfação do Cliente (CSAT)</h3>
-        <p>O(A) colaborador(a) registrou um indice de <strong>Satisfacao (CSAT) de ${metric.csat}%</strong>.</p>
+        <p>O(A) colaborador(a) registrou um indice de <strong>Satisfação (CSAT) de ${metric.csat}%</strong>.</p>
         <ul>
           <li><strong>Comparativo com a meta:</strong> ${escapeHtml(csatText)}</li>
           <li><strong>Análise detalhada:</strong> Do volume total de feedbacks recebidos (${metric.reviews}), <strong>${metric.positive_reviews} foram positivos</strong>. Houve ${metric.negative_reviews} registros negativos.</li>
@@ -6454,13 +6473,13 @@ function exportChatIndividualReport({
         <p>O(A) colaborador(a) alcancou uma <strong>taxa de avaliações de ${metric.review_percentage}%</strong>.</p>
         <ul>
           <li><strong>Comparativo com a meta:</strong> ${escapeHtml(reviewText)}</li>
-          <li><strong>Calculo:</strong> A taxa foi calculada sobre ${metric.reviews} avaliações divididas por ${metric.valid_tickets} atendimentos validos.</li>
+          <li><strong>Calculo:</strong> A taxa foi calculada sobre ${metric.reviews} avaliações divididas por ${metric.valid_tickets} atendimentos válidos.</li>
         </ul>
 
         <h3>Produtividade e Volumetria</h3>
         <p>O volume total de atendimentos realizados pelo(a) colaborador(a) foi de <strong>${metric.total_tickets} chamados</strong>.</p>
         <ul>
-          <li><strong>Comparativo com a operacao:</strong> A media de atendimentos por agente foi de ${averageTickets}. ${escapeHtml(productivityText)}</li>
+          <li><strong>Comparativo com a operação:</strong> A média de atendimentos por agente foi de ${averageTickets}. ${escapeHtml(productivityText)}</li>
           <li><strong>Destaque:</strong> ${escapeHtml(podiumText)}.</li>
         </ul>
 
@@ -6482,7 +6501,7 @@ function exportChatIndividualReport({
   })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
-  const fileName = `analise-${slugifyFileName(analystName)}-${slugifyFileName(periodLabel)}.doc`
+  const fileName = `análise-${slugifyFileName(analystName)}-${slugifyFileName(periodLabel)}.doc`
 
   link.href = url
   link.download = fileName
@@ -6496,7 +6515,7 @@ function exportChatIndividualReport({
 }
 
 function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
-  if (!history.length) return '<p class="muted">Sem historico mensal suficiente para exibir evolucao.</p>'
+  if (!history.length) return '<p class="muted">Sem historico mensal suficiente para exibir evolução.</p>'
 
   const first = history[0]
   const last = history.at(-1) ?? first
@@ -6526,12 +6545,12 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
         : csatDelta < 0
           ? 'entender o que mudou no ultimo ciclo para recuperar o patamar anterior.'
           : reviewDelta < 0
-            ? 'preservar o CSAT e recuperar participacao dos clientes nas avaliações.'
+            ? 'preservar o CSAT e recuperar participação dos clientes nas avaliações.'
             : 'manter consistencia e compartilhar as praticas que sustentaram o resultado.'
   const readText =
     history.length > 1
-      ? `Entre ${first.month_label} e ${last.month_label}, o CSAT variou ${deltaText(csatDelta, ' p.p.')}, as avaliações variaram ${deltaText(reviewDelta, ' p.p.')}, o envio/sem avaliacao variou ${deltaText(sendingDelta, ' p.p.')} e o volume mudou ${deltaText(ticketDelta)} atendimentos.`
-      : 'Ha apenas um mes importado para este analista; a leitura funciona como fotografia do periodo.'
+      ? `Entre ${first.month_label} e ${last.month_label}, o CSAT variou ${deltaText(csatDelta, ' p.p.')}, as avaliações variaram ${deltaText(reviewDelta, ' p.p.')}, o envio/sem avaliação variou ${deltaText(sendingDelta, ' p.p.')} e o volume mudou ${deltaText(ticketDelta)} atendimentos.`
+      : 'Há apenas um mes importado para este analista; a leitura funciona como fotografia do período.'
   const monthCards = history
     .map((metric) => {
       const month = escapeHtml(metric.month_label.replace(' 2026', ''))
@@ -6575,14 +6594,14 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
           <em>Melhor CSAT: ${escapeHtml(bestCsat.month_label.replace(' 2026', ''))} (${bestCsat.csat}%).</em>
         </div>
         <div class="strategy-card">
-          <span>Ponto de atencao</span>
+          <span>Ponto de atenção</span>
           <strong>${escapeHtml(lowestCsat.month_label.replace(' 2026', ''))} teve o menor CSAT</strong>
           <em>Maior amostra de avaliações: ${escapeHtml(bestReview.month_label.replace(' 2026', ''))} (${bestReview.review_percentage}%).</em>
         </div>
         <div class="strategy-card">
           <span>Foco recomendado</span>
           <strong>${escapeHtml(focusText)}</strong>
-          <em>Use esta leitura para orientar o proximo ciclo mensal.</em>
+          <em>Use esta leitura para orientar o próximo ciclo mensal.</em>
         </div>
       </div>
       <p class="chart-title">Evolução mensal em barras</p>
@@ -6605,9 +6624,9 @@ function isChatReportFeedbackComplete(text: string, style: ChatFeedbackStyle) {
   const normalizedText = cleanText.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
   const requiredSections =
     style === 'sare'
-      ? ['situacao', 'alinhamentos', 'resultado', 'expectativa']
+      ? ['situação', 'alinhamentos', 'resultado', 'expectativa']
       : style === 'mimo'
-        ? ['momento', 'impacto', 'melhoria', 'orientacao']
+        ? ['momento', 'impacto', 'melhoria', 'orientação']
         : ['leitura', 'forcas', 'plano', 'expectativa']
 
   return cleanText.length >= 650 && requiredSections.every((section) => normalizedText.includes(section))
@@ -6637,50 +6656,50 @@ function buildChatFeedbackText({
   const csatGap = round(Number(metric.csat) - csatGoal)
   const reviewGap = round(Number(metric.review_percentage) - reviewGoal)
   const productivityGap = averageTickets ? round(((Number(metric.total_tickets) - averageTickets) / averageTickets) * 100) : 0
-  const podiumText = podiumPosition > 0 ? `${podiumPosition}o lugar no podio` : 'fora do podio neste fechamento'
+  const podiumText = podiumPosition > 0 ? `${podiumPosition}o lugar no pódio` : 'fora do pódio neste fechamento'
   const notesLine = managerNotes.trim()
-    ? 'As observacoes do gestor devem calibrar o reconhecimento, os combinados e o tom da devolutiva.'
+    ? 'As observações do gestor devem calibrar o reconhecimento, os combinados e o tom da devolutiva.'
     : ''
   const qualityReading =
     csatGap >= 0
-      ? `A satisfacao ficou ${formatDelta(csatGap, ' p.p.')} em relacao a meta individual de ${csatGoal}%, sinal de boa percepcao do cliente sobre a entrega.`
-      : `A satisfacao ficou ${formatDelta(csatGap, ' p.p.')} em relacao a meta individual de ${csatGoal}%, ponto que pede revisao qualitativa dos atendimentos com avaliacao negativa.`
+      ? `A satisfação ficou ${formatDelta(csatGap, ' p.p.')} em relação a meta individual de ${csatGoal}%, sinal de boa percepcao do cliente sobre a entrega.`
+      : `A satisfação ficou ${formatDelta(csatGap, ' p.p.')} em relação a meta individual de ${csatGoal}%, ponto que pede revisao qualitativa dos atendimentos com avaliação negativa.`
   const reviewReading =
     reviewGap >= 0
-      ? `A amostra de avaliações ficou ${formatDelta(reviewGap, ' p.p.')} acima da referencia de ${reviewGoal}%, aumentando a confiabilidade da leitura do mes.`
-      : `A amostra de avaliações ficou ${formatDelta(reviewGap, ' p.p.')} abaixo da referencia de ${reviewGoal}%, entao o proximo ciclo precisa ampliar a participacao dos clientes.`
+      ? `A amostra de avaliações ficou ${formatDelta(reviewGap, ' p.p.')} acima da referência de ${reviewGoal}%, aumentando a confiabilidade da leitura do mes.`
+      : `A amostra de avaliações ficou ${formatDelta(reviewGap, ' p.p.')} abaixo da referência de ${reviewGoal}%, entao o próximo ciclo precisa ampliar a participação dos clientes.`
   const volumeReading =
     productivityGap >= 0
-      ? `O volume ficou ${formatDelta(productivityGap, '%')} acima da media da operacao, demonstrando capacidade de sustentar entrega mesmo com demanda elevada.`
-      : `O volume ficou ${formatDelta(productivityGap, '%')} abaixo da media da operacao; vale validar se houve distribuicao de fila, ausencia, emprestimo para outro setor ou oportunidade de produtividade.`
+      ? `O volume ficou ${formatDelta(productivityGap, '%')} acima da média da operação, demonstrando capacidade de sustentar entrega mesmo com demanda elevada.`
+      : `O volume ficou ${formatDelta(productivityGap, '%')} abaixo da média da operação; vale validar se houve distribuicao de fila, ausencia, emprestimo para outro setor ou oportunidade de produtividade.`
   const recognition =
     status === 'Meta Superada'
-      ? `${analystName} encerrou o ciclo em patamar de reconhecimento. O resultado combina qualidade percebida, amostra suficiente de avaliações e volume competitivo dentro da operacao.`
+      ? `${analystName} encerrou o ciclo em patamar de reconhecimento. O resultado combina qualidade percebida, amostra suficiente de avaliações e volume competitivo dentro da operação.`
       : status === 'Critico'
-        ? `${analystName} encerrou o ciclo com sinais que pedem acompanhamento mais proximo. A prioridade e escolher poucos combinados praticos, acompanhar execucao e reduzir dispersao no proximo fechamento.`
-        : `${analystName} apresentou bons sinais no ciclo, mas ainda ha criterios que precisam ganhar consistencia para sustentar elegibilidade e reconhecimento no fechamento mensal.`
+        ? `${analystName} encerrou o ciclo com sinais que pedem acompanhamento mais próximo. A prioridade e escolher poucos combinados praticos, acompanhar execucao e reduzir dispersao no próximo fechamento.`
+        : `${analystName} apresentou bons sinais no ciclo, mas ainda ha critérios que precisam ganhar consistencia para sustentar elegibilidade e reconhecimento no fechamento mensal.`
   const development =
     status === 'Meta Superada'
-      ? 'O combinado recomendado e proteger o padrao que funcionou, compartilhar boas praticas com o time e evitar acomodacao apos um ciclo positivo.'
+      ? 'O combinado recomendado e proteger o padrao que funcionou, compartilhar boas praticas com o time e evitar acomodação apos um ciclo positivo.'
       : csatGap < 0
-        ? 'O combinado recomendado e revisar exemplos concretos de interacoes com menor satisfacao, identificar causa raiz e escolher uma acao simples de melhoria para o proximo mes.'
+        ? 'O combinado recomendado e revisar exemplos concretos de interações com menor satisfação, identificar causa raiz e escolher uma ação simples de melhoria para o próximo mes.'
         : reviewGap < 0
-          ? 'O combinado recomendado e fortalecer o fechamento dos atendimentos, explicando ao cliente a importancia da avaliacao sem transformar isso em fala mecanica.'
-          : 'O combinado recomendado e investigar o fator de volume, separar o que e contexto operacional do que e oportunidade individual e definir um alvo realista para o proximo ciclo.'
+          ? 'O combinado recomendado e fortalecer o fechamento dos atendimentos, explicando ao cliente a importancia da avaliação sem transformar isso em fala mecanica.'
+          : 'O combinado recomendado e investigar o fator de volume, separar o que e contexto operacional do que e oportunidade individual e definir um alvo realista para o próximo ciclo.'
   const practicalSteps =
     status === 'Meta Superada'
-      ? 'Como colocar em pratica: escolha dois atendimentos bem avaliados do mes e registre o que se repetiu neles; transforme esse padrao em uma rotina curta de atendimento; compartilhe uma pratica com a equipe; no proximo fechamento, compare se CSAT, avaliações e volume continuaram consistentes.'
+      ? 'Como colocar em pratica: escolha dois atendimentos bem avaliados do mes e registre o que se repetiu neles; transforme esse padrao em uma rotina curta de atendimento; compartilhe uma pratica com a equipe; no próximo fechamento, compare se CSAT, avaliações e volume continuaram consistentes.'
       : csatGap < 0
-        ? 'Como colocar em pratica: separe de dois a tres atendimentos com avaliacao negativa ou neutra; identifique se a causa foi clareza, prazo, empatia, solucao ou encerramento; escolha uma mudanca de abordagem para testar no proximo ciclo; leve ao gestor um exemplo antes e depois para validar a evolucao.'
+        ? 'Como colocar em pratica: separe de dois a tres atendimentos com avaliação negativa ou neutra; identifique se a causa foi clareza, prazo, empatia, solucao ou encerramento; escolha uma mudanca de abordagem para testar no próximo ciclo; leve ao gestor um exemplo antes e depois para validar a evolução.'
         : reviewGap < 0
           ? 'Como colocar em pratica: revise o encerramento dos atendimentos e crie uma frase natural para convidar o cliente a avaliar; use essa frase nos casos resolvidos com boa percepcao; acompanhe se a quantidade de avaliações aumenta no fechamento seguinte; ajuste a abordagem se a fala parecer mecanica.'
-          : 'Como colocar em pratica: confirme com o gestor se o volume menor veio de fila, ausencia, emprestimo ou distribuicao operacional; quando for oportunidade individual, defina um alvo de produtividade realista; acompanhe a quantidade de atendimentos validos ao longo do mes; preserve qualidade para nao trocar volume por perda de CSAT.'
+          : 'Como colocar em pratica: confirme com o gestor se o volume menor veio de fila, ausencia, emprestimo ou distribuicao operacional; quando for oportunidade individual, defina um alvo de produtividade realista; acompanhe a quantidade de atendimentos válidos ao longo do mes; preserve qualidade para nao trocar volume por perda de CSAT.'
 
   if (style === 'sare') {
     return [
-      `Situacao: ${recognition} No periodo, o resultado foi CSAT ${metric.csat}%, avaliações ${metric.review_percentage}%, envio/sem avaliacao ${metric.sending_percentage}% e ${metric.total_tickets} atendimentos. A posicao atual e ${podiumText}.`,
+      `Situação: ${recognition} No período, o resultado foi CSAT ${metric.csat}%, avaliações ${metric.review_percentage}%, envio/sem avaliação ${metric.sending_percentage}% e ${metric.total_tickets} atendimentos. A posição atual e ${podiumText}.`,
       `Alinhamentos Realizados: ${qualityReading} ${reviewReading} ${volumeReading} ${notesLine}`.trim(),
-      'Resultado Esperado: manter o que ja gera boa experiencia para o cliente e transformar os pontos de atencao em comportamento observavel no proximo fechamento mensal.',
+      'Resultado Esperado: manter o que ja gera boa experiencia para o cliente e transformar os pontos de atenção em comportamento observavel no próximo fechamento mensal.',
       `Expectativa e Plano de Desenvolvimento: ${development} ${practicalSteps}`,
     ]
       .filter(Boolean)
@@ -6692,18 +6711,18 @@ function buildChatFeedbackText({
       `Momento observado: ${analystName} fechou o ciclo com status ${status}, CSAT ${metric.csat}%, avaliações ${metric.review_percentage}% e ${metric.total_tickets} atendimentos.`,
       `Impacto: ${recognition} ${qualityReading}`,
       `Melhoria ou manutencao: ${reviewReading} ${volumeReading} ${notesLine}`.trim(),
-      `Orientacao: ${development} ${practicalSteps} Posição atual: ${podiumText}.`,
+      `Orientação: ${development} ${practicalSteps} Posição atual: ${podiumText}.`,
     ]
       .filter(Boolean)
       .join('\n\n')
   }
 
   return [
-    `Leitura do ciclo: ${recognition} No fechamento, os indicadores mostram CSAT de ${metric.csat}%, avaliações de ${metric.review_percentage}%, envio/sem avaliacao de ${metric.sending_percentage}% e ${metric.total_tickets} atendimentos. A posicao atual e ${podiumText}.`,
+    `Leitura do ciclo: ${recognition} No fechamento, os indicadores mostram CSAT de ${metric.csat}%, avaliações de ${metric.review_percentage}%, envio/sem avaliação de ${metric.sending_percentage}% e ${metric.total_tickets} atendimentos. A posição atual e ${podiumText}.`,
     `Evidencias observadas: ${qualityReading} ${reviewReading} ${volumeReading}`,
     notesLine ? `Contexto do gestor: ${notesLine}` : '',
     `Plano de desenvolvimento: ${development}`,
-    `Como fazer no proximo ciclo: ${practicalSteps}`,
+    `Como fazer no próximo ciclo: ${practicalSteps}`,
   ]
     .filter(Boolean)
     .join('\n\n')
@@ -6723,7 +6742,7 @@ function formatChatFeedbackForReport(text: string) {
     .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\r?\n/g, '<br />')}</p>`)
     .join('')
 }
-function buildPhoneSareFeedbackText({
+function buildPhoneFeedbackText({
   analystName,
   periodLabel,
   analystResult,
@@ -6736,6 +6755,7 @@ function buildPhoneSareFeedbackText({
   teamTotalCalls,
   rankingPosition,
   managerNotes,
+  style,
 }: {
   analystName: string
   periodLabel: string
@@ -6749,23 +6769,34 @@ function buildPhoneSareFeedbackText({
   teamTotalCalls: number
   rankingPosition: number
   managerNotes: string
+  style: ChatFeedbackStyle
 }) {
   const statusText = analystResult.eligible ? 'elegível ao pódio' : 'em acompanhamento'
   const reasonsText = analystResult.reasons.length ? analystResult.reasons.join(', ') : 'sem impeditivos principais'
   const managerContext = managerNotes.trim()
     ? ` Contexto do gestor: ${managerNotes.trim()}`
     : ''
+  const podiumText = rankingPosition ? `${rankingPosition}º lugar no pódio` : 'fora do pódio'
+
+  if (style === 'mimo') {
+    return [
+      `Momento observado: ${analystName} fechou ${periodLabel} com CSAT de ${analystResult.averageCsat}%, ${analystResult.totalReviews} avaliações e ${analystResult.totalTickets} atendimentos. A posição atual é ${podiumText}, com status ${statusText}. A variação contra o período anterior foi de ${formatDelta(csatDelta, ' p.p.')}.`,
+      `Impacto: esse resultado influencia diretamente a elegibilidade ao pódio, a leitura de qualidade do atendimento e a confiança da gestão no fechamento do período. No contexto da equipe, a performance foi de ${teamPerformance}% para ${teamAnsweredCalls} ligações atendidas em ${teamTotalCalls} processadas, contra meta de ${teamPerformanceGoal}%.`,
+      `Melhoria ou manutenção: ${analystResult.eligible ? 'manter as práticas que sustentaram CSAT, avaliações e volume, evitando queda até o fechamento.' : `atuar sobre os pontos pendentes: ${reasonsText}.`} A referência de pódio é ${podiumCsatGoal}% de CSAT e a meta mínima de avaliações é ${reviewGoal}%.${managerContext}`,
+      `Orientação: transformar a leitura em ação prática. Revise exemplos de atendimentos que influenciaram o CSAT, combine um comportamento observável para a próxima semana e acompanhe se avaliações e volume continuam sustentando a elegibilidade.`,
+    ].join('\n\n')
+  }
 
   return [
-    `Situacao: ${analystName} fechou ${periodLabel} com CSAT de ${analystResult.averageCsat}%, ${analystResult.totalReviews} avaliações e ${analystResult.totalTickets} atendimentos. A posição atual é ${rankingPosition ? `${rankingPosition}º lugar no pódio` : 'fora do pódio'}, com status ${statusText}. A variação contra o período anterior foi de ${formatDelta(csatDelta, ' p.p.')}.`,
+    `Situação: ${analystName} fechou ${periodLabel} com CSAT de ${analystResult.averageCsat}%, ${analystResult.totalReviews} avaliações e ${analystResult.totalTickets} atendimentos. A posição atual é ${podiumText}, com status ${statusText}. A variação contra o período anterior foi de ${formatDelta(csatDelta, ' p.p.')}.`,
     `Alinhamentos Realizados: a leitura deve considerar a meta individual de ${analystResult.individualGoal}%, a referência de pódio de ${podiumCsatGoal}% e a meta mínima de avaliações de ${reviewGoal}%. O ponto observado para conversa é: ${reasonsText}.${managerContext}`,
     `Resultado Esperado: sustentar CSAT acima da referência, preservar ou recuperar volume de avaliações e manter comportamento de atendimento que gere boa experiência para o cliente. No contexto da equipe, a performance foi de ${teamPerformance}% para ${teamAnsweredCalls} ligações atendidas em ${teamTotalCalls} processadas, contra meta de ${teamPerformanceGoal}%.`,
     `Expectativa e Plano de Desenvolvimento: transforme a leitura em ação semanal. Revise exemplos de atendimentos que influenciaram o CSAT, combine um comportamento observável para a próxima semana e acompanhe se avaliações e volume continuam sustentando a elegibilidade no fechamento mensal.`,
   ].join('\n\n')
 }
 
-function normalizePhoneReportFeedback(text: string, fallbackText: string) {
-  return normalizeChatReportFeedback(text, fallbackText, 'sare')
+function normalizePhoneReportFeedback(text: string, fallbackText: string, style: ChatFeedbackStyle) {
+  return normalizeChatReportFeedback(text, fallbackText, style)
 }
 
 function exportWordReport({
@@ -6829,8 +6860,8 @@ function exportWordReport({
   const csatTrendClass = !hasWeeklyComparison ? 'neutral' : csatDelta >= 0 ? 'positive' : 'negative'
   const goalGap = round(achieved.csat - expected.csat)
   const goalGapText = goalGap >= 0
-    ? `${formatDelta(goalGap, ' p.p.')} acima da referencia`
-    : `${formatDelta(goalGap, ' p.p.')} abaixo da referencia`
+    ? `${formatDelta(goalGap, ' p.p.')} acima da referência`
+    : `${formatDelta(goalGap, ' p.p.')} abaixo da referência`
   const reviewGap = round(achieved.reviewPercentage - expected.review)
   const reviewGapText = reviewGap >= 0
     ? `${formatDelta(reviewGap, ' p.p.')} acima da meta`
@@ -6860,7 +6891,7 @@ function exportWordReport({
           `
         })
         .join('')
-    : '<p class="muted">Sem dados de evolucao no periodo.</p>'
+    : '<p class="muted">Sem dados de evolução no período.</p>'
   const evolutionRows = weeklyEvolution.length
     ? weeklyEvolution
         .map(
@@ -6874,7 +6905,7 @@ function exportWordReport({
           `,
         )
         .join('')
-    : '<tr><td colspan="4">Sem dados de evolucao no periodo.</td></tr>'
+    : '<tr><td colspan="4">Sem dados de evolução no período.</td></tr>'
 
   const documentHtml = `
     <!doctype html>
@@ -6937,14 +6968,14 @@ function exportWordReport({
             <p>Avaliações: ${achieved.reviewPercentage}% (${achieved.reviewCount} respondidas, ${reviewGapText})</p>
             <p>Atendimentos: ${achieved.answeredTickets}</p>
             <p>Media por colaborador: ${achieved.averageTickets}</p>
-            <p>Posição podio: ${achieved.rankingPosition || '-'}</p>
+            <p>Posição pódio: ${achieved.rankingPosition || '-'}</p>
           </div>
         </div>
 
         <h2>Sintese do feedback</h2>
         <div class="callout"><p>${escapeHtml(achieved.summary)}</p></div>
 
-        <h2>Graficos e evolucao</h2>
+        <h2>Graficos e evolução</h2>
         <p class="muted">Leitura visual para identificar rapidamente melhora, queda ou estabilidade.</p>
         <div class="insight-grid">
           <div class="insight">
@@ -6960,7 +6991,7 @@ function exportWordReport({
           <div class="insight">
             <div class="insight-label">Melhor semana</div>
             <div class="insight-value">${bestEvolution ? `${bestEvolution.label} - ${bestEvolution.csat}%` : '-'}</div>
-            <div class="insight-note">ponto mais alto do periodo</div>
+            <div class="insight-note">ponto mais alto do período</div>
           </div>
           <div class="insight">
             <div class="insight-label">Avaliações respondidas</div>
@@ -6969,10 +7000,10 @@ function exportWordReport({
           </div>
         </div>
         <div class="trend-panel">
-          <div class="trend-title">Evolucao semanal do CSAT - linha escura marca a referencia de ${expected.csat}%</div>
+          <div class="trend-title">Evolucao semanal do CSAT - linha escura marca a referência de ${expected.csat}%</div>
           ${evolutionBars}
         </div>
-        <p class="muted">Menor ponto do periodo: ${worstEvolution ? `${worstEvolution.label} - ${worstEvolution.csat}%` : '-'}.</p>
+        <p class="muted">Menor ponto do período: ${worstEvolution ? `${worstEvolution.label} - ${worstEvolution.csat}%` : '-'}.</p>
         <table>
           <thead>
             <tr>
@@ -6985,11 +7016,11 @@ function exportWordReport({
           <tbody>${evolutionRows}</tbody>
         </table>
         <h2>Contexto operacional da equipe</h2>
-        <p>Performance da equipe no periodo: ${achieved.teamPerformance}%.</p>
-        <p>Ligacoes atendidas pela equipe: ${achieved.teamAnsweredCalls}. Total processado: ${achieved.teamTotalCalls}.</p>
+        <p>Performance da equipe no período: ${achieved.teamPerformance}%.</p>
+        <p>Ligações atendidas pela equipe: ${achieved.teamAnsweredCalls}. Total processado: ${achieved.teamTotalCalls}.</p>
 
         <h2>Análise SARE</h2>
-        <h3>S - Situacao</h3>
+        <h3>S - Situação</h3>
         <p>${escapeHtml(sare.situation)}</p>
         <h3>A - Alinhamentos Realizados</h3>
         <p>${escapeHtml(sare.action)}</p>
@@ -7008,7 +7039,7 @@ function exportWordReport({
   })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
-  const fileName = `${slugifyFileName(analystName)}-relatorio-${slugifyFileName(periodLabel)}.doc`
+  const fileName = `${slugifyFileName(analystName)}-relatório-${slugifyFileName(periodLabel)}.doc`
 
   link.href = url
   link.download = fileName
@@ -7135,9 +7166,9 @@ function buildPeriodPodium(
       const reasons: string[] = []
 
       if (averageCsat < individualGoal) reasons.push('abaixo da meta individual')
-      if (averageCsat < podiumCsatGoal) reasons.push('abaixo do podio')
+      if (averageCsat < podiumCsatGoal) reasons.push('abaixo do pódio')
       if (reviewPercentage < reviewGoal) reasons.push('avaliações abaixo da meta')
-      if (metric.totalTickets < averageTickets) reasons.push('atendimentos abaixo da media')
+      if (metric.totalTickets < averageTickets) reasons.push('atendimentos abaixo da média')
 
       return {
         analystId: analyst.id,
@@ -7168,7 +7199,7 @@ function getGoalValue(goals: Goal[], key: string, fallback: number) {
 
   if (goal) return Number(goal.value)
 
-  const labelSearch = normalizedKey.includes('review') ? 'avalia' : 'podio'
+  const labelSearch = normalizedKey.includes('review') ? 'avalia' : 'pódio'
   const matchingLabel = goals.find(
     (item) => item.active && item.label.toLowerCase().includes(labelSearch),
   )
@@ -7468,12 +7499,12 @@ function buildChatMetricRowsFromSheets({
     'Analista',
   ])
   const satisfactionRatingColumn = findChatColumn(satisfactionRows, [
-    'Indice de satisfacao do ticket Boa Ruim vazio',
-    'Indice de satisfacao do ticket',
-    'Satisfacao',
+    'Indice de satisfação do ticket Boa Ruim vazio',
+    'Indice de satisfação do ticket',
+    'Satisfação',
     'CSAT',
     'Rating',
-    'Avaliacao',
+    'Avaliação',
   ])
   const inactiveAnalystColumn = findChatColumn(inactiveRows, [
     'Nome do atribuido',
@@ -7484,9 +7515,9 @@ function buildChatMetricRowsFromSheets({
     'Analista',
   ])
 
-  if (!satisfactionAnalystColumn) throw new Error('Nao encontrei a coluna do analista na planilha de satisfacao.')
-  if (!satisfactionRatingColumn) throw new Error('Nao encontrei a coluna de satisfacao/avaliacao na planilha de satisfacao.')
-  if (!inactiveAnalystColumn) throw new Error('Nao encontrei a coluna do analista na planilha de inatividade.')
+  if (!satisfactionAnalystColumn) throw new Error('Não encontrei a coluna do analista na planilha de satisfação.')
+  if (!satisfactionRatingColumn) throw new Error('Não encontrei a coluna de satisfação/avaliação na planilha de satisfação.')
+  if (!inactiveAnalystColumn) throw new Error('Não encontrei a coluna do analista na planilha de inatividade.')
 
   return analysts
     .filter((analyst) => analyst.active)
@@ -7563,7 +7594,7 @@ function buildChatRanking(
   return metrics
     .map((metric) => {
       const reasons = getChatAttentionReasons(metric, averageTickets)
-      if (excludedAnalystIds.has(metric.analyst_id)) reasons.push('fora do podio por excecao operacional')
+      if (excludedAnalystIds.has(metric.analyst_id)) reasons.push('fora do pódio por excecao operacional')
 
       return {
         metric,
@@ -7604,7 +7635,7 @@ function getChatAttentionReasons(metric: ChatMonthlyMetric, averageTickets: numb
   const reasons: string[] = []
   if (Number(metric.csat) < 90) reasons.push('CSAT abaixo de 90%')
   if (Number(metric.review_percentage) < 25) reasons.push('avaliações abaixo de 25%')
-  if (Number(metric.total_tickets) < averageTickets) reasons.push('volume abaixo da media (' + averageTickets + ' atend.)')
+  if (Number(metric.total_tickets) < averageTickets) reasons.push('volume abaixo da média (' + averageTickets + ' atend.)')
   return reasons
 }
 
@@ -7745,9 +7776,9 @@ function formatDelta(value: number, suffix = '') {
 }
 
 function getTrendText(delta: number) {
-  if (delta > 1) return 'crescimento frente ao periodo anterior'
-  if (delta < -1) return 'queda frente ao periodo anterior'
-  return 'estabilidade frente ao periodo anterior'
+  if (delta > 1) return 'crescimento frente ao período anterior'
+  if (delta < -1) return 'queda frente ao período anterior'
+  return 'estabilidade frente ao período anterior'
 }
 
 function buildDevelopmentFocus(result: MonthlyPodiumResult, delta: number) {
@@ -7760,11 +7791,11 @@ function buildDevelopmentFocus(result: MonthlyPodiumResult, delta: number) {
   }
 
   if (result.averageCsat < result.individualGoal) {
-    return 'revisar atendimentos com menor satisfacao e escolher uma acao objetiva de melhoria para a proxima semana.'
+    return 'revisar atendimentos com menor satisfação e escolher uma ação objetiva de melhoria para a próxima semana.'
   }
 
   if (delta < 0) {
-    return 'investigar a queda recente e comparar os casos do periodo atual com o ciclo anterior.'
+    return 'investigar a queda recente e comparar os casos do período atual com o ciclo anterior.'
   }
 
   return 'manter acompanhamento semanal e buscar estabilidade ate o fechamento do ciclo.'
@@ -7871,7 +7902,7 @@ function getErrorMessage(error: unknown) {
     if (parts.length) return parts.join(' | ')
   }
 
-  return 'Nao foi possivel concluir a acao. Tente novamente.'
+  return 'Não foi possível concluir a ação. Tente novamente.'
 }
 
 function getSupabaseMessage(message: string) {
