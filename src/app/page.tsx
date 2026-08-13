@@ -2107,30 +2107,54 @@ function ChatModuleDashboard({
     }
   }
 
+  function buildChatReportExportPayload() {
+    if (!selectedChatReportMetric) return null
+
+    const finalFeedbackText = normalizeChatReportFeedback(chatFeedbackDraft, chatReportFeedbackSuggestion, chatFeedbackStyle)
+
+    return {
+      metric: selectedChatReportMetric,
+      periodLabel: selectedPeriod?.label ?? 'Periodo',
+      averageTickets,
+      podiumPosition: selectedChatPodiumPosition,
+      monthlyHistory: metrics
+        .filter((historyMetric) => historyMetric.analyst_id === selectedChatReportMetric.analyst_id)
+        .sort((a, b) => (a.year === b.year ? a.month_number - b.month_number : a.year - b.year)),
+      feedbackStyle: chatFeedbackStyle,
+      managerNotes: '',
+      feedbackText: finalFeedbackText,
+    }
+  }
+
   function handleExportChatIndividualReport() {
-    if (!selectedChatReportMetric) {
+    const payload = buildChatReportExportPayload()
+
+    if (!payload) {
       setChatExportMessage('Selecione um analista com dados antes de exportar o relatório individual.')
       return
     }
 
     try {
-      const finalFeedbackText = normalizeChatReportFeedback(chatFeedbackDraft, chatReportFeedbackSuggestion, chatFeedbackStyle)
-      const fileName = exportChatIndividualReport({
-        metric: selectedChatReportMetric,
-        periodLabel: selectedPeriod?.label ?? 'Periodo',
-        averageTickets,
-        podiumPosition: selectedChatPodiumPosition,
-        monthlyHistory: metrics
-          .filter((historyMetric) => historyMetric.analyst_id === selectedChatReportMetric.analyst_id)
-          .sort((a, b) => (a.year === b.year ? a.month_number - b.month_number : a.year - b.year)),
-        feedbackStyle: chatFeedbackStyle,
-        managerNotes: '',
-        feedbackText: finalFeedbackText,
-      })
-
+      const fileName = exportChatIndividualReport(payload)
       setChatExportMessage(`Relatório individual gerado: ${fileName}. Verifique a pasta Downloads.`)
     } catch {
       setChatExportMessage('Não foi possível gerar o relatório individual. Tente novamente ou use outro navegador.')
+    }
+  }
+
+  function handlePrintChatIndividualReport() {
+    const payload = buildChatReportExportPayload()
+
+    if (!payload) {
+      setChatExportMessage('Selecione um analista com dados antes de gerar PDF.')
+      return
+    }
+
+    try {
+      exportChatIndividualReport({ ...payload, output: 'pdf' })
+      setChatExportMessage('Relatório limpo aberto para PDF. Na janela de impressão, escolha "Salvar como PDF".')
+    } catch {
+      setChatExportMessage('Não foi possível abrir o PDF limpo. Verifique se o navegador bloqueou a nova janela.')
     }
   }
 
@@ -2853,14 +2877,24 @@ function ChatModuleDashboard({
             />
           </Field>
 
-          <button
-            className="btn-primary w-fit disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={!selectedChatReportMetric}
-            type="button"
-            onClick={handleExportChatIndividualReport}
-          >
-            6. Exportar relatório individual
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button
+              className="btn-primary w-fit disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!selectedChatReportMetric}
+              type="button"
+              onClick={handleExportChatIndividualReport}
+            >
+              6. Exportar Word
+            </button>
+            <button
+              className="secondary-button w-fit disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!selectedChatReportMetric}
+              type="button"
+              onClick={handlePrintChatIndividualReport}
+            >
+              Salvar PDF limpo
+            </button>
+          </div>
         </div>
 
         {chatExportMessage && <p className="mt-4 rounded-md bg-slate-900/70 px-4 py-3 text-sm text-slate-200">{chatExportMessage}</p>}
@@ -6423,6 +6457,7 @@ function exportChatIndividualReport({
   feedbackStyle,
   managerNotes,
   feedbackText,
+  output = 'word',
 }: {
   metric: ChatMonthlyMetric
   periodLabel: string
@@ -6432,6 +6467,7 @@ function exportChatIndividualReport({
   feedbackStyle: ChatFeedbackStyle
   managerNotes: string
   feedbackText: string
+  output?: 'word' | 'pdf'
 }) {
   const analystName = getChatAnalystName(metric)
   const safeName = escapeHtml(analystName)
@@ -6521,6 +6557,11 @@ function exportChatIndividualReport({
           .strategy-card strong { display: block; color: #0f172a; font-size: 13px; line-height: 1.35; }
           .strategy-card em { display: block; color: #475569; font-size: 10px; font-style: normal; margin-top: 5px; }
           .coach h3 { margin-top: 0; color: #0f172a; }
+          @page { margin: 18mm; }
+          @media print {
+            body { margin: 0; }
+            .box, .kpi-card, .strategy-card, .month-card, .coach { page-break-inside: avoid; }
+          }
         </style>
       </head>
       <body>
@@ -6529,21 +6570,32 @@ function exportChatIndividualReport({
           <p class="subtitle">Período: ${escapeHtml(periodLabel)} | Fonte: Zendesk</p>
         </div>
 
-        <div class="grid">
-          <div class="box">
-            <h2>Esperado:</h2>
-            <p>>= ${reviewGoal}% de avaliações</p>
-            <p>>= ${csatGoal}% de Satisfação</p>
+        <div class="box">
+          <h2>Resumo do fechamento</h2>
+          <p>Status geral: <span class="metric">${escapeHtml(status)}</span></p>
+          <p>Posição no pódio: ${escapeHtml(podiumText)}</p>
+          <p class="muted">A leitura abaixo separa resultado, comparação com meta e orientação de desenvolvimento para evitar repetição de dados.</p>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <span>Qualidade percebida</span>
+            <strong>${metric.csat}%</strong>
+            <em>Meta individual: ${csatGoal}% (${formatDelta(csatGap, ' p.p.')})</em>
           </div>
-          <div class="box">
-            <h2>Síntese do ciclo:</h2>
-            <p>Status geral: <span class="metric">${escapeHtml(status)}</span></p>
-            <p>Posição no Podio: ${escapeHtml(podiumText)}</p>
-            <p>Leitura rápida: os detalhes de CSAT, avaliações, % sem avaliação e volume estão consolidados na análise técnica abaixo.</p>
+          <div class="kpi-card">
+            <span>Participação em avaliações</span>
+            <strong>${metric.review_percentage}%</strong>
+            <em>${metric.reviews} respostas sobre ${metric.valid_tickets} válidos</em>
+          </div>
+          <div class="kpi-card">
+            <span>Volume mensal</span>
+            <strong>${metric.total_tickets}</strong>
+            <em>Média da operação: ${averageTickets} (${formatDelta(productivityGap, '%')})</em>
           </div>
         </div>
 
-        <h2>Análise Tecnica de Desempenho</h2>
+        <h2>Análise técnica de desempenho</h2>
         <h3>Qualidade e Satisfação do Cliente (CSAT)</h3>
         <p>O(A) colaborador(a) registrou um indice de <strong>Satisfação (CSAT) de ${metric.csat}%</strong>.</p>
         <ul>
@@ -6578,6 +6630,19 @@ function exportChatIndividualReport({
       </body>
     </html>
   `
+  if (output === 'pdf') {
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) throw new Error('Janela de impressão bloqueada.')
+
+    printWindow.document.open()
+    printWindow.document.write(documentHtml)
+    printWindow.document.close()
+    printWindow.focus()
+    printWindow.setTimeout(() => printWindow.print(), 300)
+
+    return `analise-${slugifyFileName(analystName)}-${slugifyFileName(periodLabel)}.pdf`
+  }
+
   const blob = new Blob(['\ufeff', documentHtml], {
     type: 'application/msword;charset=utf-8',
   })
