@@ -2250,10 +2250,20 @@ function ChatModuleDashboard({
       </section>
       <div className={chatActiveTab === 'overview' ? 'grid gap-4 md:grid-cols-4' : 'hidden'}>
         <MetricCard label="Equipe" value={selectedTeamName} />
-        <MetricCard label="CSAT médio" value={loading ? '...' : `${averageCsat}%`} />
-        <MetricCard label="% avaliações" value={`${averageReviews}%`} />
+        <MetricCard label="CSAT médio" value={loading ? '...' : `${averageCsat}%`} tone={averageCsat >= 90 ? 'success' : averageCsat >= 85 ? 'warning' : 'danger'} />
+        <MetricCard label="% avaliações" value={`${averageReviews}%`} tone={averageReviews >= 25 ? 'success' : averageReviews >= 20 ? 'warning' : 'danger'} />
         <MetricCard label="Atendimentos" value={totals.tickets} />
       </div>
+
+      <CriteriaLegend
+        hidden={chatActiveTab !== 'overview'}
+        title="Critérios do pódio do chat"
+        items={[
+          'CSAT mínimo de 90%',
+          'Avaliações a partir de 25%',
+          `Volume igual ou acima da média da equipe (${averageTickets} atendimentos)`,
+        ]}
+      />
 
       <section className={chatActiveTab === 'overview' ? 'panel' : 'hidden'}>
         <div className="flex flex-col gap-6 xl:flex-row xl:items-stretch">
@@ -3459,19 +3469,28 @@ function DashboardView({
         {isAnalystDashboard ? (
           <>
             <MetricCard label="Analista" value={analystProfile?.name ?? 'Não vinculado'} tone="success" />
-            <MetricCard label="Atendimentos no período" value={totalTickets} />
-            <MetricCard label="Meu CSAT" value={`${analystResult?.averageCsat ?? 0}%`} />
-            <MetricCard label="Avaliações" value={`${totalReviews} (${reviewCoverage}%)`} />
+            <MetricCard label="Atendimentos no período" value={totalTickets} tone={podiumAverageTickets && totalTickets >= podiumAverageTickets ? 'success' : podiumAverageTickets ? 'warning' : undefined} />
+            <MetricCard label="Meu CSAT" value={`${analystResult?.averageCsat ?? 0}%`} tone={analystResult && analystResult.averageCsat >= analystResult.individualGoal ? 'success' : analystResult ? 'warning' : undefined} />
+            <MetricCard label="Avaliações" value={`${totalReviews} (${reviewCoverage}%)`} tone={reviewCoverage >= reviewGoal ? 'success' : reviewCoverage >= 20 ? 'warning' : 'danger'} />
           </>
         ) : (
           <>
             <MetricCard label="Status" value="Supabase conectado" tone="success" />
             <MetricCard label="Analistas ativos" value={loading ? '...' : analystsCount} />
-            <MetricCard label="CSAT do período" value={`${periodAverageCsat || 0}%`} />
-            <MetricCard label="Performance equipe" value={`${periodTeamPerformance || 0}%`} />
+            <MetricCard label="CSAT do período" value={`${periodAverageCsat || 0}%`} tone={periodAverageCsat >= podiumCsatGoal ? 'success' : periodAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
+            <MetricCard label="Performance equipe" value={`${periodTeamPerformance || 0}%`} tone={periodTeamPerformance >= teamPerformanceGoal ? 'success' : periodTeamPerformance >= teamPerformanceGoal - 3 ? 'warning' : 'danger'} />
           </>
         )}
       </div>
+
+      <CriteriaLegend
+        title={isAnalystDashboard ? 'Critérios para disputar o pódio' : 'Critérios do pódio do telefone'}
+        items={[
+          `CSAT mínimo de ${podiumCsatGoal}%`,
+          `Avaliações a partir de ${reviewGoal}%`,
+          `Volume igual ou acima da média do time (${podiumAverageTickets || 0} atendimentos)`,
+        ]}
+      />
 
       <section className="panel">
         <div className="flex flex-col gap-6 xl:flex-row xl:items-stretch">
@@ -5911,14 +5930,54 @@ function MetricCard({
 }: {
   label: string
   value: string | number
-  tone?: 'success'
+  tone?: 'success' | 'warning' | 'danger'
 }) {
+  const toneClass =
+    tone === 'success'
+      ? 'border-emerald-400/30 bg-emerald-400/10'
+      : tone === 'warning'
+        ? 'border-amber-400/30 bg-amber-400/10'
+        : tone === 'danger'
+          ? 'border-rose-400/30 bg-rose-400/10'
+          : 'border-white/10 bg-white/5'
+  const valueClass =
+    tone === 'success'
+      ? 'text-emerald-300'
+      : tone === 'warning'
+        ? 'text-amber-200'
+        : tone === 'danger'
+          ? 'text-rose-200'
+          : ''
+
   return (
-    <div className="rounded-lg border border-white/10 bg-white/5 p-5">
+    <div className={`rounded-lg border p-5 ${toneClass}`}>
       <p className="text-sm text-slate-400">{label}</p>
-      <p className={`mt-2 text-2xl font-semibold ${tone === 'success' ? 'text-emerald-300' : ''}`}>
+      <p className={`mt-2 text-2xl font-semibold ${valueClass}`}>
         {value}
       </p>
+    </div>
+  )
+}
+
+function CriteriaLegend({
+  title,
+  items,
+  hidden = false,
+}: {
+  title: string
+  items: string[]
+  hidden?: boolean
+}) {
+  return (
+    <div className={hidden ? 'hidden' : 'rounded-lg border border-cyan-400/20 bg-cyan-400/5 p-4'}>
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">{title}</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {items.map((item) => (
+          <span key={item} className="rounded-md border border-white/10 bg-slate-950/70 px-3 py-2 text-sm text-slate-200">
+            {item}
+          </span>
+        ))}
+      </div>
     </div>
   )
 }
@@ -6238,7 +6297,12 @@ function EvidenceLink({ url }: { url: string | null }) {
 }
 
 function EmptyState({ text }: { text: string }) {
-  return <p className="mt-4 rounded-md bg-slate-900 p-4 text-sm text-slate-400">{text}</p>
+  return (
+    <div className="mt-4 rounded-lg border border-amber-400/20 bg-amber-400/10 p-4">
+      <p className="text-sm font-semibold text-amber-100">Sem dados para este recorte</p>
+      <p className="mt-1 text-sm leading-6 text-slate-300">{text}</p>
+    </div>
+  )
 }
 
 function formatWeek(start: string, end: string) {
