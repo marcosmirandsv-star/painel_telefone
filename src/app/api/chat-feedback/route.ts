@@ -5,6 +5,9 @@ export const runtime = 'nodejs'
 type ChatFeedbackRequest = {
   serviceModule?: 'chat' | 'phone'
   feedbackStyle?: 'coach' | 'sare' | 'mimo'
+  feedbackGoal?: 'recognition' | 'courseCorrection' | 'maintenance' | 'development'
+  feedbackTone?: 'human' | 'direct' | 'executive'
+  generationMode?: 'generate' | 'improve'
   periodLabel?: string
   managerNotes?: string
   fallbackText?: string
@@ -40,11 +43,31 @@ type ChatFeedbackRequest = {
 
 const styleInstructions = {
   coach:
-    'Use formato Coach com seções: Leitura do ciclo, Forcas observadas, Plano de desenvolvimento, Expectativa para o próximo ciclo mensal.',
+    'Use formato Coach com seções: Leitura do ciclo, Forças observadas, Plano de desenvolvimento, Expectativa para o próximo ciclo mensal.',
   sare:
-    'Use formato SARE com seções: Situacao, Alinhamentos Realizados, Resultado Esperado, Expectativa e Plano de Desenvolvimento.',
+    'Use formato SARE com seções: Situação, Alinhamentos Realizados, Resultado Esperado, Expectativa e Plano de Desenvolvimento.',
   mimo:
     'Use formato MIMO com seções: Momento observado, Impacto, Melhoria ou manutenção, Orientação.',
+}
+
+const goalInstructions = {
+  recognition:
+    'Objetivo: reconhecer desempenho positivo e transformar o que funcionou em comportamento consciente para ser repetido.',
+  courseCorrection:
+    'Objetivo: corrigir rota com firmeza respeitosa, deixando claro qual indicador exige ação e qual comportamento precisa mudar.',
+  maintenance:
+    'Objetivo: proteger padrão já atingido, evitando acomodação e explicando quais práticas devem permanecer no próximo ciclo.',
+  development:
+    'Objetivo: desenvolver competência, conectando indicador, comportamento observado e plano prático de evolução.',
+}
+
+const toneInstructions = {
+  human:
+    'Tom: humano, claro, próximo e profissional, como uma liderança que orienta sem soar automática.',
+  direct:
+    'Tom: direto e assertivo, com frases objetivas, sem dureza desnecessária.',
+  executive:
+    'Tom: executivo, sintético e estratégico, mantendo orientação prática suficiente para o colaborador agir.',
 }
 
 function getErrorText(error: unknown) {
@@ -82,6 +105,9 @@ function getPublicProviderError(error: unknown) {
 function buildPrompt(body: ChatFeedbackRequest) {
   const metric = body.metric
   const feedbackStyle = body.feedbackStyle ?? 'coach'
+  const feedbackGoal = body.feedbackGoal ?? 'development'
+  const feedbackTone = body.feedbackTone ?? 'human'
+  const generationMode = body.generationMode ?? 'generate'
   const serviceModule = body.serviceModule ?? 'chat'
   const moduleName = serviceModule === 'phone' ? 'telefone' : 'chat'
   const sourceName = serviceModule === 'phone' ? 'lançamentos do painel de telefone' : 'dados do Zendesk'
@@ -94,6 +120,9 @@ Você é um coach sênior de atendimento ao cliente e editor de relatórios de p
 
 Módulo analisado: ${moduleName}
 Fonte dos dados: ${sourceName}
+Intenção da IA: ${generationMode === 'improve' ? 'melhorar o texto atual mantendo a estrutura e aprofundando orientação prática' : 'gerar uma devolutiva completa a partir da sugestão local'}
+${goalInstructions[feedbackGoal]}
+${toneInstructions[feedbackTone]}
 
 Regras obrigatorias:
 - Escreva em portugues do Brasil.
@@ -106,7 +135,9 @@ ${cadenceRule}
 - O feedback deve ser completo e útil. Se for direto, ainda assim precisa conter leitura do ciclo, orientação prática e expectativa para o próximo fechamento.
 - Transforme as observações do gestor em contexto de gestão; não copie literalmente e ignore observações que sejam apenas teste tecnico.
 - Traga reconhecimento especifico quando houver pontos fortes, conectando o elogio ao comportamento observado.
-- Traga orientação pratica: diga o que o analista deve repetir, observar, ajustar ou levar como evidencia no próximo fechamento mensal.
+- Traga orientação prática em linguagem humana: explique o que o indicador mostra, por que isso importa para cliente/operação e como o analista pode agir.
+- Para cada orientação, descreva pelo menos uma ação concreta: exemplo de comportamento, rotina, conferência, abordagem, pedido de avaliação ou combinação com liderança.
+- Se o texto base já estiver bom, aprofunde sem alterar a conclusão; se estiver genérico, substitua por recomendações mais específicas.
 - Não termine frase pela metade. Entregue um texto completo, pronto para colar no relatório.
 - Mantenha entre 180 e 320 palavras. Prefira clareza e completude em vez de texto longo.
 - ${styleInstructions[feedbackStyle]}
@@ -300,7 +331,7 @@ async function generateWithGitHubModels(prompt: string) {
         },
       ],
       temperature: 0.4,
-      max_tokens: 900,
+      max_tokens: 1300,
     }),
   })
   const data = await response.json()

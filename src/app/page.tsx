@@ -234,6 +234,8 @@ type PeriodFilter = {
 type AppModule = 'phone' | 'chat'
 
 type ChatFeedbackStyle = 'coach' | 'sare' | 'mimo'
+type FeedbackGoal = 'recognition' | 'courseCorrection' | 'maintenance' | 'development'
+type FeedbackTone = 'human' | 'direct' | 'executive'
 
 type ActiveTab = 'dashboard' | 'reports' | 'analysts' | 'goals' | 'entries' | 'users'
 
@@ -1355,6 +1357,8 @@ function ChatModuleDashboard({
   const [chatImportMessage, setChatImportMessage] = useState('')
   const [chatExportMessage, setChatExportMessage] = useState('')
   const [chatFeedbackStyle, setChatFeedbackStyle] = useState<ChatFeedbackStyle>('coach')
+  const [chatFeedbackGoal, setChatFeedbackGoal] = useState<FeedbackGoal>('recognition')
+  const [chatFeedbackTone, setChatFeedbackTone] = useState<FeedbackTone>('human')
   const [chatManagerNotes, setChatManagerNotes] = useState('')
   const [chatFeedbackDraft, setChatFeedbackDraft] = useState('')
   const [chatAiSaving, setChatAiSaving] = useState(false)
@@ -2067,6 +2071,9 @@ function ChatModuleDashboard({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           feedbackStyle: chatFeedbackStyle,
+          feedbackGoal: chatFeedbackGoal,
+          feedbackTone: chatFeedbackTone,
+          generationMode: 'generate',
           periodLabel: selectedPeriod?.label ?? 'Periodo',
           managerNotes: chatManagerNotes,
           fallbackText: chatReportFeedbackSuggestion,
@@ -2100,6 +2107,81 @@ function ChatModuleDashboard({
       const safeFeedback = normalizeChatReportFeedback(data.feedback, chatReportFeedbackSuggestion, chatFeedbackStyle)
       setChatFeedbackDraft(safeFeedback)
       setChatExportMessage(data.warning || 'Feedback gerado com IA. Revise o texto antes de exportar.')
+    } catch (error) {
+      setChatExportMessage(getErrorMessage(error))
+    } finally {
+      setChatAiSaving(false)
+    }
+  }
+
+  async function handleImproveChatFeedbackWithAi() {
+    if (!selectedChatReportMetric) {
+      setChatExportMessage('Selecione um analista com dados antes de acionar a IA.')
+      return
+    }
+
+    const baseFeedback = chatFeedbackDraft.trim() || chatReportFeedbackSuggestion
+
+    if (!baseFeedback.trim()) {
+      setChatExportMessage('Gere uma sugestão ou escreva um texto antes de pedir melhoria com IA.')
+      return
+    }
+
+    setChatAiSaving(true)
+    setChatExportMessage('Melhorando texto com IA...')
+
+    try {
+      const history = metrics
+        .filter((historyMetric) => historyMetric.analyst_id === selectedChatReportMetric.analyst_id)
+        .sort((a, b) => (a.year === b.year ? a.month_number - b.month_number : a.year - b.year))
+        .map((historyMetric) => ({
+          monthLabel: historyMetric.month_label,
+          csat: Number(historyMetric.csat),
+          reviewPercentage: Number(historyMetric.review_percentage),
+          sendingPercentage: Number(historyMetric.sending_percentage),
+          totalTickets: Number(historyMetric.total_tickets),
+        }))
+      const response = await fetch('/api/chat-feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          feedbackStyle: chatFeedbackStyle,
+          feedbackGoal: chatFeedbackGoal,
+          feedbackTone: chatFeedbackTone,
+          generationMode: 'improve',
+          periodLabel: selectedPeriod?.label ?? 'Periodo',
+          managerNotes: chatManagerNotes,
+          fallbackText: baseFeedback,
+          averageTickets,
+          podiumPosition: selectedChatPodiumPosition,
+          metric: {
+            analystName: getChatAnalystName(selectedChatReportMetric),
+            teamName: getChatTeamName(selectedChatReportMetric),
+            csat: Number(selectedChatReportMetric.csat),
+            reviewPercentage: Number(selectedChatReportMetric.review_percentage),
+            sendingPercentage: Number(selectedChatReportMetric.sending_percentage),
+            totalTickets: Number(selectedChatReportMetric.total_tickets),
+            inactiveTickets: Number(selectedChatReportMetric.inactive_tickets),
+            validTickets: Number(selectedChatReportMetric.valid_tickets),
+            reviews: Number(selectedChatReportMetric.reviews),
+            positiveReviews: Number(selectedChatReportMetric.positive_reviews),
+            negativeReviews: Number(selectedChatReportMetric.negative_reviews),
+            csatGoal: Number(selectedChatReportMetric.csat_goal),
+            reviewGoal: Number(selectedChatReportMetric.general_review_goal),
+            status: selectedChatReportMetric.status,
+          },
+          monthlyHistory: history,
+        }),
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data?.error || 'Não foi possível melhorar o feedback com IA.')
+      }
+
+      const safeFeedback = normalizeChatReportFeedback(data.feedback, baseFeedback, chatFeedbackStyle)
+      setChatFeedbackDraft(safeFeedback)
+      setChatExportMessage(data.warning || 'Texto melhorado com IA. Revise antes de exportar.')
     } catch (error) {
       setChatExportMessage(getErrorMessage(error))
     } finally {
@@ -2801,8 +2883,23 @@ function ChatModuleDashboard({
                 }}
               >
                 <option value="coach">Coach</option>
-                <option value="sare">SARE</option>
                 <option value="mimo">MIMO</option>
+                <option value="sare">SARE</option>
+              </select>
+            </Field>
+            <Field label="Objetivo">
+              <select className="form-input" value={chatFeedbackGoal} onChange={(event) => setChatFeedbackGoal(event.target.value as FeedbackGoal)}>
+                <option value="recognition">Reconhecer e manter</option>
+                <option value="courseCorrection">Corrigir rota</option>
+                <option value="development">Desenvolver comportamento</option>
+                <option value="maintenance">Proteger padrão</option>
+              </select>
+            </Field>
+            <Field label="Tom">
+              <select className="form-input" value={chatFeedbackTone} onChange={(event) => setChatFeedbackTone(event.target.value as FeedbackTone)}>
+                <option value="human">Humano e prático</option>
+                <option value="direct">Direto e assertivo</option>
+                <option value="executive">Executivo</option>
               </select>
             </Field>
           </div>
@@ -2846,7 +2943,7 @@ function ChatModuleDashboard({
           </Field>
 
 
-          <div className="grid gap-3 lg:grid-cols-[auto_auto_1fr] lg:items-start">
+          <div className="grid gap-3 lg:grid-cols-[auto_auto_auto_1fr] lg:items-start">
             <button
               className="btn-secondary disabled:cursor-not-allowed disabled:opacity-60"
               disabled={!selectedChatReportMetric}
@@ -2863,8 +2960,16 @@ function ChatModuleDashboard({
             >
               {chatAiSaving ? 'Gerando...' : 'Gerar texto assistido'}
             </button>
+            <button
+              className="btn-secondary disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!selectedChatReportMetric || chatAiSaving || !chatFeedbackDraft.trim()}
+              type="button"
+              onClick={handleImproveChatFeedbackWithAi}
+            >
+              Melhorar texto atual
+            </button>
             <p className="text-sm text-slate-300">
-              O texto assistido usa as regras do painel e mantem o relatório funcionando mesmo sem IA externa ativa.
+              A IA considera objetivo, tom, números do Zendesk e suas observações para explicar o que aconteceu, por que importa e como agir no próximo fechamento.
             </p>
           </div>
 
@@ -3977,6 +4082,8 @@ function ReportsView({
   const [phoneManagerNotes, setPhoneManagerNotes] = useState('')
   const [phoneFeedbackDraft, setPhoneFeedbackDraft] = useState('')
   const [phoneFeedbackStyle, setPhoneFeedbackStyle] = useState<ChatFeedbackStyle>('mimo')
+  const [phoneFeedbackGoal, setPhoneFeedbackGoal] = useState<FeedbackGoal>('development')
+  const [phoneFeedbackTone, setPhoneFeedbackTone] = useState<FeedbackTone>('human')
   const [phoneAiSaving, setPhoneAiSaving] = useState(false)
   const isPhoneDailyUnsupported = isPhonePeriodShorterThanWeeklyLaunch(periodFilter)
   const phoneWeeklyLaunchMessage =
@@ -4228,6 +4335,9 @@ function ReportsView({
         body: JSON.stringify({
           serviceModule: 'phone',
           feedbackStyle: phoneFeedbackStyle,
+          feedbackGoal: phoneFeedbackGoal,
+          feedbackTone: phoneFeedbackTone,
+          generationMode: 'generate',
           periodLabel,
           managerNotes: phoneManagerNotes,
           fallbackText: phoneFeedbackSuggestion,
@@ -4267,6 +4377,81 @@ function ReportsView({
     } catch (error) {
       setPhoneFeedbackDraft(phoneFeedbackSuggestion)
       setExportMessage(`A IA externa nao gerou um texto valido agora. Usei a sugestão local do telefone. Motivo: ${getErrorMessage(error)}`)
+    } finally {
+      setPhoneAiSaving(false)
+    }
+  }
+
+  async function handleImprovePhoneFeedbackWithAi() {
+    if (!selectedAnalyst || !analystResult) {
+      setExportMessage('Selecione um analista e um período com lançamento antes de acionar a IA.')
+      return
+    }
+
+    const baseFeedback = phoneFeedbackDraft.trim() || phoneFeedbackSuggestion
+
+    if (!baseFeedback.trim()) {
+      setExportMessage('Gere uma sugestão ou escreva um texto antes de pedir melhoria com IA.')
+      return
+    }
+
+    setPhoneAiSaving(true)
+    setExportMessage('Melhorando texto com IA...')
+
+    try {
+      const averageTickets =
+        podium.length > 0
+          ? round(podium.reduce((sum, item) => sum + item.totalTickets, 0) / podium.length)
+          : 0
+      const response = await fetch('/api/chat-feedback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          serviceModule: 'phone',
+          feedbackStyle: phoneFeedbackStyle,
+          feedbackGoal: phoneFeedbackGoal,
+          feedbackTone: phoneFeedbackTone,
+          generationMode: 'improve',
+          periodLabel,
+          managerNotes: phoneManagerNotes,
+          fallbackText: baseFeedback,
+          averageTickets,
+          podiumPosition: selectedRankingPosition,
+          metric: {
+            analystName: selectedAnalyst.name,
+            teamName: 'Telefone',
+            csat: analystResult.averageCsat,
+            reviewPercentage: analystResult.reviewPercentage,
+            totalTickets: analystResult.totalTickets,
+            reviews: analystResult.totalReviews,
+            csatGoal: analystResult.individualGoal,
+            reviewGoal,
+            status: analystResult.eligible ? 'Elegível ao pódio' : 'Em acompanhamento',
+            teamPerformance,
+            teamAnsweredCalls,
+            teamTotalCalls,
+          },
+          monthlyHistory: weeklyEvolution.map((item) => ({
+            monthLabel: item.label,
+            csat: item.csat,
+            reviewPercentage: item.totalTickets ? round((item.totalReviews / item.totalTickets) * 100) : 0,
+            sendingPercentage: 0,
+            totalTickets: item.totalTickets,
+          })),
+        }),
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Não foi possível melhorar texto com IA.')
+      }
+
+      setPhoneFeedbackDraft(normalizePhoneReportFeedback(data.feedback ?? '', baseFeedback, phoneFeedbackStyle))
+      setExportMessage(data.warning || 'Texto do telefone melhorado com IA. Revise antes de exportar.')
+    } catch (error) {
+      setExportMessage('A IA externa não melhorou o texto agora. Mantive o texto atual. Motivo: ' + getErrorMessage(error))
     } finally {
       setPhoneAiSaving(false)
     }
@@ -4502,21 +4687,38 @@ function ReportsView({
             />
           </Field>
 
-          <Field label="Modelo do feedback">
-            <select
-              className="form-input"
-              value={phoneFeedbackStyle}
-              onChange={(event) => {
-                setPhoneFeedbackStyle(event.target.value as ChatFeedbackStyle)
-                setPhoneFeedbackDraft('')
-              }}
-            >
-              <option value="mimo">MIMO</option>
-              <option value="sare">SARE</option>
-            </select>
-          </Field>
+          <div className="grid gap-4 md:grid-cols-3">
+            <Field label="Modelo do feedback">
+              <select
+                className="form-input"
+                value={phoneFeedbackStyle}
+                onChange={(event) => {
+                  setPhoneFeedbackStyle(event.target.value as ChatFeedbackStyle)
+                  setPhoneFeedbackDraft('')
+                }}
+              >
+                <option value="mimo">MIMO</option>
+                <option value="sare">SARE</option>
+              </select>
+            </Field>
+            <Field label="Objetivo">
+              <select className="form-input" value={phoneFeedbackGoal} onChange={(event) => setPhoneFeedbackGoal(event.target.value as FeedbackGoal)}>
+                <option value="development">Desenvolver comportamento</option>
+                <option value="courseCorrection">Corrigir rota</option>
+                <option value="recognition">Reconhecer e manter</option>
+                <option value="maintenance">Proteger padrão</option>
+              </select>
+            </Field>
+            <Field label="Tom">
+              <select className="form-input" value={phoneFeedbackTone} onChange={(event) => setPhoneFeedbackTone(event.target.value as FeedbackTone)}>
+                <option value="human">Humano e prático</option>
+                <option value="direct">Direto e assertivo</option>
+                <option value="executive">Executivo</option>
+              </select>
+            </Field>
+          </div>
 
-          <div className="grid gap-3 lg:grid-cols-[auto_auto_1fr] lg:items-start">
+          <div className="grid gap-3 lg:grid-cols-[auto_auto_auto_1fr] lg:items-start">
             <button
               className="btn-secondary disabled:cursor-not-allowed disabled:opacity-60"
               disabled={!selectedAnalyst || !analystResult}
@@ -4533,8 +4735,16 @@ function ReportsView({
             >
               {phoneAiSaving ? 'Gerando...' : 'Gerar texto assistido'}
             </button>
+            <button
+              className="btn-secondary disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!selectedAnalyst || !analystResult || phoneAiSaving || !phoneFeedbackDraft.trim()}
+              type="button"
+              onClick={handleImprovePhoneFeedbackWithAi}
+            >
+              Melhorar texto atual
+            </button>
             <p className="text-sm text-slate-300">
-              A IA usa CSAT, avaliações, atendimentos, performance da equipe, pódio e suas observações para melhorar a devolutiva SARE.
+              A IA usa CSAT, avaliações, atendimentos, performance da equipe, pódio, objetivo e tom para explicar o que melhorar e como fazer isso na prática.
             </p>
           </div>
 
