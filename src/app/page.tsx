@@ -327,7 +327,7 @@ export default function Home() {
         setIsPasswordRecovery(true)
         setMessage('Digite uma nova senha para concluir a recuperação.')
       }
-      setLoading(false)
+      if (!data.user) setLoading(false)
     }
 
     loadSession()
@@ -3445,6 +3445,7 @@ function DashboardView({
       }
     : localAnalystResult
   const analystRankingPosition = secureAnalystRanking?.position ?? (localAnalystResult ? periodPodium.findIndex((item) => item.analystId === localAnalystResult.analystId) + 1 : 0)
+  const analystDataLoading = isAnalystDashboard && loading
   const launchedPeriodLabel = formatLaunchedPeriodLabel(filteredIndividualMetrics, periodFilter)
   const analystRankingRead =
     periodFilter.mode === 'month'
@@ -3893,10 +3894,12 @@ function DashboardView({
           <div className="mt-6 grid gap-4 lg:grid-cols-3">
             <div className="rounded-lg bg-slate-900 p-5">
               <p className="text-sm text-slate-400">Status do período</p>
-              <h3 className={`mt-2 text-2xl font-bold ${analystResult?.eligible ? 'text-emerald-300' : 'text-cyan-300'}`}>
-                {analystStatusText}
+              <h3 className={`mt-2 text-2xl font-bold ${analystDataLoading ? 'text-cyan-300' : analystResult?.eligible ? 'text-emerald-300' : 'text-cyan-300'}`}>
+                {analystDataLoading ? 'Atualizando leitura...' : analystStatusText}
               </h3>
-              <p className="mt-3 text-sm text-slate-400">{analystPulseText}</p>
+              <p className="mt-3 text-sm text-slate-400">
+                {analystDataLoading ? 'Buscando lançamentos e recalculando sua posição com os dados do período.' : analystPulseText}
+              </p>
             </div>
 
             <div className="rounded-lg bg-slate-900 p-5">
@@ -3910,13 +3913,13 @@ function DashboardView({
             </div>
 
             <div className="rounded-lg bg-slate-900 p-5">
-              <p className="text-sm text-slate-400">Posicao e previsao</p>
-              <p className="mt-2 text-3xl font-bold">{analystRankingPosition ? `${analystRankingPosition}o` : '-'}</p>
-              <p className={`mt-2 text-sm font-semibold ${analystResult?.eligible && analystRankingPosition <= 3 ? 'text-emerald-300' : analystResult?.eligible ? 'text-cyan-300' : 'text-amber-200'}`}>
-                {analystPodiumPositionStatus}
+              <p className="text-sm text-slate-400">Posição e previsão</p>
+              <p className="mt-2 text-3xl font-bold">{analystDataLoading ? '...' : analystRankingPosition ? `${analystRankingPosition}o` : '-'}</p>
+              <p className={`mt-2 text-sm font-semibold ${analystDataLoading ? 'text-cyan-300' : analystResult?.eligible && analystRankingPosition <= 3 ? 'text-emerald-300' : analystResult?.eligible ? 'text-cyan-300' : 'text-amber-200'}`}>
+                {analystDataLoading ? 'Calculando com os dados do período' : analystPodiumPositionStatus}
               </p>
               <p className="mt-2 text-sm text-slate-400">
-                {analystRankingRead} {analystPodiumProjectionText}
+                {analystDataLoading ? 'Aguarde a leitura final do banco antes de considerar a posição.' : `${analystRankingRead} ${analystPodiumProjectionText}`}
               </p>
             </div>
 
@@ -3924,9 +3927,13 @@ function DashboardView({
               <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                 <div>
                   <p className="text-sm text-slate-400">O que falta para o pódio?</p>
-                  <h3 className="mt-2 text-2xl font-bold text-cyan-300">{analystResult?.eligible ? 'Você esta dentro dos critérios' : 'Distancia ate o pódio'}</h3>
+                  <h3 className="mt-2 text-2xl font-bold text-cyan-300">
+                    {analystDataLoading ? 'Calculando critérios' : analystResult?.eligible ? 'Você esta dentro dos critérios' : 'Distancia ate o pódio'}
+                  </h3>
                 </div>
-                <p className="max-w-2xl text-sm leading-6 text-slate-400">{analystPodiumGapText}</p>
+                <p className="max-w-2xl text-sm leading-6 text-slate-400">
+                  {analystDataLoading ? 'Aguarde enquanto o sistema cruza CSAT, avaliações, volume e ranking do período.' : analystPodiumGapText}
+                </p>
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 {analystPodiumChecklist.map((item) => (
