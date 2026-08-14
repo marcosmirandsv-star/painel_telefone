@@ -1649,6 +1649,34 @@ function ChatModuleDashboard({
   const chatBelowReviewMetrics = visibleMetrics.filter((metric) => Number(metric.review_percentage) < Number(metric.general_review_goal))
   const chatCriticalMetrics = visibleMetrics.filter((metric) => metric.status === 'Critico')
   const chatEligibleItems = chatRanking.filter((item) => item.eligible)
+  const chatFunnelItems = [
+    {
+      label: 'Base analisada',
+      value: visibleMetrics.length,
+      detail: 'Analistas com dados no período.',
+    },
+    {
+      label: 'CSAT mínimo',
+      value: visibleMetrics.filter((metric) => Number(metric.csat) >= 90).length,
+      detail: 'Mantêm qualidade percebida acima de 90%.',
+    },
+    {
+      label: 'Avaliações',
+      value: visibleMetrics.filter((metric) => Number(metric.review_percentage) >= Number(metric.general_review_goal)).length,
+      detail: 'Têm amostra de avaliações dentro da referência.',
+    },
+    {
+      label: 'Volume',
+      value: visibleMetrics.filter((metric) => Number(metric.total_tickets) >= averageTickets).length,
+      detail: `Atendem pelo menos a média de ${averageTickets} atendimentos.`,
+    },
+    {
+      label: 'Elegíveis',
+      value: chatEligibleCount,
+      detail: 'Cumpriram todos os critérios ao mesmo tempo.',
+      tone: 'success' as const,
+    },
+  ]
   const chatBelowVolumeCount = chatBelowVolumeItems.length
   const chatBelowCsatCount = chatBelowCsatMetrics.length
   const chatBelowReviewCount = chatBelowReviewMetrics.length
@@ -2522,7 +2550,12 @@ function ChatModuleDashboard({
       </section>
 
       <section className={chatActiveTab === 'overview' ? 'panel' : 'hidden'}>
-        <div className="grid gap-6 xl:grid-cols-2">
+        <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+          <EligibilityFunnel
+            title="Funil de elegibilidade do chat"
+            subtitle="Mostra onde o pódio mensal está afunilando: qualidade, avaliações, volume ou combinação dos três."
+            items={chatFunnelItems}
+          />
           <ComparisonBars
             title="Comparativo visual dos analistas"
             subtitle="Mostra rapidamente quem combina qualidade, amostra de avaliações e volume no período."
@@ -2531,6 +2564,8 @@ function ChatModuleDashboard({
             secondaryGoal={25}
             volumeReference={averageTickets}
           />
+        </div>
+        <div className="mt-6">
           <VolumeQualityMap
             title="Mapa volume x CSAT"
             subtitle="Quanto mais para a direita, maior o volume. Quanto mais para cima, melhor o CSAT."
@@ -3532,6 +3567,34 @@ function DashboardView({
         : 'Meta imédiata: manter elegibilidade e buscar ganho em CSAT, avaliações ou volume para apróximar do top 3.'
       : 'Meta imédiata: resolver primeiro os critérios pendentes antes de pensar em posição no pódio.'
     : 'Meta imédiata: aguardar o lançamento do período para liberar o plano.'
+  const phoneFunnelItems = [
+    {
+      label: 'Analistas lançados',
+      value: periodPodium.length,
+      detail: 'Base usada no ranking do recorte selecionado.',
+    },
+    {
+      label: 'CSAT mínimo',
+      value: periodPodium.filter((item) => item.averageCsat >= podiumCsatGoal).length,
+      detail: `Bateram a referência de ${podiumCsatGoal}%.`,
+    },
+    {
+      label: 'Avaliações',
+      value: periodPodium.filter((item) => item.reviewPercentage >= reviewGoal).length,
+      detail: `Mantêm amostra acima de ${reviewGoal}%.`,
+    },
+    {
+      label: 'Volume',
+      value: periodPodium.filter((item) => item.totalTickets >= podiumAverageTickets).length,
+      detail: `Atendimentos iguais ou acima da média de ${podiumAverageTickets}.`,
+    },
+    {
+      label: 'Elegíveis',
+      value: eligibleCount,
+      detail: 'Cumpriram todos os critérios ao mesmo tempo.',
+      tone: 'success' as const,
+    },
+  ]
   const phoneVisualRows = periodPodium.slice(0, 10).map((item) => ({
     label: item.analystName,
     primary: item.averageCsat,
@@ -3729,20 +3792,29 @@ function DashboardView({
         </div>
 
         {!isAnalystDashboard && (
-          <div className="mt-6 grid gap-6 xl:grid-cols-2">
+          <div className="mt-6 grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+            <EligibilityFunnel
+              title="Funil de elegibilidade do telefone"
+              subtitle="Mostra em qual critério o time perde força antes do fechamento do pódio."
+              items={phoneFunnelItems}
+            />
             <ComparisonBars
               title="Comparativo visual dos analistas"
               subtitle="Mostra rapidamente quem combina CSAT, avaliações e volume de atendimentos no período."
               rows={phoneVisualRows}
               primaryGoal={podiumCsatGoal}
               secondaryGoal={reviewGoal}
+              volumeReference={podiumAverageTickets}
             />
-            <VolumeQualityMap
-              title="Mapa volume x CSAT"
-              subtitle="Quanto mais para a direita, maior o volume. Quanto mais para cima, melhor o CSAT."
-              points={phoneVisualPoints}
-              yReference={podiumCsatGoal}
-            />
+            <div className="xl:col-span-2">
+              <VolumeQualityMap
+                title="Mapa volume x CSAT"
+                subtitle="Quanto mais para a direita, maior o volume. Quanto mais para cima, melhor o CSAT."
+                points={phoneVisualPoints}
+                xReference={podiumAverageTickets}
+                yReference={podiumCsatGoal}
+              />
+            </div>
           </div>
         )}
 
@@ -3864,6 +3936,26 @@ function DashboardView({
                   </div>
                 ))}
               </div>
+
+              {analystResult && (
+                <div className="mt-4 rounded-md bg-slate-950/60 p-4">
+                  <p className="text-sm font-semibold text-slate-200">Meu mapa visual dos crit?rios</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-400">
+                    Compare seu resultado com a refer?ncia do p?dio e veja rapidamente onde proteger ou recuperar desempenho.
+                  </p>
+                  <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                    <ProgressMetric label="CSAT" value={analystResult.averageCsat} goal={podiumCsatGoal} suffix="%" tone="cyan" />
+                    <ProgressMetric label="Avalia??es" value={analystResult.reviewPercentage} goal={reviewGoal} suffix="%" tone="emerald" />
+                    <ProgressMetric
+                      label="Volume"
+                      value={analystResult.totalTickets}
+                      goal={podiumAverageTickets}
+                      max={Math.max(analystResult.totalTickets, podiumAverageTickets, 1)}
+                      tone="amber"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ) : (
@@ -6252,6 +6344,54 @@ function PredictiveCard({
     </div>
   )
 }
+
+function EligibilityFunnel({
+  title,
+  subtitle,
+  items,
+}: {
+  title: string
+  subtitle: string
+  items: Array<{ label: string; value: number; detail: string; tone?: 'success' | 'warning' | 'danger' }>
+}) {
+  const base = Math.max(items[0]?.value ?? 0, 1)
+
+  return (
+    <div className="rounded-lg bg-slate-900 p-5">
+      <h3 className="text-xl font-bold">{title}</h3>
+      <p className="mt-2 text-sm leading-6 text-slate-400">{subtitle}</p>
+      <div className="mt-5 space-y-3">
+        {items.map((item, index) => {
+          const width = Math.max(6, Math.min(100, (item.value / base) * 100))
+          const color =
+            item.tone === 'success'
+              ? 'bg-emerald-300'
+              : item.tone === 'danger'
+                ? 'bg-rose-300'
+                : index === 0
+                  ? 'bg-cyan-300'
+                  : 'bg-amber-300'
+
+          return (
+            <div key={item.label} className="rounded-md bg-slate-950/60 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="font-semibold">{item.label}</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-400">{item.detail}</p>
+                </div>
+                <strong className="text-lg">{item.value}</strong>
+              </div>
+              <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-800">
+                <div className={`h-3 rounded-full ${color}`} style={{ width: `${width}%` }} />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function TrendLineChart({
   label,
   points,
