@@ -3762,25 +3762,25 @@ function DashboardView({
 
         <div className="mt-6 grid gap-4 lg:grid-cols-4">
           <PredictiveCard
-            label="Chance de atingir metas"
+            label="Chance geral de fechamento"
             value={`${predictiveGoalProbability}%`}
             detail={
               hasPeriodData
-                ? `CSAT, performance, avaliações e pódio combinados. ${eligibleCount} de ${periodPodium.length} elegiveis.`
+                ? `Leitura combinada de CSAT, performance, avaliações e pódio. ${eligibleCount} de ${periodPodium.length} elegíveis.`
                 : 'Sem base de dados no período.'
             }
             tone={predictiveGoalProbability >= 75 ? 'success' : predictiveGoalProbability >= 45 ? 'warning' : 'danger'}
           />
           <PredictiveCard
-            label="Previsao CSAT"
+            label="CSAT projetado"
             value={`${projectedCsat}%`}
-            detail={`${formatDelta(csatDelta, ' p.p.')} vs período anterior`}
+            detail={`Resultado projetado se a tendência atual continuar. ${formatDelta(csatDelta, ' p.p.')} vs período anterior`}
             tone={projectedCsat >= podiumCsatGoal ? 'success' : 'warning'}
           />
           <PredictiveCard
-            label="Previsao performance"
+            label="Performance projetada"
             value={`${projectedTeamPerformance}%`}
-            detail={`meta operacional ${teamPerformanceGoal}%`}
+            detail={`Valor projetado da operação. Meta: ${teamPerformanceGoal}%`}
             tone={projectedTeamPerformance >= teamPerformanceGoal ? 'success' : 'danger'}
           />
           <PredictiveCard
@@ -3819,23 +3819,23 @@ function DashboardView({
         )}
 
         <div className="mt-5 rounded-lg bg-slate-900 p-5">
-          <p className="text-sm font-semibold text-slate-200">Como ler esta previsao</p>
+          <p className="text-sm font-semibold text-slate-200">Como ler esta projeção</p>
           <div className="mt-3 grid gap-3 text-sm leading-6 text-slate-400 md:grid-cols-2">
             <p>
-              A chance de atingir metas combina CSAT do período, performance da equipe, cobertura de avaliações e
-              quantidade de analistas elegiveis ao pódio.
+              A chance geral de fechamento é uma leitura combinada: CSAT, performance da equipe, cobertura de avaliações
+              e quantidade de analistas elegíveis ao pódio. Ela não é o mesmo número da performance operacional.
             </p>
             <p>
-              As previsoes usam o resultado atual e parte da variação contra o período anterior. Quanto mais semanas
-              lancadas, mais confiavel fica a leitura.
+              CSAT projetado e performance projetada são valores esperados se a tendência atual continuar. Exemplo:
+              performance projetada de 100% significa projeção acima da meta de 96%, não chance de 100%.
             </p>
             <p>
-              O risco de queda sobe quando CSAT ou performance perdem forca, quando a chance fica abaixo de 75% ou
-              quando existem analistas em acompanhamento.
+              O risco de queda sobe quando poucos analistas ficam elegíveis, quando CSAT ou performance perdem força,
+              quando a chance geral cai abaixo de 75% ou quando existem analistas em acompanhamento.
             </p>
             <p>
-              Esta leitura e um alerta de gestão: ela ajuda a decidir onde agir antes do fechamento, sem substituir a
-              análise do gestor.
+              Esta leitura é um alerta de gestão: ela ajuda a decidir onde agir antes do fechamento, sem substituir a
+              análise do supervisor ou da coordenação.
             </p>
           </div>
         </div>
@@ -3939,9 +3939,9 @@ function DashboardView({
 
               {analystResult && (
                 <div className="mt-4 rounded-md bg-slate-950/60 p-4">
-                  <p className="text-sm font-semibold text-slate-200">Meu mapa visual dos crit?rios</p>
+                  <p className="text-sm font-semibold text-slate-200">Meu mapa visual dos critérios</p>
                   <p className="mt-1 text-xs leading-5 text-slate-400">
-                    Compare seu resultado com a refer?ncia do p?dio e veja rapidamente onde proteger ou recuperar desempenho.
+                    Compare seu resultado com a referência do pódio e veja rapidamente onde proteger ou recuperar desempenho.
                   </p>
                   <div className="mt-4 grid gap-3 lg:grid-cols-3">
                     <ProgressMetric label="CSAT" value={analystResult.averageCsat} goal={podiumCsatGoal} suffix="%" tone="cyan" />
