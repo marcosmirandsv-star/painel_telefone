@@ -3887,6 +3887,11 @@ function DashboardView({
                 ? `Sua leitura em ${launchedPeriodLabel}: CSAT mínimo ${podiumCsatGoal}%, avaliações ${reviewGoal}% e volume comparado com a média dos analistas lançados.`
                 : `Ranking de ${periodLabel}: CSAT mínimo ${podiumCsatGoal}%, avaliações ${reviewGoal}% e atendimentos dentro da média da equipe.`}
             </p>
+            {!isAnalystDashboard && (
+              <p className="mt-2 text-sm text-slate-400">
+                Média de atendimentos do time neste recorte: <span className="font-semibold text-slate-200">{podiumAverageTickets || 0}</span>.
+              </p>
+            )}
           </div>
         </div>
 

@@ -77,8 +77,8 @@ export async function GET(request: NextRequest) {
     admin
       .from('weekly_individual_metrics')
       .select('analyst_id, csat, total_reviews, total_tickets')
-      .gte('week_start', start)
-      .lte('week_end', end),
+      .lte('week_start', end)
+      .gte('week_end', start),
     admin.from('goals').select('key, label, value, active'),
   ])
 
