@@ -6551,7 +6551,10 @@ function TrendLineChart({
   suffix?: string
 }) {
   const path = buildLinePath(points)
+  const first = points.at(0)?.value ?? 0
   const latest = points.at(-1)?.value ?? 0
+  const delta = round(latest - first)
+  const hasComparison = points.length > 1
 
   return (
     <div className="rounded-lg bg-slate-900 p-4">
@@ -6561,6 +6564,11 @@ function TrendLineChart({
           <p className="mt-1 text-2xl font-semibold">
             {latest}
             {suffix}
+          </p>
+          <p className="mt-2 text-xs leading-5 text-slate-400">
+            {hasComparison
+              ? `De ${first}${suffix} para ${latest}${suffix} · ${delta > 0 ? '+' : ''}${delta}${suffix === '%' ? ' p.p.' : ''}`
+              : 'Apenas um fechamento disponível neste período.'}
           </p>
         </div>
       </div>
@@ -6576,6 +6584,9 @@ function TrendLineChart({
             return (
               <g key={`${point.label}-${index}`}>
                 <circle cx={x} cy={y} fill="rgb(103 232 249)" r="4" />
+                <text fill="rgb(226 232 240)" fontSize="10" fontWeight="600" textAnchor="middle" x={x} y={Math.max(y - 9, 10)}>
+                  {point.value}{suffix}
+                </text>
                 <text fill="rgb(203 213 225)" fontSize="10" textAnchor="middle" x={x} y="126">
                   {point.label}
                 </text>
@@ -8587,7 +8598,6 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
-
 
 
 
