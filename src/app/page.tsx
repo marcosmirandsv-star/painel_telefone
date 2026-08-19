@@ -3285,6 +3285,14 @@ function DashboardView({
       label: formatShortDate(metric.week_start),
       value: calculateTeamPerformance([metric]),
     }))
+  const overallCsatTrend = [...filteredTeamMetrics]
+    .filter((metric) => metric.overall_csat !== null)
+    .sort((a, b) => a.week_start.localeCompare(b.week_start))
+    .slice(-8)
+    .map((metric) => ({
+      label: formatShortDate(metric.week_start),
+      value: Number(metric.overall_csat),
+    }))
   const podiumCsatGoal = getGoalValue(goals, 'podium_csat_minimum', 90)
   const reviewGoal = getGoalValue(goals, 'review_percentage', 25)
   const teamPerformanceGoal = getTeamPerformanceGoal(goals)
@@ -3965,7 +3973,7 @@ function DashboardView({
             : `Evolucao calculada dentro de ${periodLabel}.`}
         </p>
 
-        <div className="mt-6 grid gap-6 xl:grid-cols-3">
+        <div className="mt-6 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
           <TrendLineChart
             label={isAnalystDashboard ? 'Meu CSAT semanal' : 'CSAT médio semanal'}
             points={weeklyIndividualTrend.map((item) => ({
@@ -3984,6 +3992,11 @@ function DashboardView({
           <TrendLineChart
             label="Performance da equipe"
             points={teamPerformanceTrend}
+            suffix="%"
+          />
+          <TrendLineChart
+            label="CSAT geral N1 + N2"
+            points={overallCsatTrend}
             suffix="%"
           />
         </div>
@@ -8598,7 +8611,6 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
-
 
 
 
