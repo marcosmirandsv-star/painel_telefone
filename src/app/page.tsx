@@ -62,8 +62,7 @@ type TeamMetric = {
   abandoned_calls: number
   total_calls: number
   performance_percentage: number
-  overall_positive_reviews: number | null
-  overall_negative_reviews: number | null
+  overall_csat: number | null
   evidence_url: string | null
   notes: string | null
 }
@@ -184,8 +183,7 @@ type TeamForm = {
   answeredCalls: string
   abandonedCalls: string
   totalCalls: string
-  overallPositiveReviews: string
-  overallNegativeReviews: string
+  overallCsat: string
   notes: string
   evidenceFile: File | null
 }
@@ -261,8 +259,7 @@ const initialTeamForm: TeamForm = {
   answeredCalls: '',
   abandonedCalls: '',
   totalCalls: '',
-  overallPositiveReviews: '',
-  overallNegativeReviews: '',
+  overallCsat: '',
   notes: '',
   evidenceFile: null,
 }
@@ -408,7 +405,7 @@ export default function Home() {
       individualQuery,
       supabase
         .from('weekly_team_metrics')
-        .select('id, week_start, week_end, answered_calls, abandoned_calls, total_calls, performance_percentage, overall_positive_reviews, overall_negative_reviews, evidence_url, notes')
+        .select('id, week_start, week_end, answered_calls, abandoned_calls, total_calls, performance_percentage, overall_csat, evidence_url, notes')
         .order('week_start', { ascending: false })
         .limit(52),
     ])
@@ -944,8 +941,7 @@ export default function Home() {
       const answeredCalls = toNumber(teamForm.answeredCalls)
       const abandonedCalls = toNumber(teamForm.abandonedCalls)
       const totalCalls = toNumber(teamForm.totalCalls)
-      const overallPositiveReviews = toNumber(teamForm.overallPositiveReviews)
-      const overallNegativeReviews = toNumber(teamForm.overallNegativeReviews)
+      const overallCsat = toNumber(teamForm.overallCsat)
 
       if (isEndBeforeStart(teamForm.weekStart, teamForm.weekEnd)) {
         setMessage('A data final nao pode ser menor que a data inicial.')
@@ -982,8 +978,7 @@ export default function Home() {
         abandoned_calls: abandonedCalls,
         total_calls: totalCalls,
         performance_percentage: performancePercentage,
-        overall_positive_reviews: overallPositiveReviews,
-        overall_negative_reviews: overallNegativeReviews,
+        overall_csat: overallCsat,
         evidence_url: evidenceUrl,
         notes: teamForm.notes || null,
         created_by: user?.id,
@@ -3349,12 +3344,11 @@ function DashboardView({
   const totalReviews = filteredIndividualMetrics.reduce((sum, metric) => sum + Number(metric.total_reviews), 0)
   const totalTickets = filteredIndividualMetrics.reduce((sum, metric) => sum + Number(metric.total_tickets), 0)
   const n1PositiveReviews = filteredIndividualMetrics.reduce((sum, metric) => sum + Number(metric.positive_reviews), 0)
-  const n1NegativeReviews = filteredIndividualMetrics.reduce((sum, metric) => sum + Number(metric.negative_reviews), 0)
   const reviewCoverage = totalTickets ? round((totalReviews / totalTickets) * 100) : 0
   const teamAnsweredCalls = filteredTeamMetrics.reduce((sum, metric) => sum + Number(metric.answered_calls), 0)
   const teamTotalCalls = filteredTeamMetrics.reduce((sum, metric) => sum + Number(metric.total_calls), 0)
   const metricsWithOverallCsat = filteredTeamMetrics.filter(
-    (metric) => metric.overall_positive_reviews !== null && metric.overall_negative_reviews !== null,
+    (metric) => metric.overall_csat !== null,
   )
   const n1MetricsInOverallCoverage = filteredIndividualMetrics.filter((metric) =>
     metricsWithOverallCsat.some(
@@ -3362,32 +3356,11 @@ function DashboardView({
     ),
   )
   const n1ComparisonCsat = calculateAverageCsat(n1MetricsInOverallCoverage)
-  const n1ComparisonPositiveReviews = n1MetricsInOverallCoverage.reduce(
-    (sum, metric) => sum + Number(metric.positive_reviews),
-    0,
-  )
-  const n1ComparisonNegativeReviews = n1MetricsInOverallCoverage.reduce(
-    (sum, metric) => sum + Number(metric.negative_reviews),
-    0,
-  )
-  const overallPositiveReviews = metricsWithOverallCsat.reduce(
-    (sum, metric) => sum + Number(metric.overall_positive_reviews),
-    0,
-  )
-  const overallNegativeReviews = metricsWithOverallCsat.reduce(
-    (sum, metric) => sum + Number(metric.overall_negative_reviews),
-    0,
-  )
-  const overallReviews = overallPositiveReviews + overallNegativeReviews
-  const overallPhoneCsat = overallReviews ? round((overallPositiveReviews / overallReviews) * 100) : null
-  const n2PositiveReviews = overallPositiveReviews - n1ComparisonPositiveReviews
-  const n2NegativeReviews = overallNegativeReviews - n1ComparisonNegativeReviews
-  const n2Reviews = n2PositiveReviews + n2NegativeReviews
-  const n2DataIsConsistent = Boolean(
-    overallPhoneCsat !== null && n2PositiveReviews >= 0 && n2NegativeReviews >= 0,
-  )
-  const n2AggregateCsat = n2DataIsConsistent && n2Reviews > 0
-    ? round((n2PositiveReviews / n2Reviews) * 100)
+  const overallPhoneCsat = metricsWithOverallCsat.length
+    ? round(
+        metricsWithOverallCsat.reduce((sum, metric) => sum + Number(metric.overall_csat), 0) /
+          metricsWithOverallCsat.length,
+      )
     : null
   const overallCsatGap = overallPhoneCsat === null ? null : round(overallPhoneCsat - n1ComparisonCsat)
   const hasCompleteOverallCoverage = filteredTeamMetrics.length > 0 && metricsWithOverallCsat.length === filteredTeamMetrics.length
@@ -3779,19 +3752,14 @@ function DashboardView({
 
           {overallPhoneCsat === null ? (
             <div className="mt-5 rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
-              Informe as avaliações positivas e negativas gerais no fechamento semanal para liberar a comparação N1 versus N2.
-            </div>
-          ) : !n2DataIsConsistent ? (
-            <div className="mt-5 rounded-lg border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-100">
-              Os totais gerais informados são menores que os totais do N1 neste período. Revise os números do fechamento semanal antes de usar o diagnóstico.
+              Informe o CSAT geral do 55PBX no fechamento semanal para liberar a comparação N1 versus N2.
             </div>
           ) : (
             <>
-              <div className="mt-5 grid gap-4 md:grid-cols-4">
+              <div className="mt-5 grid gap-4 md:grid-cols-3">
                 <MetricCard label="CSAT N1 comparável" value={`${n1ComparisonCsat}%`} />
                 <MetricCard label="CSAT geral" value={`${overallPhoneCsat}%`} />
                 <MetricCard label="Diferença geral x N1" value={`${overallCsatGap && overallCsatGap > 0 ? '+' : ''}${overallCsatGap ?? 0} p.p.`} tone={overallCsatGap !== null && overallCsatGap < 0 ? 'danger' : 'success'} />
-                <MetricCard label="N2 agregado estimado" value={n2AggregateCsat === null ? 'Sem avaliações N2' : `${n2AggregateCsat}%`} tone={n2AggregateCsat === null ? undefined : n2AggregateCsat >= podiumCsatGoal ? 'success' : 'warning'} />
               </div>
 
               <div className="mt-5 grid gap-4 lg:grid-cols-2">
@@ -3799,16 +3767,15 @@ function DashboardView({
                   <h3 className="font-semibold text-slate-100">Onde está a diferença?</h3>
                   <p className="mt-2 text-sm leading-6 text-slate-300">
                     {overallCsatGap !== null && overallCsatGap < -0.01
-                      ? n2AggregateCsat !== null && n2AggregateCsat < n1ComparisonCsat
-                        ? `O resultado geral está ${Math.abs(overallCsatGap)} p.p. abaixo do N1. Pelos totais consolidados, a diferença está concentrada no grupo N2, cujo CSAT agregado estimado é ${n2AggregateCsat}%.`
-                        : `O resultado geral está ${Math.abs(overallCsatGap)} p.p. abaixo do N1, mas os dados agregados não permitem atribuir essa diferença a uma pessoa específica do N2.`
+                      ? `O resultado geral está ${Math.abs(overallCsatGap)} p.p. abaixo do N1. Como o geral inclui o N2, esta diferença indica que o conjunto externo ao N1 reduziu o consolidado. Sem as avaliações individuais do N2, não é possível atribuir o efeito a uma pessoa específica.`
                       : overallCsatGap !== null && overallCsatGap > 0.01
-                        ? `O resultado geral está ${overallCsatGap} p.p. acima do N1. Neste recorte, o N2 melhora o consolidado da operação.`
+                        ? `O resultado geral está ${overallCsatGap} p.p. acima do N1. Neste recorte, o conjunto externo ao N1 melhora o consolidado da operação.`
                         : 'N1 e resultado geral estão praticamente alinhados neste período.'}
                   </p>
                   {!hasCompleteOverallCoverage && (
                     <p className="mt-3 text-xs leading-5 text-amber-200">Atenção: parte das semanas do filtro ainda não possui o CSAT geral informado; a comparação cobre somente as semanas preenchidas.</p>
                   )}
+                  <p className="mt-3 text-xs leading-5 text-slate-400">Em filtros com várias semanas, o CSAT geral representa a média dos fechamentos semanais informados.</p>
                 </div>
 
                 <div className="rounded-lg bg-slate-900 p-4">
@@ -5283,12 +5250,7 @@ function EntriesView({
   const answeredCalls = toNumber(teamForm.answeredCalls)
   const abandonedCalls = toNumber(teamForm.abandonedCalls)
   const totalCalls = toNumber(teamForm.totalCalls)
-  const overallPositiveReviews = toNumber(teamForm.overallPositiveReviews)
-  const overallNegativeReviews = toNumber(teamForm.overallNegativeReviews)
-  const overallReviews = overallPositiveReviews + overallNegativeReviews
-  const calculatedOverallCsat = overallReviews
-    ? round((overallPositiveReviews / overallReviews) * 100)
-    : 0
+  const overallCsat = toNumber(teamForm.overallCsat)
   const calculatedPerformance = totalCalls ? round((answeredCalls / totalCalls) * 100) : 0
   const teamDateInvalid = isEndBeforeStart(teamForm.weekStart, teamForm.weekEnd)
   const teamDuplicate = teamMetrics.some(
@@ -5627,33 +5589,23 @@ function EntriesView({
           <div className="rounded-lg border border-cyan-400/20 bg-cyan-400/5 p-4">
             <h3 className="font-semibold text-cyan-200">CSAT geral do telefone (N1 + N2)</h3>
             <p className="mt-1 text-sm leading-6 text-slate-300">
-              Informe os totais gerais exibidos no 55PBX. Esses números serão usados apenas para comparar o N1 com o resultado geral; não alteram o pódio dos analistas do N1.
+              Informe o percentual pronto exibido no 55PBX. Ele será usado apenas para comparar o N1 com o resultado geral; não altera o pódio dos analistas do N1.
             </p>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <Field label="Avaliações positivas gerais">
+            <div className="mt-4 max-w-sm">
+              <Field label="CSAT geral informado (%)">
                 <input
                   className="form-input"
                   min="0"
+                  max="100"
+                  step="0.01"
                   type="number"
-                  value={teamForm.overallPositiveReviews}
-                  onChange={(event) => onTeamChange({ ...teamForm, overallPositiveReviews: event.target.value })}
-                  required
-                />
-              </Field>
-              <Field label="Avaliações negativas gerais">
-                <input
-                  className="form-input"
-                  min="0"
-                  type="number"
-                  value={teamForm.overallNegativeReviews}
-                  onChange={(event) => onTeamChange({ ...teamForm, overallNegativeReviews: event.target.value })}
+                  value={teamForm.overallCsat}
+                  onChange={(event) => onTeamChange({ ...teamForm, overallCsat: event.target.value })}
                   required
                 />
               </Field>
             </div>
-            <p className="mt-3 text-sm text-slate-300">
-              CSAT geral calculado: <strong className="text-cyan-200">{calculatedOverallCsat}%</strong> ({overallReviews} avaliações)
-            </p>
+            <p className="mt-3 text-sm text-slate-300">Valor informado: <strong className="text-cyan-200">{overallCsat}%</strong></p>
           </div>
 
           <Field label="Observações">
@@ -8635,10 +8587,6 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
-
-
-
-
 
 
 
