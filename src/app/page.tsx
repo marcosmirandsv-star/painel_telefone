@@ -1054,6 +1054,35 @@ export default function Home() {
     }
   }
 
+  async function handleUpdateTeamOverallCsat(metric: TeamMetric, overallCsat: number) {
+    if (!Number.isFinite(overallCsat) || overallCsat < 0 || overallCsat > 100) {
+      setMessage('Informe um CSAT geral entre 0 e 100%.')
+      return
+    }
+
+    setSaving(true)
+    setMessage('')
+
+    try {
+      const { error } = await withTimeout(
+        supabase.from('weekly_team_metrics').update({ overall_csat: overallCsat }).eq('id', metric.id),
+        'O Supabase demorou para atualizar o CSAT geral. Tente novamente.',
+      )
+
+      if (error) setMessage(error.message)
+      else {
+        setMessage(`CSAT geral da semana ${formatWeek(metric.week_start, metric.week_end)} atualizado com sucesso.`)
+        setTeamMetrics((current) =>
+          current.map((item) => (item.id === metric.id ? { ...item, overall_csat: overallCsat } : item)),
+        )
+      }
+    } catch (error) {
+      setMessage(getErrorMessage(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
   if (!user || isPasswordRecovery) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-white">
@@ -1265,6 +1294,7 @@ export default function Home() {
             onTeamSubmit={handleTeamSubmit}
             onDeleteIndividualMetric={handleDeleteIndividualMetric}
             onDeleteTeamMetric={handleDeleteTeamMetric}
+            onUpdateTeamOverallCsat={handleUpdateTeamOverallCsat}
           />
         )}
 
@@ -3416,11 +3446,49 @@ function DashboardView({
     teamPerformanceDelta,
     attentionCount,
   )
+  const predictiveRiskDrivers = !hasPeriodData
+    ? []
+    : [
+        predictiveGoalProbability < 75
+          ? {
+              label: 'Chance geral de fechamento',
+              reading: `${predictiveGoalProbability}% (faixa de atenção: abaixo de 75%)`,
+              action: 'Revisar os critérios ainda não cumpridos antes do próximo lançamento.',
+              severity: predictiveGoalProbability < 45 ? 'Alto' : 'Médio',
+            }
+          : null,
+        csatDelta < 0
+          ? {
+              label: 'CSAT em queda',
+              reading: `${formatDelta(csatDelta, ' p.p.')} em relação ao período anterior`,
+              action: 'Identificar os analistas com maior impacto negativo e combinar uma ação prática de qualidade.',
+              severity: csatDelta < -2 ? 'Alto' : 'Médio',
+            }
+          : null,
+        teamPerformanceDelta < 0
+          ? {
+              label: 'Performance operacional em queda',
+              reading: `${formatDelta(teamPerformanceDelta, ' p.p.')} em relação ao período anterior`,
+              action: 'Conferir abandonos, escala, cobertura e possíveis gargalos do atendimento.',
+              severity: teamPerformanceDelta < -1.5 ? 'Alto' : 'Médio',
+            }
+          : null,
+        attentionCount > 0
+          ? {
+              label: 'Analistas que pedem acompanhamento',
+              reading: `${attentionCount} analista(s) abaixo de pelo menos um critério do pódio`,
+              action: isManagementView
+                ? 'Abrir a análise individual para localizar o critério e orientar o próximo passo.'
+                : 'Observe em sua elegibilidade qual critério precisa de recuperação.',
+              severity: attentionCount >= 3 ? 'Alto' : 'Médio',
+            }
+          : null,
+      ].filter((driver): driver is NonNullable<typeof driver> => driver !== null)
   const predictiveAction =
     !hasPeriodData
       ? 'Aguardar novos lançamentos para liberar previsao.'
       : predictiveRiskLevel === 'Alto'
-        ? 'Priorizar feedback SARE e acompanhamento semanal dos indicadores críticos.'
+        ? 'Priorizar feedback e acompanhamento dos indicadores críticos.'
         : predictiveRiskLevel === 'Medio'
           ? 'Monitorar variações e reforcar os pontos abaixo da meta antes do fechamento.'
           : 'Manter rotina atual e preservar consistencia ate o fechamento.'
@@ -3853,6 +3921,44 @@ function DashboardView({
               <span>{totalReviews} avaliações respondidas de {totalTickets} atendimentos</span>
             </div>
           </div>
+        </div>
+
+        <div className="mt-5 rounded-lg bg-slate-900 p-5">
+          <div className="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-200">Onde está o risco?</p>
+              <p className="mt-1 text-sm text-slate-400">
+                Veja qual indicador elevou o alerta e a ação recomendada para ele.
+              </p>
+            </div>
+            <span className="text-sm font-semibold text-slate-300">Nível atual: {predictiveRiskLevel}</span>
+          </div>
+
+          {!hasPeriodData ? (
+            <p className="mt-4 text-sm text-slate-400">Ainda não há dados suficientes para localizar riscos.</p>
+          ) : predictiveRiskDrivers.length ? (
+            <div className="mt-4 grid gap-3 lg:grid-cols-2">
+              {predictiveRiskDrivers.map((driver) => (
+                <div key={driver.label} className="rounded-lg border border-white/10 bg-slate-950/60 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-semibold text-white">{driver.label}</p>
+                    <span className={driver.severity === 'Alto' ? 'text-rose-300' : 'text-amber-300'}>
+                      {driver.severity}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-300">Leitura: {driver.reading}.</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-400">Próxima ação: {driver.action}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-4 rounded-lg border border-emerald-400/20 bg-emerald-400/5 p-4">
+              <p className="font-semibold text-emerald-300">Nenhum indicador acionou alerta.</p>
+              <p className="mt-2 text-sm text-slate-300">
+                CSAT, performance, chance de fechamento e critérios do pódio estão estáveis neste recorte.
+              </p>
+            </div>
+          )}
         </div>
 
         {!isAnalystDashboard && (
@@ -5238,6 +5344,7 @@ function EntriesView({
   onTeamSubmit,
   onDeleteIndividualMetric,
   onDeleteTeamMetric,
+  onUpdateTeamOverallCsat,
 }: {
   analysts: Analyst[]
   selectedAnalyst: Analyst | null
@@ -5253,6 +5360,7 @@ function EntriesView({
   onTeamSubmit: (event: React.FormEvent<HTMLFormElement>) => void
   onDeleteIndividualMetric: (metric: IndividualMetric) => void
   onDeleteTeamMetric: (metric: TeamMetric) => void
+  onUpdateTeamOverallCsat: (metric: TeamMetric, overallCsat: number) => void
 }) {
   const positiveReviews = toNumber(individualForm.positiveReviews)
   const negativeReviews = toNumber(individualForm.negativeReviews)
@@ -5679,6 +5787,7 @@ function EntriesView({
         saving={saving}
         onDeleteIndividualMetric={onDeleteIndividualMetric}
         onDeleteTeamMetric={onDeleteTeamMetric}
+        onUpdateTeamOverallCsat={onUpdateTeamOverallCsat}
       />
     </div>
   )
@@ -5690,12 +5799,14 @@ function EntriesHistory({
   saving,
   onDeleteIndividualMetric,
   onDeleteTeamMetric,
+  onUpdateTeamOverallCsat,
 }: {
   individualMetrics: IndividualMetric[]
   teamMetrics: TeamMetric[]
   saving: boolean
   onDeleteIndividualMetric: (metric: IndividualMetric) => void
   onDeleteTeamMetric: (metric: TeamMetric) => void
+  onUpdateTeamOverallCsat: (metric: TeamMetric, overallCsat: number) => void
 }) {
   const [historyType, setHistoryType] = useState<'all' | 'individual' | 'team'>('all')
   const [historyAnalyst, setHistoryAnalyst] = useState('all')
@@ -5869,6 +5980,7 @@ function EntriesHistory({
                     <th className="pb-3 pr-4 font-medium">Performance</th>
                     <th className="pb-3 pr-4 font-medium">Atendidas</th>
                     <th className="pb-3 pr-4 font-medium">Processadas</th>
+                    <th className="pb-3 pr-4 font-medium">CSAT geral N1 + N2</th>
                     <th className="pb-3 pr-4 font-medium">Evidencia</th>
                     <th className="pb-3 font-medium">Acao</th>
                   </tr>
@@ -5880,6 +5992,13 @@ function EntriesHistory({
                       <td className="py-3 pr-4">{metric.performance_percentage}%</td>
                       <td className="py-3 pr-4">{metric.answered_calls}</td>
                       <td className="py-3 pr-4">{metric.total_calls}</td>
+                      <td className="min-w-52 py-3 pr-4">
+                        <TeamOverallCsatEditor
+                          metric={metric}
+                          saving={saving}
+                          onSave={onUpdateTeamOverallCsat}
+                        />
+                      </td>
                       <td className="py-3 pr-4">
                         <EvidenceLink url={metric.evidence_url} />
                       </td>
@@ -5906,6 +6025,46 @@ function EntriesHistory({
         )}
       </div>
     </section>
+  )
+}
+
+function TeamOverallCsatEditor({
+  metric,
+  saving,
+  onSave,
+}: {
+  metric: TeamMetric
+  saving: boolean
+  onSave: (metric: TeamMetric, overallCsat: number) => void
+}) {
+  const [value, setValue] = useState(metric.overall_csat == null ? '' : String(metric.overall_csat))
+
+  useEffect(() => {
+    setValue(metric.overall_csat == null ? '' : String(metric.overall_csat))
+  }, [metric.overall_csat])
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        aria-label={`CSAT geral da semana ${formatWeek(metric.week_start, metric.week_end)}`}
+        className="form-input min-w-24 py-2"
+        type="number"
+        min="0"
+        max="100"
+        step="0.01"
+        placeholder="0 a 100"
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+      />
+      <button
+        className="secondary-button whitespace-nowrap"
+        disabled={saving || value === ''}
+        type="button"
+        onClick={() => onSave(metric, Number(value))}
+      >
+        Salvar
+      </button>
+    </div>
   )
 }
 function getHistoryAnalystOptions(metrics: IndividualMetric[]) {
@@ -8618,11 +8777,6 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
-
-
-
-
-
 
 
 
