@@ -3973,7 +3973,7 @@ function DashboardView({
             : `Evolucao calculada dentro de ${periodLabel}.`}
         </p>
 
-        <div className="mt-6 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-6 grid gap-6 md:grid-cols-2 xl:grid-cols-5">
           <TrendLineChart
             label={isAnalystDashboard ? 'Meu CSAT semanal' : 'CSAT médio semanal'}
             points={weeklyIndividualTrend.map((item) => ({
@@ -3987,6 +3987,13 @@ function DashboardView({
             points={weeklyIndividualTrend.map((item) => ({
               label: item.label,
               value: item.totalReviews,
+            }))}
+          />
+          <BarTrend
+            label={isAnalystDashboard ? 'Meus atendimentos por semana' : 'Atendimentos por semana'}
+            points={weeklyIndividualTrend.map((item) => ({
+              label: item.label,
+              value: item.totalTickets,
             }))}
           />
           <TrendLineChart
@@ -8611,7 +8618,6 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
-
 
 
 
