@@ -2384,9 +2384,9 @@ function ChatModuleDashboard({
       </section>
       <div className={chatActiveTab === 'overview' ? 'grid gap-4 md:grid-cols-4' : 'hidden'}>
         <MetricCard label="Equipe" value={selectedTeamName} />
-        <MetricCard label="CSAT médio" value={loading ? '...' : `${averageCsat}%`} tone={averageCsat >= 90 ? 'success' : averageCsat >= 85 ? 'warning' : 'danger'} />
-        <MetricCard label="% avaliações" value={`${averageReviews}%`} tone={averageReviews >= 25 ? 'success' : averageReviews >= 20 ? 'warning' : 'danger'} />
-        <MetricCard label="Atendimentos" value={totals.tickets} />
+        <MetricCard label="CSAT médio" value={loading ? '...' : formatChatPercent(averageCsat)} tone={averageCsat >= 90 ? 'success' : averageCsat >= 85 ? 'warning' : 'danger'} />
+        <MetricCard label="% avaliações" value={formatChatPercent(averageReviews)} tone={averageReviews >= 25 ? 'success' : averageReviews >= 20 ? 'warning' : 'danger'} />
+        <MetricCard label="Atendimentos" value={formatChatCount(totals.tickets)} />
       </div>
 
       <CriteriaLegend
@@ -2395,7 +2395,7 @@ function ChatModuleDashboard({
         items={[
           'CSAT mínimo de 90%',
           'Avaliações a partir de 25%',
-          `Volume igual ou acima da média da equipe (${averageTickets} atendimentos)`,
+          `Volume igual ou acima da média da equipe (${formatChatCount(averageTickets)} atendimentos)`,
         ]}
       />
 
@@ -2413,16 +2413,16 @@ function ChatModuleDashboard({
             <div className="executive-card">
               <p>CSAT vs mês anterior</p>
               <strong>{formatDelta(chatCsatDelta, ' p.p.')}</strong>
-              <span>Atual: {averageCsat}%</span>
+              <span>Atual: {formatChatPercent(averageCsat)}</span>
             </div>
             <div className="executive-card">
               <p>Avaliações vs mês anterior</p>
               <strong>{formatDelta(chatReviewDelta, ' p.p.')}</strong>
-              <span>Atual: {averageReviews}%</span>
+              <span>Atual: {formatChatPercent(averageReviews)}</span>
             </div>
             <div className="executive-card">
               <p>% sem avaliação</p>
-              <strong>{averageSending}%</strong>
+              <strong>{formatChatPercent(averageSending)}</strong>
               <span>{formatDelta(chatSendingDelta, ' p.p.')} vs anterior</span>
             </div>
           </div>
@@ -2469,10 +2469,10 @@ function ChatModuleDashboard({
             <h3 className="mt-3 text-xl font-bold">Diagnóstico</h3>
             <p className="mt-3 text-sm leading-6 text-slate-300">{chatManagementDiagnosis}</p>
             <div className="mt-4 grid gap-2 text-sm text-slate-300">
-              <span>CSAT médio: <strong>{averageCsat}%</strong></span>
-              <span>Avaliações: <strong>{averageReviews}%</strong></span>
-              <span>Sem avaliação: <strong>{averageSending}%</strong></span>
-              <span>Inativos: <strong>{chatInactiveRate}%</strong></span>
+              <span>CSAT médio: <strong>{formatChatPercent(averageCsat)}</strong></span>
+              <span>Avaliações: <strong>{formatChatPercent(averageReviews)}</strong></span>
+              <span>Sem avaliação: <strong>{formatChatPercent(averageSending)}</strong></span>
+              <span>Inativos: <strong>{formatChatPercent(chatInactiveRate)}</strong></span>
             </div>
           </div>
 
@@ -2531,7 +2531,7 @@ function ChatModuleDashboard({
             <p className="text-sm text-slate-400">Destaque do período</p>
             <p className="mt-2 text-lg font-bold">{chatTopHighlight ? getChatAnalystName(chatTopHighlight) : 'Aguardando dados'}</p>
             <p className="mt-1 text-sm text-slate-300">
-              {chatTopHighlight ? `CSAT ${chatTopHighlight.csat}% | ${chatTopHighlight.review_percentage}% avaliações | ${chatTopHighlight.total_tickets} atendimentos` : 'Importe um mês para liberar a leitura.'}
+              {chatTopHighlight ? `CSAT ${formatChatPercent(chatTopHighlight.csat)} | ${formatChatPercent(chatTopHighlight.review_percentage)} avaliações | ${formatChatCount(chatTopHighlight.total_tickets)} atendimentos` : 'Importe um mês para liberar a leitura.'}
             </p>
           </div>
           <div className="rounded-lg bg-slate-900 p-4">
@@ -2541,7 +2541,7 @@ function ChatModuleDashboard({
           </div>
           <div className="rounded-lg bg-slate-900 p-4">
             <p className="text-sm text-slate-400">Média de volume para pódio</p>
-            <p className="mt-2 text-lg font-bold">{averageTickets} atendimentos</p>
+            <p className="mt-2 text-lg font-bold tabular-nums">{formatChatCount(averageTickets)} atendimentos</p>
             <p className="mt-1 text-sm text-slate-300">
               Quem fica abaixo dessa média aparece como volume abaixo da média no ranking.
             </p>
@@ -2595,11 +2595,11 @@ function ChatModuleDashboard({
           <div className="rounded-lg bg-slate-900 p-5">
             <h3 className="text-xl font-bold">Resumo operacional</h3>
             <div className="mt-4 space-y-3 text-sm text-slate-300">
-              <p>Válidos: <strong>{totals.validTickets}</strong></p>
-              <p>Inativos: <strong>{totals.inactive}</strong></p>
-              <p>Avaliações: <strong>{totals.reviews}</strong></p>
-              <p>% sem avaliação medio: <strong>{averageSending}%</strong></p>
-              <p>Média por analista: <strong>{averageTickets}</strong></p>
+              <p>Válidos: <strong className="tabular-nums">{formatChatCount(totals.validTickets)}</strong></p>
+              <p>Inativos: <strong className="tabular-nums">{formatChatCount(totals.inactive)}</strong></p>
+              <p>Avaliações: <strong className="tabular-nums">{formatChatCount(totals.reviews)}</strong></p>
+              <p>% sem avaliação médio: <strong className="tabular-nums">{formatChatPercent(averageSending)}</strong></p>
+              <p>Média por analista: <strong className="tabular-nums">{formatChatCount(averageTickets)}</strong></p>
               <p>Metas superadas: <strong>{chatGoalsReachedCount}</strong></p>
               <p>Críticos: <strong>{chatCriticalCount}</strong></p>
             </div>
@@ -2632,7 +2632,7 @@ function ChatModuleDashboard({
                 {winner ? (
                   <>
                     <p className="mt-3 text-lg font-bold">{getChatAnalystName(winner)}</p>
-                    <p className="mt-2 text-sm text-slate-300">CSAT {winner.csat}% | {winner.review_percentage}% avaliações | {winner.total_tickets} atendimentos</p>
+                    <p className="mt-2 text-sm text-slate-300">CSAT {formatChatPercent(winner.csat)} | {formatChatPercent(winner.review_percentage)} avaliações | {formatChatCount(winner.total_tickets)} atendimentos</p>
                   </>
                 ) : (
                   <p className="mt-3 text-slate-400">Aguardando elegível</p>
@@ -2684,7 +2684,7 @@ function ChatModuleDashboard({
               </p>
             </div>
             <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">
-              Média exigida: {averageTickets} atendimentos
+              Média exigida: {formatChatCount(averageTickets)} atendimentos
             </span>
           </div>
 
@@ -2737,11 +2737,11 @@ function ChatModuleDashboard({
                     <tr key={item.metric.id}>
                       <td className="py-3 pr-4 font-bold text-cyan-300">{index + 1}o</td>
                       <td className="py-3 pr-4 font-semibold">{getChatAnalystName(item.metric)}</td>
-                      <td className="py-3 pr-4">{item.metric.csat}%</td>
-                      <td className="py-3 pr-4">{item.metric.review_percentage}%</td>
-                      <td className="py-3 pr-4">{item.metric.total_tickets}</td>
-                      <td className={`py-3 pr-4 font-semibold ${volumeGap >= 0 ? 'text-emerald-300' : 'text-amber-200'}`}>
-                        {volumeGap >= 0 ? '+' : ''}{volumeGap}
+                      <td className="whitespace-nowrap py-3 pr-4 tabular-nums">{formatChatPercent(item.metric.csat)}</td>
+                      <td className="whitespace-nowrap py-3 pr-4 tabular-nums">{formatChatPercent(item.metric.review_percentage)}</td>
+                      <td className="whitespace-nowrap py-3 pr-4 tabular-nums">{formatChatCount(item.metric.total_tickets)}</td>
+                      <td className={`whitespace-nowrap py-3 pr-4 font-semibold tabular-nums ${volumeGap >= 0 ? 'text-emerald-300' : 'text-amber-200'}`}>
+                        {volumeGap >= 0 ? '+' : ''}{formatChatCount(volumeGap)}
                       </td>
                       <td className="py-3 pr-4">
                         {item.eligible ? (
@@ -2868,12 +2868,12 @@ function ChatModuleDashboard({
                 <tr key={item.metric.id}>
                   <td className="py-3 pr-4 font-semibold">{getChatAnalystName(item.metric)}</td>
                   <td className="py-3 pr-4">{item.metric.status}</td>
-                  <td className="py-3 pr-4">{item.metric.csat}%</td>
+                  <td className="whitespace-nowrap py-3 pr-4 tabular-nums">{formatChatPercent(item.metric.csat)}</td>
                   <td className="py-3 pr-4">{formatDelta(round(Number(item.metric.csat) - Number(item.metric.csat_goal)), ' p.p.')}</td>
-                  <td className="py-3 pr-4">{item.metric.review_percentage}%</td>
+                  <td className="whitespace-nowrap py-3 pr-4 tabular-nums">{formatChatPercent(item.metric.review_percentage)}</td>
                   <td className="py-3 pr-4">{formatDelta(round(Number(item.metric.review_percentage) - Number(item.metric.general_review_goal)), ' p.p.')}</td>
-                  <td className="py-3 pr-4">{item.metric.sending_percentage}%</td>
-                  <td className="py-3 pr-4">{item.metric.total_tickets} / média {averageTickets}</td>
+                  <td className="whitespace-nowrap py-3 pr-4 tabular-nums">{formatChatPercent(item.metric.sending_percentage)}</td>
+                  <td className="whitespace-nowrap py-3 pr-4 tabular-nums">{formatChatCount(item.metric.total_tickets)} / média {formatChatCount(averageTickets)}</td>
                 </tr>
               ))}
             </tbody>
@@ -3169,12 +3169,12 @@ function ChatModuleDashboard({
         </div>
 
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-          <MetricCard label="Atendidos" value={totals.tickets} />
-          <MetricCard label="Inativos" value={`${totals.inactive} (${chatInactiveRate}%)`} />
-          <MetricCard label="Válidos" value={totals.validTickets} />
-          <MetricCard label="Avaliações" value={`${totals.reviews} (${chatReviewRate}%)`} />
-          <MetricCard label="Sem avaliação" value={`${Math.max(totals.validTickets - totals.reviews, 0)} (${chatSendingRate}%)`} />
-          <MetricCard label="CSAT consolidado" value={`${averageCsat}%`} />
+          <MetricCard label="Atendidos" value={formatChatCount(totals.tickets)} />
+          <MetricCard label="Inativos" value={`${formatChatCount(totals.inactive)} (${formatChatPercent(chatInactiveRate)})`} />
+          <MetricCard label="Válidos" value={formatChatCount(totals.validTickets)} />
+          <MetricCard label="Avaliações" value={`${formatChatCount(totals.reviews)} (${formatChatPercent(chatReviewRate)})`} />
+          <MetricCard label="Sem avaliação" value={`${formatChatCount(Math.max(totals.validTickets - totals.reviews, 0))} (${formatChatPercent(chatSendingRate)})`} />
+          <MetricCard label="CSAT consolidado" value={formatChatPercent(averageCsat)} />
         </div>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-3">
@@ -3212,26 +3212,26 @@ function ChatModuleDashboard({
                 <tr key={metric.id} className="border-t border-slate-800">
                   <td className="px-3 py-3 font-semibold">{getChatAnalystName(metric)}</td>
                   <td className="px-3 py-3 text-slate-300">{getChatTeamName(metric)}</td>
-                  <td className="px-3 py-3">{metric.csat}%</td>
-                  <td className="px-3 py-3">{metric.review_percentage}%</td>
-                  <td className="px-3 py-3">{metric.total_tickets}</td>
-                  <td className="px-3 py-3">{metric.valid_tickets}</td>
-                  <td className="px-3 py-3">{metric.inactive_tickets}</td>
-                  <td className="px-3 py-3">{metric.total_tickets ? round((Number(metric.inactive_tickets) / Number(metric.total_tickets)) * 100) : 0}%</td>
-                  <td className="px-3 py-3">{metric.sending_percentage}%</td>
+                  <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatPercent(metric.csat)}</td>
+                  <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatPercent(metric.review_percentage)}</td>
+                  <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatCount(metric.total_tickets)}</td>
+                  <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatCount(metric.valid_tickets)}</td>
+                  <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatCount(metric.inactive_tickets)}</td>
+                  <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatPercent(metric.total_tickets ? (Number(metric.inactive_tickets) / Number(metric.total_tickets)) * 100 : 0)}</td>
+                  <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatPercent(metric.sending_percentage)}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot className="border-t border-cyan-400/30 font-semibold text-cyan-100">
               <tr>
                 <td className="px-3 py-3" colSpan={2}>Total do filtro</td>
-                <td className="px-3 py-3">{averageCsat}%</td>
-                <td className="px-3 py-3">{chatReviewRate}%</td>
-                <td className="px-3 py-3">{totals.tickets}</td>
-                <td className="px-3 py-3">{totals.validTickets}</td>
-                <td className="px-3 py-3">{totals.inactive}</td>
-                <td className="px-3 py-3">{chatInactiveRate}%</td>
-                <td className="px-3 py-3">{chatSendingRate}%</td>
+                <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatPercent(averageCsat)}</td>
+                <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatPercent(chatReviewRate)}</td>
+                <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatCount(totals.tickets)}</td>
+                <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatCount(totals.validTickets)}</td>
+                <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatCount(totals.inactive)}</td>
+                <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatPercent(chatInactiveRate)}</td>
+                <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatPercent(chatSendingRate)}</td>
               </tr>
             </tfoot>
           </table>
@@ -6300,7 +6300,7 @@ function MetricCard({
   return (
     <div className={`rounded-lg border p-5 ${toneClass}`}>
       <p className="text-sm text-slate-400">{label}</p>
-      <p className={`mt-2 text-2xl font-semibold ${valueClass}`}>
+      <p className={`mt-2 text-xl font-semibold leading-tight tabular-nums sm:text-2xl ${valueClass}`}>
         {value}
       </p>
     </div>
@@ -8381,6 +8381,26 @@ function round(value: number) {
   return Math.round(value * 100) / 100
 }
 
+const chatCountFormatter = new Intl.NumberFormat('pt-BR', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+})
+
+const chatPercentFormatter = new Intl.NumberFormat('pt-BR', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+})
+
+function formatChatCount(value: number | string) {
+  const numericValue = Number(value)
+  return Number.isFinite(numericValue) ? chatCountFormatter.format(numericValue) : '0'
+}
+
+function formatChatPercent(value: number | string) {
+  const numericValue = Number(value)
+  return `${Number.isFinite(numericValue) ? chatPercentFormatter.format(numericValue) : '0'}%`
+}
+
 function upsertAnalyst(analysts: Analyst[], updatedAnalyst: Analyst) {
   const exists = analysts.some((analyst) => analyst.id === updatedAnalyst.id)
 
@@ -8430,8 +8450,6 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
-
-
 
 
 
