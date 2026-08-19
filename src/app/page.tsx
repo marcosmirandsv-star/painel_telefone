@@ -62,6 +62,8 @@ type TeamMetric = {
   abandoned_calls: number
   total_calls: number
   performance_percentage: number
+  overall_positive_reviews: number | null
+  overall_negative_reviews: number | null
   evidence_url: string | null
   notes: string | null
 }
@@ -182,6 +184,8 @@ type TeamForm = {
   answeredCalls: string
   abandonedCalls: string
   totalCalls: string
+  overallPositiveReviews: string
+  overallNegativeReviews: string
   notes: string
   evidenceFile: File | null
 }
@@ -257,6 +261,8 @@ const initialTeamForm: TeamForm = {
   answeredCalls: '',
   abandonedCalls: '',
   totalCalls: '',
+  overallPositiveReviews: '',
+  overallNegativeReviews: '',
   notes: '',
   evidenceFile: null,
 }
@@ -402,7 +408,7 @@ export default function Home() {
       individualQuery,
       supabase
         .from('weekly_team_metrics')
-        .select('id, week_start, week_end, answered_calls, abandoned_calls, total_calls, performance_percentage, evidence_url, notes')
+        .select('id, week_start, week_end, answered_calls, abandoned_calls, total_calls, performance_percentage, overall_positive_reviews, overall_negative_reviews, evidence_url, notes')
         .order('week_start', { ascending: false })
         .limit(52),
     ])
@@ -938,6 +944,8 @@ export default function Home() {
       const answeredCalls = toNumber(teamForm.answeredCalls)
       const abandonedCalls = toNumber(teamForm.abandonedCalls)
       const totalCalls = toNumber(teamForm.totalCalls)
+      const overallPositiveReviews = toNumber(teamForm.overallPositiveReviews)
+      const overallNegativeReviews = toNumber(teamForm.overallNegativeReviews)
 
       if (isEndBeforeStart(teamForm.weekStart, teamForm.weekEnd)) {
         setMessage('A data final nao pode ser menor que a data inicial.')
@@ -974,6 +982,8 @@ export default function Home() {
         abandoned_calls: abandonedCalls,
         total_calls: totalCalls,
         performance_percentage: performancePercentage,
+        overall_positive_reviews: overallPositiveReviews,
+        overall_negative_reviews: overallNegativeReviews,
         evidence_url: evidenceUrl,
         notes: teamForm.notes || null,
         created_by: user?.id,
@@ -3338,9 +3348,70 @@ function DashboardView({
   const teamPerformanceDelta = round(periodTeamPerformance - previousTeamPerformance)
   const totalReviews = filteredIndividualMetrics.reduce((sum, metric) => sum + Number(metric.total_reviews), 0)
   const totalTickets = filteredIndividualMetrics.reduce((sum, metric) => sum + Number(metric.total_tickets), 0)
+  const n1PositiveReviews = filteredIndividualMetrics.reduce((sum, metric) => sum + Number(metric.positive_reviews), 0)
+  const n1NegativeReviews = filteredIndividualMetrics.reduce((sum, metric) => sum + Number(metric.negative_reviews), 0)
   const reviewCoverage = totalTickets ? round((totalReviews / totalTickets) * 100) : 0
   const teamAnsweredCalls = filteredTeamMetrics.reduce((sum, metric) => sum + Number(metric.answered_calls), 0)
   const teamTotalCalls = filteredTeamMetrics.reduce((sum, metric) => sum + Number(metric.total_calls), 0)
+  const metricsWithOverallCsat = filteredTeamMetrics.filter(
+    (metric) => metric.overall_positive_reviews !== null && metric.overall_negative_reviews !== null,
+  )
+  const n1MetricsInOverallCoverage = filteredIndividualMetrics.filter((metric) =>
+    metricsWithOverallCsat.some(
+      (teamMetric) => teamMetric.week_start === metric.week_start && teamMetric.week_end === metric.week_end,
+    ),
+  )
+  const n1ComparisonCsat = calculateAverageCsat(n1MetricsInOverallCoverage)
+  const n1ComparisonPositiveReviews = n1MetricsInOverallCoverage.reduce(
+    (sum, metric) => sum + Number(metric.positive_reviews),
+    0,
+  )
+  const n1ComparisonNegativeReviews = n1MetricsInOverallCoverage.reduce(
+    (sum, metric) => sum + Number(metric.negative_reviews),
+    0,
+  )
+  const overallPositiveReviews = metricsWithOverallCsat.reduce(
+    (sum, metric) => sum + Number(metric.overall_positive_reviews),
+    0,
+  )
+  const overallNegativeReviews = metricsWithOverallCsat.reduce(
+    (sum, metric) => sum + Number(metric.overall_negative_reviews),
+    0,
+  )
+  const overallReviews = overallPositiveReviews + overallNegativeReviews
+  const overallPhoneCsat = overallReviews ? round((overallPositiveReviews / overallReviews) * 100) : null
+  const n2PositiveReviews = overallPositiveReviews - n1ComparisonPositiveReviews
+  const n2NegativeReviews = overallNegativeReviews - n1ComparisonNegativeReviews
+  const n2Reviews = n2PositiveReviews + n2NegativeReviews
+  const n2DataIsConsistent = Boolean(
+    overallPhoneCsat !== null && n2PositiveReviews >= 0 && n2NegativeReviews >= 0,
+  )
+  const n2AggregateCsat = n2DataIsConsistent && n2Reviews > 0
+    ? round((n2PositiveReviews / n2Reviews) * 100)
+    : null
+  const overallCsatGap = overallPhoneCsat === null ? null : round(overallPhoneCsat - n1ComparisonCsat)
+  const hasCompleteOverallCoverage = filteredTeamMetrics.length > 0 && metricsWithOverallCsat.length === filteredTeamMetrics.length
+  const isManagementView = role === 'master' || role === 'coordinator'
+  const n1ImpactRanking = periodPodium
+    .map((result) => {
+      const analystMetrics = filteredIndividualMetrics.filter((metric) => metric.analyst_id === result.analystId)
+      const positive = analystMetrics.reduce((sum, metric) => sum + Number(metric.positive_reviews), 0)
+      const negative = analystMetrics.reduce((sum, metric) => sum + Number(metric.negative_reviews), 0)
+      const reviewsWithoutAnalyst = totalReviews - positive - negative
+      const csatWithoutAnalyst = reviewsWithoutAnalyst > 0
+        ? round(((n1PositiveReviews - positive) / reviewsWithoutAnalyst) * 100)
+        : periodAverageCsat
+
+      return {
+        analystName: result.analystName,
+        averageCsat: result.averageCsat,
+        reviews: positive + negative,
+        negativeReviews: negative,
+        downwardImpact: round(csatWithoutAnalyst - periodAverageCsat),
+      }
+    })
+    .filter((item) => item.reviews > 0)
+    .sort((a, b) => b.downwardImpact - a.downwardImpact)
   const attentionCount = attentionList.length
   const hasPeriodData = filteredIndividualMetrics.length > 0 || filteredTeamMetrics.length > 0
   const predictiveGoalProbability = calculateGoalProbability({
@@ -3668,23 +3739,98 @@ function DashboardView({
         </div>
       </section>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {isAnalystDashboard ? (
           <>
             <MetricCard label="Analista" value={analystProfile?.name ?? 'Não vinculado'} tone="success" />
             <MetricCard label="Atendimentos no período" value={totalTickets} tone={podiumAverageTickets && totalTickets >= podiumAverageTickets ? 'success' : podiumAverageTickets ? 'warning' : undefined} />
             <MetricCard label="Meu CSAT" value={`${analystResult?.averageCsat ?? 0}%`} tone={analystResult && analystResult.averageCsat >= analystResult.individualGoal ? 'success' : analystResult ? 'warning' : undefined} />
+            <MetricCard label="CSAT equipe N1" value={`${periodAverageCsat || 0}%`} tone={periodAverageCsat >= podiumCsatGoal ? 'success' : periodAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
+            <MetricCard label="CSAT geral N1 + N2" value={overallPhoneCsat === null ? 'Não informado' : `${overallPhoneCsat}%`} tone={overallPhoneCsat === null ? undefined : overallPhoneCsat >= podiumCsatGoal ? 'success' : overallPhoneCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
             <MetricCard label="Avaliações" value={`${totalReviews} (${reviewCoverage}%)`} tone={reviewCoverage >= reviewGoal ? 'success' : reviewCoverage >= 20 ? 'warning' : 'danger'} />
           </>
         ) : (
           <>
             <MetricCard label="Status" value="Supabase conectado" tone="success" />
             <MetricCard label="Analistas ativos" value={loading ? '...' : analystsCount} />
-            <MetricCard label="CSAT do período" value={`${periodAverageCsat || 0}%`} tone={periodAverageCsat >= podiumCsatGoal ? 'success' : periodAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
+            <MetricCard label="CSAT equipe N1" value={`${periodAverageCsat || 0}%`} tone={periodAverageCsat >= podiumCsatGoal ? 'success' : periodAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
+            <MetricCard label="CSAT geral N1 + N2" value={overallPhoneCsat === null ? 'Não informado' : `${overallPhoneCsat}%`} tone={overallPhoneCsat === null ? undefined : overallPhoneCsat >= podiumCsatGoal ? 'success' : overallPhoneCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
             <MetricCard label="Performance equipe" value={`${periodTeamPerformance || 0}%`} tone={periodTeamPerformance >= teamPerformanceGoal ? 'success' : periodTeamPerformance >= teamPerformanceGoal - 3 ? 'warning' : 'danger'} />
           </>
         )}
       </div>
+
+      {isAnalystDashboard && (
+        <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-3 text-sm leading-6 text-slate-300">
+          O CSAT da equipe N1 reúne os oito analistas do telefone. O CSAT geral inclui também os atendimentos de transbordo do N2 e serve como contexto da operação; ele não altera seu pódio individual.
+        </div>
+      )}
+
+      {isManagementView && (
+        <section className="panel border border-cyan-400/20">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Diagnóstico reservado</p>
+              <h2 className="section-title mt-2">Impacto no CSAT do telefone</h2>
+              <p className="section-subtitle">Visível apenas para master e coordenadora. O pódio continua considerando somente os analistas do N1.</p>
+            </div>
+            <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">Gestão</span>
+          </div>
+
+          {overallPhoneCsat === null ? (
+            <div className="mt-5 rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
+              Informe as avaliações positivas e negativas gerais no fechamento semanal para liberar a comparação N1 versus N2.
+            </div>
+          ) : !n2DataIsConsistent ? (
+            <div className="mt-5 rounded-lg border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-100">
+              Os totais gerais informados são menores que os totais do N1 neste período. Revise os números do fechamento semanal antes de usar o diagnóstico.
+            </div>
+          ) : (
+            <>
+              <div className="mt-5 grid gap-4 md:grid-cols-4">
+                <MetricCard label="CSAT N1 comparável" value={`${n1ComparisonCsat}%`} />
+                <MetricCard label="CSAT geral" value={`${overallPhoneCsat}%`} />
+                <MetricCard label="Diferença geral x N1" value={`${overallCsatGap && overallCsatGap > 0 ? '+' : ''}${overallCsatGap ?? 0} p.p.`} tone={overallCsatGap !== null && overallCsatGap < 0 ? 'danger' : 'success'} />
+                <MetricCard label="N2 agregado estimado" value={n2AggregateCsat === null ? 'Sem avaliações N2' : `${n2AggregateCsat}%`} tone={n2AggregateCsat === null ? undefined : n2AggregateCsat >= podiumCsatGoal ? 'success' : 'warning'} />
+              </div>
+
+              <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                <div className="rounded-lg bg-slate-900 p-4">
+                  <h3 className="font-semibold text-slate-100">Onde está a diferença?</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-300">
+                    {overallCsatGap !== null && overallCsatGap < -0.01
+                      ? n2AggregateCsat !== null && n2AggregateCsat < n1ComparisonCsat
+                        ? `O resultado geral está ${Math.abs(overallCsatGap)} p.p. abaixo do N1. Pelos totais consolidados, a diferença está concentrada no grupo N2, cujo CSAT agregado estimado é ${n2AggregateCsat}%.`
+                        : `O resultado geral está ${Math.abs(overallCsatGap)} p.p. abaixo do N1, mas os dados agregados não permitem atribuir essa diferença a uma pessoa específica do N2.`
+                      : overallCsatGap !== null && overallCsatGap > 0.01
+                        ? `O resultado geral está ${overallCsatGap} p.p. acima do N1. Neste recorte, o N2 melhora o consolidado da operação.`
+                        : 'N1 e resultado geral estão praticamente alinhados neste período.'}
+                  </p>
+                  {!hasCompleteOverallCoverage && (
+                    <p className="mt-3 text-xs leading-5 text-amber-200">Atenção: parte das semanas do filtro ainda não possui o CSAT geral informado; a comparação cobre somente as semanas preenchidas.</p>
+                  )}
+                </div>
+
+                <div className="rounded-lg bg-slate-900 p-4">
+                  <h3 className="font-semibold text-slate-100">Impacto matemático dentro do N1</h3>
+                  <p className="mt-2 text-xs leading-5 text-slate-400">A leitura considera CSAT e quantidade de avaliações. Ela indica impacto no número consolidado, não culpa ou causa operacional.</p>
+                  <div className="mt-3 space-y-2">
+                    {n1ImpactRanking.filter((item) => item.downwardImpact > 0).slice(0, 3).map((item) => (
+                      <div key={item.analystName} className="flex flex-col gap-1 rounded-md bg-slate-950 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+                        <span className="font-semibold">{item.analystName}</span>
+                        <span className="text-slate-300">{item.averageCsat}% CSAT · {item.reviews} avaliações · impacto de {item.downwardImpact} p.p.</span>
+                      </div>
+                    ))}
+                    {!n1ImpactRanking.some((item) => item.downwardImpact > 0) && (
+                      <p className="text-sm text-slate-300">Nenhum impacto negativo individual relevante foi identificado no N1 neste recorte.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </section>
+      )}
 
       <CriteriaLegend
         title={isAnalystDashboard ? 'Critérios para disputar o pódio' : 'Critérios do pódio do telefone'}
@@ -5137,6 +5283,12 @@ function EntriesView({
   const answeredCalls = toNumber(teamForm.answeredCalls)
   const abandonedCalls = toNumber(teamForm.abandonedCalls)
   const totalCalls = toNumber(teamForm.totalCalls)
+  const overallPositiveReviews = toNumber(teamForm.overallPositiveReviews)
+  const overallNegativeReviews = toNumber(teamForm.overallNegativeReviews)
+  const overallReviews = overallPositiveReviews + overallNegativeReviews
+  const calculatedOverallCsat = overallReviews
+    ? round((overallPositiveReviews / overallReviews) * 100)
+    : 0
   const calculatedPerformance = totalCalls ? round((answeredCalls / totalCalls) * 100) : 0
   const teamDateInvalid = isEndBeforeStart(teamForm.weekStart, teamForm.weekEnd)
   const teamDuplicate = teamMetrics.some(
@@ -5471,6 +5623,39 @@ function EntriesView({
               required
             />
           </Field>
+
+          <div className="rounded-lg border border-cyan-400/20 bg-cyan-400/5 p-4">
+            <h3 className="font-semibold text-cyan-200">CSAT geral do telefone (N1 + N2)</h3>
+            <p className="mt-1 text-sm leading-6 text-slate-300">
+              Informe os totais gerais exibidos no 55PBX. Esses números serão usados apenas para comparar o N1 com o resultado geral; não alteram o pódio dos analistas do N1.
+            </p>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <Field label="Avaliações positivas gerais">
+                <input
+                  className="form-input"
+                  min="0"
+                  type="number"
+                  value={teamForm.overallPositiveReviews}
+                  onChange={(event) => onTeamChange({ ...teamForm, overallPositiveReviews: event.target.value })}
+                  required
+                />
+              </Field>
+              <Field label="Avaliações negativas gerais">
+                <input
+                  className="form-input"
+                  min="0"
+                  type="number"
+                  value={teamForm.overallNegativeReviews}
+                  onChange={(event) => onTeamChange({ ...teamForm, overallNegativeReviews: event.target.value })}
+                  required
+                />
+              </Field>
+            </div>
+            <p className="mt-3 text-sm text-slate-300">
+              CSAT geral calculado: <strong className="text-cyan-200">{calculatedOverallCsat}%</strong> ({overallReviews} avaliações)
+            </p>
+          </div>
+
           <Field label="Observações">
             <textarea
               className="form-input min-h-24"
@@ -8450,11 +8635,6 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
-
-
-
-
-
 
 
 
