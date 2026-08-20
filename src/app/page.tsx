@@ -3308,6 +3308,10 @@ function DashboardView({
     [teamMetrics, periodFilter],
   )
   const weeklyIndividualTrend = aggregateIndividualByWeek(filteredIndividualMetrics).slice(-8)
+  const weeklyReviewCoverageTrend = weeklyIndividualTrend.map((item) => ({
+    label: item.label,
+    value: item.totalTickets ? round((item.totalReviews / item.totalTickets) * 100) : 0,
+  }))
   const teamPerformanceTrend = [...filteredTeamMetrics]
     .sort((a, b) => a.week_start.localeCompare(b.week_start))
     .slice(-8)
@@ -4111,6 +4115,13 @@ function DashboardView({
             label="CSAT geral N1 + N2 por semana"
             points={overallCsatTrend}
             suffix="%"
+          />
+          <TrendLineChart
+            label={isAnalystDashboard ? 'Meu percentual de avaliações por semana' : 'Cobertura de avaliações por semana'}
+            points={weeklyReviewCoverageTrend}
+            suffix="%"
+            goal={reviewGoal}
+            goalLabel="Meta do pódio"
           />
         </div>
       </section>
@@ -6724,13 +6735,18 @@ function TrendLineChart({
   label,
   points,
   suffix = '',
+  goal,
+  goalLabel = 'Meta',
 }: {
   label: string
   points: ChartPoint[]
   suffix?: string
+  goal?: number
+  goalLabel?: string
 }) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
-  const path = buildLinePath(points)
+  const comparisonValues = goal === undefined ? [] : [goal]
+  const path = buildLinePath(points, comparisonValues)
   const first = points.at(0)?.value ?? 0
   const latest = points.at(-1)?.value ?? 0
   const delta = round(latest - first)
@@ -6760,6 +6776,12 @@ function TrendLineChart({
             </p>
           </div>
         )}
+        {goal !== undefined && (
+          <div className="rounded-md border border-amber-300/20 bg-amber-300/5 px-3 py-2 text-right">
+            <p className="text-xs text-slate-400">{goalLabel}</p>
+            <p className="mt-1 text-sm font-semibold text-amber-200">{goal}{suffix}</p>
+          </div>
+        )}
       </div>
 
       {points.length ? (
@@ -6772,9 +6794,28 @@ function TrendLineChart({
           <title>{label}</title>
           <path d="M20 110 H310" stroke="rgb(51 65 85)" strokeWidth="1" />
           <path d="M20 15 V110" stroke="rgb(51 65 85)" strokeWidth="1" />
+          {goal !== undefined && (
+            <>
+              <path
+                d={`M20 ${getPointPosition(goal, 0, points, comparisonValues).y} H310`}
+                stroke="rgb(252 211 77)"
+                strokeDasharray="6 5"
+                strokeWidth="1.5"
+              />
+              <text
+                fill="rgb(253 230 138)"
+                fontSize="9"
+                textAnchor="end"
+                x="308"
+                y={Math.max(getPointPosition(goal, 0, points, comparisonValues).y - 5, 10)}
+              >
+                Meta {goal}{suffix}
+              </text>
+            </>
+          )}
           <path d={path} fill="none" stroke="rgb(103 232 249)" strokeWidth="3" />
           {points.map((point, index) => {
-            const { x, y } = getPointPosition(point.value, index, points)
+            const { x, y } = getPointPosition(point.value, index, points, comparisonValues)
             return (
               <g
                 key={`${point.label}-${index}`}
@@ -8715,8 +8756,8 @@ function toDateInputValue(date: Date) {
   return `${year}-${month}-${day}`
 }
 
-function getPointPosition(value: number, index: number, points: ChartPoint[]) {
-  const values = points.map((point) => point.value)
+function getPointPosition(value: number, index: number, points: ChartPoint[], comparisonValues: number[] = []) {
+  const values = [...points.map((point) => point.value), ...comparisonValues]
   const min = Math.min(...values)
   const max = Math.max(...values)
   const range = max - min || 1
@@ -8726,12 +8767,12 @@ function getPointPosition(value: number, index: number, points: ChartPoint[]) {
   return { x, y }
 }
 
-function buildLinePath(points: ChartPoint[]) {
+function buildLinePath(points: ChartPoint[], comparisonValues: number[] = []) {
   if (!points.length) return ''
 
   return points
     .map((point, index) => {
-      const { x, y } = getPointPosition(point.value, index, points)
+      const { x, y } = getPointPosition(point.value, index, points, comparisonValues)
       return `${index === 0 ? 'M' : 'L'} ${x} ${y}`
     })
     .join(' ')
@@ -8819,10 +8860,6 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
-
-
-
-
 
 
 
