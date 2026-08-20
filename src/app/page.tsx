@@ -3795,7 +3795,7 @@ function DashboardView({
             <MetricCard label="Atendimentos no período" value={totalTickets} tone={podiumAverageTickets && totalTickets >= podiumAverageTickets ? 'success' : podiumAverageTickets ? 'warning' : undefined} />
             <MetricCard label="Meu CSAT" value={`${analystResult?.averageCsat ?? 0}%`} tone={analystResult && analystResult.averageCsat >= analystResult.individualGoal ? 'success' : analystResult ? 'warning' : undefined} />
             <MetricCard label="CSAT equipe N1" value={`${periodAverageCsat || 0}%`} tone={periodAverageCsat >= podiumCsatGoal ? 'success' : periodAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
-            <MetricCard label="CSAT geral N1 + N2" value={overallPhoneCsat === null ? 'Não informado' : `${overallPhoneCsat}%`} tone={overallPhoneCsat === null ? undefined : overallPhoneCsat >= podiumCsatGoal ? 'success' : overallPhoneCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
+            <MetricCard label="CSAT geral N1 + N2 · média do período" value={overallPhoneCsat === null ? 'Não informado' : `${overallPhoneCsat}%`} tone={overallPhoneCsat === null ? undefined : overallPhoneCsat >= podiumCsatGoal ? 'success' : overallPhoneCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
             <MetricCard label="Avaliações" value={`${totalReviews} (${reviewCoverage}%)`} tone={reviewCoverage >= reviewGoal ? 'success' : reviewCoverage >= 20 ? 'warning' : 'danger'} />
           </>
         ) : (
@@ -3803,7 +3803,7 @@ function DashboardView({
             <MetricCard label="Status" value="Supabase conectado" tone="success" />
             <MetricCard label="Analistas ativos" value={loading ? '...' : analystsCount} />
             <MetricCard label="CSAT equipe N1" value={`${periodAverageCsat || 0}%`} tone={periodAverageCsat >= podiumCsatGoal ? 'success' : periodAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
-            <MetricCard label="CSAT geral N1 + N2" value={overallPhoneCsat === null ? 'Não informado' : `${overallPhoneCsat}%`} tone={overallPhoneCsat === null ? undefined : overallPhoneCsat >= podiumCsatGoal ? 'success' : overallPhoneCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
+            <MetricCard label="CSAT geral N1 + N2 · média do período" value={overallPhoneCsat === null ? 'Não informado' : `${overallPhoneCsat}%`} tone={overallPhoneCsat === null ? undefined : overallPhoneCsat >= podiumCsatGoal ? 'success' : overallPhoneCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
             <MetricCard label="Performance equipe" value={`${periodTeamPerformance || 0}%`} tone={periodTeamPerformance >= teamPerformanceGoal ? 'success' : periodTeamPerformance >= teamPerformanceGoal - 3 ? 'warning' : 'danger'} />
           </>
         )}
@@ -4079,7 +4079,7 @@ function DashboardView({
             : `Evolucao calculada dentro de ${periodLabel}.`}
         </p>
 
-        <div className="mt-6 grid gap-6 md:grid-cols-2 xl:grid-cols-5">
+        <div className="mt-6 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
           <TrendLineChart
             label={isAnalystDashboard ? 'Meu CSAT semanal' : 'CSAT médio semanal'}
             points={weeklyIndividualTrend.map((item) => ({
@@ -4108,7 +4108,7 @@ function DashboardView({
             suffix="%"
           />
           <TrendLineChart
-            label="CSAT geral N1 + N2"
+            label="CSAT geral N1 + N2 por semana"
             points={overallCsatTrend}
             suffix="%"
           />
@@ -6729,15 +6729,17 @@ function TrendLineChart({
   points: ChartPoint[]
   suffix?: string
 }) {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null)
   const path = buildLinePath(points)
   const first = points.at(0)?.value ?? 0
   const latest = points.at(-1)?.value ?? 0
   const delta = round(latest - first)
   const hasComparison = points.length > 1
+  const highlightedPoint = activeIndex === null ? points.at(-1) : points[activeIndex]
 
   return (
-    <div className="rounded-lg bg-slate-900 p-4">
-      <div className="flex items-start justify-between gap-3">
+    <div className="rounded-lg bg-slate-900 p-5 transition-colors hover:bg-slate-900/90">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm text-slate-400">{label}</p>
           <p className="mt-1 text-2xl font-semibold">
@@ -6750,10 +6752,23 @@ function TrendLineChart({
               : 'Apenas um fechamento disponível neste período.'}
           </p>
         </div>
+        {highlightedPoint && (
+          <div className="rounded-md border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-right">
+            <p className="text-xs text-slate-400">{activeIndex === null ? 'Última semana' : 'Semana destacada'}</p>
+            <p className="mt-1 text-sm font-semibold text-cyan-200">
+              {highlightedPoint.label}: {highlightedPoint.value}{suffix}
+            </p>
+          </div>
+        )}
       </div>
 
       {points.length ? (
-        <svg className="mt-4 h-36 w-full" role="img" viewBox="0 0 320 130">
+        <svg
+          className="mt-4 h-44 w-full"
+          role="img"
+          viewBox="0 0 320 130"
+          onMouseLeave={() => setActiveIndex(null)}
+        >
           <title>{label}</title>
           <path d="M20 110 H310" stroke="rgb(51 65 85)" strokeWidth="1" />
           <path d="M20 15 V110" stroke="rgb(51 65 85)" strokeWidth="1" />
@@ -6761,8 +6776,21 @@ function TrendLineChart({
           {points.map((point, index) => {
             const { x, y } = getPointPosition(point.value, index, points)
             return (
-              <g key={`${point.label}-${index}`}>
-                <circle cx={x} cy={y} fill="rgb(103 232 249)" r="4" />
+              <g
+                key={`${point.label}-${index}`}
+                className="cursor-pointer"
+                onMouseEnter={() => setActiveIndex(index)}
+              >
+                <title>{`${point.label}: ${point.value}${suffix}`}</title>
+                <circle cx={x} cy={y} fill="transparent" r="14" />
+                <circle
+                  cx={x}
+                  cy={y}
+                  fill="rgb(103 232 249)"
+                  r={activeIndex === index ? 7 : 4}
+                  stroke={activeIndex === index ? 'rgb(255 255 255)' : 'transparent'}
+                  strokeWidth="2"
+                />
                 <text fill="rgb(226 232 240)" fontSize="10" fontWeight="600" textAnchor="middle" x={x} y={Math.max(y - 9, 10)}>
                   {point.value}{suffix}
                 </text>
@@ -6787,18 +6815,32 @@ function BarTrend({
   label: string
   points: ChartPoint[]
 }) {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null)
   const maxValue = Math.max(...points.map((point) => point.value), 1)
 
   return (
-    <div className="rounded-lg bg-slate-900 p-4">
-      <p className="text-sm text-slate-400">{label}</p>
+    <div className="rounded-lg bg-slate-900 p-5 transition-colors hover:bg-slate-900/90">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm text-slate-400">{label}</p>
+        {points.length > 0 && (
+          <p className="text-xs text-cyan-200">
+            {activeIndex === null ? 'Passe o mouse para destacar' : `${points[activeIndex].label}: ${points[activeIndex].value}`}
+          </p>
+        )}
+      </div>
       <div className="mt-4 space-y-3">
-        {points.map((point) => (
-          <div key={point.label} className="grid grid-cols-[72px_1fr_42px] items-center gap-3 text-sm">
+        {points.map((point, index) => (
+          <div
+            key={point.label}
+            className={`grid grid-cols-[72px_1fr_42px] items-center gap-3 rounded-md px-2 py-2 text-sm transition-colors ${activeIndex === index ? 'bg-cyan-300/10' : ''}`}
+            title={`${point.label}: ${point.value}`}
+            onMouseEnter={() => setActiveIndex(index)}
+            onMouseLeave={() => setActiveIndex(null)}
+          >
             <span className="text-slate-400">{point.label}</span>
             <div className="h-3 rounded-full bg-slate-800">
               <div
-                className="h-3 rounded-full bg-cyan-300"
+                className={`h-3 rounded-full transition-all ${activeIndex === index ? 'bg-white' : 'bg-cyan-300'}`}
                 style={{ width: `${Math.max((point.value / maxValue) * 100, 4)}%` }}
               />
             </div>
@@ -8777,8 +8819,6 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
-
-
 
 
 
