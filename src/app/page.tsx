@@ -4020,7 +4020,9 @@ function DashboardView({
                 Veja qual indicador elevou o alerta e a ação recomendada para ele.
               </p>
             </div>
-            <span className="text-sm font-semibold text-slate-300">Nível atual: {predictiveRiskLevel}</span>
+            <span className="text-sm font-semibold text-slate-300">
+              Risco de queda: {predictiveRiskLevel}
+            </span>
           </div>
 
           {!hasPeriodData ? (
@@ -4042,9 +4044,10 @@ function DashboardView({
             </div>
           ) : (
             <div className="mt-4 rounded-lg border border-emerald-400/20 bg-emerald-400/5 p-4">
-              <p className="font-semibold text-emerald-300">Nenhum indicador acionou alerta.</p>
+              <p className="font-semibold text-emerald-300">Cenário estável neste período.</p>
               <p className="mt-2 text-sm text-slate-300">
-                CSAT, performance, chance de fechamento e critérios do pódio estão estáveis neste recorte.
+                O risco de queda está baixo porque nenhum indicador acionou alerta. CSAT, performance,
+                chance de fechamento e critérios do pódio estão estáveis neste recorte.
               </p>
             </div>
           )}
@@ -8998,7 +9001,6 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
-
 
 
 
