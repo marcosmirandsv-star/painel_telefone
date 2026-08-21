@@ -4962,13 +4962,8 @@ function ReportsView({
           teamAbandonedCalls,
           teamTotalCalls,
         },
-        sare: {
-          situation: situationText,
-          action: actionText,
-          result: resultText,
-          evolution: evolutionText,
-        },
         weeklyEvolution,
+        feedbackStyle: phoneFeedbackStyle,
         assistedFeedback: finalPhoneFeedback,
       })
 
@@ -7921,8 +7916,8 @@ function exportWordReport({
   periodLabel,
   expected,
   achieved,
-  sare,
   weeklyEvolution,
+  feedbackStyle,
   assistedFeedback,
 }: {
   analystName: string
@@ -7946,13 +7941,8 @@ function exportWordReport({
     teamAbandonedCalls: number
     teamTotalCalls: number
   }
-  sare: {
-    situation: string
-    action: string
-    result: string
-    evolution: string
-  }
   weeklyEvolution: WeeklyIndividualTrend[]
+  feedbackStyle: ChatFeedbackStyle
   assistedFeedback: string
 }) {
   const safeName = escapeHtml(analystName)
@@ -7988,6 +7978,7 @@ function exportWordReport({
   const reviewGapText = reviewGap >= 0
     ? `${formatDelta(reviewGap, ' p.p.')} acima da meta`
     : `${formatDelta(reviewGap, ' p.p.')} abaixo da meta`
+  const feedbackTitle = getChatFeedbackStyleLabel(feedbackStyle)
   const evolutionBars = weeklyEvolution.length
     ? weeklyEvolution
         .map((item, index) => {
@@ -8001,7 +7992,6 @@ function exportWordReport({
             <div class="evolution-row">
               <div class="evolution-label">${escapeHtml(item.label)}</div>
               <div class="evolution-track">
-                <div class="goal-line"></div>
                 <div class="evolution-bar" style="width:${width}%; background:${color};"></div>
               </div>
               <div class="evolution-value">
@@ -8014,20 +8004,19 @@ function exportWordReport({
         })
         .join('')
     : '<p class="muted">Sem dados de evolução no período.</p>'
-  const evolutionRows = weeklyEvolution.length
+  const volumeRows = weeklyEvolution.length
     ? weeklyEvolution
         .map(
           (item) => `
             <tr>
               <td>${escapeHtml(item.label)}</td>
-              <td>${item.csat}%</td>
               <td>${item.totalReviews}</td>
               <td>${item.totalTickets}</td>
             </tr>
           `,
         )
         .join('')
-    : '<tr><td colspan="4">Sem dados de evolução no período.</td></tr>'
+    : '<tr><td colspan="3">Sem dados de volume no período.</td></tr>'
 
   const documentHtml = `
     <!doctype html>
@@ -8065,7 +8054,7 @@ function exportWordReport({
           .evolution-label { font-size: 11px; font-weight: bold; color: #0f172a; }
           .evolution-track { background: #e2e8f0; height: 20px; border-radius: 3px; overflow: hidden; position: relative; }
           .evolution-bar { height: 20px; }
-          .goal-line { position: absolute; left: ${expected.csat}%; top: 0; width: 2px; height: 20px; background: #111827; opacity: .55; }
+          .goal-badge { display: inline-block; background: #0f766e; color: #ffffff; font-size: 11px; font-weight: bold; padding: 6px 9px; margin: 0 0 10px; }
           .evolution-value { font-size: 11px; font-weight: normal; }
           .evolution-value strong { display: inline-block; min-width: 42px; }
           .evolution-value span { font-weight: bold; }
@@ -8126,36 +8115,28 @@ function exportWordReport({
           </div>
         </div>
         <div class="trend-panel">
-          <div class="trend-title">Evolucao semanal do CSAT - linha escura marca a referência de ${expected.csat}%</div>
+          <div class="trend-title">Evolução semanal do CSAT</div>
+          <div class="goal-badge">Referência para o pódio: ${expected.csat}%</div>
           ${evolutionBars}
         </div>
         <p class="muted">Menor ponto do período: ${worstEvolution ? `${worstEvolution.label} - ${worstEvolution.csat}%` : '-'}.</p>
+        <h3>Volume semanal</h3>
+        <p class="muted">Complemento da evolução: avaliações respondidas e atendimentos registrados em cada semana.</p>
         <table>
           <thead>
             <tr>
               <th>Semana</th>
-              <th>CSAT</th>
               <th>Avaliações</th>
               <th>Atendimentos</th>
             </tr>
           </thead>
-          <tbody>${evolutionRows}</tbody>
+          <tbody>${volumeRows}</tbody>
         </table>
         <h2>Contexto operacional da equipe</h2>
         <p>Performance da equipe no período: ${achieved.teamPerformance}%.</p>
         <p>Ligações atendidas pela equipe: ${achieved.teamAnsweredCalls}. Total processado: ${achieved.teamTotalCalls}.</p>
 
-        <h2>Análise SARE</h2>
-        <h3>S - Situação</h3>
-        <p>${escapeHtml(sare.situation)}</p>
-        <h3>A - Alinhamentos Realizados</h3>
-        <p>${escapeHtml(sare.action)}</p>
-        <h3>R - Resultado Esperado</h3>
-        <p>${escapeHtml(sare.result)}</p>
-        <h3>E - Expectativa e Plano de Desenvolvimento</h3>
-        <p>${escapeHtml(sare.evolution)}</p>
-
-        <h2>Devolutiva assistida para o colaborador</h2>
+        <h2>Feedback ${escapeHtml(feedbackTitle)}</h2>
         <div class="callout">${formatChatFeedbackForReport(assistedFeedback)}</div>
       </body>
     </html>
@@ -9072,8 +9053,6 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
-
-
 
 
 
