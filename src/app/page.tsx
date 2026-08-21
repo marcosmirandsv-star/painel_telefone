@@ -3470,8 +3470,10 @@ function DashboardView({
   const previousAverageCsat = calculateAverageCsat(previousIndividualMetrics)
   const periodTeamPerformance = calculateTeamPerformance(filteredTeamMetrics)
   const previousTeamPerformance = calculateTeamPerformance(previousTeamMetrics)
-  const csatDelta = round(periodAverageCsat - previousAverageCsat)
-  const teamPerformanceDelta = round(periodTeamPerformance - previousTeamPerformance)
+  const hasPreviousIndividualData = previousIndividualMetrics.length > 0
+  const hasPreviousTeamData = previousTeamMetrics.length > 0
+  const csatDelta = hasPreviousIndividualData ? round(periodAverageCsat - previousAverageCsat) : 0
+  const teamPerformanceDelta = hasPreviousTeamData ? round(periodTeamPerformance - previousTeamPerformance) : 0
   const totalReviews = filteredIndividualMetrics.reduce((sum, metric) => sum + Number(metric.total_reviews), 0)
   const totalTickets = filteredIndividualMetrics.reduce((sum, metric) => sum + Number(metric.total_tickets), 0)
   const periodAverageTickets = periodPodium.length ? round(totalTickets / periodPodium.length) : 0
@@ -3571,7 +3573,7 @@ function DashboardView({
               severity: predictiveGoalProbability < 45 ? 'Alto' : 'Médio',
             }
           : null,
-        csatDelta < 0
+        hasPreviousIndividualData && csatDelta < 0
           ? {
               label: 'CSAT em queda',
               reading: `${formatDelta(csatDelta, ' p.p.')} em relação ao período anterior`,
@@ -3579,7 +3581,7 @@ function DashboardView({
               severity: csatDelta < -2 ? 'Alto' : 'Médio',
             }
           : null,
-        teamPerformanceDelta < 0
+        hasPreviousTeamData && teamPerformanceDelta < 0
           ? {
               label: 'Performance operacional em queda',
               reading: `${formatDelta(teamPerformanceDelta, ' p.p.')} em relação ao período anterior`,
@@ -3607,24 +3609,24 @@ function DashboardView({
   const executiveStatus =
     !hasPeriodData
       ? 'Sem dados no período'
-      : periodTeamPerformance >= teamPerformanceGoal && periodAverageCsat >= podiumCsatGoal
-        ? 'Periodo saudavel'
-        : attentionCount
-          ? 'Periodo pede acompanhamento'
+      : attentionCount
+        ? 'Período pede acompanhamento'
+        : periodTeamPerformance >= teamPerformanceGoal && periodAverageCsat >= podiumCsatGoal
+          ? 'Período saudável'
           : 'Periodo em consolidação'
   const executiveStatusTone =
     !hasPeriodData
       ? 'text-slate-300'
-      : periodTeamPerformance >= teamPerformanceGoal && periodAverageCsat >= podiumCsatGoal
-        ? 'text-emerald-300'
-        : attentionCount
-          ? 'text-amber-300'
+      : attentionCount
+        ? 'text-amber-300'
+        : periodTeamPerformance >= teamPerformanceGoal && periodAverageCsat >= podiumCsatGoal
+          ? 'text-emerald-300'
           : 'text-cyan-300'
   const executivePriority =
     !hasPeriodData
       ? 'Selecionar outro período ou aguardar os lançamentos.'
       : attentionList.length > 0
-        ? attentionSummary
+        ? `${attentionCount} analista(s) precisam de acompanhamento. Consulte os nomes e critérios no diagnóstico abaixo.`
         : periodTeamPerformance < teamPerformanceGoal
           ? 'Revisar performance operacional da equipe.'
           : 'Manter rotina de acompanhamento semanal.'
@@ -4081,13 +4083,17 @@ function DashboardView({
           <PredictiveCard
             label="CSAT projetado"
             value={`${projectedCsat}%`}
-            detail={`Resultado esperado se a tendência continuar. ${formatDelta(csatDelta, ' p.p.')} vs período anterior.`}
+            detail={hasPreviousIndividualData
+              ? `Resultado esperado se a tendência continuar. ${formatDelta(csatDelta, ' p.p.')} vs período anterior.`
+              : 'Resultado esperado com a base atual. Ainda não há período anterior equivalente para comparação.'}
             tone={projectedCsat >= podiumCsatGoal ? 'success' : 'warning'}
           />
           <PredictiveCard
             label="Performance projetada"
             value={`${projectedTeamPerformance}%`}
-            detail={`Valor esperado da operação se a tendência continuar. Meta: ${teamPerformanceGoal}%.`}
+            detail={hasPreviousTeamData
+              ? `Valor esperado da operação se a tendência continuar. Meta: ${teamPerformanceGoal}%.`
+              : `Valor esperado com a base atual. Meta: ${teamPerformanceGoal}%; ainda sem período anterior equivalente.`}
             tone={projectedTeamPerformance >= teamPerformanceGoal ? 'success' : 'danger'}
           />
           <PredictiveCard
@@ -4119,30 +4125,44 @@ function DashboardView({
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
               {isAnalystDashboard ? 'Resumo individual' : 'Diagnóstico e plano de ação'}
             </p>
-            <h2 className={`mt-3 text-3xl font-bold ${isAnalystDashboard ? 'text-cyan-300' : executiveStatusTone}`}>
-              {isAnalystDashboard ? analystStatusText : executiveStatus}
+            <h2 className={`mt-3 text-3xl font-bold ${isAnalystDashboard ? 'text-cyan-300' : attentionCount ? 'text-amber-300' : 'text-emerald-300'}`}>
+              {isAnalystDashboard
+                ? analystStatusText
+                : `${eligibleCount} de ${periodPodium.length} analistas elegíveis`}
             </h2>
             <p className="mt-3 text-sm leading-6 text-slate-300">
               {isAnalystDashboard
                 ? analystFocusText
-                : `${periodLabel}: ${eligibleCount} de ${periodPodium.length} analistas elegiveis ao pódio. ${executivePriority}`}
+                : `${periodLabel}. O detalhamento abaixo mostra quem precisa de atenção, qual critério não foi cumprido e a próxima ação recomendada.`}
             </p>
           </div>
 
           <div className="grid flex-1 gap-4 md:grid-cols-3">
             <div className="executive-card">
-              <p>{isAnalystDashboard ? 'Atendimentos no período' : 'CSAT vs período anterior'}</p>
-              <strong>{isAnalystDashboard ? totalTickets : formatDelta(csatDelta, ' p.p.')}</strong>
+              <p>{isAnalystDashboard ? 'Atendimentos no período' : hasPreviousIndividualData ? 'CSAT vs período anterior' : 'CSAT do período'}</p>
+              <strong>
+                {isAnalystDashboard
+                  ? totalTickets
+                  : hasPreviousIndividualData
+                    ? formatDelta(csatDelta, ' p.p.')
+                    : `${periodAverageCsat || 0}%`}
+              </strong>
               <span>
                 {isAnalystDashboard
                   ? `${totalReviews} avaliações registradas em ${launchedPeriodLabel}`
-                  : `Atual: ${periodAverageCsat || 0}%`}
+                  : hasPreviousIndividualData
+                    ? `Atual: ${periodAverageCsat || 0}%`
+                    : 'Sem período anterior equivalente para comparação'}
               </span>
             </div>
             <div className="executive-card">
               <p>Performance equipe</p>
               <strong>{periodTeamPerformance || 0}%</strong>
-              <span>{formatDelta(teamPerformanceDelta, ' p.p.')} vs anterior</span>
+              <span>
+                {hasPreviousTeamData
+                  ? `${formatDelta(teamPerformanceDelta, ' p.p.')} vs anterior`
+                  : 'Sem período anterior equivalente para comparação'}
+              </span>
             </div>
             <div className="executive-card">
               <p>{isAnalystDashboard ? 'Minhas avaliações' : 'Cobertura de avaliações'}</p>
@@ -4194,29 +4214,8 @@ function DashboardView({
         </div>
 
         {!isAnalystDashboard && (
-          <div className="mt-5 grid gap-4 lg:grid-cols-3">            <div className="rounded-lg bg-slate-900 p-4">
-              <p className="text-sm text-slate-400">Ponto crítico</p>
-              <p className="mt-2 font-semibold">{executiveCriticalPoint}</p>
-              <p className="mt-2 text-xs leading-5 text-slate-500">{executivePriority}</p>
-            </div>
-            <div className="rounded-lg bg-slate-900 p-4">
-              <p className="text-sm text-slate-400">Ação recomendada</p>
-              <p className="mt-2 font-semibold">{executiveNextAction}</p>
-              {attentionCount > 0 && (
-                <p className="mt-2 text-xs leading-5 text-slate-500">
-                  Use MIMO para orientar uma correção ou manutenção imediata. Reserve o SARE para um plano de
-                  desenvolvimento formal, com alinhamentos e resultado esperado.
-                </p>
-              )}
-            </div>
-            <div className="rounded-lg bg-slate-900 p-4">
-              <p className="text-sm text-slate-400">Leitura do fechamento</p>
-              <p className="mt-2 font-semibold">{executiveClosingRead}</p>
-              <p className="mt-2 text-xs leading-5 text-slate-500">
-                Volume: {teamAnsweredCalls} atendidas de {teamTotalCalls} processadas.
-              </p>
-            </div>
-            <div className="rounded-lg border border-cyan-400/20 bg-slate-900 p-5 lg:col-span-3">
+          <div className="mt-5">
+            <div className="rounded-lg border border-cyan-400/20 bg-slate-900 p-5">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="font-semibold text-white">Aprofundamento com IA</p>
@@ -9121,5 +9120,3 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
-
-
