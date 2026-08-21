@@ -19,6 +19,7 @@ type Analyst = {
   name: string
   active: boolean
   csat_goal: number
+  photo_url?: string | null
 }
 
 type UserRole = 'master' | 'coordinator' | 'analyst'
@@ -47,9 +48,11 @@ type IndividualMetric = {
   analysts?:
     | {
         name: string
+        photo_url?: string | null
       }
     | {
         name: string
+        photo_url?: string | null
       }[]
     | null
 }
@@ -81,6 +84,7 @@ type ChatAnalyst = {
   name: string
   csat_goal: number
   active: boolean
+  photo_url?: string | null
 }
 
 type ChatMetricImportRecord = {
@@ -150,10 +154,12 @@ type ChatMonthlyMetric = {
     | {
         name: string
         csat_goal: number
+        photo_url?: string | null
       }
     | {
         name: string
         csat_goal: number
+        photo_url?: string | null
       }[]
     | null
   chat_teams?:
@@ -267,6 +273,7 @@ const initialTeamForm: TeamForm = {
 const initialAnalystForm = {
   name: '',
   csatGoal: '86',
+  photoFile: null as File | null,
 }
 
 const initialGoalForm = {
@@ -282,6 +289,31 @@ const initialAccessUserForm = {
   password: '',
   role: 'analista',
   analystId: '',
+}
+
+const ANALYST_PHOTO_BUCKET = 'analyst-photos'
+const MAX_ANALYST_PHOTO_SIZE = 5 * 1024 * 1024
+const ACCEPTED_ANALYST_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+
+async function uploadAnalystPhoto(file: File, scope: 'phone' | 'chat', analystId: string) {
+  if (!ACCEPTED_ANALYST_PHOTO_TYPES.includes(file.type)) {
+    throw new Error('Use uma imagem PNG, JPG ou WEBP.')
+  }
+  if (file.size > MAX_ANALYST_PHOTO_SIZE) {
+    throw new Error('A foto deve ter no máximo 5 MB.')
+  }
+
+  const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+  const path = `${scope}/${analystId}/profile.${extension}`
+  const { error } = await supabase.storage.from(ANALYST_PHOTO_BUCKET).upload(path, file, {
+    cacheControl: '3600',
+    contentType: file.type,
+    upsert: true,
+  })
+  if (error) throw error
+
+  const { data } = supabase.storage.from(ANALYST_PHOTO_BUCKET).getPublicUrl(path)
+  return `${data.publicUrl}?v=${Date.now()}`
 }
 
 export default function Home() {
@@ -363,7 +395,7 @@ export default function Home() {
       supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(),
       supabase.from('profiles').select('*').order('full_name'),
       supabase.from('goals').select('id, key, label, value, unit, active').order('label'),
-      supabase.from('analysts').select('id, name, active, csat_goal').order('name'),
+      supabase.from('analysts').select('id, name, active, csat_goal, photo_url').order('name'),
     ])
 
     const loadedProfile = (profileResult.data as UserProfile | null) ?? null
@@ -392,7 +424,7 @@ export default function Home() {
 
     let individualQuery = supabase
       .from('weekly_individual_metrics')
-      .select('id, analyst_id, week_start, week_end, csat, total_reviews, positive_reviews, negative_reviews, review_percentage, total_tickets, evidence_url, notes, analysts(name)')
+      .select('id, analyst_id, week_start, week_end, csat, total_reviews, positive_reviews, negative_reviews, review_percentage, total_tickets, evidence_url, notes, analysts(name, photo_url)')
       .order('week_start', { ascending: false })
       .limit(52)
 
@@ -418,10 +450,10 @@ export default function Home() {
 
     const [chatTeamsResult, chatAnalystsResult, chatMetricsResult, chatManualPodiumResult, chatExclusionsResult] = await Promise.all([
       supabase.from('chat_teams').select('id, name, legacy_name, manager_name, active').order('name'),
-      supabase.from('chat_analysts').select('id, team_id, name, csat_goal, active').order('name'),
+      supabase.from('chat_analysts').select('id, team_id, name, csat_goal, active, photo_url').order('name'),
       supabase
         .from('chat_monthly_metrics')
-        .select('id, team_id, analyst_id, month_label, year, month_number, period_start, period_end, csat, review_percentage, sending_percentage, total_tickets, inactive_tickets, valid_tickets, reviews, positive_reviews, negative_reviews, csat_goal, csat_delta, general_review_goal, status, chat_analysts(name, csat_goal), chat_teams(name)')
+        .select('id, team_id, analyst_id, month_label, year, month_number, period_start, period_end, csat, review_percentage, sending_percentage, total_tickets, inactive_tickets, valid_tickets, reviews, positive_reviews, negative_reviews, csat_goal, csat_delta, general_review_goal, status, chat_analysts(name, csat_goal, photo_url), chat_teams(name)')
         .order('period_start', { ascending: false })
         .limit(500),
       supabase
@@ -694,7 +726,7 @@ export default function Home() {
               .from('analysts')
               .update(payload)
               .eq('id', editingAnalystId)
-              .select('id, name, active, csat_goal')
+              .select('id, name, active, csat_goal, photo_url')
               .single(),
             'O Supabase demorou para atualizar o analista. Tente novamente.',
           )
@@ -702,15 +734,27 @@ export default function Home() {
             supabase
               .from('analysts')
               .insert({ ...payload, active: true })
-              .select('id, name, active, csat_goal')
+              .select('id, name, active, csat_goal, photo_url')
               .single(),
             'O Supabase demorou para incluir o analista. Tente novamente.',
           )
 
       if (result.error) setMessage(result.error.message)
       else {
+        let savedAnalyst = result.data as Analyst
+        if (analystForm.photoFile) {
+          const photoUrl = await uploadAnalystPhoto(analystForm.photoFile, 'phone', savedAnalyst.id)
+          const photoResult = await supabase
+            .from('analysts')
+            .update({ photo_url: photoUrl })
+            .eq('id', savedAnalyst.id)
+            .select('id, name, active, csat_goal, photo_url')
+            .single()
+          if (photoResult.error) throw photoResult.error
+          savedAnalyst = photoResult.data as Analyst
+        }
         setMessage(editingAnalystId ? 'Analista atualizado com sucesso.' : 'Analista incluido com sucesso.')
-        setAnalysts((current) => upsertAnalyst(current, result.data as Analyst))
+        setAnalysts((current) => upsertAnalyst(current, savedAnalyst))
         setAnalystForm(initialAnalystForm)
         setEditingAnalystId(null)
       }
@@ -725,6 +769,7 @@ export default function Home() {
     setAnalystForm({
       name: analyst.name,
       csatGoal: String(analyst.csat_goal),
+      photoFile: null,
     })
     setEditingAnalystId(analyst.id)
   }
@@ -732,6 +777,19 @@ export default function Home() {
   function handleCancelAnalystEdit() {
     setAnalystForm(initialAnalystForm)
     setEditingAnalystId(null)
+  }
+
+  async function handleRemoveAnalystPhoto(analyst: Analyst) {
+    if (!window.confirm(`Remover a foto personalizada de ${analyst.name}?`)) return
+    setSaving(true)
+    const { error } = await supabase.from('analysts').update({ photo_url: null }).eq('id', analyst.id)
+    setSaving(false)
+    if (error) {
+      setMessage(getSupabaseMessage(error.message))
+      return
+    }
+    setAnalysts((current) => current.map((item) => item.id === analyst.id ? { ...item, photo_url: null } : item))
+    setMessage('Foto personalizada removida. A imagem inicial ou as iniciais serão exibidas.')
   }
 
   async function handleToggleAnalyst(analyst: Analyst) {
@@ -744,7 +802,7 @@ export default function Home() {
           .from('analysts')
           .update({ active: !analyst.active })
           .eq('id', analyst.id)
-          .select('id, name, active, csat_goal')
+          .select('id, name, active, csat_goal, photo_url')
           .single(),
         'O Supabase demorou para alterar o status do analista. Tente novamente.',
       )
@@ -1310,6 +1368,7 @@ export default function Home() {
             onEditAnalyst={handleEditAnalyst}
             onToggleAnalyst={handleToggleAnalyst}
             onDeleteAnalyst={handleDeleteAnalyst}
+            onRemoveAnalystPhoto={handleRemoveAnalystPhoto}
           />
         )}
 
@@ -1401,7 +1460,7 @@ function ChatModuleDashboard({
   const [chatActiveTab, setChatActiveTab] = useState<'overview' | 'podium' | 'analysis' | 'reports' | 'import' | 'settings' | 'base'>('overview')
   const [manualPodiumDraft, setManualPodiumDraft] = useState<Record<number, string>>({})
   const [chatPodiumMessage, setChatPodiumMessage] = useState('')
-  const [chatAnalystForm, setChatAnalystForm] = useState({ teamId: '', name: '', csatGoal: '86' })
+  const [chatAnalystForm, setChatAnalystForm] = useState({ teamId: '', name: '', csatGoal: '86', photoFile: null as File | null })
   const [editingChatAnalystId, setEditingChatAnalystId] = useState<string | null>(null)
   const [chatAnalystSaving, setChatAnalystSaving] = useState(false)
   const [chatAnalystMessage, setChatAnalystMessage] = useState('')
@@ -1832,7 +1891,7 @@ function ChatModuleDashboard({
 
   function resetChatAnalystForm() {
     setEditingChatAnalystId(null)
-    setChatAnalystForm({ teamId: teams[0]?.id ?? '', name: '', csatGoal: '86' })
+    setChatAnalystForm({ teamId: teams[0]?.id ?? '', name: '', csatGoal: '86', photoFile: null })
   }
 
   async function handleChatAnalystSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1866,11 +1925,18 @@ function ChatModuleDashboard({
         csat_goal: csatGoal,
       }
 
-      const { error } = editingChatAnalystId
-        ? await supabase.from('chat_analysts').update(payload).eq('id', editingChatAnalystId)
-        : await supabase.from('chat_analysts').insert({ ...payload, active: true })
+      const saveResult = editingChatAnalystId
+        ? await supabase.from('chat_analysts').update(payload).eq('id', editingChatAnalystId).select('id').single()
+        : await supabase.from('chat_analysts').insert({ ...payload, active: true }).select('id').single()
 
-      if (error) throw error
+      if (saveResult.error) throw saveResult.error
+
+      if (chatAnalystForm.photoFile) {
+        const analystId = editingChatAnalystId ?? saveResult.data.id
+        const photoUrl = await uploadAnalystPhoto(chatAnalystForm.photoFile, 'chat', analystId)
+        const { error: photoError } = await supabase.from('chat_analysts').update({ photo_url: photoUrl }).eq('id', analystId)
+        if (photoError) throw photoError
+      }
 
       if (editingChatAnalystId) {
         await syncChatMetricGoalsForAnalyst(editingChatAnalystId, csatGoal)
@@ -1912,6 +1978,7 @@ function ChatModuleDashboard({
       teamId: analyst.team_id,
       name: analyst.name,
       csatGoal: String(analyst.csat_goal),
+      photoFile: null,
     })
     setChatAnalystMessage('')
   }
@@ -1962,6 +2029,19 @@ function ChatModuleDashboard({
     } finally {
       setChatAnalystSaving(false)
     }
+  }
+
+  async function handleRemoveChatAnalystPhoto(analyst: ChatAnalyst) {
+    if (!window.confirm(`Remover a foto personalizada de ${analyst.name}?`)) return
+    setChatAnalystSaving(true)
+    const { error } = await supabase.from('chat_analysts').update({ photo_url: null }).eq('id', analyst.id)
+    setChatAnalystSaving(false)
+    if (error) {
+      setChatAnalystMessage(getSupabaseMessage(error.message))
+      return
+    }
+    await onImportComplete()
+    setChatAnalystMessage('Foto personalizada removida. A imagem inicial ou as iniciais serão exibidas.')
   }
   function getChatPodiumExclusion(metric: ChatMonthlyMetric) {
     return activePodiumExclusions.find(
@@ -2268,6 +2348,10 @@ function ChatModuleDashboard({
       feedbackStyle: chatFeedbackStyle,
       managerNotes: '',
       feedbackText: finalFeedbackText,
+      photoUrl: getAnalystPhoto(
+        getChatAnalystName(selectedChatReportMetric),
+        analysts.find((analyst) => analyst.id === selectedChatReportMetric.analyst_id)?.photo_url,
+      ),
     }
   }
 
@@ -2666,7 +2750,10 @@ function ChatModuleDashboard({
                 <p className="text-sm text-slate-400">{index + 1}o lugar</p>
                 {winner ? (
                   <>
-                    <p className="mt-3 text-lg font-bold">{getChatAnalystName(winner)}</p>
+                    <div className="mt-3 flex items-center gap-3">
+                      <AnalystAvatar name={getChatAnalystName(winner)} photoUrl={getChatAnalystPhoto(winner)} size="md" />
+                      <p className="text-lg font-bold">{getChatAnalystName(winner)}</p>
+                    </div>
                     <p className="mt-2 text-sm text-slate-300">CSAT {formatChatPercent(winner.csat)} | {formatChatPercent(winner.review_percentage)} avaliações | {formatChatCount(winner.total_tickets)} atendimentos</p>
                   </>
                 ) : (
@@ -3122,6 +3209,16 @@ function ChatModuleDashboard({
                 />
               </Field>
 
+              <Field label={editingChatAnalystId ? 'Substituir foto' : 'Foto do analista'}>
+                <input
+                  accept="image/png,image/jpeg,image/webp"
+                  className="form-input"
+                  type="file"
+                  onChange={(event) => setChatAnalystForm({ ...chatAnalystForm, photoFile: event.target.files?.[0] ?? null })}
+                />
+                <p className="mt-2 text-xs text-slate-400">PNG, JPG ou WEBP, com até 5 MB.</p>
+              </Field>
+
               <div className="flex flex-wrap gap-3">
                 <button className="btn-primary" disabled={chatAnalystSaving} type="submit">
                   {chatAnalystSaving ? 'Salvando...' : editingChatAnalystId ? 'Salvar alterações' : 'Incluir analista'}
@@ -3160,7 +3257,12 @@ function ChatModuleDashboard({
                   .sort((a, b) => `${getChatTeamNameById(teams, a.team_id)} ${a.name}`.localeCompare(`${getChatTeamNameById(teams, b.team_id)} ${b.name}`))
                   .map((analyst) => (
                     <tr key={analyst.id}>
-                      <td className="py-3 pr-4 font-semibold">{analyst.name}</td>
+                      <td className="py-3 pr-4 font-semibold">
+                        <div className="flex items-center gap-3">
+                          <AnalystAvatar name={analyst.name} photoUrl={analyst.photo_url} size="sm" />
+                          <span>{analyst.name}</span>
+                        </div>
+                      </td>
                       <td className="py-3 pr-4 text-slate-300">{getChatTeamNameById(teams, analyst.team_id)}</td>
                       <td className="py-3 pr-4">{analyst.csat_goal}%</td>
                       <td className="py-3 pr-4">
@@ -3179,6 +3281,11 @@ function ChatModuleDashboard({
                           <button className="danger-button" type="button" onClick={() => handleDeleteChatAnalyst(analyst)}>
                             Excluir
                           </button>
+                          {analyst.photo_url && (
+                            <button className="small-button" type="button" onClick={() => handleRemoveChatAnalystPhoto(analyst)}>
+                              Remover foto
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -3795,7 +3902,7 @@ function DashboardView({
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {isAnalystDashboard ? (
           <>
-            <MetricCard label="Analista" value={analystProfile?.name ?? 'Não vinculado'} tone="success" />
+            <AnalystIdentityCard analyst={analystProfile} />
             <MetricCard label="Atendimentos no período" value={totalTickets} tone={podiumAverageTickets && totalTickets >= podiumAverageTickets ? 'success' : podiumAverageTickets ? 'warning' : undefined} />
             <MetricCard label="Meu CSAT" value={`${analystResult?.averageCsat ?? 0}%`} tone={analystResult && analystResult.averageCsat >= analystResult.individualGoal ? 'success' : analystResult ? 'warning' : undefined} />
             <MetricCard label="CSAT equipe N1" value={`${periodAverageCsat || 0}%`} tone={periodAverageCsat >= podiumCsatGoal ? 'success' : periodAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
@@ -4821,6 +4928,7 @@ function ReportsView({
       const finalPhoneFeedback = normalizePhoneReportFeedback(phoneFeedbackDraft, phoneFeedbackSuggestion, phoneFeedbackStyle)
       const fileName = exportWordReport({
         analystName: selectedAnalyst.name,
+        photoUrl: getAnalystPhoto(selectedAnalyst.name, selectedAnalyst.photo_url),
         periodLabel,
         expected: {
           csat: podiumCsatGoal,
@@ -6084,6 +6192,41 @@ function getHistoryAnalystOptions(metrics: IndividualMetric[]) {
   return [...names].sort((a, b) => a.localeCompare(b))
 }
 
+const DEFAULT_ANALYST_PHOTOS: Record<string, string> = {
+  'bruno silva': '/team-photos/phone/bruno-silva.png',
+  'gabriel vaz': '/team-photos/phone/gabriel-vaz.png',
+  'henrique sergio': '/team-photos/phone/henrique-sergio.png',
+  jesse: '/team-photos/phone/jesse.png',
+  'karine cunha': '/team-photos/phone/karine-cunha.png',
+  'mario diniz': '/team-photos/phone/mario-diniz.png',
+  'sergio junior': '/team-photos/phone/sergio-junior.png',
+  'thales silva': '/team-photos/phone/thales-silva.png',
+  'ana claudia correa': '/team-photos/chat/ana-claudia-correa.png',
+  'carlos lemos': '/team-photos/chat/carlos-lemos.png',
+  'lorena almeida': '/team-photos/chat/lorena-almeida.png',
+  'paulo victor': '/team-photos/chat/paulo-victor.png',
+  'paulo victor leite': '/team-photos/chat/paulo-victor.png',
+  'joao pedro vianey': '/team-photos/chat/joao-pedro-vianey.png',
+  'joao vitor almeida': '/team-photos/chat/joao-vitor-almeida.png',
+  'thiago reis': '/team-photos/chat/thiago-reis.png',
+  'vanessa kateline': '/team-photos/chat/vanessa-kateline.png',
+  'vanessa silva': '/team-photos/chat/vanessa-kateline.png',
+}
+
+function getAnalystPhoto(name: string, photoUrl?: string | null) {
+  return photoUrl || DEFAULT_ANALYST_PHOTOS[normalizeText(name)] || null
+}
+
+function AnalystAvatar({ name, photoUrl, size = 'md' }: { name: string; photoUrl?: string | null; size?: 'sm' | 'md' | 'lg' }) {
+  const resolvedPhoto = getAnalystPhoto(name, photoUrl)
+  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
+  return (
+    <span className={`analyst-avatar analyst-avatar-${size}`} title={name}>
+      {resolvedPhoto ? <img alt={`Foto de ${name}`} src={resolvedPhoto} /> : <span>{initials || '?'}</span>}
+    </span>
+  )
+}
+
 function isMetricInsideHistoryFilter(
   weekStart: string,
   weekEnd: string,
@@ -6105,6 +6248,7 @@ function AnalystsView({
   onEditAnalyst,
   onToggleAnalyst,
   onDeleteAnalyst,
+  onRemoveAnalystPhoto,
 }: {
   analysts: Analyst[]
   analystForm: typeof initialAnalystForm
@@ -6116,6 +6260,7 @@ function AnalystsView({
   onEditAnalyst: (analyst: Analyst) => void
   onToggleAnalyst: (analyst: Analyst) => void
   onDeleteAnalyst: (analyst: Analyst) => void
+  onRemoveAnalystPhoto: (analyst: Analyst) => void
 }) {
   return (
     <div className="mt-8 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
@@ -6154,6 +6299,16 @@ function AnalystsView({
             />
           </Field>
 
+          <Field label={editingAnalystId ? 'Substituir foto' : 'Foto do analista'}>
+            <input
+              accept="image/png,image/jpeg,image/webp"
+              className="form-input"
+              type="file"
+              onChange={(event) => onAnalystChange({ ...analystForm, photoFile: event.target.files?.[0] ?? null })}
+            />
+            <p className="mt-2 text-xs text-slate-400">PNG, JPG ou WEBP, com até 5 MB. A imagem será exibida em formato quadrado.</p>
+          </Field>
+
           <div className="flex flex-wrap gap-3">
             <button className="primary-button" disabled={saving} type="submit">
               {saving ? 'Salvando...' : editingAnalystId ? 'Salvar alterações' : 'Incluir analista'}
@@ -6178,7 +6333,7 @@ function AnalystsView({
           <table className="min-w-full text-left text-sm">
             <thead className="text-slate-400">
               <tr>
-                <th className="pb-3 pr-4 font-medium">Nome</th>
+                <th className="pb-3 pr-4 font-medium">Analista</th>
                 <th className="pb-3 pr-4 font-medium">Meta CSAT</th>
                 <th className="pb-3 pr-4 font-medium">Status</th>
                 <th className="pb-3 font-medium">Ações</th>
@@ -6187,7 +6342,12 @@ function AnalystsView({
             <tbody className="divide-y divide-white/10">
               {analysts.map((analyst) => (
                 <tr key={analyst.id}>
-                  <td className="py-3 pr-4">{analyst.name}</td>
+                  <td className="py-3 pr-4">
+                    <div className="flex items-center gap-3">
+                      <AnalystAvatar name={analyst.name} photoUrl={analyst.photo_url} size="sm" />
+                      <span>{analyst.name}</span>
+                    </div>
+                  </td>
                   <td className="py-3 pr-4">{analyst.csat_goal}%</td>
                   <td className="py-3 pr-4">
                     <span className={analyst.active ? 'text-emerald-300' : 'text-slate-400'}>
@@ -6217,6 +6377,11 @@ function AnalystsView({
                       >
                         Excluir
                       </button>
+                      {analyst.photo_url && (
+                        <button className="small-button" type="button" onClick={() => onRemoveAnalystPhoto(analyst)}>
+                          Remover foto
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -6630,6 +6795,18 @@ function MetricCard({
       <p className={`mt-2 text-xl font-semibold leading-tight tabular-nums sm:text-2xl ${valueClass}`}>
         {value}
       </p>
+    </div>
+  )
+}
+
+function AnalystIdentityCard({ analyst }: { analyst: Pick<Analyst, 'name' | 'photo_url'> | null }) {
+  return (
+    <div className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 p-5">
+      <p className="text-sm text-slate-400">Analista</p>
+      <div className="mt-3 flex items-center gap-3">
+        <AnalystAvatar name={analyst?.name ?? 'Analista'} photoUrl={analyst?.photo_url} size="md" />
+        <p className="text-xl font-semibold leading-tight text-emerald-300 sm:text-2xl">{analyst?.name ?? 'Não vinculado'}</p>
+      </div>
     </div>
   )
 }
@@ -7229,6 +7406,7 @@ function exportChatIndividualReport({
   feedbackStyle,
   managerNotes,
   feedbackText,
+  photoUrl,
   output = 'word',
 }: {
   metric: ChatMonthlyMetric
@@ -7239,10 +7417,13 @@ function exportChatIndividualReport({
   feedbackStyle: ChatFeedbackStyle
   managerNotes: string
   feedbackText: string
+  photoUrl?: string | null
   output?: 'word' | 'pdf'
 }) {
   const analystName = getChatAnalystName(metric)
   const safeName = escapeHtml(analystName)
+  const resolvedPhotoUrl = photoUrl ? new URL(photoUrl, window.location.origin).href : ''
+  const photoHtml = resolvedPhotoUrl ? `<img class="profile-photo" src="${escapeHtml(resolvedPhotoUrl)}" alt="Foto de ${safeName}" />` : ''
   const csatGoal = Number(metric.csat_goal) || 90
   const reviewGoal = 25
   const csatGap = round(Number(metric.csat) - csatGoal)
@@ -7282,6 +7463,8 @@ function exportChatIndividualReport({
           ul { margin-top: 6px; }
           li { font-size: 12px; line-height: 1.55; margin-bottom: 5px; }
           .header { border-bottom: 3px solid #06b6d4; padding-bottom: 12px; margin-bottom: 18px; }
+          .header-content { display: flex; align-items: center; gap: 16px; }
+          .profile-photo { width: 76px; height: 76px; border-radius: 50%; object-fit: cover; border: 2px solid #0891b2; }
           .subtitle { color: #475569; margin-bottom: 0; }
           .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0 18px; }
           .box { border: 1px solid #cbd5e1; background: #f8fafc; padding: 12px; margin-bottom: 12px; }
@@ -7338,8 +7521,10 @@ function exportChatIndividualReport({
       </head>
       <body>
         <div class="header">
-          <h1>Relatório de Performance - ${safeName}</h1>
-          <p class="subtitle">Período: ${escapeHtml(periodLabel)} | Fonte: Zendesk</p>
+          <div class="header-content">
+            ${photoHtml}
+            <div><h1>Relatório de Performance - ${safeName}</h1><p class="subtitle">Período: ${escapeHtml(periodLabel)} | Fonte: Zendesk</p></div>
+          </div>
         </div>
 
         <div class="box">
@@ -7720,6 +7905,7 @@ function normalizePhoneReportFeedback(text: string, fallbackText: string, style:
 
 function exportWordReport({
   analystName,
+  photoUrl,
   periodLabel,
   expected,
   achieved,
@@ -7728,6 +7914,7 @@ function exportWordReport({
   assistedFeedback,
 }: {
   analystName: string
+  photoUrl?: string | null
   periodLabel: string
   expected: {
     csat: number
@@ -7757,6 +7944,8 @@ function exportWordReport({
   assistedFeedback: string
 }) {
   const safeName = escapeHtml(analystName)
+  const resolvedPhotoUrl = photoUrl ? new URL(photoUrl, window.location.origin).href : ''
+  const photoHtml = resolvedPhotoUrl ? `<img class="profile-photo" src="${escapeHtml(resolvedPhotoUrl)}" alt="Foto de ${safeName}" />` : ''
   const firstEvolution = weeklyEvolution[0] ?? null
   const lastEvolution = weeklyEvolution.at(-1) ?? null
   const bestEvolution = weeklyEvolution.reduce<WeeklyIndividualTrend | null>(
@@ -7843,6 +8032,8 @@ function exportWordReport({
           th { background: #ecfeff; font-weight: bold; color: #0f172a; }
           .subtitle { color: #475569; margin-bottom: 18px; }
           .header { border-bottom: 3px solid #06b6d4; padding-bottom: 12px; margin-bottom: 18px; }
+          .header-content { display: flex; align-items: center; gap: 16px; }
+          .profile-photo { width: 76px; height: 76px; border-radius: 50%; object-fit: cover; border: 2px solid #0891b2; }
           .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
           .box { border: 1px solid #cbd5e1; background: #f8fafc; padding: 12px; margin-bottom: 12px; }
           .box h2 { margin-top: 0; }
@@ -7871,8 +8062,10 @@ function exportWordReport({
       </head>
       <body>
         <div class="header">
-          <h1>${safeName}</h1>
-          <p class="subtitle">Relatorio mensal de performance - ${escapeHtml(periodLabel)}</p>
+          <div class="header-content">
+            ${photoHtml}
+            <div><h1>${safeName}</h1><p class="subtitle">Relatorio mensal de performance - ${escapeHtml(periodLabel)}</p></div>
+          </div>
         </div>
 
         <div class="grid">
@@ -8269,6 +8462,11 @@ function getChatTeamNameById(teams: ChatTeam[], teamId: string) {
 function getChatAnalystName(metric: ChatMonthlyMetric) {
   const analyst = Array.isArray(metric.chat_analysts) ? metric.chat_analysts[0] : metric.chat_analysts
   return analyst?.name ?? 'Analista'
+}
+
+function getChatAnalystPhoto(metric: ChatMonthlyMetric) {
+  const analyst = Array.isArray(metric.chat_analysts) ? metric.chat_analysts[0] : metric.chat_analysts
+  return analyst?.photo_url ?? null
 }
 
 function getChatTeamName(metric: ChatMonthlyMetric) {
@@ -8860,23 +9058,6 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
