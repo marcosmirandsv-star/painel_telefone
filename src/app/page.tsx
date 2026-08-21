@@ -3366,6 +3366,7 @@ function DashboardView({
   role: UserRole
 }) {
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>(() => createPeriodFilter('month'))
+  const [managementSection, setManagementSection] = useState<'area' | 'people'>('area')
   const [phonePodiumRanking, setPhonePodiumRanking] = useState<PhonePodiumRankingRow[]>([])
   const [managementAiAnalysis, setManagementAiAnalysis] = useState('')
   const [managementAiMessage, setManagementAiMessage] = useState('')
@@ -3853,6 +3854,8 @@ function DashboardView({
       ok: Boolean(analystResult && podiumAverageTickets > 0 && analystVolumeGap === 0),
     },
   ]
+  const analystCriteriaCompleted = analystPodiumChecklist.filter((item) => item.ok).length
+  const analystJourneyProgress = analystResult ? Math.round((analystCriteriaCompleted / analystPodiumChecklist.length) * 100) : 0
   const analystPodiumGapText = analystResult
     ? analystResult.eligible
       ? 'Você ja cumpre os critérios objetivos. Agora o foco e preservar qualidade, avaliações e volume ate o fechamento.'
@@ -3993,6 +3996,35 @@ function DashboardView({
         </div>
       </section>
 
+      {!isAnalystDashboard && (
+        <nav className="panel" aria-label="Visão do dashboard">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Organização da análise</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              className={managementSection === 'area' ? 'tab-button-active' : 'tab-button'}
+              type="button"
+              aria-pressed={managementSection === 'area'}
+              onClick={() => setManagementSection('area')}
+            >
+              Diagnóstico da área
+            </button>
+            <button
+              className={managementSection === 'people' ? 'tab-button-active' : 'tab-button'}
+              type="button"
+              aria-pressed={managementSection === 'people'}
+              onClick={() => setManagementSection('people')}
+            >
+              Pessoas e produtividade
+            </button>
+          </div>
+          <p className="mt-3 text-sm text-slate-400">
+            {managementSection === 'area'
+              ? 'Indicadores gerais, tendências, riscos e plano de ação da operação.'
+              : 'Ranking, elegibilidade, volume e comparação entre os analistas.'}
+          </p>
+        </nav>
+      )}
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {isAnalystDashboard ? (
           <>
@@ -4020,7 +4052,7 @@ function DashboardView({
         </div>
       )}
 
-      {isManagementView && (
+      {isManagementView && managementSection === 'area' && (
         <section className="panel border border-cyan-400/20">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -4080,16 +4112,16 @@ function DashboardView({
         </section>
       )}
 
-      <CriteriaLegend
+      {(isAnalystDashboard || managementSection === 'people') && <CriteriaLegend
         title={isAnalystDashboard ? 'Critérios para disputar o pódio' : 'Critérios do pódio do telefone'}
         items={[
           `CSAT mínimo de ${podiumCsatGoal}%`,
           `Avaliações a partir de ${reviewGoal}%`,
           `Volume igual ou acima da média do time (${podiumAverageTickets || 0} atendimentos)`,
         ]}
-      />
+      />}
 
-      <section className="panel">
+      {!isAnalystDashboard && managementSection === 'area' && <section className="panel">
         <h2 className="section-title">Projeção do fechamento</h2>
         <p className="section-subtitle">
           Mostra para onde os indicadores apontam se a tendência atual continuar. A projeção não altera os resultados já apurados.
@@ -4143,9 +4175,9 @@ function DashboardView({
             </p>
           </div>
         </div>
-      </section>
+      </section>}
 
-      <section className="panel">
+      {!isAnalystDashboard && managementSection === 'area' && <section className="panel">
         <div className="flex flex-col gap-6 xl:flex-row xl:items-stretch">
           <div className="xl:w-2/5">
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
@@ -4285,9 +4317,9 @@ function DashboardView({
             </div>
           </div>
         )}
-      </section>
+      </section>}
 
-      {!isAnalystDashboard && (
+      {!isAnalystDashboard && managementSection === 'people' && (
         <section className="panel">
           <h2 className="section-title">Análise visual do período</h2>
           <p className="section-subtitle">
@@ -4321,7 +4353,7 @@ function DashboardView({
         </section>
       )}
 
-      <section className="panel">
+      {(isAnalystDashboard || managementSection === 'area') && <section className="panel">
         <h2 className="section-title">
           {isAnalystDashboard ? 'Minha evolução recente' : 'Variações recentes'}
         </h2>
@@ -4372,9 +4404,9 @@ function DashboardView({
             goalLabel="Meta do pódio"
           />
         </div>
-      </section>
+      </section>}
 
-      <section className="panel">
+      {(isAnalystDashboard || managementSection === 'people') && <section className="panel">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h2 className="section-title">
@@ -4416,13 +4448,13 @@ function DashboardView({
             </div>
 
             <div className="rounded-lg bg-slate-900 p-5">
-              <p className="text-sm text-slate-400">Posição e previsão</p>
+              <p className="text-sm text-slate-400">Posição no período</p>
               <p className="mt-2 text-3xl font-bold">{analystDataLoading ? '...' : analystRankingPosition ? `${analystRankingPosition}o` : '-'}</p>
               <p className={`mt-2 text-sm font-semibold ${analystDataLoading ? 'text-cyan-300' : analystResult?.eligible && analystRankingPosition <= 3 ? 'text-emerald-300' : analystResult?.eligible ? 'text-cyan-300' : 'text-amber-200'}`}>
                 {analystDataLoading ? 'Calculando com os dados do período' : analystPodiumPositionStatus}
               </p>
               <p className="mt-2 text-sm text-slate-400">
-                {analystDataLoading ? 'Aguarde a leitura final do banco antes de considerar a posição.' : `${analystRankingRead} ${analystPodiumProjectionText}`}
+                {analystDataLoading ? 'Aguarde a leitura final do banco antes de considerar a posição.' : analystRankingRead}
               </p>
             </div>
 
@@ -4438,34 +4470,31 @@ function DashboardView({
                   {analystDataLoading ? 'Aguarde enquanto o sistema cruza CSAT, avaliações, volume e ranking do período.' : analystPodiumGapText}
                 </p>
               </div>
-              <div className="mt-4 grid gap-3 md:grid-cols-3">
-                {analystPodiumChecklist.map((item) => (
-                  <div key={item.label} className="rounded-md bg-slate-950/60 p-4">
-                    <p className="text-sm text-slate-400">{item.label}</p>
-                    <p className={`mt-2 font-semibold ${item.ok ? 'text-emerald-300' : 'text-amber-200'}`}>{item.value}</p>
+              <div className="mt-5 rounded-lg border border-cyan-400/20 bg-slate-950/70 p-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-cyan-200">Sua jornada até o pódio</p>
+                    <p className="mt-1 text-sm text-slate-400">Atualizada com os lançamentos de {launchedPeriodLabel}.</p>
                   </div>
-                ))}
-              </div>
-
-              {analystResult && (
-                <div className="mt-4 rounded-md bg-slate-950/60 p-4">
-                  <p className="text-sm font-semibold text-slate-200">Meu mapa visual dos critérios</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-400">
-                    Compare seu resultado com a referência do pódio e veja rapidamente onde proteger ou recuperar desempenho.
-                  </p>
-                  <div className="mt-4 grid gap-3 lg:grid-cols-3">
-                    <ProgressMetric label="CSAT" value={analystResult.averageCsat} goal={podiumCsatGoal} suffix="%" tone="cyan" />
-                    <ProgressMetric label="Avaliações" value={analystResult.reviewPercentage} goal={reviewGoal} suffix="%" tone="emerald" />
-                    <ProgressMetric
-                      label="Volume"
-                      value={analystResult.totalTickets}
-                      goal={podiumAverageTickets}
-                      max={Math.max(analystResult.totalTickets, podiumAverageTickets, 1)}
-                      tone="amber"
-                    />
-                  </div>
+                  <p className="text-2xl font-bold text-white">{analystCriteriaCompleted} de 3 critérios</p>
                 </div>
-              )}
+                <div className="mt-5 h-3 overflow-hidden rounded-full bg-slate-800" aria-label={`${analystJourneyProgress}% dos critérios cumpridos`}>
+                  <div className="h-full rounded-full bg-cyan-300 transition-[width] duration-500" style={{ width: `${analystJourneyProgress}%` }} />
+                </div>
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  {analystPodiumChecklist.map((item, index) => (
+                    <div key={`journey-${item.label}`} className={`rounded-lg border p-4 ${item.ok ? 'border-emerald-400/30 bg-emerald-400/5' : 'border-amber-300/30 bg-amber-300/5'}`}>
+                      <div className="flex items-center gap-3">
+                        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${item.ok ? 'bg-emerald-300 text-slate-950' : 'bg-amber-200 text-slate-950'}`}>
+                          {item.ok ? 'OK' : index + 1}
+                        </span>
+                        <p className="font-semibold text-white">{item.label}</p>
+                      </div>
+                      <p className={`mt-3 text-sm leading-6 ${item.ok ? 'text-emerald-200' : 'text-amber-100'}`}>{item.value}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         ) : (
@@ -4543,81 +4572,7 @@ function DashboardView({
             </div>
           </>
           )}
-      </section>
-
-      {isAnalystDashboard && (
-        <section className="panel">
-          <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-            <div>
-              <p className="eyebrow">Plano de ação individual</p>
-              <h2 className="section-title">Minha próxima jogada</h2>
-              <p className="section-subtitle">
-                Orientação pratica para transformar a leitura do pódio em comportamento no próximo ciclo.
-              </p>
-            </div>
-            <div className="rounded-lg bg-slate-900 p-4 text-sm font-semibold text-cyan-200 md:max-w-md">
-              {analystNextTargetText}
-            </div>
-          </div>
-
-          {analystActionPlan.length ? (
-            <div className="mt-6 grid gap-4 lg:grid-cols-3">
-              {analystActionPlan.map((item) => (
-                <div key={item.label} className="rounded-lg bg-slate-900 p-5">
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300">{item.label}</p>
-                  <h3 className="mt-3 text-xl font-bold">{item.title}</h3>
-                  <p className="mt-3 text-sm leading-6 text-slate-300">{item.text}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState text="Assim que houver lançamento no período, o plano de ação individual aparece aqui." />
-          )}
-        </section>
-      )}
-
-      {isAnalystDashboard && (
-      <section className="panel">
-        <h2 className="section-title">Meus insights do período</h2>
-        <p className="section-subtitle">
-          Resumo dos principais resultados do período selecionado.
-        </p>
-
-        <div className="mt-6 grid gap-4 lg:grid-cols-3">
-            <div className="rounded-lg bg-slate-900 p-5">
-              <p className="text-sm text-slate-400">Ponto forte</p>
-              <p className="mt-2 text-xl font-bold">
-                {analystResult && analystResult.averageCsat >= analystResult.individualGoal
-                  ? 'CSAT dentro da meta individual'
-                  : 'Acompanhar CSAT individual'}
-              </p>
-              <p className="mt-2 text-sm text-slate-400">
-                Resultado atual: {analystResult?.averageCsat ?? 0}% / meta {analystProfile?.csat_goal ?? 0}%.
-              </p>
-            </div>
-
-            <div className="rounded-lg bg-slate-900 p-5">
-              <p className="text-sm text-slate-400">Ponto de atenção</p>
-              <p className="mt-2 text-xl font-bold">
-                {analystResult ? analystActionText : 'Sem dados no período'}
-              </p>
-              <p className="mt-2 text-sm text-slate-400">
-                Esta recomendação muda conforme o período selecionado no filtro.
-              </p>
-            </div>
-
-            <div className="rounded-lg bg-slate-900 p-5">
-              <p className="text-sm text-slate-400">Equipe no período</p>
-              <p className="mt-2 text-3xl font-bold text-emerald-300">
-                {periodTeamPerformance || 0}%
-              </p>
-              <p className="mt-2 text-sm text-slate-400">
-                Referencia geral da operação: {teamPerformanceGoal}%.
-              </p>
-            </div>
-        </div>
-      </section>
-      )}
+      </section>}
     </div>
   )
 }
