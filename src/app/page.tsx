@@ -3456,7 +3456,7 @@ function DashboardView({
   const periodPodium = buildPeriodPodium(filteredIndividualMetrics, analysts, podiumCsatGoal, reviewGoal)
   const podiumWinners = periodPodium.filter((item) => item.eligible).slice(0, 3)
   const bestPerformer = periodPodium[0] ?? null
-  const attentionList = periodPodium.filter((item) => !item.eligible).slice(0, 3)
+  const attentionList = periodPodium.filter((item) => !item.eligible)
   const eligibleCount = periodPodium.filter((item) => item.eligible).length
   const periodLabel = formatPeriodLabel(periodFilter)
   const periodAverageCsat = calculateAverageCsat(filteredIndividualMetrics)
@@ -3467,6 +3467,7 @@ function DashboardView({
   const teamPerformanceDelta = round(periodTeamPerformance - previousTeamPerformance)
   const totalReviews = filteredIndividualMetrics.reduce((sum, metric) => sum + Number(metric.total_reviews), 0)
   const totalTickets = filteredIndividualMetrics.reduce((sum, metric) => sum + Number(metric.total_tickets), 0)
+  const periodAverageTickets = periodPodium.length ? round(totalTickets / periodPodium.length) : 0
   const n1PositiveReviews = filteredIndividualMetrics.reduce((sum, metric) => sum + Number(metric.positive_reviews), 0)
   const reviewCoverage = totalTickets ? round((totalReviews / totalTickets) * 100) : 0
   const teamAnsweredCalls = filteredTeamMetrics.reduce((sum, metric) => sum + Number(metric.answered_calls), 0)
@@ -3510,6 +3511,26 @@ function DashboardView({
     .filter((item) => item.reviews > 0)
     .sort((a, b) => b.downwardImpact - a.downwardImpact)
   const attentionCount = attentionList.length
+  const attentionDetails = attentionList.map((item) => {
+    const criteria: string[] = []
+
+    if (item.averageCsat < item.individualGoal || item.averageCsat < podiumCsatGoal) {
+      const csatReferences = [
+        item.averageCsat < item.individualGoal ? `meta individual ${item.individualGoal}%` : null,
+        item.averageCsat < podiumCsatGoal ? `pódio ${podiumCsatGoal}%` : null,
+      ].filter(Boolean).join(' e ')
+      criteria.push(`CSAT ${item.averageCsat}% (referência: ${csatReferences})`)
+    }
+    if (item.reviewPercentage < reviewGoal) {
+      criteria.push(`avaliações ${item.reviewPercentage}% (meta ${reviewGoal}%)`)
+    }
+    if (item.totalTickets < periodAverageTickets) {
+      criteria.push(`volume ${item.totalTickets} (média do time ${periodAverageTickets})`)
+    }
+
+    return `${item.analystName}: ${criteria.join('; ')}`
+  })
+  const attentionSummary = attentionDetails.join(' | ')
   const hasPeriodData = filteredIndividualMetrics.length > 0 || filteredTeamMetrics.length > 0
   const predictiveGoalProbability = calculateGoalProbability({
     hasData: hasPeriodData,
@@ -3562,9 +3583,9 @@ function DashboardView({
         attentionCount > 0
           ? {
               label: 'Analistas que pedem acompanhamento',
-              reading: `${attentionCount} analista(s) abaixo de pelo menos um critério do pódio`,
+              reading: `${attentionCount} analista(s) em atenção. ${attentionSummary}`,
               action: isManagementView
-                ? 'Abrir a análise individual para localizar o critério e orientar o próximo passo.'
+                ? 'Abrir a análise individual dos nomes indicados, validar a causa e registrar um feedback MIMO com uma ação mensurável para o próximo lançamento.'
                 : 'Observe em sua elegibilidade qual critério precisa de recuperação.',
               severity: attentionCount >= 3 ? 'Alto' : 'Médio',
             }
@@ -3598,7 +3619,7 @@ function DashboardView({
     !hasPeriodData
       ? 'Selecionar outro período ou aguardar os lançamentos.'
       : attentionList.length > 0
-        ? `Priorizar ${attentionList.map((item) => item.analystName).join(', ')}.`
+        ? attentionSummary
         : periodTeamPerformance < teamPerformanceGoal
           ? 'Revisar performance operacional da equipe.'
           : 'Manter rotina de acompanhamento semanal.'
@@ -3617,18 +3638,20 @@ function DashboardView({
     !hasPeriodData
       ? 'Conferir se os lançamentos da semana/mes ja foram feitos.'
       : attentionCount
-        ? 'Abrir feedback SARE dos analistas em atenção e acompanhar a semana seguinte.'
+        ? 'Abrir feedback MIMO dos analistas em atenção, combinar uma ação objetiva por critério e conferir o resultado no próximo lançamento.'
         : periodTeamPerformance < teamPerformanceGoal
           ? 'Revisar abandonos, escala e gargalos antes do fechamento.'
           : 'Comparar evolução semanal e preservar a rotina atual.'
   const executiveClosingRead =
     !hasPeriodData
       ? 'Fechamento ainda nao liberado para leitura.'
-      : predictiveRiskLevel === 'Alto'
-        ? 'Fechamento em risco: agir antes de consolidar o período.'
-        : predictiveRiskLevel === 'Medio'
-          ? 'Fechamento pede monitoramento: ha variação que pode mudar o resultado.'
-          : 'Fechamento favoravel: manter acompanhamento ate concluir o período.'
+      : periodTeamPerformance < teamPerformanceGoal
+        ? `Meta operacional em risco: performance atual de ${periodTeamPerformance}% para uma meta de ${teamPerformanceGoal}%. Revisar abandonos, escala e cobertura.`
+        : periodAverageCsat < podiumCsatGoal
+          ? `Qualidade em atenção: CSAT N1 de ${periodAverageCsat}% para a referência de ${podiumCsatGoal}%. Revisar os casos com impacto negativo.`
+          : attentionCount
+            ? `Pódio em atenção: ${attentionCount} analista(s) podem fechar fora dos critérios. A operação está em ${periodTeamPerformance}%, mas os casos individuais precisam de ação.`
+            : 'Fechamento favorável: manter o acompanhamento até concluir o período.'
 
   function handlePeriodModeChange(mode: PeriodMode) {
     setPeriodFilter(createPeriodFilter(mode))
@@ -4017,11 +4040,11 @@ function DashboardView({
             <div>
               <p className="text-sm font-semibold text-slate-200">Onde está o risco?</p>
               <p className="mt-1 text-sm text-slate-400">
-                Veja qual indicador elevou o alerta e a ação recomendada para ele.
+                Veja o que elevou o alerta, quem precisa de atenção e a ação recomendada para cada caso.
               </p>
             </div>
             <span className="text-sm font-semibold text-slate-300">
-              Risco de queda: {predictiveRiskLevel}
+              Risco do período: {predictiveRiskLevel}
             </span>
           </div>
 
@@ -4062,6 +4085,12 @@ function DashboardView({
             <div className="rounded-lg bg-slate-900 p-4">
               <p className="text-sm text-slate-400">Ação recomendada</p>
               <p className="mt-2 font-semibold">{executiveNextAction}</p>
+              {attentionCount > 0 && (
+                <p className="mt-2 text-xs leading-5 text-slate-500">
+                  Use MIMO para orientar uma correção ou manutenção imediata. Reserve o SARE para um plano de
+                  desenvolvimento formal, com alinhamentos e resultado esperado.
+                </p>
+              )}
             </div>
             <div className="rounded-lg bg-slate-900 p-4">
               <p className="text-sm text-slate-400">Leitura do fechamento</p>
@@ -9001,9 +9030,6 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
-
-
-
 
 
 
