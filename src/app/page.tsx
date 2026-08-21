@@ -3415,6 +3415,17 @@ function DashboardView({
   const podiumCsatGoal = getGoalValue(goals, 'podium_csat_minimum', 90)
   const reviewGoal = getGoalValue(goals, 'review_percentage', 25)
   const teamPerformanceGoal = getTeamPerformanceGoal(goals)
+  const weeklyEligibilityTrend = [...new Set(filteredIndividualMetrics.map((metric) => metric.week_start))]
+    .sort()
+    .map((weekStart) => {
+      const weekMetrics = filteredIndividualMetrics.filter((metric) => metric.week_start === weekStart)
+      const weekPodium = buildPeriodPodium(weekMetrics, analysts, podiumCsatGoal, reviewGoal)
+      return {
+        label: formatShortDate(weekStart),
+        eligible: weekPodium.filter((item) => item.eligible).length,
+        total: weekPodium.length,
+      }
+    })
   const previousPeriodFilter = getPreviousPeriod(periodFilter)
   const previousIndividualMetrics = filterIndividualMetricsByPeriod(individualMetrics, previousPeriodFilter)
   const previousTeamMetrics = filterTeamMetricsByPeriod(teamMetrics, previousPeriodFilter)
@@ -3462,7 +3473,6 @@ function DashboardView({
   }, [periodFilter.start, periodFilter.end])
   const periodPodium = buildPeriodPodium(filteredIndividualMetrics, analysts, podiumCsatGoal, reviewGoal)
   const podiumWinners = periodPodium.filter((item) => item.eligible).slice(0, 3)
-  const bestPerformer = periodPodium[0] ?? null
   const attentionList = periodPodium.filter((item) => !item.eligible)
   const eligibleCount = periodPodium.filter((item) => item.eligible).length
   const periodLabel = formatPeriodLabel(periodFilter)
@@ -3474,6 +3484,27 @@ function DashboardView({
   const hasPreviousTeamData = previousTeamMetrics.length > 0
   const csatDelta = hasPreviousIndividualData ? round(periodAverageCsat - previousAverageCsat) : 0
   const teamPerformanceDelta = hasPreviousTeamData ? round(periodTeamPerformance - previousTeamPerformance) : 0
+  const hasWeeklyPaceComparison = weeklyIndividualTrend.length > 1
+  const firstWeeklyResult = weeklyIndividualTrend[0] ?? null
+  const lastWeeklyResult = weeklyIndividualTrend.at(-1) ?? null
+  const firstWeeklyPerformance = teamPerformanceTrend[0] ?? null
+  const lastWeeklyPerformance = teamPerformanceTrend.at(-1) ?? null
+  const firstWeeklyOverallCsat = overallCsatTrend[0] ?? null
+  const lastWeeklyOverallCsat = overallCsatTrend.at(-1) ?? null
+  const firstWeeklyEligibility = weeklyEligibilityTrend[0] ?? null
+  const lastWeeklyEligibility = weeklyEligibilityTrend.at(-1) ?? null
+  const weeklyCsatPace = firstWeeklyResult && lastWeeklyResult
+    ? round(lastWeeklyResult.csat - firstWeeklyResult.csat)
+    : 0
+  const weeklyPerformancePace = firstWeeklyPerformance && lastWeeklyPerformance
+    ? round(lastWeeklyPerformance.value - firstWeeklyPerformance.value)
+    : 0
+  const weeklyOverallCsatPace = firstWeeklyOverallCsat && lastWeeklyOverallCsat
+    ? round(lastWeeklyOverallCsat.value - firstWeeklyOverallCsat.value)
+    : 0
+  const weeklyEligibilityPace = firstWeeklyEligibility && lastWeeklyEligibility
+    ? lastWeeklyEligibility.eligible - firstWeeklyEligibility.eligible
+    : 0
   const totalReviews = filteredIndividualMetrics.reduce((sum, metric) => sum + Number(metric.total_reviews), 0)
   const totalTickets = filteredIndividualMetrics.reduce((sum, metric) => sum + Number(metric.total_tickets), 0)
   const periodAverageTickets = periodPodium.length ? round(totalTickets / periodPodium.length) : 0
@@ -3562,6 +3593,47 @@ function DashboardView({
     teamPerformanceDelta,
     attentionCount,
   )
+  const weeklyPaceFacts = [
+    firstWeeklyResult && lastWeeklyResult
+      ? `CSAT N1: ${firstWeeklyResult.csat}% para ${lastWeeklyResult.csat}% (${formatDelta(weeklyCsatPace, ' p.p.')})`
+      : null,
+    teamPerformanceTrend.length > 1 && firstWeeklyPerformance && lastWeeklyPerformance
+      ? `performance: ${firstWeeklyPerformance.value}% para ${lastWeeklyPerformance.value}% (${formatDelta(weeklyPerformancePace, ' p.p.')})`
+      : null,
+    overallCsatTrend.length > 1 && firstWeeklyOverallCsat && lastWeeklyOverallCsat
+      ? `CSAT geral N1 + N2: ${firstWeeklyOverallCsat.value}% para ${lastWeeklyOverallCsat.value}% (${formatDelta(weeklyOverallCsatPace, ' p.p.')})`
+      : null,
+    weeklyEligibilityTrend.length > 1 && firstWeeklyEligibility && lastWeeklyEligibility
+      ? `elegíveis: ${firstWeeklyEligibility.eligible} de ${firstWeeklyEligibility.total} para ${lastWeeklyEligibility.eligible} de ${lastWeeklyEligibility.total}`
+      : null,
+  ].filter((fact): fact is string => Boolean(fact))
+  const weeklyPaceRisks = [
+    weeklyIndividualTrend.length > 1 && lastWeeklyResult && lastWeeklyResult.csat < podiumCsatGoal && weeklyCsatPace <= 0
+      ? `o CSAT N1 tende a permanecer abaixo de ${podiumCsatGoal}%`
+      : null,
+    teamPerformanceTrend.length > 1 && lastWeeklyPerformance && lastWeeklyPerformance.value < teamPerformanceGoal && weeklyPerformancePace <= 0
+      ? `a performance tende a permanecer abaixo de ${teamPerformanceGoal}%`
+      : null,
+    overallCsatTrend.length > 1 && lastWeeklyOverallCsat && lastWeeklyOverallCsat.value < podiumCsatGoal && weeklyOverallCsatPace <= 0
+      ? `o CSAT geral N1 + N2 tende a permanecer abaixo de ${podiumCsatGoal}%`
+      : null,
+    weeklyEligibilityTrend.length > 1 && lastWeeklyEligibility && lastWeeklyEligibility.total > 0 &&
+      lastWeeklyEligibility.eligible / lastWeeklyEligibility.total < 0.5 && weeklyEligibilityPace <= 0
+      ? 'o período tende a fechar com poucos analistas elegíveis ao pódio'
+      : null,
+  ].filter((risk): risk is string => Boolean(risk))
+  const weeklyPaceRead = !hasWeeklyPaceComparison
+    ? 'Ainda há somente uma semana lançada neste recorte. A tendência será liberada após o próximo lançamento semanal.'
+    : `Da primeira para a última semana, ${weeklyPaceFacts.join('; ')}. ${
+        weeklyPaceRisks.length
+          ? `Se esse ritmo continuar, ${weeklyPaceRisks.join(' e ')}.`
+          : 'Mantido esse ritmo, os indicadores acompanhados permanecem em trajetória compatível com as metas.'
+      }`
+  const weeklyPaceAction = !hasWeeklyPaceComparison
+    ? 'Fazer o próximo lançamento semanal para comparar velocidade, direção e consistência da evolução.'
+    : weeklyPaceRisks.length
+      ? 'Atuar nos critérios indicados abaixo e conferir, no próximo lançamento semanal, se a distância para a meta diminuiu.'
+      : 'Preservar as práticas atuais e confirmar no próximo lançamento se a evolução se mantém.'
   const predictiveRiskDrivers = !hasPeriodData
     ? []
     : [
@@ -3606,41 +3678,6 @@ function DashboardView({
       : predictiveRiskDrivers.length > 0
         ? `Alerta acionado por: ${predictiveRiskDrivers.map((driver) => driver.label.toLowerCase()).join(', ')}. Veja o diagnóstico e as ações logo abaixo.`
         : 'Nenhum alerta acionado. Manter a rotina atual e preservar a consistência até o fechamento.'
-  const executiveStatus =
-    !hasPeriodData
-      ? 'Sem dados no período'
-      : attentionCount
-        ? 'Período pede acompanhamento'
-        : periodTeamPerformance >= teamPerformanceGoal && periodAverageCsat >= podiumCsatGoal
-          ? 'Período saudável'
-          : 'Periodo em consolidação'
-  const executiveStatusTone =
-    !hasPeriodData
-      ? 'text-slate-300'
-      : attentionCount
-        ? 'text-amber-300'
-        : periodTeamPerformance >= teamPerformanceGoal && periodAverageCsat >= podiumCsatGoal
-          ? 'text-emerald-300'
-          : 'text-cyan-300'
-  const executivePriority =
-    !hasPeriodData
-      ? 'Selecionar outro período ou aguardar os lançamentos.'
-      : attentionList.length > 0
-        ? `${attentionCount} analista(s) precisam de acompanhamento. Consulte os nomes e critérios no diagnóstico abaixo.`
-        : periodTeamPerformance < teamPerformanceGoal
-          ? 'Revisar performance operacional da equipe.'
-          : 'Manter rotina de acompanhamento semanal.'
-
-  const executiveCriticalPoint =
-    !hasPeriodData
-      ? 'Sem dados suficientes para diagnostico.'
-      : attentionList.length > 0
-        ? `${attentionCount} analista(s) abaixo dos critérios de pódio.`
-        : periodAverageCsat < podiumCsatGoal
-          ? `CSAT do período abaixo da meta de pódio (${podiumCsatGoal}%).`
-          : periodTeamPerformance < teamPerformanceGoal
-            ? `Performance da equipe abaixo da meta operacional (${teamPerformanceGoal}%).`
-            : 'Indicadores principais dentro da faixa esperada.'
   const executiveNextAction =
     !hasPeriodData
       ? 'Conferir se os lançamentos da semana/mes ja foram feitos.'
@@ -4185,6 +4222,21 @@ function DashboardView({
             </span>
           </div>
 
+          {hasPeriodData && (
+            <div className="mt-4 rounded-lg border border-cyan-400/20 bg-slate-950/60 p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="font-semibold text-white">Ritmo entre a primeira e a última semana</p>
+                <span className={weeklyPaceRisks.length ? 'text-amber-200' : 'text-emerald-300'}>
+                  {hasWeeklyPaceComparison
+                    ? weeklyPaceRisks.length ? 'Tendência exige atenção' : 'Tendência favorável'
+                    : 'Aguardando comparação'}
+                </span>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-slate-300">{weeklyPaceRead}</p>
+              <p className="mt-2 text-sm leading-6 text-slate-400">Próxima ação: {weeklyPaceAction}</p>
+            </div>
+          )}
+
           {!hasPeriodData ? (
             <p className="mt-4 text-sm text-slate-400">Ainda não há dados suficientes para localizar riscos.</p>
           ) : predictiveRiskDrivers.length ? (
@@ -4535,18 +4587,14 @@ function DashboardView({
         </section>
       )}
 
+      {isAnalystDashboard && (
       <section className="panel">
-        <h2 className="section-title">
-          {isAnalystDashboard ? 'Meus insights do período' : 'Insights do período'}
-        </h2>
+        <h2 className="section-title">Meus insights do período</h2>
         <p className="section-subtitle">
-          {isAnalystDashboard
-            ? 'Leitura rapida para acompanhar seu desempenho sem abrir historico de lançamentos.'
-            : 'Leitura rapida para entender desempenho, riscos e prioridades sem abrir historico de lançamentos.'}
+          Leitura rápida para acompanhar seu desempenho sem abrir histórico de lançamentos.
         </p>
 
-        {isAnalystDashboard ? (
-          <div className="mt-6 grid gap-4 lg:grid-cols-3">
+        <div className="mt-6 grid gap-4 lg:grid-cols-3">
             <div className="rounded-lg bg-slate-900 p-5">
               <p className="text-sm text-slate-400">Ponto forte</p>
               <p className="mt-2 text-xl font-bold">
@@ -4578,57 +4626,9 @@ function DashboardView({
                 Referencia geral da operação: {teamPerformanceGoal}%.
               </p>
             </div>
-          </div>
-        ) : (
-          <div className="mt-6 grid gap-4 lg:grid-cols-3">
-            <div className="rounded-lg bg-slate-900 p-5">
-              <p className="text-sm text-slate-400">Melhor leitura</p>
-              {bestPerformer ? (
-                <>
-                  <h3 className="mt-2 text-xl font-bold">{bestPerformer.analystName}</h3>
-                  <p className="mt-2 text-3xl font-bold text-cyan-300">{bestPerformer.averageCsat}%</p>
-                  <p className="mt-2 text-sm text-slate-400">
-                    {bestPerformer.reviewPercentage}% avaliações no período
-                  </p>
-                </>
-              ) : (
-                <p className="mt-4 text-sm text-slate-500">Aguardando dados do período.</p>
-              )}
-            </div>
-
-            <div className="rounded-lg bg-slate-900 p-5">
-              <p className="text-sm text-slate-400">Atencao necessaria</p>
-              {attentionList.length ? (
-                <div className="mt-4 space-y-3">
-                  {attentionList.map((item) => (
-                    <div key={item.analystId} className="border-b border-white/10 pb-3 last:border-0 last:pb-0">
-                      <p className="font-semibold">{item.analystName}</p>
-                      <p className="mt-1 text-sm text-slate-400">{item.reasons.join(', ')}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-4 text-sm text-emerald-300">
-                  Nenhum alerta crítico entre os analistas com lançamento.
-                </p>
-              )}
-            </div>
-
-            <div className="rounded-lg bg-slate-900 p-5">
-              <p className="text-sm text-slate-400">Saude da equipe</p>
-              <p className="mt-2 text-3xl font-bold text-emerald-300">
-                {periodTeamPerformance || 0}%
-              </p>
-              <p className="mt-2 text-sm text-slate-400">
-                Meta de referência: {teamPerformanceGoal}%
-              </p>
-              <p className="mt-4 text-sm text-slate-300">
-                {eligibleCount} de {periodPodium.length} analistas estao elegiveis para o pódio.
-              </p>
-            </div>
-          </div>
-        )}
+        </div>
       </section>
+      )}
     </div>
   )
 }
