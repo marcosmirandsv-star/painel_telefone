@@ -4580,7 +4580,7 @@ function DashboardView({
       <section className="panel">
         <h2 className="section-title">Meus insights do período</h2>
         <p className="section-subtitle">
-          Leitura rápida para acompanhar seu desempenho sem abrir histórico de lançamentos.
+          Resumo dos principais resultados do período selecionado.
         </p>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-3">
