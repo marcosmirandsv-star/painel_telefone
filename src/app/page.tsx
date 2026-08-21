@@ -3378,6 +3378,9 @@ function DashboardView({
 }) {
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>(() => createPeriodFilter('month'))
   const [phonePodiumRanking, setPhonePodiumRanking] = useState<PhonePodiumRankingRow[]>([])
+  const [managementAiAnalysis, setManagementAiAnalysis] = useState('')
+  const [managementAiMessage, setManagementAiMessage] = useState('')
+  const [managementAiLoading, setManagementAiLoading] = useState(false)
   const isPhoneDailyUnsupported = isPhonePeriodShorterThanWeeklyLaunch(periodFilter)
   const phoneWeeklyLaunchMessage =
     'Os dados do telefone são lançados por semana. Para leitura diária, seria necessário lançar os atendimentos por dia.'
@@ -3452,6 +3455,10 @@ function DashboardView({
     return () => {
       active = false
     }
+  }, [periodFilter.start, periodFilter.end])
+  useEffect(() => {
+    setManagementAiAnalysis('')
+    setManagementAiMessage('')
   }, [periodFilter.start, periodFilter.end])
   const periodPodium = buildPeriodPodium(filteredIndividualMetrics, analysts, podiumCsatGoal, reviewGoal)
   const podiumWinners = periodPodium.filter((item) => item.eligible).slice(0, 3)
@@ -3655,6 +3662,66 @@ function DashboardView({
 
   function handlePeriodModeChange(mode: PeriodMode) {
     setPeriodFilter(createPeriodFilter(mode))
+  }
+
+  async function handleManagementAiAnalysis() {
+    if (!hasPeriodData || !isManagementView) return
+
+    setManagementAiLoading(true)
+    setManagementAiMessage('Analisando os indicadores com IA...')
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('Sua sessão expirou. Entre novamente no sistema.')
+
+      const response = await fetch('/api/management-analysis', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          periodLabel,
+          riskLevel: predictiveRiskLevel,
+          goalProbability: predictiveGoalProbability,
+          team: {
+            csat: periodAverageCsat,
+            csatGoal: podiumCsatGoal,
+            csatDelta,
+            performance: periodTeamPerformance,
+            performanceGoal: teamPerformanceGoal,
+            performanceDelta: teamPerformanceDelta,
+            reviewCoverage,
+            reviewGoal,
+            answeredCalls: teamAnsweredCalls,
+            totalCalls: teamTotalCalls,
+            eligibleCount,
+            totalAnalysts: periodPodium.length,
+          },
+          analysts: attentionList.map((item) => ({
+            name: item.analystName,
+            csat: item.averageCsat,
+            csatGoal: Math.max(item.individualGoal, podiumCsatGoal),
+            reviewPercentage: item.reviewPercentage,
+            reviewGoal,
+            tickets: item.totalTickets,
+            teamAverageTickets: periodAverageTickets,
+            reasons: item.reasons,
+          })),
+          localDiagnosis: executiveClosingRead,
+          localAction: executiveNextAction,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data?.error || 'Não foi possível aprofundar a análise com IA.')
+
+      setManagementAiAnalysis(data.analysis ?? '')
+      setManagementAiMessage('Análise gerada pela IA com base nos cálculos deste período. Revise antes de agir.')
+    } catch (error) {
+      setManagementAiMessage(error instanceof Error ? error.message : 'Não foi possível consultar a IA agora.')
+    } finally {
+      setManagementAiLoading(false)
+    }
   }
   const isAnalystDashboard = role === 'analyst'
   const analystProfile = isAnalystDashboard ? analysts[0] ?? null : null
@@ -4098,6 +4165,33 @@ function DashboardView({
               <p className="mt-2 text-xs leading-5 text-slate-500">
                 Volume: {teamAnsweredCalls} atendidas de {teamTotalCalls} processadas.
               </p>
+            </div>
+            <div className="rounded-lg border border-cyan-400/20 bg-slate-900 p-5 lg:col-span-3">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="font-semibold text-white">Aprofundamento com IA</p>
+                  <p className="mt-1 text-sm leading-6 text-slate-400">
+                    A IA interpreta os cálculos acima, prioriza ações e explica como acompanhar o próximo resultado.
+                    Ela não altera números, critérios ou posições do pódio.
+                  </p>
+                </div>
+                <button
+                  className="primary-button shrink-0 disabled:cursor-not-allowed disabled:opacity-60"
+                  type="button"
+                  disabled={!hasPeriodData || managementAiLoading}
+                  onClick={handleManagementAiAnalysis}
+                >
+                  {managementAiLoading ? 'Analisando...' : 'Aprofundar análise com IA'}
+                </button>
+              </div>
+              {managementAiMessage && (
+                <p className="mt-4 text-sm text-cyan-100">{managementAiMessage}</p>
+              )}
+              {managementAiAnalysis && (
+                <div className="mt-4 whitespace-pre-line rounded-lg border border-white/10 bg-slate-950/70 p-5 text-sm leading-7 text-slate-200">
+                  {managementAiAnalysis}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -9030,9 +9124,6 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
-
-
-
 
 
 
