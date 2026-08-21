@@ -4332,13 +4332,23 @@ function DashboardView({
             <div className="mt-6 grid gap-4 md:grid-cols-3">
               {[0, 1, 2].map((index) => {
                 const winner = podiumWinners[index]
+                const winnerAnalyst = winner
+                  ? analysts.find((analyst) => analyst.id === winner.analystId)
+                  : null
 
                 return (
                   <div key={index} className="rounded-lg bg-slate-900 p-5">
                     <p className="text-sm text-slate-400">{index + 1}o lugar</p>
                     {winner ? (
                       <>
-                        <h3 className="mt-2 text-xl font-bold">{winner.analystName}</h3>
+                        <div className="mt-3 flex items-center gap-3">
+                          <AnalystAvatar
+                            name={winner.analystName}
+                            photoUrl={winnerAnalyst?.photo_url}
+                            size="md"
+                          />
+                          <h3 className="text-xl font-bold">{winner.analystName}</h3>
+                        </div>
                         <p className="mt-3 text-3xl font-bold text-cyan-300">{winner.averageCsat}%</p>
                         <p className="mt-2 text-sm text-slate-400">
                           {winner.reviewPercentage}% avaliações | {winner.totalTickets} atendimentos
@@ -7423,7 +7433,9 @@ function exportChatIndividualReport({
   const analystName = getChatAnalystName(metric)
   const safeName = escapeHtml(analystName)
   const resolvedPhotoUrl = photoUrl ? new URL(photoUrl, window.location.origin).href : ''
-  const photoHtml = resolvedPhotoUrl ? `<img class="profile-photo" src="${escapeHtml(resolvedPhotoUrl)}" alt="Foto de ${safeName}" />` : ''
+  const photoHtml = resolvedPhotoUrl
+    ? `<img class="profile-photo" src="${escapeHtml(resolvedPhotoUrl)}" alt="Foto de ${safeName}" width="76" height="76" style="width:76px;height:76px;max-width:76px;max-height:76px;border-radius:50%;object-fit:cover;border:2px solid #0891b2;display:block;" />`
+    : ''
   const csatGoal = Number(metric.csat_goal) || 90
   const reviewGoal = 25
   const csatGap = round(Number(metric.csat) - csatGoal)
@@ -7464,7 +7476,7 @@ function exportChatIndividualReport({
           li { font-size: 12px; line-height: 1.55; margin-bottom: 5px; }
           .header { border-bottom: 3px solid #06b6d4; padding-bottom: 12px; margin-bottom: 18px; }
           .header-content { display: flex; align-items: center; gap: 16px; }
-          .profile-photo { width: 76px; height: 76px; border-radius: 50%; object-fit: cover; border: 2px solid #0891b2; }
+          .profile-photo { width: 76px !important; height: 76px !important; max-width: 76px !important; max-height: 76px !important; border-radius: 50%; object-fit: cover; border: 2px solid #0891b2; display: block; }
           .subtitle { color: #475569; margin-bottom: 0; }
           .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0 18px; }
           .box { border: 1px solid #cbd5e1; background: #f8fafc; padding: 12px; margin-bottom: 12px; }
@@ -7945,7 +7957,9 @@ function exportWordReport({
 }) {
   const safeName = escapeHtml(analystName)
   const resolvedPhotoUrl = photoUrl ? new URL(photoUrl, window.location.origin).href : ''
-  const photoHtml = resolvedPhotoUrl ? `<img class="profile-photo" src="${escapeHtml(resolvedPhotoUrl)}" alt="Foto de ${safeName}" />` : ''
+  const photoHtml = resolvedPhotoUrl
+    ? `<img class="profile-photo" src="${escapeHtml(resolvedPhotoUrl)}" alt="Foto de ${safeName}" width="76" height="76" style="width:76px;height:76px;max-width:76px;max-height:76px;border-radius:50%;object-fit:cover;border:2px solid #0891b2;display:block;" />`
+    : ''
   const firstEvolution = weeklyEvolution[0] ?? null
   const lastEvolution = weeklyEvolution.at(-1) ?? null
   const bestEvolution = weeklyEvolution.reduce<WeeklyIndividualTrend | null>(
@@ -8033,7 +8047,7 @@ function exportWordReport({
           .subtitle { color: #475569; margin-bottom: 18px; }
           .header { border-bottom: 3px solid #06b6d4; padding-bottom: 12px; margin-bottom: 18px; }
           .header-content { display: flex; align-items: center; gap: 16px; }
-          .profile-photo { width: 76px; height: 76px; border-radius: 50%; object-fit: cover; border: 2px solid #0891b2; }
+          .profile-photo { width: 76px !important; height: 76px !important; max-width: 76px !important; max-height: 76px !important; border-radius: 50%; object-fit: cover; border: 2px solid #0891b2; display: block; }
           .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
           .box { border: 1px solid #cbd5e1; background: #f8fafc; padding: 12px; margin-bottom: 12px; }
           .box h2 { margin-top: 0; }
@@ -9058,7 +9072,6 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
-
 
 
 
