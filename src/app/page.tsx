@@ -4295,7 +4295,7 @@ function DashboardView({
                   </p>
                   <div className="mt-4 grid gap-3 lg:grid-cols-3">
                     <ProgressMetric label="CSAT" value={analystResult.averageCsat} goal={podiumCsatGoal} suffix="%" tone="cyan" />
-                    <ProgressMetric label="Avalia??es" value={analystResult.reviewPercentage} goal={reviewGoal} suffix="%" tone="emerald" />
+                    <ProgressMetric label="Avaliações" value={analystResult.reviewPercentage} goal={reviewGoal} suffix="%" tone="emerald" />
                     <ProgressMetric
                       label="Volume"
                       value={analystResult.totalTickets}
@@ -9001,7 +9001,6 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
-
 
 
 
