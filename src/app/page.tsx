@@ -2371,22 +2371,6 @@ function ChatModuleDashboard({
     }
   }
 
-  function handlePrintChatIndividualReport() {
-    const payload = buildChatReportExportPayload()
-
-    if (!payload) {
-      setChatExportMessage('Selecione um analista com dados antes de gerar PDF.')
-      return
-    }
-
-    try {
-      exportChatIndividualReport({ ...payload, output: 'pdf' })
-      setChatExportMessage('Relatório limpo aberto para PDF. Na janela de impressão, escolha "Salvar como PDF".')
-    } catch {
-      setChatExportMessage('Não foi possível abrir o PDF limpo. Verifique se o navegador bloqueou a nova janela.')
-    }
-  }
-
   return (
     <div className="mt-8 space-y-7">
       <section className="panel">
@@ -3139,24 +3123,14 @@ function ChatModuleDashboard({
             />
           </Field>
 
-          <div className="flex flex-wrap gap-3">
-            <button
-              className="btn-primary w-fit disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={!selectedChatReportMetric}
-              type="button"
-              onClick={handleExportChatIndividualReport}
-            >
-              6. Exportar Word
-            </button>
-            <button
-              className="secondary-button w-fit disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={!selectedChatReportMetric}
-              type="button"
-              onClick={handlePrintChatIndividualReport}
-            >
-              Salvar PDF limpo
-            </button>
-          </div>
+          <button
+            className="btn-primary w-fit disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={!selectedChatReportMetric}
+            type="button"
+            onClick={handleExportChatIndividualReport}
+          >
+            6. Exportar relatório Word
+          </button>
         </div>
 
         {chatExportMessage && <p className="mt-4 rounded-md bg-slate-900/70 px-4 py-3 text-sm text-slate-200">{chatExportMessage}</p>}
@@ -4973,16 +4947,6 @@ function ReportsView({
     }
   }
 
-  function handlePrintReport() {
-    if (!selectedAnalyst || !analystResult) {
-      setExportMessage('Selecione um analista e um período com lançamento antes de gerar PDF.')
-      return
-    }
-
-    setExportMessage('Na janela de impressao, escolha "Salvar como PDF".')
-    window.setTimeout(() => window.print(), 120)
-  }
-
   return (
     <div className="mt-8 space-y-7">
       <section className="panel">
@@ -5225,7 +5189,7 @@ function ReportsView({
           </Field>
         </div>
 
-        <div className="no-print mt-4 flex flex-wrap gap-3">
+        <div className="no-print mt-4">
           <button
             className="primary-button disabled:cursor-not-allowed disabled:opacity-60"
             disabled={!selectedAnalyst || !analystResult}
@@ -5233,14 +5197,6 @@ function ReportsView({
             onClick={handleExportWordReport}
           >
             Exportar relatório Word
-          </button>
-          <button
-            className="secondary-button disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={!selectedAnalyst || !analystResult}
-            type="button"
-            onClick={handlePrintReport}
-          >
-            Salvar PDF
           </button>
         </div>
         <div className="no-print">{exportMessage && <Feedback message={exportMessage} />}</div>
@@ -7412,7 +7368,6 @@ function exportChatIndividualReport({
   managerNotes,
   feedbackText,
   photoUrl,
-  output = 'word',
 }: {
   metric: ChatMonthlyMetric
   periodLabel: string
@@ -7423,7 +7378,6 @@ function exportChatIndividualReport({
   managerNotes: string
   feedbackText: string
   photoUrl?: string | null
-  output?: 'word' | 'pdf'
 }) {
   const analystName = getChatAnalystName(metric)
   const safeName = escapeHtml(analystName)
@@ -7594,19 +7548,6 @@ function exportChatIndividualReport({
       </body>
     </html>
   `
-  if (output === 'pdf') {
-    const printWindow = window.open('', '_blank')
-    if (!printWindow) throw new Error('Janela de impressão bloqueada.')
-
-    printWindow.document.open()
-    printWindow.document.write(documentHtml)
-    printWindow.document.close()
-    printWindow.focus()
-    printWindow.setTimeout(() => printWindow.print(), 300)
-
-    return `analise-${slugifyFileName(analystName)}-${slugifyFileName(periodLabel)}.pdf`
-  }
-
   const blob = new Blob(['\ufeff', documentHtml], {
     type: 'application/msword;charset=utf-8',
   })
@@ -9053,7 +8994,6 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
-
 
 
 
