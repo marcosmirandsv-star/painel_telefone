@@ -3601,11 +3601,9 @@ function DashboardView({
   const predictiveAction =
     !hasPeriodData
       ? 'Aguardar novos lançamentos para liberar previsao.'
-      : predictiveRiskLevel === 'Alto'
-        ? 'Priorizar feedback e acompanhamento dos indicadores críticos.'
-        : predictiveRiskLevel === 'Medio'
-          ? 'Monitorar variações e reforcar os pontos abaixo da meta antes do fechamento.'
-          : 'Manter rotina atual e preservar consistencia ate o fechamento.'
+      : predictiveRiskDrivers.length > 0
+        ? `Alerta acionado por: ${predictiveRiskDrivers.map((driver) => driver.label.toLowerCase()).join(', ')}. Veja o diagnóstico e as ações logo abaixo.`
+        : 'Nenhum alerta acionado. Manter a rotina atual e preservar a consistência até o fechamento.'
   const executiveStatus =
     !hasPeriodData
       ? 'Sem dados no período'
@@ -4064,10 +4062,62 @@ function DashboardView({
       />
 
       <section className="panel">
+        <h2 className="section-title">Projeção do fechamento</h2>
+        <p className="section-subtitle">
+          Mostra para onde os indicadores apontam se a tendência atual continuar. A projeção não altera os resultados já apurados.
+        </p>
+
+        <div className="mt-6 grid gap-4 lg:grid-cols-4">
+          <PredictiveCard
+            label="Chance geral de fechamento"
+            value={`${predictiveGoalProbability}%`}
+            detail={
+              hasPeriodData
+                ? `Leitura combinada de CSAT, performance, avaliações e pódio. ${eligibleCount} de ${periodPodium.length} elegíveis.`
+                : 'Sem base de dados no período.'
+            }
+            tone={predictiveGoalProbability >= 75 ? 'success' : predictiveGoalProbability >= 45 ? 'warning' : 'danger'}
+          />
+          <PredictiveCard
+            label="CSAT projetado"
+            value={`${projectedCsat}%`}
+            detail={`Resultado esperado se a tendência continuar. ${formatDelta(csatDelta, ' p.p.')} vs período anterior.`}
+            tone={projectedCsat >= podiumCsatGoal ? 'success' : 'warning'}
+          />
+          <PredictiveCard
+            label="Performance projetada"
+            value={`${projectedTeamPerformance}%`}
+            detail={`Valor esperado da operação se a tendência continuar. Meta: ${teamPerformanceGoal}%.`}
+            tone={projectedTeamPerformance >= teamPerformanceGoal ? 'success' : 'danger'}
+          />
+          <PredictiveCard
+            label="Risco do período"
+            value={predictiveRiskLevel}
+            detail={predictiveAction}
+            tone={predictiveRiskLevel === 'Baixo' ? 'success' : predictiveRiskLevel === 'Medio' ? 'warning' : 'danger'}
+          />
+        </div>
+
+        <div className="mt-5 rounded-lg bg-slate-900 p-5">
+          <p className="text-sm font-semibold text-slate-200">Como ler esta projeção</p>
+          <div className="mt-3 grid gap-3 text-sm leading-6 text-slate-400 md:grid-cols-2">
+            <p>
+              A chance geral combina CSAT, performance, avaliações e quantidade de analistas elegíveis. Ela não é o
+              mesmo número da performance operacional.
+            </p>
+            <p>
+              CSAT e performance projetados são valores esperados, não probabilidades. O diagnóstico abaixo explica
+              por que o risco foi acionado e qual ação deve ser tomada.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="panel">
         <div className="flex flex-col gap-6 xl:flex-row xl:items-stretch">
           <div className="xl:w-2/5">
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
-              {isAnalystDashboard ? 'Resumo individual' : 'Resumo executivo'}
+              {isAnalystDashboard ? 'Resumo individual' : 'Diagnóstico e plano de ação'}
             </p>
             <h2 className={`mt-3 text-3xl font-bold ${isAnalystDashboard ? 'text-cyan-300' : executiveStatusTone}`}>
               {isAnalystDashboard ? analystStatusText : executiveStatus}
@@ -4197,44 +4247,13 @@ function DashboardView({
         )}
       </section>
 
-      <section className="panel">
-        <h2 className="section-title">Inteligência preditiva</h2>
-        <p className="section-subtitle">
-          Projecao inicial baseada nos lançamentos, metas, variação contra período anterior e risco operacional.
-        </p>
+      {!isAnalystDashboard && (
+        <section className="panel">
+          <h2 className="section-title">Análise visual do período</h2>
+          <p className="section-subtitle">
+            Compare elegibilidade, qualidade e volume para localizar rapidamente onde a equipe ganha ou perde força.
+          </p>
 
-        <div className="mt-6 grid gap-4 lg:grid-cols-4">
-          <PredictiveCard
-            label="Chance geral de fechamento"
-            value={`${predictiveGoalProbability}%`}
-            detail={
-              hasPeriodData
-                ? `Leitura combinada de CSAT, performance, avaliações e pódio. ${eligibleCount} de ${periodPodium.length} elegíveis.`
-                : 'Sem base de dados no período.'
-            }
-            tone={predictiveGoalProbability >= 75 ? 'success' : predictiveGoalProbability >= 45 ? 'warning' : 'danger'}
-          />
-          <PredictiveCard
-            label="CSAT projetado"
-            value={`${projectedCsat}%`}
-            detail={`Resultado projetado se a tendência atual continuar. ${formatDelta(csatDelta, ' p.p.')} vs período anterior`}
-            tone={projectedCsat >= podiumCsatGoal ? 'success' : 'warning'}
-          />
-          <PredictiveCard
-            label="Performance projetada"
-            value={`${projectedTeamPerformance}%`}
-            detail={`Valor projetado da operação. Meta: ${teamPerformanceGoal}%`}
-            tone={projectedTeamPerformance >= teamPerformanceGoal ? 'success' : 'danger'}
-          />
-          <PredictiveCard
-            label="Risco de queda"
-            value={predictiveRiskLevel}
-            detail={predictiveAction}
-            tone={predictiveRiskLevel === 'Baixo' ? 'success' : predictiveRiskLevel === 'Medio' ? 'warning' : 'danger'}
-          />
-        </div>
-
-        {!isAnalystDashboard && (
           <div className="mt-6 grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
             <EligibilityFunnel
               title="Funil de elegibilidade do telefone"
@@ -4259,30 +4278,8 @@ function DashboardView({
               />
             </div>
           </div>
-        )}
-
-        <div className="mt-5 rounded-lg bg-slate-900 p-5">
-          <p className="text-sm font-semibold text-slate-200">Como ler esta projeção</p>
-          <div className="mt-3 grid gap-3 text-sm leading-6 text-slate-400 md:grid-cols-2">
-            <p>
-              A chance geral de fechamento é uma leitura combinada: CSAT, performance da equipe, cobertura de avaliações
-              e quantidade de analistas elegíveis ao pódio. Ela não é o mesmo número da performance operacional.
-            </p>
-            <p>
-              CSAT projetado e performance projetada são valores esperados se a tendência atual continuar. Exemplo:
-              performance projetada de 100% significa projeção acima da meta de 96%, não chance de 100%.
-            </p>
-            <p>
-              O risco de queda sobe quando poucos analistas ficam elegíveis, quando CSAT ou performance perdem força,
-              quando a chance geral cai abaixo de 75% ou quando existem analistas em acompanhamento.
-            </p>
-            <p>
-              Esta leitura é um alerta de gestão: ela ajuda a decidir onde agir antes do fechamento, sem substituir a
-              análise do supervisor ou da coordenação.
-            </p>
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       <section className="panel">
         <h2 className="section-title">
@@ -9124,8 +9121,5 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
-
-
-
 
 
