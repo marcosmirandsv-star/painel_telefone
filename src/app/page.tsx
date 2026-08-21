@@ -244,7 +244,6 @@ type AppModule = 'phone' | 'chat'
 
 type ChatFeedbackStyle = 'coach' | 'sare' | 'mimo'
 type FeedbackGoal = 'recognition' | 'courseCorrection' | 'maintenance' | 'development'
-type FeedbackTone = 'human' | 'direct' | 'executive'
 
 type ActiveTab = 'dashboard' | 'reports' | 'analysts' | 'goals' | 'entries' | 'users'
 
@@ -1453,7 +1452,6 @@ function ChatModuleDashboard({
   const [chatExportMessage, setChatExportMessage] = useState('')
   const [chatFeedbackStyle, setChatFeedbackStyle] = useState<ChatFeedbackStyle>('coach')
   const [chatFeedbackGoal, setChatFeedbackGoal] = useState<FeedbackGoal>('recognition')
-  const [chatFeedbackTone, setChatFeedbackTone] = useState<FeedbackTone>('human')
   const [chatManagerNotes, setChatManagerNotes] = useState('')
   const [chatFeedbackDraft, setChatFeedbackDraft] = useState('')
   const [chatAiSaving, setChatAiSaving] = useState(false)
@@ -2216,7 +2214,6 @@ function ChatModuleDashboard({
         body: JSON.stringify({
           feedbackStyle: chatFeedbackStyle,
           feedbackGoal: chatFeedbackGoal,
-          feedbackTone: chatFeedbackTone,
           generationMode: 'generate',
           periodLabel: selectedPeriod?.label ?? 'Periodo',
           managerNotes: chatManagerNotes,
@@ -2291,7 +2288,6 @@ function ChatModuleDashboard({
         body: JSON.stringify({
           feedbackStyle: chatFeedbackStyle,
           feedbackGoal: chatFeedbackGoal,
-          feedbackTone: chatFeedbackTone,
           generationMode: 'improve',
           periodLabel: selectedPeriod?.label ?? 'Periodo',
           managerNotes: chatManagerNotes,
@@ -2998,7 +2994,7 @@ function ChatModuleDashboard({
             </p>
           </div>
 
-          <div className="grid flex-1 gap-3 md:grid-cols-2">
+          <div className="grid flex-1 gap-3 md:grid-cols-3">
             <Field label="1. Analista">
               <select
                 className="form-input"
@@ -3035,13 +3031,6 @@ function ChatModuleDashboard({
                 <option value="courseCorrection">Corrigir rota</option>
                 <option value="development">Desenvolver comportamento</option>
                 <option value="maintenance">Proteger padrão</option>
-              </select>
-            </Field>
-            <Field label="Tom">
-              <select className="form-input" value={chatFeedbackTone} onChange={(event) => setChatFeedbackTone(event.target.value as FeedbackTone)}>
-                <option value="human">Humano e prático</option>
-                <option value="direct">Direto e assertivo</option>
-                <option value="executive">Executivo</option>
               </select>
             </Field>
           </div>
@@ -4654,7 +4643,6 @@ function ReportsView({
   const [phoneFeedbackDraft, setPhoneFeedbackDraft] = useState('')
   const [phoneFeedbackStyle, setPhoneFeedbackStyle] = useState<ChatFeedbackStyle>('mimo')
   const [phoneFeedbackGoal, setPhoneFeedbackGoal] = useState<FeedbackGoal>('development')
-  const [phoneFeedbackTone, setPhoneFeedbackTone] = useState<FeedbackTone>('human')
   const [phoneAiSaving, setPhoneAiSaving] = useState(false)
   const isPhoneDailyUnsupported = isPhonePeriodShorterThanWeeklyLaunch(periodFilter)
   const phoneWeeklyLaunchMessage =
@@ -4836,14 +4824,12 @@ function ReportsView({
         analystResult,
         podiumCsatGoal,
         reviewGoal,
-        csatDelta,
         teamPerformance,
         teamPerformanceGoal,
-        teamAnsweredCalls,
-        teamTotalCalls,
         rankingPosition: selectedRankingPosition,
         managerNotes: phoneManagerNotes,
         style: phoneFeedbackStyle,
+        averageTickets: supervisorAverageTickets,
       })
     : ''
 
@@ -4907,7 +4893,6 @@ function ReportsView({
           serviceModule: 'phone',
           feedbackStyle: phoneFeedbackStyle,
           feedbackGoal: phoneFeedbackGoal,
-          feedbackTone: phoneFeedbackTone,
           generationMode: 'generate',
           periodLabel,
           managerNotes: phoneManagerNotes,
@@ -4983,7 +4968,6 @@ function ReportsView({
           serviceModule: 'phone',
           feedbackStyle: phoneFeedbackStyle,
           feedbackGoal: phoneFeedbackGoal,
-          feedbackTone: phoneFeedbackTone,
           generationMode: 'improve',
           periodLabel,
           managerNotes: phoneManagerNotes,
@@ -5244,7 +5228,7 @@ function ReportsView({
             />
           </Field>
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2">
             <Field label="Modelo do feedback">
               <select
                 className="form-input"
@@ -5264,13 +5248,6 @@ function ReportsView({
                 <option value="courseCorrection">Corrigir rota</option>
                 <option value="recognition">Reconhecer e manter</option>
                 <option value="maintenance">Proteger padrão</option>
-              </select>
-            </Field>
-            <Field label="Tom">
-              <select className="form-input" value={phoneFeedbackTone} onChange={(event) => setPhoneFeedbackTone(event.target.value as FeedbackTone)}>
-                <option value="human">Humano e prático</option>
-                <option value="direct">Direto e assertivo</option>
-                <option value="executive">Executivo</option>
               </select>
             </Field>
           </div>
@@ -7834,7 +7811,11 @@ function buildChatFeedbackText({
   const csatGap = round(Number(metric.csat) - csatGoal)
   const reviewGap = round(Number(metric.review_percentage) - reviewGoal)
   const productivityGap = averageTickets ? round(((Number(metric.total_tickets) - averageTickets) / averageTickets) * 100) : 0
-  const podiumText = podiumPosition > 0 ? `${podiumPosition}o lugar no pódio` : 'fora do pódio neste fechamento'
+  const podiumText = podiumPosition > 0 && podiumPosition <= 3
+    ? `${podiumPosition}º lugar no pódio`
+    : podiumPosition > 3
+      ? `${podiumPosition}ª posição no ranking, fora dos três primeiros lugares`
+      : 'fora dos três primeiros lugares neste fechamento'
   const notesLine = managerNotes.trim()
     ? 'As observações do gestor devem calibrar o reconhecimento, os combinados e o tom da devolutiva.'
     : ''
@@ -7886,17 +7867,17 @@ function buildChatFeedbackText({
 
   if (style === 'mimo') {
     return [
-      `Momento observado: ${analystName} fechou o ciclo com status ${status}, CSAT ${metric.csat}%, avaliações ${metric.review_percentage}% e ${metric.total_tickets} atendimentos.`,
-      `Impacto: ${recognition} ${qualityReading}`,
-      `Melhoria ou manutencao: ${reviewReading} ${volumeReading} ${notesLine}`.trim(),
-      `Orientação: ${development} ${practicalSteps} Posição atual: ${podiumText}.`,
+      `Momento observado: ${analystName}, neste fechamento você registrou CSAT de ${metric.csat}%, avaliações em ${metric.review_percentage}% e ${metric.total_tickets} atendimentos. Sua colocação foi ${podiumText}.`,
+      `Impacto: ${recognition} Em termos simples, ${qualityReading.charAt(0).toLowerCase()}${qualityReading.slice(1)}`,
+      `Melhoria ou manutenção: ${development} ${reviewReading} ${volumeReading} ${notesLine}`.trim(),
+      `Orientação: escolha primeiro o ponto que mais limita seu resultado e trabalhe nele sem abandonar o que já funciona. ${practicalSteps}`,
     ]
       .filter(Boolean)
       .join('\n\n')
   }
 
   return [
-    `Leitura do ciclo: ${recognition} No fechamento, os indicadores mostram CSAT de ${metric.csat}%, avaliações de ${metric.review_percentage}%, envio/sem avaliação de ${metric.sending_percentage}% e ${metric.total_tickets} atendimentos. A posição atual e ${podiumText}.`,
+    `Leitura do ciclo: ${analystName}, este fechamento mostra CSAT de ${metric.csat}%, avaliações de ${metric.review_percentage}%, envio/sem avaliação de ${metric.sending_percentage}% e ${metric.total_tickets} atendimentos. Sua colocação foi ${podiumText}. ${recognition}`,
     `Evidencias observadas: ${qualityReading} ${reviewReading} ${volumeReading}`,
     notesLine ? `Contexto do gestor: ${notesLine}` : '',
     `Plano de desenvolvimento: ${development}`,
@@ -7926,50 +7907,76 @@ function buildPhoneFeedbackText({
   analystResult,
   podiumCsatGoal,
   reviewGoal,
-  csatDelta,
   teamPerformance,
   teamPerformanceGoal,
-  teamAnsweredCalls,
-  teamTotalCalls,
   rankingPosition,
   managerNotes,
   style,
+  averageTickets,
 }: {
   analystName: string
   periodLabel: string
   analystResult: ReturnType<typeof buildPeriodPodium>[number]
   podiumCsatGoal: number
   reviewGoal: number
-  csatDelta: number
   teamPerformance: number
   teamPerformanceGoal: number
-  teamAnsweredCalls: number
-  teamTotalCalls: number
   rankingPosition: number
   managerNotes: string
   style: ChatFeedbackStyle
+  averageTickets: number
 }) {
-  const statusText = analystResult.eligible ? 'elegível ao pódio' : 'em acompanhamento'
-  const reasonsText = analystResult.reasons.length ? analystResult.reasons.join(', ') : 'sem impeditivos principais'
+  const isTopThree = rankingPosition > 0 && rankingPosition <= 3
+  const rankingText = rankingPosition
+    ? isTopThree
+      ? `${rankingPosition}º lugar no pódio`
+      : `${rankingPosition}ª posição no ranking, fora dos três primeiros lugares`
+    : 'sem posição calculada no ranking'
+  const volumeGap = Math.max(0, Math.ceil(averageTickets - analystResult.totalTickets))
+  const podiumGap = round(analystResult.averageCsat - podiumCsatGoal)
+  const reviewGap = round(analystResult.reviewPercentage - reviewGoal)
   const managerContext = managerNotes.trim()
-    ? ` Contexto do gestor: ${managerNotes.trim()}`
+    ? ` Considere também este contexto trazido pela liderança: ${managerNotes.trim()}`
     : ''
-  const podiumText = rankingPosition ? `${rankingPosition}º lugar no pódio` : 'fora do pódio'
+  const strengths = [
+    podiumGap >= 0 ? `seu CSAT de ${analystResult.averageCsat}% está acima da referência de ${podiumCsatGoal}%` : '',
+    reviewGap >= 0 ? `suas avaliações chegaram a ${analystResult.reviewPercentage}%, acima da meta de ${reviewGoal}%` : '',
+    volumeGap === 0 ? `seu volume de ${analystResult.totalTickets} atendimentos alcançou a média do time` : '',
+  ].filter(Boolean)
+  const mainFocus =
+    podiumGap < 0
+      ? `Seu principal ponto de atenção é o CSAT: faltam ${Math.abs(podiumGap)} p.p. para a referência de ${podiumCsatGoal}%.`
+      : reviewGap < 0
+        ? `Seu principal ponto de atenção é a participação nas avaliações: faltam ${Math.abs(reviewGap)} p.p. para a meta de ${reviewGoal}%.`
+        : volumeGap > 0
+          ? `Seu principal ponto de atenção é o volume: foram ${analystResult.totalTickets} atendimentos, e a média do time foi ${averageTickets}. A diferença é de aproximadamente ${volumeGap} atendimentos neste mesmo período.`
+          : 'Você cumpriu os três critérios objetivos. O foco agora é manter esse equilíbrio até o fechamento.'
+  const practicalAction =
+    podiumGap < 0
+      ? 'Escolha com seu gestor dois atendimentos com menor satisfação, identifique o que poderia ter sido mais claro ou resolutivo e teste uma mudança de abordagem na próxima semana.'
+      : reviewGap < 0
+        ? 'Revise como você encerra os contatos e combine uma forma natural de convidar o cliente a avaliar, sem transformar o pedido em uma fala automática.'
+        : volumeGap > 0
+          ? 'Converse com seu gestor para entender se a diferença veio da distribuição da fila, ausências, pausas ou de uma oportunidade na rotina. Depois, combine uma meta possível para o próximo lançamento sem perder qualidade.'
+          : 'Registre uma prática que ajudou nesse resultado e repita-a no próximo ciclo. Se puder, compartilhe esse aprendizado com a equipe.'
+  const positiveReading = strengths.length
+    ? `Há pontos importantes para reconhecer: ${strengths.join('; ')}.`
+    : 'Este período pede atenção e um combinado simples, possível de acompanhar no próximo lançamento.'
 
   if (style === 'mimo') {
     return [
-      `Momento observado: ${analystName} fechou ${periodLabel} com CSAT de ${analystResult.averageCsat}%, ${analystResult.totalReviews} avaliações e ${analystResult.totalTickets} atendimentos. A posição atual é ${podiumText}, com status ${statusText}. A variação contra o período anterior foi de ${formatDelta(csatDelta, ' p.p.')}.`,
-      `Impacto: esse resultado influencia diretamente a elegibilidade ao pódio, a leitura de qualidade do atendimento e a confiança da gestão no fechamento do período. No contexto da equipe, a performance foi de ${teamPerformance}% para ${teamAnsweredCalls} ligações atendidas em ${teamTotalCalls} processadas, contra meta de ${teamPerformanceGoal}%.`,
-      `Melhoria ou manutenção: ${analystResult.eligible ? 'manter as práticas que sustentaram CSAT, avaliações e volume, evitando queda até o fechamento.' : `atuar sobre os pontos pendentes: ${reasonsText}.`} A referência de pódio é ${podiumCsatGoal}% de CSAT e a meta mínima de avaliações é ${reviewGoal}%.${managerContext}`,
-      `Orientação: transformar a leitura em ação prática. Revise exemplos de atendimentos que influenciaram o CSAT, combine um comportamento observável para a próxima semana e acompanhe se avaliações e volume continuam sustentando a elegibilidade.`,
+      `Momento observado: ${analystName}, em ${periodLabel}, você registrou CSAT de ${analystResult.averageCsat}%, ${analystResult.totalReviews} avaliações e ${analystResult.totalTickets} atendimentos. Hoje, isso coloca você na ${rankingText}.`,
+      `Impacto: ${positiveReading} ${mainFocus} Esse conjunto mostra como qualidade, avaliações e volume se completam na disputa pelo pódio.`,
+      `Melhoria ou manutenção: ${analystResult.eligible ? 'O caminho é preservar o que funcionou e evitar que um dos três indicadores perca força.' : 'A prioridade não é mudar tudo ao mesmo tempo, mas agir primeiro sobre o ponto que está impedindo sua elegibilidade.'}${managerContext}`,
+      `Orientação: ${practicalAction} No próximo lançamento, confira com seu gestor se essa ação produziu avanço e ajuste o combinado, se necessário.`,
     ].join('\n\n')
   }
 
   return [
-    `Situação: ${analystName} fechou ${periodLabel} com CSAT de ${analystResult.averageCsat}%, ${analystResult.totalReviews} avaliações e ${analystResult.totalTickets} atendimentos. A posição atual é ${podiumText}, com status ${statusText}. A variação contra o período anterior foi de ${formatDelta(csatDelta, ' p.p.')}.`,
-    `Alinhamentos Realizados: a leitura deve considerar a meta individual de ${analystResult.individualGoal}%, a referência de pódio de ${podiumCsatGoal}% e a meta mínima de avaliações de ${reviewGoal}%. O ponto observado para conversa é: ${reasonsText}.${managerContext}`,
-    `Resultado Esperado: sustentar CSAT acima da referência, preservar ou recuperar volume de avaliações e manter comportamento de atendimento que gere boa experiência para o cliente. No contexto da equipe, a performance foi de ${teamPerformance}% para ${teamAnsweredCalls} ligações atendidas em ${teamTotalCalls} processadas, contra meta de ${teamPerformanceGoal}%.`,
-    `Expectativa e Plano de Desenvolvimento: transforme a leitura em ação semanal. Revise exemplos de atendimentos que influenciaram o CSAT, combine um comportamento observável para a próxima semana e acompanhe se avaliações e volume continuam sustentando a elegibilidade no fechamento mensal.`,
+    `Situação: ${analystName}, em ${periodLabel}, você registrou CSAT de ${analystResult.averageCsat}%, ${analystResult.totalReviews} avaliações e ${analystResult.totalTickets} atendimentos. Sua posição atual é ${rankingText}. ${positiveReading}`,
+    `Alinhamentos Realizados: ${mainFocus}${managerContext} A conversa deve confirmar a causa antes de atribuir o resultado apenas ao seu desempenho individual.`,
+    `Resultado Esperado: avançar no ponto principal sem perder os indicadores que já estão bons. A equipe fechou com performance de ${teamPerformance}%, diante da referência de ${teamPerformanceGoal}%.`,
+    `Expectativa e Plano de Desenvolvimento: ${practicalAction} O resultado será revisto no próximo lançamento para decidir se o plano deve ser mantido ou ajustado.`,
   ].join('\n\n')
 }
 

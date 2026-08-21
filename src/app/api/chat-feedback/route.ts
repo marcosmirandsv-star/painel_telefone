@@ -6,7 +6,6 @@ type ChatFeedbackRequest = {
   serviceModule?: 'chat' | 'phone'
   feedbackStyle?: 'coach' | 'sare' | 'mimo'
   feedbackGoal?: 'recognition' | 'courseCorrection' | 'maintenance' | 'development'
-  feedbackTone?: 'human' | 'direct' | 'executive'
   generationMode?: 'generate' | 'improve'
   periodLabel?: string
   managerNotes?: string
@@ -61,15 +60,6 @@ const goalInstructions = {
     'Objetivo: desenvolver competência, conectando indicador, comportamento observado e plano prático de evolução.',
 }
 
-const toneInstructions = {
-  human:
-    'Tom: humano, claro, próximo e profissional, como uma liderança que orienta sem soar automática.',
-  direct:
-    'Tom: direto e assertivo, com frases objetivas, sem dureza desnecessária.',
-  executive:
-    'Tom: executivo, sintético e estratégico, mantendo orientação prática suficiente para o colaborador agir.',
-}
-
 function getErrorText(error: unknown) {
   if (error instanceof Error) return error.message
   return 'Erro inesperado ao gerar feedback com IA.'
@@ -106,7 +96,6 @@ function buildPrompt(body: ChatFeedbackRequest) {
   const metric = body.metric
   const feedbackStyle = body.feedbackStyle ?? 'coach'
   const feedbackGoal = body.feedbackGoal ?? 'development'
-  const feedbackTone = body.feedbackTone ?? 'human'
   const generationMode = body.generationMode ?? 'generate'
   const serviceModule = body.serviceModule ?? 'chat'
   const moduleName = serviceModule === 'phone' ? 'telefone' : 'chat'
@@ -122,11 +111,19 @@ Módulo analisado: ${moduleName}
 Fonte dos dados: ${sourceName}
 Intenção da IA: ${generationMode === 'improve' ? 'melhorar o texto atual mantendo a estrutura e aprofundando orientação prática' : 'gerar uma devolutiva completa a partir da sugestão local'}
 ${goalInstructions[feedbackGoal]}
-${toneInstructions[feedbackTone]}
+Tom obrigatório: humano, claro, próximo e profissional. Escreva como uma boa liderança conversaria com a pessoa em uma reunião individual: com respeito, contexto e direção prática, sem soar automática.
 
 Regras obrigatorias:
 - Escreva em portugues do Brasil.
 ${cadenceRule}
+- Fale diretamente com o analista usando "você". Não escreva como um parecer distante sobre "o colaborador".
+- Traduza os indicadores: depois de cada número importante, explique em linguagem simples o que ele significa para a pessoa.
+- Não use expressões abstratas como "confiança da gestão", "sustentar elegibilidade" ou "proteger o indicador" sem explicar o comportamento concreto esperado.
+- Escolha um foco principal por vez. Reconheça o que está bom, indique o maior impedimento e proponha no máximo duas ações realizáveis.
+- Quando o volume estiver abaixo da média, informe a diferença em atendimentos e recomende validar fila, distribuição, ausências ou pausas antes de responsabilizar a pessoa.
+- Só chame uma colocação de pódio quando ela estiver entre o primeiro e o terceiro lugar. Nas demais, diga "posição no ranking".
+- Não mencione variação contra período anterior quando não houver um valor anterior real no histórico recebido.
+- Não invente a causa de um resultado. Quando a causa não estiver nos dados ou nas observações, oriente uma conversa com a liderança para confirmá-la.
 - Não comece com parabens generico. Comece com uma leitura profissional do ciclo.
 - Use o texto base do sistema como esqueleto obrigatorio; refine, aprofunde e humanize, mas não substitua por um texto curto.
 - Preserve todos os numeros relevantes; não invente dados e não mude cálculos.
