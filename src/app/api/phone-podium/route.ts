@@ -128,6 +128,20 @@ export async function GET(request: NextRequest) {
   const teamAverageTickets = grouped.size
     ? round([...grouped.values()].reduce((sum, item) => sum + item.totalTickets, 0) / grouped.size)
     : 0
+  const teamTotals = [...grouped.values()].reduce(
+    (total, item) => ({
+      csatWeightedTotal: total.csatWeightedTotal + item.csatWeightedTotal,
+      csatSimpleTotal: total.csatSimpleTotal + item.csatSimpleTotal,
+      csatSimpleCount: total.csatSimpleCount + item.csatSimpleCount,
+      totalReviews: total.totalReviews + item.totalReviews,
+    }),
+    { csatWeightedTotal: 0, csatSimpleTotal: 0, csatSimpleCount: 0, totalReviews: 0 },
+  )
+  const teamAverageCsat = teamTotals.totalReviews > 0
+    ? round(teamTotals.csatWeightedTotal / teamTotals.totalReviews)
+    : teamTotals.csatSimpleCount > 0
+      ? round(teamTotals.csatSimpleTotal / teamTotals.csatSimpleCount)
+      : 0
 
   const rows = analysts
     .map((analyst) => {
@@ -158,6 +172,7 @@ export async function GET(request: NextRequest) {
         eligible: reasons.length === 0,
         reasons,
         team_average_tickets: teamAverageTickets,
+        team_average_csat: teamAverageCsat,
       }
     })
     .filter((item): item is NonNullable<typeof item> => Boolean(item))

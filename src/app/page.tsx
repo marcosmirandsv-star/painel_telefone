@@ -230,6 +230,7 @@ type PhonePodiumRankingRow = {
   eligible: boolean
   reasons: string[] | null
   team_average_tickets?: number
+  team_average_csat?: number
 }
 type PeriodMode = 'week' | 'month' | 'year' | 'custom'
 
@@ -3636,6 +3637,9 @@ function DashboardView({
   const analystProfile = isAnalystDashboard ? analysts[0] ?? null : null
   const localAnalystResult = isAnalystDashboard ? periodPodium[0] ?? null : null
   const secureAnalystRanking = isAnalystDashboard ? phonePodiumRanking[0] ?? null : null
+  const n1TeamAverageCsat = isAnalystDashboard && secureAnalystRanking?.team_average_csat !== undefined
+    ? Number(secureAnalystRanking.team_average_csat)
+    : periodAverageCsat
   const analystResult = secureAnalystRanking
     ? {
         analystId: secureAnalystRanking.analyst_id,
@@ -3879,7 +3883,7 @@ function DashboardView({
             <AnalystIdentityCard analyst={analystProfile} />
             <MetricCard label="Atendimentos no período" value={totalTickets} tone={podiumAverageTickets && totalTickets >= podiumAverageTickets ? 'success' : podiumAverageTickets ? 'warning' : undefined} />
             <MetricCard label="Meu CSAT" value={`${analystResult?.averageCsat ?? 0}%`} tone={analystResult && analystResult.averageCsat >= analystResult.individualGoal ? 'success' : analystResult ? 'warning' : undefined} />
-            <MetricCard label="CSAT equipe N1" value={`${periodAverageCsat || 0}%`} tone={periodAverageCsat >= podiumCsatGoal ? 'success' : periodAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
+            <MetricCard label="CSAT equipe N1" value={`${n1TeamAverageCsat || 0}%`} tone={n1TeamAverageCsat >= podiumCsatGoal ? 'success' : n1TeamAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
             <MetricCard label="CSAT geral N1 + N2 · média do período" value={overallPhoneCsat === null ? 'Não informado' : `${overallPhoneCsat}%`} tone={overallPhoneCsat === null ? undefined : overallPhoneCsat >= podiumCsatGoal ? 'success' : overallPhoneCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
             <MetricCard label="Avaliações" value={`${totalReviews} (${reviewCoverage}%)`} tone={reviewCoverage >= reviewGoal ? 'success' : reviewCoverage >= 20 ? 'warning' : 'danger'} />
           </>
@@ -3887,7 +3891,7 @@ function DashboardView({
           <>
             <MetricCard label="Status" value="Supabase conectado" tone="success" />
             <MetricCard label="Analistas ativos" value={loading ? '...' : analystsCount} />
-            <MetricCard label="CSAT equipe N1" value={`${periodAverageCsat || 0}%`} tone={periodAverageCsat >= podiumCsatGoal ? 'success' : periodAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
+            <MetricCard label="CSAT equipe N1" value={`${n1TeamAverageCsat || 0}%`} tone={n1TeamAverageCsat >= podiumCsatGoal ? 'success' : n1TeamAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
             <MetricCard label="CSAT geral N1 + N2 · média do período" value={overallPhoneCsat === null ? 'Não informado' : `${overallPhoneCsat}%`} tone={overallPhoneCsat === null ? undefined : overallPhoneCsat >= podiumCsatGoal ? 'success' : overallPhoneCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
             <MetricCard label="Performance equipe" value={`${periodTeamPerformance || 0}%`} tone={periodTeamPerformance >= teamPerformanceGoal ? 'success' : periodTeamPerformance >= teamPerformanceGoal - 3 ? 'warning' : 'danger'} />
           </>
@@ -8994,7 +8998,6 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
-
 
 
 
