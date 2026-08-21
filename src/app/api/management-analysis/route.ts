@@ -51,14 +51,30 @@ function sanitizeProviderMessage(message: string) {
     .trim()
 }
 
-function extractGeminiText(data: unknown) {
+function extractGeminiResult(data: unknown) {
   const response = data as {
     candidates?: {
       content?: { parts?: { text?: string }[] }
+      finishReason?: string
     }[]
   }
 
-  return response.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('').trim() ?? ''
+  const candidate = response.candidates?.[0]
+  return {
+    text: candidate?.content?.parts?.map((part) => part.text ?? '').join('').trim() ?? '',
+    finishReason: candidate?.finishReason ?? 'não informado',
+  }
+}
+
+function isCompleteManagementAnalysis(analysis: string) {
+  const requiredSections = [
+    'Diagnóstico do período:',
+    'Prioridades da gestão:',
+    'Plano de ação:',
+    'Como acompanhar:',
+  ]
+  const sectionCount = requiredSections.filter((section) => analysis.includes(section)).length
+  return analysis.length >= 280 && sectionCount >= 3
 }
 
 function buildPrompt(body: ManagementAnalysisRequest) {
@@ -76,7 +92,7 @@ Regras obrigatórias:
 - Recomende MIMO para ajuste ou manutenção imediata. Só recomende SARE quando houver necessidade de plano formal de desenvolvimento.
 - Não exponha dados de clientes e não faça julgamento pessoal dos analistas.
 - Não use Markdown, asteriscos ou tabelas.
-- Entregue de 220 a 380 palavras, com exatamente estas seções: Diagnóstico do período:, Prioridades da gestão:, Plano de ação:, Como acompanhar:.
+- Entregue de 160 a 260 palavras, com exatamente estas seções: Diagnóstico do período:, Prioridades da gestão:, Plano de ação:, Como acompanhar:.
 
 Período: ${body.periodLabel ?? 'não informado'}
 Risco calculado pelas regras: ${body.riskLevel ?? 'não informado'}
@@ -130,12 +146,16 @@ async function generateWithGemini(prompt: string) {
       throw new Error(message)
     }
 
-    const analysis = extractGeminiText(data).replace(/\*\*/g, '').trim()
-    if (analysis.length < 500) throw new Error('A Gemini devolveu uma análise curta ou incompleta.')
+    const result = extractGeminiResult(data)
+    const analysis = result.text.replace(/\*\*/g, '').trim()
+    if (!isCompleteManagementAnalysis(analysis)) {
+      errors.push(`${model}: resposta incompleta (${analysis.length} caracteres; término ${result.finishReason})`)
+      continue
+    }
     return analysis
   }
 
-  throw new Error(`Nenhum modelo disponível respondeu. ${errors.join(' | ')}`)
+  throw new Error(`Nenhum modelo disponível gerou uma análise completa. ${errors.join(' | ')}`)
 }
 
 export async function POST(request: NextRequest) {
