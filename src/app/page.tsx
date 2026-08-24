@@ -1554,10 +1554,29 @@ function ChatModuleDashboard({
       : true
     return matchesTeam && matchesPeriod
   })
-  const trendMetrics = metrics.filter((metric) => selectedTeamId === 'all' || metric.team_id === selectedTeamId)
+  const activePodiumExclusions = podiumExclusions.filter((exclusion) => {
+    const matchesTeam = selectedTeamId === 'all' || exclusion.team_id === selectedTeamId
+    const matchesPeriod = selectedPeriod
+      ? exclusion.year === selectedPeriod.year && exclusion.month_number === selectedPeriod.monthNumber
+      : true
+
+    return matchesTeam && matchesPeriod
+  })
+  const excludedChatAnalystIds = new Set(activePodiumExclusions.map((exclusion) => exclusion.analyst_id))
+  const calculationMetrics = visibleMetrics.filter((metric) => !excludedChatAnalystIds.has(metric.analyst_id))
+  const excludedChatMetricKeys = new Set(
+    podiumExclusions
+      .filter((exclusion) => selectedTeamId === 'all' || exclusion.team_id === selectedTeamId)
+      .map((exclusion) => `${exclusion.analyst_id}:${exclusion.year}:${exclusion.month_number}`),
+  )
+  const trendMetrics = metrics.filter(
+    (metric) =>
+      (selectedTeamId === 'all' || metric.team_id === selectedTeamId) &&
+      !excludedChatMetricKeys.has(`${metric.analyst_id}:${metric.year}:${metric.month_number}`),
+  )
   const selectedTeamName =
     selectedTeamId === 'all' ? 'Todas as equipes' : teams.find((team) => team.id === selectedTeamId)?.name ?? 'Equipe'
-  const totals = visibleMetrics.reduce(
+  const totals = calculationMetrics.reduce(
     (acc, metric) => ({
       tickets: acc.tickets + Number(metric.total_tickets),
       validTickets: acc.validTickets + Number(metric.valid_tickets),
@@ -1568,10 +1587,10 @@ function ChatModuleDashboard({
     }),
     { tickets: 0, validTickets: 0, reviews: 0, positives: 0, negatives: 0, inactive: 0 },
   )
-  const averageTickets = visibleMetrics.length ? round(totals.tickets / visibleMetrics.length) : 0
-  const averageCsat = calculateChatAverage(visibleMetrics, 'csat')
-  const averageReviews = calculateChatAverage(visibleMetrics, 'review_percentage')
-  const averageSending = calculateChatAverage(visibleMetrics, 'sending_percentage')
+  const averageTickets = calculationMetrics.length ? round(totals.tickets / calculationMetrics.length) : 0
+  const averageCsat = calculateChatAverage(calculationMetrics, 'csat')
+  const averageReviews = calculateChatAverage(calculationMetrics, 'review_percentage')
+  const averageSending = calculateChatAverage(calculationMetrics, 'sending_percentage')
   const chatReviewRate = totals.validTickets ? round((totals.reviews / totals.validTickets) * 100) : 0
   const chatSendingRate = totals.validTickets ? round(((totals.validTickets - totals.reviews) / totals.validTickets) * 100) : 0
   const chatInactiveRate = totals.tickets ? round((totals.inactive / totals.tickets) * 100) : 0
@@ -1586,9 +1605,23 @@ function ChatModuleDashboard({
       : false
     return matchesTeam && matchesPeriod
   })
-  const previousAverageCsat = calculateChatAverage(previousMetrics, 'csat')
-  const previousAverageReviews = calculateChatAverage(previousMetrics, 'review_percentage')
-  const previousAverageSending = calculateChatAverage(previousMetrics, 'sending_percentage')
+  const previousExcludedAnalystIds = new Set(
+    podiumExclusions
+      .filter((exclusion) => {
+        const matchesTeam = selectedTeamId === 'all' || exclusion.team_id === selectedTeamId
+        const matchesPeriod = previousPeriod
+          ? exclusion.year === previousPeriod.year && exclusion.month_number === previousPeriod.monthNumber
+          : false
+        return matchesTeam && matchesPeriod
+      })
+      .map((exclusion) => exclusion.analyst_id),
+  )
+  const previousCalculationMetrics = previousMetrics.filter(
+    (metric) => !previousExcludedAnalystIds.has(metric.analyst_id),
+  )
+  const previousAverageCsat = calculateChatAverage(previousCalculationMetrics, 'csat')
+  const previousAverageReviews = calculateChatAverage(previousCalculationMetrics, 'review_percentage')
+  const previousAverageSending = calculateChatAverage(previousCalculationMetrics, 'sending_percentage')
   const chatCsatDelta = round(averageCsat - previousAverageCsat)
   const chatReviewDelta = round(averageReviews - previousAverageReviews)
   const chatSendingDelta = round(averageSending - previousAverageSending)
@@ -1603,41 +1636,32 @@ function ChatModuleDashboard({
     })
     .sort((a, b) => a.position - b.position)
   const manualPodiumMetrics = activeManualPodium
-    .map((manual) => visibleMetrics.find((metric) => metric.analyst_id === manual.analyst_id) ?? null)
+    .map((manual) => calculationMetrics.find((metric) => metric.analyst_id === manual.analyst_id) ?? null)
     .filter((metric): metric is ChatMonthlyMetric => Boolean(metric))
-
-  const activePodiumExclusions = podiumExclusions.filter((exclusion) => {
-    const matchesTeam = selectedTeamId === 'all' || exclusion.team_id === selectedTeamId
-    const matchesPeriod = selectedPeriod
-      ? exclusion.year === selectedPeriod.year && exclusion.month_number === selectedPeriod.monthNumber
-      : true
-
-    return matchesTeam && matchesPeriod
-  })
-  const excludedChatAnalystIds = new Set(activePodiumExclusions.map((exclusion) => exclusion.analyst_id))
   const chatRanking = buildChatRanking(visibleMetrics, averageTickets, excludedChatAnalystIds)
+  const calculatedChatRanking = chatRanking.filter((item) => !item.excluded)
   const automaticPodium = chatRanking.filter((item) => item.eligible).slice(0, 3).map((item) => item.metric)
   const podium = [1, 2, 3].map((position, index) => {
     const manual = activeManualPodium.find((item) => item.position === position)
     return manual
-      ? visibleMetrics.find((metric) => metric.analyst_id === manual.analyst_id) ?? automaticPodium[index] ?? null
+      ? calculationMetrics.find((metric) => metric.analyst_id === manual.analyst_id) ?? automaticPodium[index] ?? null
       : automaticPodium[index] ?? null
   })
-  const attention = visibleMetrics
+  const attention = calculationMetrics
     .map((metric) => ({ metric, reasons: getChatAttentionReasons(metric, averageTickets) }))
     .filter((item) => item.reasons.length)
     .sort((a, b) => Number(a.metric.csat) - Number(b.metric.csat))
     .slice(0, 5)
   const monthlyTrend = buildChatMonthlyTrend(trendMetrics).slice(-7)
   const monthlyUnifiedTrend = buildChatMonthlyUnifiedTrend(trendMetrics).slice(-7)
-  const chatGoalsReachedCount = visibleMetrics.filter(
+  const chatGoalsReachedCount = calculationMetrics.filter(
     (metric) => Number(metric.csat) >= Number(metric.csat_goal) && Number(metric.review_percentage) >= Number(metric.general_review_goal),
   ).length
-  const chatCriticalCount = visibleMetrics.filter((metric) => metric.status === 'Critico').length
-  const chatTopPerformers = chatRanking
+  const chatCriticalCount = calculationMetrics.filter((metric) => metric.status === 'Critico').length
+  const chatTopPerformers = calculatedChatRanking
     .filter((item) => item.eligible || (Number(item.metric.csat) >= Number(item.metric.csat_goal) && Number(item.metric.review_percentage) >= 25))
     .slice(0, 5)
-  const chatOpportunities = visibleMetrics
+  const chatOpportunities = calculationMetrics
     .map((metric) => ({
       metric,
       reasons: getChatAttentionReasons(metric, averageTickets),
@@ -1670,7 +1694,7 @@ function ChatModuleDashboard({
       })
     : ''
   const chatExecutiveStatus =
-    !visibleMetrics.length
+    !calculationMetrics.length
       ? 'Sem dados no período'
       : averageCsat >= 90 && averageReviews >= 25
         ? 'Operação saudavel'
@@ -1678,7 +1702,7 @@ function ChatModuleDashboard({
           ? 'Acompanhamento prioritario'
           : 'Periodo em atenção'
   const chatExecutiveTone =
-    !visibleMetrics.length
+    !calculationMetrics.length
       ? 'text-slate-300'
       : averageCsat >= 90 && averageReviews >= 25
         ? 'text-emerald-300'
@@ -1686,7 +1710,7 @@ function ChatModuleDashboard({
           ? 'text-rose-300'
           : 'text-amber-300'
   const chatMainAlert =
-    !visibleMetrics.length
+    !calculationMetrics.length
       ? 'Selecione outro período ou aguarde a importação mensal.'
       : averageCsat < 85
         ? 'A qualidade do atendimento tem espaco para evolução.'
@@ -1701,7 +1725,7 @@ function ChatModuleDashboard({
                 : 'Equipe alinhada com os critérios principais do período.'
 
   const chatRecommendedAction =
-    !visibleMetrics.length
+    !calculationMetrics.length
       ? 'Importar ou selecionar um mes com dados.'
       : averageCsat < 90
         ? 'Revisar atendimentos negativos e direcionar feedback dos analistas em atenção.'
@@ -1710,26 +1734,26 @@ function ChatModuleDashboard({
           : attention.length
             ? 'Priorizar os analistas listados em atenção antes do próximo fechamento.'
             : 'Manter rotina atual e acompanhar se o resultado se sustenta no mes seguinte.'
-  const chatEligibleCount = chatRanking.filter((item) => item.eligible).length
-  const chatVisualRows = chatRanking.slice(0, 10).map((item) => ({
+  const chatEligibleCount = calculatedChatRanking.filter((item) => item.eligible).length
+  const chatVisualRows = calculatedChatRanking.slice(0, 10).map((item) => ({
     label: getChatAnalystName(item.metric),
     primary: Number(item.metric.csat),
     secondary: Number(item.metric.review_percentage),
     volume: Number(item.metric.total_tickets),
     status: item.eligible ? 'Elegivel' : item.reasons.join(', '),
   }))
-  const chatVisualPoints = chatRanking.map((item) => ({
+  const chatVisualPoints = calculatedChatRanking.map((item) => ({
     label: getChatAnalystName(item.metric),
     x: Number(item.metric.total_tickets),
     y: Number(item.metric.csat),
     tone: item.eligible ? 'success' : Number(item.metric.csat) < 90 ? 'danger' : 'warning',
     detail: `${item.metric.review_percentage}% avaliações`,
   }))
-  const chatTopHighlight = chatRanking.find((item) => item.eligible)?.metric ?? chatRanking[0]?.metric ?? null
+  const chatTopHighlight = calculatedChatRanking.find((item) => item.eligible)?.metric ?? calculatedChatRanking[0]?.metric ?? null
   const chatAttentionHighlight = chatOpportunities[0]?.metric ?? null
   const chatAttentionText = chatOpportunities[0]?.reasons.join(', ') ?? 'Sem alerta crítico no período.'
   const chatClosureReading =
-    !visibleMetrics.length
+    !calculationMetrics.length
       ? 'Ainda não há base suficiente para leitura executiva.'
       : chatEligibleCount >= 3 && !chatCriticalCount
         ? 'Fechamento forte: há pódio completo e nenhum caso crítico no período.'
@@ -1737,30 +1761,32 @@ function ChatModuleDashboard({
           ? 'Fechamento positivo, com oportunidade de ampliar a quantidade de elegíveis ao pódio.'
           : 'Fechamento pede atenção: nenhum analista ficou plenamente elegível ao pódio.'
 
-  const chatBelowVolumeItems = chatRanking.filter((item) => item.reasons.some((reason) => reason.includes('volume abaixo')))
-  const chatBelowCsatMetrics = visibleMetrics.filter((metric) => Number(metric.csat) < 90)
-  const chatBelowReviewMetrics = visibleMetrics.filter((metric) => Number(metric.review_percentage) < Number(metric.general_review_goal))
-  const chatCriticalMetrics = visibleMetrics.filter((metric) => metric.status === 'Critico')
-  const chatEligibleItems = chatRanking.filter((item) => item.eligible)
+  const chatBelowVolumeItems = calculatedChatRanking.filter((item) => item.reasons.some((reason) => reason.includes('volume abaixo')))
+  const chatBelowCsatMetrics = calculationMetrics.filter((metric) => Number(metric.csat) < 90)
+  const chatBelowReviewMetrics = calculationMetrics.filter((metric) => Number(metric.review_percentage) < Number(metric.general_review_goal))
+  const chatCriticalMetrics = calculationMetrics.filter((metric) => metric.status === 'Critico')
+  const chatEligibleItems = calculatedChatRanking.filter((item) => item.eligible)
   const chatFunnelItems = [
     {
       label: 'Base analisada',
-      value: visibleMetrics.length,
-      detail: 'Analistas com dados no período.',
+      value: calculationMetrics.length,
+      detail: activePodiumExclusions.length
+        ? `${activePodiumExclusions.length} analista(s) desconsiderado(s) por exceção operacional.`
+        : 'Analistas com dados válidos no período.',
     },
     {
       label: 'CSAT mínimo',
-      value: visibleMetrics.filter((metric) => Number(metric.csat) >= 90).length,
+      value: calculationMetrics.filter((metric) => Number(metric.csat) >= 90).length,
       detail: 'Mantêm qualidade percebida acima de 90%.',
     },
     {
       label: 'Avaliações',
-      value: visibleMetrics.filter((metric) => Number(metric.review_percentage) >= Number(metric.general_review_goal)).length,
+      value: calculationMetrics.filter((metric) => Number(metric.review_percentage) >= Number(metric.general_review_goal)).length,
       detail: 'Têm amostra de avaliações dentro da referência.',
     },
     {
       label: 'Volume',
-      value: visibleMetrics.filter((metric) => Number(metric.total_tickets) >= averageTickets).length,
+      value: calculationMetrics.filter((metric) => Number(metric.total_tickets) >= averageTickets).length,
       detail: `Atendem pelo menos a média de ${averageTickets} atendimentos.`,
     },
     {
@@ -1785,7 +1811,7 @@ function ChatModuleDashboard({
   const chatCriticalNames = chatCriticalMetrics.slice(0, 3).map(getChatAnalystName)
   const chatEligibleNames = chatEligibleItems.slice(0, 3).map((item) => getChatAnalystName(item.metric))
   const chatManagementDiagnosis =
-    !visibleMetrics.length
+    !calculationMetrics.length
       ? 'Sem base importada para o período selecionado.'
       : chatCriticalCount > 0
         ? `Há risco real de fechamento: ${chatNameList(chatCriticalNames)} precisam de tratativa antes da comunicação final.`
@@ -1796,7 +1822,7 @@ function ChatModuleDashboard({
             : chatBelowVolumeCount > 0
               ? `O fechamento geral é saudável, mas o pódio depende de contexto operacional: ${chatBelowVolumeCount} analista(s) ficaram abaixo da média de ${averageTickets} atendimentos.`
               : 'Fechamento saudável: qualidade, amostra de avaliações e volume sustentam a leitura do período.'
-  const chatTacticalPlan = !visibleMetrics.length
+  const chatTacticalPlan = !calculationMetrics.length
     ? ['Importar as planilhas do Zendesk.', 'Conferir se mês, equipe e analistas foram reconhecidos.', 'Selecionar equipe e período para liberar a leitura de gestão.']
     : [
         chatBelowCsatCount
@@ -1810,7 +1836,7 @@ function ChatModuleDashboard({
           : 'Volume: manter a distribuição atual e monitorar apenas exceções operacionais.',
       ]
   const chatStrategicDecision =
-    !visibleMetrics.length
+    !calculationMetrics.length
       ? 'Decisão recomendada: aguardar a importação mensal antes de definir plano de gestão.'
       : chatCriticalCount > 0
         ? `Decisão recomendada: tratar ${chatNameList(chatCriticalNames)} como prioridade de gestão antes de publicar o fechamento.`
@@ -1818,7 +1844,7 @@ function ChatModuleDashboard({
           ? `Decisão recomendada: validar o pódio, reconhecer ${chatNameList(chatEligibleNames)} e transformar as práticas vencedoras em padrão do próximo ciclo.`
           : 'Decisão recomendada: separar exceções operacionais de desempenho real e focar o próximo ciclo em ampliar elegíveis ao pódio.'
   const chatStrategicTrend =
-    !visibleMetrics.length
+    !calculationMetrics.length
       ? 'Sem tendência calculada.'
       : chatCsatDelta >= 0 && chatReviewDelta >= 0
         ? 'Tendência favorável: qualidade e amostra melhoraram contra o mês anterior; preserve o que funcionou.'
@@ -1843,7 +1869,7 @@ function ChatModuleDashboard({
     },
     {
       label: 'Base Zendesk',
-      value: `${visibleMetrics.length} analista(s)`,
+      value: `${calculationMetrics.length} analista(s)`,
       detail: `${totals.tickets} atendimentos, ${totals.validTickets} válidos e ${totals.reviews} avaliações.`,
     },
   ]
@@ -2149,10 +2175,10 @@ function ChatModuleDashboard({
       if (currentExclusion) {
         const { error } = await supabase.from('chat_podium_exclusions').delete().eq('id', currentExclusion.id)
         if (error) throw error
-        setChatExportMessage(`${getChatAnalystName(metric)} voltou a concorrer ao pódio deste período.`)
+        setChatExportMessage(`${getChatAnalystName(metric)} voltou a compor os cálculos e a concorrer ao pódio deste período.`)
       } else {
         const reason = window.prompt(
-          `Motivo para tirar ${getChatAnalystName(metric)} do pódio deste período:`,
+          `Motivo para desconsiderar ${getChatAnalystName(metric)} de todos os cálculos deste período:`,
           'Emprestimo para outro setor / volume atipico',
         )
 
@@ -2169,7 +2195,9 @@ function ChatModuleDashboard({
           { onConflict: 'team_id,analyst_id,year,month_number' },
         )
         if (error) throw error
-        setChatExportMessage(`${getChatAnalystName(metric)} ficou fora do pódio deste período por excecao operacional.`)
+        setChatExportMessage(
+          `${getChatAnalystName(metric)} foi desconsiderado de CSAT, avaliações, volume, médias e ranking deste período.`,
+        )
       }
 
       await onImportComplete()
@@ -2622,7 +2650,7 @@ function ChatModuleDashboard({
             <h2 className="mt-2 text-2xl font-bold">{chatClosureReading}</h2>
           </div>
           <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">
-            {chatEligibleCount} elegíveis de {visibleMetrics.length}
+            {chatEligibleCount} elegíveis de {calculationMetrics.length}
           </span>
         </div>
 
@@ -2755,7 +2783,7 @@ function ChatModuleDashboard({
                 onChange={(event) => setManualPodiumDraft((current) => ({ ...current, [position]: event.target.value }))}
               >
                 <option value="">Automático</option>
-                {visibleMetrics.map((metric) => (
+                {calculationMetrics.map((metric) => (
                   <option key={metric.id} value={metric.analyst_id}>
                     {getChatAnalystName(metric)}
                   </option>
@@ -2791,6 +2819,13 @@ function ChatModuleDashboard({
             </span>
           </div>
 
+          {activePodiumExclusions.length > 0 && (
+            <div className="mt-4 rounded-lg border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">
+              Cálculos refeitos com {calculationMetrics.length} analista(s). {activePodiumExclusions.length} registro(s)
+              desconsiderado(s) integralmente neste período por exceção operacional.
+            </div>
+          )}
+
           <div className="mt-5 grid gap-4 md:grid-cols-4">
             <div className="rounded-lg bg-slate-900 p-4">
               <p className="text-sm text-slate-400">Elegíveis</p>
@@ -2799,19 +2834,19 @@ function ChatModuleDashboard({
             <div className="rounded-lg bg-slate-900 p-4">
               <p className="text-sm text-slate-400">Fora por volume</p>
               <p className="mt-2 text-2xl font-bold text-amber-200">
-                {chatRanking.filter((item) => item.reasons.some((reason) => reason.includes('volume abaixo'))).length}
+                {calculatedChatRanking.filter((item) => item.reasons.some((reason) => reason.includes('volume abaixo'))).length}
               </p>
             </div>
             <div className="rounded-lg bg-slate-900 p-4">
               <p className="text-sm text-slate-400">Fora por CSAT</p>
               <p className="mt-2 text-2xl font-bold text-amber-200">
-                {chatRanking.filter((item) => item.reasons.some((reason) => reason.includes('CSAT abaixo'))).length}
+                {calculatedChatRanking.filter((item) => item.reasons.some((reason) => reason.includes('CSAT abaixo'))).length}
               </p>
             </div>
             <div className="rounded-lg bg-slate-900 p-4">
               <p className="text-sm text-slate-400">Fora por avaliações</p>
               <p className="mt-2 text-2xl font-bold text-amber-200">
-                {chatRanking.filter((item) => item.reasons.some((reason) => reason.includes('avaliações abaixo'))).length}
+                {calculatedChatRanking.filter((item) => item.reasons.some((reason) => reason.includes('avaliações abaixo'))).length}
               </p>
             </div>
           </div>
@@ -2828,7 +2863,7 @@ function ChatModuleDashboard({
                   <th className="pb-3 pr-4 font-medium">Volume vs média</th>
                   <th className="pb-3 pr-4 font-medium">Status</th>
                   <th className="pb-3 pr-4 font-medium">Motivo</th>
-                  <th className="pb-3 font-medium">Podio</th>
+                  <th className="pb-3 font-medium">Cálculo</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/10">
@@ -2838,7 +2873,7 @@ function ChatModuleDashboard({
 
                   return (
                     <tr key={item.metric.id}>
-                      <td className="py-3 pr-4 font-bold text-cyan-300">{index + 1}o</td>
+                      <td className="py-3 pr-4 font-bold text-cyan-300">{item.excluded ? '—' : `${index + 1}o`}</td>
                       <td className="py-3 pr-4 font-semibold">{getChatAnalystName(item.metric)}</td>
                       <td className="whitespace-nowrap py-3 pr-4 tabular-nums">{formatChatPercent(item.metric.csat)}</td>
                       <td className="whitespace-nowrap py-3 pr-4 tabular-nums">{formatChatPercent(item.metric.review_percentage)}</td>
@@ -2850,7 +2885,7 @@ function ChatModuleDashboard({
                         {item.eligible ? (
                           <span className="text-emerald-300">Elegível</span>
                         ) : excluded ? (
-                          <span className="text-amber-200">Exceção manual</span>
+                          <span className="text-amber-200">Desconsiderado</span>
                         ) : (
                           <span className="text-slate-400">Não elegível</span>
                         )}
@@ -2860,7 +2895,7 @@ function ChatModuleDashboard({
                       </td>
                       <td className="py-3">
                         <button className="small-button" type="button" onClick={() => handleToggleChatPodiumExclusion(item.metric)}>
-                          {excluded ? 'Permitir' : 'Tirar'}
+                          {excluded ? 'Incluir novamente' : 'Desconsiderar'}
                         </button>
                       </td>
                     </tr>
@@ -8746,16 +8781,19 @@ function buildChatRanking(
 ) {
   return metrics
     .map((metric) => {
+      const excluded = excludedAnalystIds.has(metric.analyst_id)
       const reasons = getChatAttentionReasons(metric, averageTickets)
-      if (excludedAnalystIds.has(metric.analyst_id)) reasons.push('fora do pódio por excecao operacional')
+      if (excluded) reasons.push('desconsiderado do período por exceção operacional')
 
       return {
         metric,
-        eligible: reasons.length === 0,
+        eligible: !excluded && reasons.length === 0,
+        excluded,
         reasons,
       }
     })
     .sort((a, b) => {
+      if (a.excluded !== b.excluded) return a.excluded ? 1 : -1
       if (a.eligible !== b.eligible) return a.eligible ? -1 : 1
       if (Number(b.metric.csat) !== Number(a.metric.csat)) return Number(b.metric.csat) - Number(a.metric.csat)
       if (Number(b.metric.review_percentage) !== Number(a.metric.review_percentage)) {
