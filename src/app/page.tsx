@@ -1221,7 +1221,7 @@ export default function Home() {
               Central de Performance
             </p>
             <h1 className="mt-3 text-3xl font-bold sm:text-4xl">
-              Gestao de Performance de Atendimento
+              Gestão de Performance de Atendimento
             </h1>
             <p className="mt-3 max-w-3xl text-slate-300">
               Painel interno para acompanhar metas, analistas, lançamentos semanais,
@@ -1235,7 +1235,7 @@ export default function Home() {
             </p>
             {!isManagementUser && !currentProfileAnalyst && (
               <p className="mt-2 text-sm text-amber-200">
-                Perfil de analista sem vinculo com cadastro. Peca ao gestor para revisar o usuario.
+                Perfil de analista sem vínculo com cadastro. Peça ao gestor para revisar o usuário.
               </p>
             )}
           </div>
@@ -1255,7 +1255,7 @@ export default function Home() {
                 setActiveTab('dashboard')
               }}
             >
-              <span>Modulo telefone</span>
+              <span>Módulo telefone</span>
               <strong>Performance de atendimento</strong>
               <small>Dashboard, lançamentos, metas, pódio, SARE e IA preditiva.</small>
             </button>
@@ -1264,7 +1264,7 @@ export default function Home() {
               type="button"
               onClick={() => setActiveModule('chat')}
             >
-              <span>Modulo chat</span>
+              <span>Módulo chat</span>
               <strong>Performance de atendimento via chat</strong>
               <small>Dados do Zendesk, importação mensal, ranking, pódio e relatórios individuais.</small>
             </button>
@@ -1277,13 +1277,13 @@ export default function Home() {
           </TabButton>
           {isManagementUser && (
             <TabButton active={activeTab === 'reports'} onClick={() => setActiveTab('reports')}>
-              Relatorios
+              Relatórios
             </TabButton>
           )}
           {isManagementUser && (
             <>
               <TabButton active={activeTab === 'entries'} onClick={() => setActiveTab('entries')}>
-                Lancamentos
+                Lançamentos
               </TabButton>
               <TabButton active={activeTab === 'analysts'} onClick={() => setActiveTab('analysts')}>
                 Analistas
@@ -1292,7 +1292,7 @@ export default function Home() {
                 Metas
               </TabButton>
               <TabButton active={activeTab === 'users'} onClick={() => setActiveTab('users')}>
-                Usuarios
+                Usuários
               </TabButton>
             </>
           )}
@@ -1476,7 +1476,7 @@ function ChatModuleDashboard({
     const monthNumber = Number(chatImportMonth)
 
     if (!year || !monthNumber || monthNumber < 1 || monthNumber > 12) {
-      setChatImportMessage('Informe um mes e ano válidos para a importação.')
+      setChatImportMessage('Informe um mês e um ano válidos para a importação.')
       return
     }
 
@@ -1512,7 +1512,7 @@ function ChatModuleDashboard({
 
       await onImportComplete()
       setSelectedPeriodKey(`${year}-${monthNumber}`)
-      setChatImportMessage(`Importação concluida: ${importRows.length} analistas processados para ${period.label}.`)
+      setChatImportMessage(`Importação concluída: ${importRows.length} analistas processados para ${period.label}.`)
     } catch (error) {
       setChatImportMessage(getErrorMessage(error))
     } finally {
@@ -1537,9 +1537,9 @@ function ChatModuleDashboard({
 
       <section className="panel">
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Módulo chat</p>
-          <h2 className="mt-3 text-3xl font-bold">Acesso restrito a gestão</h2>
+          <h2 className="mt-3 text-3xl font-bold">Acesso restrito à gestão</h2>
           <p className="mt-3 max-w-3xl text-slate-300">
-            O modulo chat sera usado para importação mensal, calculos consolidados, ranking, pódio e relatórios individuais.
+            O módulo Chat será usado para importação mensal, cálculos consolidados, ranking, pódio e relatórios individuais.
           </p>
         </section>
       </div>
@@ -1697,10 +1697,10 @@ function ChatModuleDashboard({
     !calculationMetrics.length
       ? 'Sem dados no período'
       : averageCsat >= 90 && averageReviews >= 25
-        ? 'Operação saudavel'
+        ? 'Operação saudável'
         : averageCsat < 85 || averageReviews < 20 || attention.length >= 3
-          ? 'Acompanhamento prioritario'
-          : 'Periodo em atenção'
+          ? 'Acompanhamento prioritário'
+          : 'Período em atenção'
   const chatExecutiveTone =
     !calculationMetrics.length
       ? 'text-slate-300'
@@ -1713,7 +1713,7 @@ function ChatModuleDashboard({
     !calculationMetrics.length
       ? 'Selecione outro período ou aguarde a importação mensal.'
       : averageCsat < 85
-        ? 'A qualidade do atendimento tem espaco para evolução.'
+        ? 'A qualidade do atendimento tem espaço para evolução.'
         : averageCsat < 90
           ? 'CSAT abaixo da referência de pódio do chat.'
           : averageReviews < 20
@@ -1726,21 +1726,21 @@ function ChatModuleDashboard({
 
   const chatRecommendedAction =
     !calculationMetrics.length
-      ? 'Importar ou selecionar um mes com dados.'
+      ? 'Importar ou selecionar um mês com dados.'
       : averageCsat < 90
         ? 'Revisar atendimentos negativos e direcionar feedback dos analistas em atenção.'
         : averageReviews < 25
-          ? 'Reforcar convite para avaliação e acompanhar volume de respostas no próximo ciclo.'
+          ? 'Reforçar o convite para avaliação e acompanhar o volume de respostas no próximo ciclo.'
           : attention.length
             ? 'Priorizar os analistas listados em atenção antes do próximo fechamento.'
-            : 'Manter rotina atual e acompanhar se o resultado se sustenta no mes seguinte.'
+            : 'Manter a rotina atual e acompanhar se o resultado se sustenta no mês seguinte.'
   const chatEligibleCount = calculatedChatRanking.filter((item) => item.eligible).length
   const chatVisualRows = calculatedChatRanking.slice(0, 10).map((item) => ({
     label: getChatAnalystName(item.metric),
     primary: Number(item.metric.csat),
     secondary: Number(item.metric.review_percentage),
     volume: Number(item.metric.total_tickets),
-    status: item.eligible ? 'Elegivel' : item.reasons.join(', '),
+    status: item.eligible ? 'Elegível' : item.reasons.join(', '),
   }))
   const chatVisualPoints = calculatedChatRanking.map((item) => ({
     label: getChatAnalystName(item.metric),
@@ -1826,46 +1826,46 @@ function ChatModuleDashboard({
     ? ['Importar as planilhas do Zendesk.', 'Conferir se mês, equipe e analistas foram reconhecidos.', 'Selecionar equipe e período para liberar a leitura de gestão.']
     : [
         chatBelowCsatCount
-          ? `Qualidade: ouvir 2 interações mal avaliadas de ${chatNameList(chatBelowCsatNames)} e registrar uma orientação objetiva por pessoa.`
-          : `Qualidade: usar ${chatNameList(chatEligibleNames)} como referência de abordagem e encerramento para o próximo ciclo.`,
+          ? `Qualidade: ouvir duas interações mal avaliadas de ${chatNameList(chatBelowCsatNames)}, identificar o comportamento que prejudicou a experiência do cliente e combinar uma mudança objetiva com cada pessoa.`
+          : `Qualidade: ouvir atendimentos bem avaliados de ${chatNameList(chatEligibleNames)}, identificar o que funcionou na abordagem e compartilhar esse exemplo com a equipe.`,
         chatBelowReviewCount
-          ? `Avaliações: reforçar com ${chatNameList(chatBelowReviewNames)} a frase de encerramento e conferir se o convite está sendo enviado no momento correto.`
-          : 'Avaliações: manter o ritual de encerramento que preservou a amostra acima da referência de 25%.',
+          ? `Avaliações: orientar ${chatNameList(chatBelowReviewNames)} a concluir o atendimento confirmando a solução e, em seguida, convidar o cliente a responder à pesquisa. Conferir no próximo fechamento se a participação aumentou.`
+          : 'Avaliações: manter a forma de encerramento atual: confirmar que a solicitação foi resolvida e convidar o cliente a avaliar. Essa prática manteve a participação acima da referência de 25%.',
         chatBelowVolumeCount
-          ? `Volume: validar ${chatNameList(chatBelowVolumeNames)} contra escala, ausência, empréstimo para outro setor ou distribuição de fila antes de fechar o pódio.`
+          ? `Volume: conferir se o resultado de ${chatNameList(chatBelowVolumeNames)} foi afetado por escala, ausência, empréstimo para outro setor ou distribuição desigual da fila. Só tratar como desempenho individual depois de eliminar essas causas operacionais.`
           : 'Volume: manter a distribuição atual e monitorar apenas exceções operacionais.',
       ]
   const chatStrategicDecision =
     !calculationMetrics.length
       ? 'Decisão recomendada: aguardar a importação mensal antes de definir plano de gestão.'
       : chatCriticalCount > 0
-        ? `Decisão recomendada: tratar ${chatNameList(chatCriticalNames)} como prioridade de gestão antes de publicar o fechamento.`
+        ? `Antes de publicar o fechamento, analisar individualmente ${chatNameList(chatCriticalNames)}, registrar a causa dos indicadores críticos e combinar uma ação com prazo para o próximo ciclo.`
         : chatEligibleCount >= 3
-          ? `Decisão recomendada: validar o pódio, reconhecer ${chatNameList(chatEligibleNames)} e transformar as práticas vencedoras em padrão do próximo ciclo.`
-          : 'Decisão recomendada: separar exceções operacionais de desempenho real e focar o próximo ciclo em ampliar elegíveis ao pódio.'
+          ? `Antes de publicar o ranking, confirme se empréstimos, ausências ou diferenças na distribuição da fila exigem algum ajuste. Depois, reconheça ${chatNameList(chatEligibleNames)} e compartilhe com a equipe os comportamentos que sustentaram os resultados.`
+          : 'Antes de publicar o ranking, separe as exceções operacionais dos resultados individuais. Depois, escolha o indicador com maior impacto e defina uma ação para aumentar a quantidade de elegíveis no próximo ciclo.'
   const chatStrategicTrend =
     !calculationMetrics.length
       ? 'Sem tendência calculada.'
       : chatCsatDelta >= 0 && chatReviewDelta >= 0
-        ? 'Tendência favorável: qualidade e amostra melhoraram contra o mês anterior; preserve o que funcionou.'
+        ? `Evolução favorável: o CSAT passou de ${formatChatPercent(previousAverageCsat)} para ${formatChatPercent(averageCsat)}, e as avaliações passaram de ${formatChatPercent(previousAverageReviews)} para ${formatChatPercent(averageReviews)}. Mantenha as práticas que produziram essa melhora.`
         : chatCsatDelta < 0 && chatReviewDelta < 0
-          ? 'Tendência de atenção: qualidade e amostra pioraram juntas; faça revisão de causa antes do fechamento.'
+          ? `Alerta duplo: o CSAT caiu de ${formatChatPercent(previousAverageCsat)} para ${formatChatPercent(averageCsat)}, e a participação nas avaliações caiu de ${formatChatPercent(previousAverageReviews)} para ${formatChatPercent(averageReviews)}. Revise atendimentos mal avaliados e a forma de encerramento antes de concluir o fechamento.`
           : chatCsatDelta < 0
-            ? 'Tendência de qualidade: priorize leitura dos atendimentos negativos e alinhe comportamento de atendimento.'
-            : 'Tendência de amostra: o desafio não é só qualidade, é conseguir mais clientes respondendo à avaliação.'
+            ? `Alerta de qualidade: o CSAT caiu de ${formatChatPercent(previousAverageCsat)} para ${formatChatPercent(averageCsat)}. Priorize a leitura dos atendimentos negativos e alinhe o comportamento que precisa mudar.`
+            : `Alerta de participação: as avaliações passaram de ${formatChatPercent(previousAverageReviews)} para ${formatChatPercent(averageReviews)}. A qualidade pode estar preservada, mas é preciso aumentar a quantidade de clientes que respondem à pesquisa.`
 
   const chatMonthlyContextCards = [
     {
-      label: 'Mes analisado',
-      value: selectedPeriod?.label ?? 'Periodo',
+      label: 'Mês analisado',
+      value: selectedPeriod?.label ?? 'Período',
       detail: selectedTeamName,
     },
     {
       label: 'Comparativo',
-      value: previousPeriod?.label ?? 'Sem mes anterior',
+      value: previousPeriod?.label ?? 'Sem mês anterior',
       detail: previousPeriod
         ? 'Leitura comparada com o fechamento mensal anterior da mesma equipe.'
-        : 'Importe meses anteriores para liberar tendencia e comparação.',
+        : 'Importe meses anteriores para liberar tendência e comparação.',
     },
     {
       label: 'Base Zendesk',
@@ -1879,38 +1879,38 @@ function ChatModuleDashboard({
       label: 'Reconhecimento',
       title:
         chatEligibleCount >= 3
-          ? 'Podio sustentado'
+          ? 'Pódio sustentado'
           : chatEligibleCount > 0
             ? 'Há destaques para reconhecer'
             : 'Reconhecimento seletivo',
       text:
         chatEligibleCount >= 3
-          ? `Reconhecer o pódio e usar ${chatNameList(chatEligibleNames)} como referência de comportamento para o próximo mes.`
+          ? `Reconhecer o pódio e usar ${chatNameList(chatEligibleNames)} como referência de comportamento para o próximo mês.`
           : chatEligibleCount > 0
-            ? `Reconhecer ${chatNameList(chatEligibleNames)} e separar o que foi pratica individual do que foi contexto operacional.`
-            : 'Sem pódio completo no período; reconhecer evolucoes pontuais e evitar premiar sem cumprir os critérios.',
+            ? `Reconhecer ${chatNameList(chatEligibleNames)} e separar o que foi prática individual do que foi contexto operacional.`
+            : 'Sem pódio completo no período; reconhecer evoluções pontuais e evitar premiar sem cumprir os critérios.',
     },
     {
       label: 'Acompanhamento',
       title: chatOpportunities.length ? 'Priorizar analistas em atenção' : 'Sem fila crítica de acompanhamento',
       text: chatOpportunities.length
-        ? `Comecar por ${chatNameList(chatOpportunities.slice(0, 3).map((item) => getChatAnalystName(item.metric)))} e registrar uma ação objetiva por indicador pendente.`
-        : 'Manter acompanhamento leve e preservar o padrao que sustentou o fechamento.',
+        ? `Começar por ${chatNameList(chatOpportunities.slice(0, 3).map((item) => getChatAnalystName(item.metric)))} e registrar uma ação objetiva por indicador pendente.`
+        : 'Manter acompanhamento leve e repetir as práticas que sustentaram o fechamento.',
     },
     {
-      label: 'Excecoes operacionais',
-      title: chatBelowVolumeCount ? 'Validar volume antes do pódio' : 'Volume sem excecao relevante',
+      label: 'Exceções operacionais',
+      title: chatBelowVolumeCount ? 'Validar volume antes do pódio' : 'Volume sem exceção relevante',
       text: chatBelowVolumeCount
-        ? `Antes de fechar o pódio, validar se ${chatNameList(chatBelowVolumeNames)} tiveram emprestimo, ausencia, cobertura ou distribuicao diferente de fila.`
-        : 'Não ha alerta relevante de volume abaixo da média para justificar excecao operacional.',
+        ? `Antes de fechar o pódio, validar se ${chatNameList(chatBelowVolumeNames)} tiveram empréstimo, ausência, cobertura ou distribuição diferente de fila.`
+        : 'Não há alerta relevante de volume abaixo da média para justificar exceção operacional.',
     },
     {
-      label: 'Proximo fechamento',
-      title: averageCsat >= 90 && averageReviews >= 25 ? 'Proteger padrao' : 'Corrigir base do indicador',
+      label: 'Próximo fechamento',
+      title: averageCsat >= 90 && averageReviews >= 25 ? 'Repetir o que funcionou' : 'Corrigir o indicador prioritário',
       text:
         averageCsat >= 90 && averageReviews >= 25
-          ? 'No próximo mes, acompanhar se CSAT e amostra continuam sustentados sem depender apenas de um ou dois destaques.'
-          : 'No próximo mes, definir uma prioridade: qualidade se CSAT caiu, amostra se avaliações ficaram baixas, ou volume se houve distorcao operacional.',
+          ? 'No próximo mês, verificar se CSAT e participação nas avaliações continuam acima das referências sem depender apenas de um ou dois destaques.'
+          : 'No próximo mês, definir uma prioridade: qualidade se o CSAT caiu, participação se houve poucas avaliações, ou volume se existiu distorção operacional.',
     },
   ]
 
@@ -2134,7 +2134,7 @@ function ChatModuleDashboard({
       if (error) throw error
 
       await onImportComplete()
-      setChatPodiumMessage('Podio manual salvo para este período.')
+      setChatPodiumMessage('Pódio manual salvo para este período.')
     } catch (error) {
       setChatPodiumMessage(`Erro ao salvar pódio manual: ${getErrorMessage(error)}`)
     }
@@ -2160,7 +2160,7 @@ function ChatModuleDashboard({
 
       setManualPodiumDraft({})
       await onImportComplete()
-      setChatPodiumMessage('Podio manual removido. O ranking automatico voltou a valer.')
+      setChatPodiumMessage('Pódio manual removido. O ranking automático voltou a valer.')
     } catch (error) {
       setChatPodiumMessage(getErrorMessage(error))
     }
@@ -2243,7 +2243,7 @@ function ChatModuleDashboard({
           feedbackStyle: chatFeedbackStyle,
           feedbackGoal: chatFeedbackGoal,
           generationMode: 'generate',
-          periodLabel: selectedPeriod?.label ?? 'Periodo',
+          periodLabel: selectedPeriod?.label ?? 'Período',
           managerNotes: chatManagerNotes,
           fallbackText: chatReportFeedbackSuggestion,
           averageTickets,
@@ -2317,7 +2317,7 @@ function ChatModuleDashboard({
           feedbackStyle: chatFeedbackStyle,
           feedbackGoal: chatFeedbackGoal,
           generationMode: 'improve',
-          periodLabel: selectedPeriod?.label ?? 'Periodo',
+          periodLabel: selectedPeriod?.label ?? 'Período',
           managerNotes: chatManagerNotes,
           fallbackText: baseFeedback,
           averageTickets,
@@ -2364,7 +2364,7 @@ function ChatModuleDashboard({
 
     return {
       metric: selectedChatReportMetric,
-      periodLabel: selectedPeriod?.label ?? 'Periodo',
+      periodLabel: selectedPeriod?.label ?? 'Período',
       averageTickets,
       podiumPosition: selectedChatPodiumPosition,
       monthlyHistory: metrics
@@ -2419,7 +2419,7 @@ function ChatModuleDashboard({
                 ))}
               </select>
             </Field>
-            <Field label="Periodo">
+            <Field label="Período">
               <select className="form-input" value={selectedPeriodKey} onChange={(event) => setSelectedPeriodKey(event.target.value)}>
                 {periods.map((period) => (
                   <option key={`${period.year}-${period.monthNumber}`} value={`${period.year}-${period.monthNumber}`}>
@@ -2533,7 +2533,7 @@ function ChatModuleDashboard({
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Resumo executivo</p>
             <h2 className={`mt-3 text-3xl font-bold ${chatExecutiveTone}`}>{chatExecutiveStatus}</h2>
             <p className="mt-3 text-sm leading-6 text-slate-300">
-              {selectedPeriod?.label ?? 'Periodo'} - {selectedTeamName}. {chatMainAlert}
+              {selectedPeriod?.label ?? 'Período'} - {selectedTeamName}. {chatMainAlert}
             </p>
           </div>
 
@@ -2626,9 +2626,9 @@ function ChatModuleDashboard({
       <section className={chatActiveTab === 'overview' ? 'panel' : 'hidden'}>
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Inteligência do fechamento mensal</p>
-          <h2 className="mt-2 text-2xl font-bold">Acoes de gestão para o próximo ciclo</h2>
+          <h2 className="mt-2 text-2xl font-bold">Ações de gestão para o próximo ciclo</h2>
           <p className="section-subtitle">
-            Leitura desenhada para o uso real do chat: fechamento mensal, reconhecimento, excecoes operacionais e plano do próximo mes.
+            Leitura desenhada para o uso real do chat: fechamento mensal, reconhecimento, exceções operacionais e plano do próximo mês.
           </p>
         </div>
 
@@ -2708,7 +2708,7 @@ function ChatModuleDashboard({
         <div className="grid gap-6 xl:grid-cols-3">
           <div className="xl:col-span-2">
             <h2 className="section-title">Evolução mensal</h2>
-            <p className="section-subtitle">CSAT médio consolidado por mes no filtro selecionado.</p>
+            <p className="section-subtitle">CSAT médio consolidado por mês no filtro selecionado.</p>
             <div className="mt-5">
               <GroupedPercentTrendChart
                 points={monthlyUnifiedTrend}
@@ -3077,7 +3077,7 @@ function ChatModuleDashboard({
             <MetricCard label="Avaliações" value={`${selectedChatReportMetric.review_percentage}%`} />
             <MetricCard label="Atendimentos" value={selectedChatReportMetric.total_tickets} />
             <MetricCard label="Volume vs média" value={`${Number(selectedChatReportMetric.total_tickets) - averageTickets >= 0 ? '+' : ''}${Number(selectedChatReportMetric.total_tickets) - averageTickets}`} />
-            <MetricCard label="Podio" value={selectedChatPodiumPosition > 0 ? `${selectedChatPodiumPosition}o lugar` : 'Fora'} />
+            <MetricCard label="Pódio" value={selectedChatPodiumPosition > 0 ? `${selectedChatPodiumPosition}º lugar` : 'Fora'} />
           </div>
         ) : (
           <EmptyState text="Selecione um analista com dados para gerar o relatório." />
@@ -3104,7 +3104,7 @@ function ChatModuleDashboard({
               className="form-input min-h-24"
               value={chatManagerNotes}
               onChange={(event) => setChatManagerNotes(event.target.value)}
-              placeholder="Inclua contexto do mes, combinados, pontos de atenção ou reconhecimento para orientar o feedback."
+              placeholder="Inclua o contexto do mês, combinados, pontos de atenção ou reconhecimento para orientar o feedback."
             />
           </Field>
 
@@ -3305,7 +3305,7 @@ function ChatModuleDashboard({
             </p>
           </div>
           <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">
-            {selectedPeriod?.label ?? 'Periodo'} - {selectedTeamName}
+            {selectedPeriod?.label ?? 'Período'} - {selectedTeamName}
           </span>
         </div>
 
