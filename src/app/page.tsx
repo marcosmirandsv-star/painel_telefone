@@ -1456,7 +1456,7 @@ function ChatModuleDashboard({
   const [chatFeedbackDraft, setChatFeedbackDraft] = useState('')
   const [chatAiSaving, setChatAiSaving] = useState(false)
   const [selectedChatReportMetricId, setSelectedChatReportMetricId] = useState('')
-  const [chatActiveTab, setChatActiveTab] = useState<'overview' | 'podium' | 'analysis' | 'reports' | 'import' | 'settings' | 'base'>('overview')
+  const [chatActiveTab, setChatActiveTab] = useState<'overview' | 'podium' | 'analysis' | 'reports' | 'import' | 'settings'>('overview')
   const [manualPodiumDraft, setManualPodiumDraft] = useState<Record<number, string>>({})
   const [chatPodiumMessage, setChatPodiumMessage] = useState('')
   const [chatAnalystForm, setChatAnalystForm] = useState({ teamId: '', name: '', csatGoal: '86', photoFile: null as File | null })
@@ -2432,29 +2432,63 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <nav className="tab-row">
-        <TabButton active={chatActiveTab === 'overview'} onClick={() => setChatActiveTab('overview')}>
-          Painel
-        </TabButton>
-        <TabButton active={chatActiveTab === 'podium'} onClick={() => setChatActiveTab('podium')}>
-          Ranking e pódio
-        </TabButton>
-        <TabButton active={chatActiveTab === 'analysis'} onClick={() => setChatActiveTab('analysis')}>
-          Análise
-        </TabButton>
-        <TabButton active={chatActiveTab === 'reports'} onClick={() => setChatActiveTab('reports')}>
-          Relatórios
-        </TabButton>
-        <TabButton active={chatActiveTab === 'import'} onClick={() => setChatActiveTab('import')}>
-          Importação
-        </TabButton>
-        <TabButton active={chatActiveTab === 'settings'} onClick={() => setChatActiveTab('settings')}>
-          Cadastros
-        </TabButton>
-        <TabButton active={chatActiveTab === 'base'} onClick={() => setChatActiveTab('base')}>
-          Base importada
-        </TabButton>
+      <nav className="chat-navigation" aria-label="Áreas do módulo Chat">
+        <div className="tab-row">
+          <TabButton active={chatActiveTab === 'overview'} onClick={() => setChatActiveTab('overview')}>
+            Visão da operação
+          </TabButton>
+          <TabButton active={chatActiveTab === 'analysis'} onClick={() => setChatActiveTab('analysis')}>
+            Equipe e produtividade
+          </TabButton>
+          <TabButton active={chatActiveTab === 'podium'} onClick={() => setChatActiveTab('podium')}>
+            Gestão e ações
+          </TabButton>
+          <TabButton active={chatActiveTab === 'reports'} onClick={() => setChatActiveTab('reports')}>
+            Fechamento mensal
+          </TabButton>
+        </div>
+        <div className="chat-utility-tabs" aria-label="Ferramentas do módulo Chat">
+          <span>Ferramentas</span>
+          <TabButton active={chatActiveTab === 'import'} onClick={() => setChatActiveTab('import')}>
+            Importação
+          </TabButton>
+          <TabButton active={chatActiveTab === 'settings'} onClick={() => setChatActiveTab('settings')}>
+            Cadastros
+          </TabButton>
+        </div>
       </nav>
+
+      {chatActiveTab === 'overview' && (
+        <section className="panel">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Visão da operação</p>
+          <h2 className="mt-2 text-2xl font-bold">O que aconteceu no período?</h2>
+          <p className="section-subtitle">Resultado consolidado, comparação com o mês anterior e evolução dos principais indicadores.</p>
+        </section>
+      )}
+
+      {chatActiveTab === 'analysis' && (
+        <section className="panel">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Equipe e produtividade</p>
+          <h2 className="mt-2 text-2xl font-bold">Como os resultados estão distribuídos?</h2>
+          <p className="section-subtitle">Comparação entre analistas, volume, qualidade, participação nas avaliações e conferência da base importada.</p>
+        </section>
+      )}
+
+      {chatActiveTab === 'podium' && (
+        <section className="panel">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Gestão e ações</p>
+          <h2 className="mt-2 text-2xl font-bold">Onde agir e o que acompanhar?</h2>
+          <p className="section-subtitle">Diagnóstico gerencial, prioridades, causas a validar e ações recomendadas para o próximo ciclo.</p>
+        </section>
+      )}
+
+      {chatActiveTab === 'reports' && (
+        <section className="panel">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Fechamento mensal</p>
+          <h2 className="mt-2 text-2xl font-bold">Consolidar, reconhecer e comunicar</h2>
+          <p className="section-subtitle">Ranking final, ajustes operacionais do pódio e geração dos relatórios individuais.</p>
+        </section>
+      )}
 
       <section className={chatActiveTab === 'import' ? 'panel' : 'hidden'}>
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
@@ -2467,7 +2501,7 @@ function ChatModuleDashboard({
           </div>
 
           <form className="grid flex-1 gap-3 md:grid-cols-5" onSubmit={handleChatMonthlyImport}>
-            <Field label="Mes">
+            <Field label="Mês">
               <select className="form-input" value={chatImportMonth} onChange={(event) => setChatImportMonth(event.target.value)}>
                 {chatMonthOptions.map((month) => (
                   <option key={month.value} value={month.value}>
@@ -2518,7 +2552,7 @@ function ChatModuleDashboard({
       </div>
 
       <CriteriaLegend
-        hidden={chatActiveTab !== 'overview'}
+        hidden={chatActiveTab !== 'analysis'}
         title="Critérios do pódio do chat"
         items={[
           'CSAT mínimo de 90%',
@@ -2572,7 +2606,7 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <section className={chatActiveTab === 'overview' ? 'panel' : 'hidden'}>
+      <section className={chatActiveTab === 'podium' ? 'panel' : 'hidden'}>
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Inteligência de gestão</p>
           <h2 className="mt-2 text-2xl font-bold">Três camadas para decidir o próximo movimento</h2>
@@ -2623,7 +2657,7 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <section className={chatActiveTab === 'overview' ? 'panel' : 'hidden'}>
+      <section className={chatActiveTab === 'podium' ? 'panel' : 'hidden'}>
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Inteligência do fechamento mensal</p>
           <h2 className="mt-2 text-2xl font-bold">Ações de gestão para o próximo ciclo</h2>
@@ -2643,7 +2677,7 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <section className={chatActiveTab === 'overview' ? 'panel' : 'hidden'}>
+      <section className={chatActiveTab === 'podium' ? 'panel' : 'hidden'}>
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Fechamento mensal</p>
@@ -2677,7 +2711,7 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <section className={chatActiveTab === 'overview' ? 'panel' : 'hidden'}>
+      <section className={chatActiveTab === 'analysis' ? 'panel' : 'hidden'}>
         <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           <EligibilityFunnel
             title="Funil de elegibilidade do chat"
@@ -2735,7 +2769,7 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <section className={chatActiveTab === 'podium' ? 'panel' : 'hidden'}>
+      <section className={chatActiveTab === 'reports' ? 'panel' : 'hidden'}>
         <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <h2 className="section-title">Pódio final do chat</h2>
@@ -2805,7 +2839,7 @@ function ChatModuleDashboard({
         {chatPodiumMessage && <p className="mt-4 rounded-md bg-slate-900/70 px-4 py-3 text-sm text-slate-200">{chatPodiumMessage}</p>}
       </section>
 
-      <div className={chatActiveTab === 'podium' ? 'grid gap-6 xl:grid-cols-2' : 'hidden'}>
+      <div className={chatActiveTab === 'reports' ? 'grid gap-6 xl:grid-cols-2' : 'hidden'}>
         <section className="panel xl:col-span-2">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -2908,34 +2942,15 @@ function ChatModuleDashboard({
           </div>
         </section>
 
-        <section className="panel">
-          <h2 className="section-title">Analistas em atenção</h2>
-          <p className="section-subtitle">Lista objetiva para orientar acompanhamento mensal.</p>
-          <div className="mt-5 space-y-3">
-            {attention.length ? (
-              attention.map((item) => (
-                <div key={item.metric.id} className="rounded-lg bg-slate-900 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="font-semibold">{getChatAnalystName(item.metric)}</p>
-                    <strong className="text-amber-200">{item.metric.csat}%</strong>
-                  </div>
-                  <p className="mt-2 text-sm text-slate-400">{item.reasons.join(', ')}</p>
-                </div>
-              ))
-            ) : (
-              <EmptyState text="Nenhum ponto crítico encontrado neste filtro." />
-            )}
-          </div>
-        </section>
       </div>
 
 
       <section className={chatActiveTab === 'analysis' ? 'panel' : 'hidden'}>
         <div className="flex flex-col gap-2">
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Análise detalhada</p>
-          <h2 className="section-title">Leitura por critérios do painel antigo</h2>
+          <h2 className="section-title">Diagnóstico por analista</h2>
           <p className="section-subtitle">
-            Mostra delta de CSAT contra a meta individual, delta de avaliações contra 25%, % sem avaliação contra 80% e volume contra a média do período.
+            Compare CSAT, avaliações, percentual sem avaliação e volume com as referências do período para localizar destaques e oportunidades.
           </p>
         </div>
 
@@ -3094,7 +3109,7 @@ function ChatModuleDashboard({
           </div>
           <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
             <p className="font-semibold text-slate-100">3. Exportar</p>
-            <p className="mt-2">O arquivo individual sera gerado para envio ao colaborador no fechamento mensal.</p>
+            <p className="mt-2">O arquivo individual será gerado para envio ao colaborador no fechamento mensal.</p>
           </div>
         </div>
 
@@ -3296,12 +3311,12 @@ function ChatModuleDashboard({
           </div>
         </div>
       </section>
-      <section className={chatActiveTab === 'base' ? 'panel' : 'hidden'}>
+      <section className={chatActiveTab === 'analysis' ? 'panel' : 'hidden'}>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h2 className="section-title">Base importada</h2>
+            <h2 className="section-title">Base e produtividade</h2>
             <p className="section-subtitle">
-              {metrics.length} registros carregados entre histórico e importações mensais do Zendesk. Esta aba serve para conferir se a importação mensal bate com o fechamento antes de olhar ranking e relatórios.
+              {metrics.length} registros carregados entre histórico e importações mensais do Zendesk. Use esta seção para conferir os números de produtividade e validar a importação antes do fechamento.
             </p>
           </div>
           <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">

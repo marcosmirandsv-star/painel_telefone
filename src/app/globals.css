@@ -115,6 +115,42 @@ button:disabled {
   font-weight: 700;
 }
 
+.chat-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid rgb(255 255 255 / 0.1);
+  padding-bottom: 16px;
+}
+
+.tab-row,
+.chat-utility-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-utility-tabs > span {
+  color: rgb(148 163 184);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+@media (max-width: 900px) {
+  .chat-navigation {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tab-row .tab-button,
+  .tab-row .tab-button-active {
+    flex: 1 1 180px;
+  }
+}
+
 .list-row {
   display: flex;
   min-height: 56px;
