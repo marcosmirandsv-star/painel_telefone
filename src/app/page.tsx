@@ -1457,6 +1457,7 @@ function ChatModuleDashboard({
   const [chatAiSaving, setChatAiSaving] = useState(false)
   const [selectedChatReportMetricId, setSelectedChatReportMetricId] = useState('')
   const [chatActiveTab, setChatActiveTab] = useState<'overview' | 'podium' | 'analysis' | 'reports' | 'import' | 'settings'>('overview')
+  const [chatToolsOpen, setChatToolsOpen] = useState(false)
   const [manualPodiumDraft, setManualPodiumDraft] = useState<Record<number, string>>({})
   const [chatPodiumMessage, setChatPodiumMessage] = useState('')
   const [chatAnalystForm, setChatAnalystForm] = useState({ teamId: '', name: '', csatGoal: '86', photoFile: null as File | null })
@@ -2447,14 +2448,45 @@ function ChatModuleDashboard({
             Fechamento mensal
           </TabButton>
         </div>
-        <div className="chat-utility-tabs" aria-label="Ferramentas do módulo Chat">
-          <span>Ferramentas</span>
-          <TabButton active={chatActiveTab === 'import'} onClick={() => setChatActiveTab('import')}>
-            Importação
-          </TabButton>
-          <TabButton active={chatActiveTab === 'settings'} onClick={() => setChatActiveTab('settings')}>
-            Cadastros
-          </TabButton>
+        <div className="chat-tools-menu">
+          <button
+            aria-expanded={chatToolsOpen}
+            aria-haspopup="menu"
+            className={chatActiveTab === 'import' || chatActiveTab === 'settings' ? 'chat-tools-trigger chat-tools-trigger-active' : 'chat-tools-trigger'}
+            onClick={() => setChatToolsOpen((open) => !open)}
+            type="button"
+          >
+            Ferramentas
+            <span aria-hidden="true" className={chatToolsOpen ? 'chat-tools-chevron chat-tools-chevron-open' : 'chat-tools-chevron'}>⌄</span>
+          </button>
+          {chatToolsOpen && (
+            <div className="chat-tools-dropdown" role="menu">
+              <button
+                className={chatActiveTab === 'import' ? 'chat-tools-option chat-tools-option-active' : 'chat-tools-option'}
+                onClick={() => {
+                  setChatActiveTab('import')
+                  setChatToolsOpen(false)
+                }}
+                role="menuitem"
+                type="button"
+              >
+                <strong>Importação</strong>
+                <span>Atualizar a base mensal do Zendesk</span>
+              </button>
+              <button
+                className={chatActiveTab === 'settings' ? 'chat-tools-option chat-tools-option-active' : 'chat-tools-option'}
+                onClick={() => {
+                  setChatActiveTab('settings')
+                  setChatToolsOpen(false)
+                }}
+                role="menuitem"
+                type="button"
+              >
+                <strong>Cadastros</strong>
+                <span>Gerenciar analistas, metas e fotos</span>
+              </button>
+            </div>
+          )}
         </div>
       </nav>
 
