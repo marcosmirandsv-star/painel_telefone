@@ -3453,9 +3453,6 @@ function DashboardView({
   const [managementAiAnalysis, setManagementAiAnalysis] = useState('')
   const [managementAiMessage, setManagementAiMessage] = useState('')
   const [managementAiLoading, setManagementAiLoading] = useState(false)
-  const isPhoneDailyUnsupported = isPhonePeriodShorterThanWeeklyLaunch(periodFilter)
-  const phoneWeeklyLaunchMessage =
-    'Os dados do telefone são lançados por semana. Para leitura diária, seria necessário lançar os atendimentos por dia.'
   const filteredIndividualMetrics = useMemo(
     () => filterIndividualMetricsByPeriod(individualMetrics, periodFilter),
     [individualMetrics, periodFilter],
@@ -4047,12 +4044,6 @@ function DashboardView({
             ))}
           </div>
         </div>
-
-        {isPhoneDailyUnsupported && (
-          <div className="mt-5 rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm leading-6 text-amber-100">
-            {phoneWeeklyLaunchMessage}
-          </div>
-        )}
 
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           <Field label="Inicio">
@@ -4681,9 +4672,6 @@ function ReportsView({
   const [phoneFeedbackStyle, setPhoneFeedbackStyle] = useState<ChatFeedbackStyle>('mimo')
   const [phoneFeedbackGoal, setPhoneFeedbackGoal] = useState<FeedbackGoal>('development')
   const [phoneAiSaving, setPhoneAiSaving] = useState(false)
-  const isPhoneDailyUnsupported = isPhonePeriodShorterThanWeeklyLaunch(periodFilter)
-  const phoneWeeklyLaunchMessage =
-    'Os dados do telefone são lançados por semana. Para leitura diária, seria necessário lançar os atendimentos por dia.'
   const isManagementUser = role !== 'analyst'
   const reportAnalysts = useMemo(
     () => (analysts.length ? analysts : buildAnalystsFromMetrics(individualMetrics)),
@@ -5118,12 +5106,6 @@ function ReportsView({
             ))}
           </div>
         </div>
-
-        {isPhoneDailyUnsupported && (
-          <div className="mt-5 rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm leading-6 text-amber-100">
-            {phoneWeeklyLaunchMessage}
-          </div>
-        )}
 
         <div className="mt-5 grid gap-4 lg:grid-cols-3">
           {isManagementUser && (
@@ -5582,6 +5564,21 @@ function EntriesView({
   onDeleteTeamMetric: (metric: TeamMetric) => void
   onUpdateTeamOverallCsat: (metric: TeamMetric, overallCsat: number) => void
 }) {
+  const launchPeriods = useMemo(() => {
+    const periods = new Map<string, { key: string; start: string; end: string }>()
+
+    ;[...individualMetrics, ...teamMetrics].forEach((metric) => {
+      const key = `${metric.week_start}|${metric.week_end}`
+      periods.set(key, { key, start: metric.week_start, end: metric.week_end })
+    })
+
+    return [...periods.values()].sort((a, b) =>
+      b.start.localeCompare(a.start) || b.end.localeCompare(a.end),
+    )
+  }, [individualMetrics, teamMetrics])
+  const [selectedChecklistPeriod, setSelectedChecklistPeriod] = useState('')
+  const checklistPeriod =
+    launchPeriods.find((period) => period.key === selectedChecklistPeriod) ?? launchPeriods[0] ?? null
   const positiveReviews = toNumber(individualForm.positiveReviews)
   const negativeReviews = toNumber(individualForm.negativeReviews)
   const totalReviews = positiveReviews + negativeReviews
@@ -5607,8 +5604,8 @@ function EntriesView({
   const teamAnsweredInvalid = answeredCalls > totalCalls && totalCalls > 0
   const teamTotalMismatch =
     totalCalls > 0 && answeredCalls + abandonedCalls > 0 && answeredCalls + abandonedCalls !== totalCalls
-  const checklistStart = individualForm.weekStart || teamForm.weekStart
-  const checklistEnd = individualForm.weekEnd || teamForm.weekEnd
+  const checklistStart = checklistPeriod?.start ?? ''
+  const checklistEnd = checklistPeriod?.end ?? ''
   const checklistIndividualMetrics =
     checklistStart && checklistEnd
       ? individualMetrics.filter((metric) => metric.week_start === checklistStart && metric.week_end === checklistEnd)
@@ -5621,6 +5618,7 @@ function EntriesView({
       : null
   const checklistComplete =
     Boolean(checklistStart && checklistEnd && checklistTeamMetric && pendingAnalysts.length === 0)
+  const checklistDayCount = getInclusiveDayCount(checklistStart, checklistEnd)
 
 
   return (
@@ -5633,8 +5631,26 @@ function EntriesView({
               Use este resumo para conferir se todos os lançamentos da semana foram feitos antes de fechar o período.
             </p>
           </div>
-          <div className={`rounded-lg px-4 py-3 text-sm font-semibold ${checklistComplete ? 'bg-emerald-400/10 text-emerald-200' : 'bg-amber-400/10 text-amber-100'}`}>
-            {checklistComplete ? 'Semana completa' : 'Semana pendente'}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <label className="block min-w-64 text-sm text-slate-300">
+              Período para conferência
+              <select
+                className="input mt-2"
+                value={checklistPeriod?.key ?? ''}
+                onChange={(event) => setSelectedChecklistPeriod(event.target.value)}
+                disabled={!launchPeriods.length}
+              >
+                {!launchPeriods.length && <option value="">Nenhum período lançado</option>}
+                {launchPeriods.map((period) => (
+                  <option key={period.key} value={period.key}>
+                    {formatWeek(period.start, period.end)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className={`rounded-lg px-4 py-3 text-sm font-semibold ${checklistComplete ? 'bg-emerald-400/10 text-emerald-200' : 'bg-amber-400/10 text-amber-100'}`}>
+              {!checklistPeriod ? 'Sem lançamentos' : checklistComplete ? 'Semana completa' : 'Semana pendente'}
+            </div>
           </div>
         </div>
 
@@ -5642,8 +5658,13 @@ function EntriesView({
           <div className="rounded-lg bg-slate-900 p-4">
             <p className="text-sm text-slate-400">Periodo conferido</p>
             <p className="mt-2 font-semibold">
-              {checklistStart && checklistEnd ? `${formatDate(checklistStart)} a ${formatDate(checklistEnd)}` : 'Informe as datas'}
+              {checklistStart && checklistEnd ? `${formatDate(checklistStart)} a ${formatDate(checklistEnd)}` : 'Nenhum período lançado'}
             </p>
+            {checklistDayCount > 0 && checklistDayCount < 5 && (
+              <p className="mt-1 text-xs text-cyan-200">
+                Período parcial de {checklistDayCount} dia(s)
+              </p>
+            )}
           </div>
           <div className="rounded-lg bg-slate-900 p-4">
             <p className="text-sm text-slate-400">Analistas lancados</p>
@@ -5659,7 +5680,7 @@ function EntriesView({
             <p className="text-sm text-slate-400">Proxima ação</p>
             <p className="mt-2 font-semibold">
               {!checklistStart || !checklistEnd
-                ? 'Preencher inicio e fim da semana.'
+                ? 'Faça o primeiro lançamento da semana.'
                 : pendingAnalysts.length
                   ? `Faltam ${pendingAnalysts.length} analista(s).`
                   : checklistTeamMetric
@@ -6032,6 +6053,8 @@ function EntriesHistory({
   const [historyAnalyst, setHistoryAnalyst] = useState('all')
   const [historyStart, setHistoryStart] = useState('')
   const [historyEnd, setHistoryEnd] = useState('')
+  const [historyPage, setHistoryPage] = useState(0)
+  const [expandedHistoryPeriod, setExpandedHistoryPeriod] = useState('')
   const analystOptions = getHistoryAnalystOptions(individualMetrics)
   const filteredIndividualMetrics = individualMetrics.filter((metric) => {
     const analystName = getAnalystName(metric.analysts)
@@ -6053,12 +6076,65 @@ function EntriesHistory({
   )
   const averageHistoryCsat = calculateAverageCsat(filteredIndividualMetrics)
   const averageTeamPerformance = calculateTeamPerformance(filteredTeamMetrics)
+  const historyPeriods = useMemo(() => {
+    const periods = new Map<
+      string,
+      { key: string; start: string; end: string; individual: IndividualMetric[]; team: TeamMetric | null }
+    >()
+
+    if (showIndividual) {
+      filteredIndividualMetrics.forEach((metric) => {
+        const key = `${metric.week_start}|${metric.week_end}`
+        const period = periods.get(key) ?? {
+          key,
+          start: metric.week_start,
+          end: metric.week_end,
+          individual: [],
+          team: null,
+        }
+        period.individual.push(metric)
+        periods.set(key, period)
+      })
+    }
+
+    if (showTeam) {
+      filteredTeamMetrics.forEach((metric) => {
+        const key = `${metric.week_start}|${metric.week_end}`
+        const period = periods.get(key) ?? {
+          key,
+          start: metric.week_start,
+          end: metric.week_end,
+          individual: [],
+          team: null,
+        }
+        period.team = metric
+        periods.set(key, period)
+      })
+    }
+
+    return [...periods.values()].sort((a, b) =>
+      b.start.localeCompare(a.start) || b.end.localeCompare(a.end),
+    )
+  }, [filteredIndividualMetrics, filteredTeamMetrics, showIndividual, showTeam])
+  const historyPageSize = 4
+  const historyPageCount = Math.max(1, Math.ceil(historyPeriods.length / historyPageSize))
+  const safeHistoryPage = Math.min(historyPage, historyPageCount - 1)
+  const visibleHistoryPeriods = historyPeriods.slice(
+    safeHistoryPage * historyPageSize,
+    (safeHistoryPage + 1) * historyPageSize,
+  )
+
+  function resetHistoryPage() {
+    setHistoryPage(0)
+    setExpandedHistoryPeriod('')
+  }
 
   function clearHistoryFilters() {
     setHistoryType('all')
     setHistoryAnalyst('all')
     setHistoryStart('')
     setHistoryEnd('')
+    resetHistoryPage()
   }
 
   return (
@@ -6080,7 +6156,10 @@ function EntriesHistory({
           <select
             className="form-input"
             value={historyType}
-            onChange={(event) => setHistoryType(event.target.value as 'all' | 'individual' | 'team')}
+            onChange={(event) => {
+              setHistoryType(event.target.value as 'all' | 'individual' | 'team')
+              resetHistoryPage()
+            }}
           >
             <option value="all">Todos</option>
             <option value="individual">Somente individuais</option>
@@ -6092,7 +6171,10 @@ function EntriesHistory({
             className="form-input"
             disabled={historyType === 'team'}
             value={historyAnalyst}
-            onChange={(event) => setHistoryAnalyst(event.target.value)}
+            onChange={(event) => {
+              setHistoryAnalyst(event.target.value)
+              resetHistoryPage()
+            }}
           >
             <option value="all">Todos</option>
             {analystOptions.map((name) => (
@@ -6107,7 +6189,10 @@ function EntriesHistory({
             className="form-input"
             type="date"
             value={historyStart}
-            onChange={(event) => setHistoryStart(event.target.value)}
+            onChange={(event) => {
+              setHistoryStart(event.target.value)
+              resetHistoryPage()
+            }}
           />
         </Field>
         <Field label="Fim">
@@ -6115,7 +6200,10 @@ function EntriesHistory({
             className="form-input"
             type="date"
             value={historyEnd}
-            onChange={(event) => setHistoryEnd(event.target.value)}
+            onChange={(event) => {
+              setHistoryEnd(event.target.value)
+              resetHistoryPage()
+            }}
           />
         </Field>
       </div>
@@ -6139,11 +6227,43 @@ function EntriesHistory({
         </div>
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-2">
-        {showIndividual && (
-          <div>
-            <h3 className="font-semibold">Lancamentos individuais</h3>
-            <div className="mt-3 overflow-x-auto">
+      <div className="mt-6 space-y-4">
+        {visibleHistoryPeriods.map((period, index) => {
+          const isExpanded = expandedHistoryPeriod
+            ? expandedHistoryPeriod === period.key
+            : index === 0
+          const periodCsat = calculateAverageCsat(period.individual)
+
+          return (
+            <article key={period.key} className="overflow-hidden rounded-xl border border-white/10 bg-slate-900/60">
+              <button
+                className="flex w-full flex-col gap-3 p-5 text-left sm:flex-row sm:items-center sm:justify-between"
+                type="button"
+                aria-expanded={isExpanded}
+                onClick={() => setExpandedHistoryPeriod(isExpanded ? '__none__' : period.key)}
+              >
+                <div>
+                  <p className="font-semibold">{formatWeek(period.start, period.end)}</p>
+                  <p className="mt-1 text-sm text-slate-400">
+                    {period.individual.length} analista(s) · CSAT médio {periodCsat}% · Equipe {period.team ? 'registrada' : 'pendente'}
+                  </p>
+                  {getInclusiveDayCount(period.start, period.end) < 5 && (
+                    <p className="mt-1 text-xs text-cyan-200">
+                      Período parcial de {getInclusiveDayCount(period.start, period.end)} dia(s)
+                    </p>
+                  )}
+                </div>
+                <span className="text-sm font-semibold text-cyan-200">
+                  {isExpanded ? 'Recolher detalhes' : 'Ver detalhes'}
+                </span>
+              </button>
+
+              {isExpanded && (
+                <div className="border-t border-white/10 p-5">
+                  {showIndividual && (
+                    <div>
+                      <h3 className="font-semibold">Lancamentos individuais</h3>
+                      <div className="mt-3 overflow-x-auto">
               <table className="min-w-full text-left text-sm">
                 <thead className="text-slate-400">
                   <tr>
@@ -6157,7 +6277,7 @@ function EntriesHistory({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
-                  {filteredIndividualMetrics.map((metric) => (
+                  {period.individual.map((metric) => (
                     <tr key={metric.id}>
                       <td className="py-3 pr-4">{getAnalystName(metric.analysts)}</td>
                       <td className="py-3 pr-4">{formatWeek(metric.week_start, metric.week_end)}</td>
@@ -6182,17 +6302,17 @@ function EntriesHistory({
                 </tbody>
               </table>
 
-              {!filteredIndividualMetrics.length && (
+              {!period.individual.length && (
                 <EmptyState text="Nenhum lançamento individual encontrado com estes filtros." />
               )}
-            </div>
-          </div>
-        )}
+                      </div>
+                    </div>
+                  )}
 
-        {showTeam && (
-          <div>
-            <h3 className="font-semibold">Performance da equipe</h3>
-            <div className="mt-3 overflow-x-auto">
+                  {showTeam && (
+                    <div className={showIndividual ? 'mt-6' : ''}>
+                      <h3 className="font-semibold">Performance da equipe</h3>
+                      <div className="mt-3 overflow-x-auto">
               <table className="min-w-full text-left text-sm">
                 <thead className="text-slate-400">
                   <tr>
@@ -6206,40 +6326,81 @@ function EntriesHistory({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
-                  {filteredTeamMetrics.map((metric) => (
-                    <tr key={metric.id}>
-                      <td className="py-3 pr-4">{formatWeek(metric.week_start, metric.week_end)}</td>
-                      <td className="py-3 pr-4">{metric.performance_percentage}%</td>
-                      <td className="py-3 pr-4">{metric.answered_calls}</td>
-                      <td className="py-3 pr-4">{metric.total_calls}</td>
+                  {period.team && (
+                    <tr key={period.team.id}>
+                      <td className="py-3 pr-4">{formatWeek(period.team.week_start, period.team.week_end)}</td>
+                      <td className="py-3 pr-4">{period.team.performance_percentage}%</td>
+                      <td className="py-3 pr-4">{period.team.answered_calls}</td>
+                      <td className="py-3 pr-4">{period.team.total_calls}</td>
                       <td className="min-w-52 py-3 pr-4">
                         <TeamOverallCsatEditor
-                          metric={metric}
+                          metric={period.team}
                           saving={saving}
                           onSave={onUpdateTeamOverallCsat}
                         />
                       </td>
                       <td className="py-3 pr-4">
-                        <EvidenceLink url={metric.evidence_url} />
+                        <EvidenceLink url={period.team.evidence_url} />
                       </td>
                       <td className="py-3">
                         <button
                           className="danger-button"
                           disabled={saving}
                           type="button"
-                          onClick={() => onDeleteTeamMetric(metric)}
+                          onClick={() => onDeleteTeamMetric(period.team!)}
                         >
                           Excluir
                         </button>
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
 
-              {!filteredTeamMetrics.length && (
+              {!period.team && (
                 <EmptyState text="Nenhuma performance de equipe encontrada com estes filtros." />
               )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </article>
+          )
+        })}
+
+        {!historyPeriods.length && (
+          <EmptyState text="Nenhum lançamento encontrado com estes filtros." />
+        )}
+
+        {historyPageCount > 1 && (
+          <div className="flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-slate-400">
+              Página {safeHistoryPage + 1} de {historyPageCount} · {historyPeriods.length} período(s)
+            </p>
+            <div className="flex gap-2">
+              <button
+                className="secondary-button"
+                type="button"
+                disabled={safeHistoryPage === 0}
+                onClick={() => {
+                  setHistoryPage((page) => Math.max(0, page - 1))
+                  setExpandedHistoryPeriod('')
+                }}
+              >
+                Anterior
+              </button>
+              <button
+                className="secondary-button"
+                type="button"
+                disabled={safeHistoryPage >= historyPageCount - 1}
+                onClick={() => {
+                  setHistoryPage((page) => Math.min(historyPageCount - 1, page + 1))
+                  setExpandedHistoryPeriod('')
+                }}
+              >
+                Próxima
+              </button>
             </div>
           </div>
         )}
@@ -8484,20 +8645,8 @@ function filterTeamMetricsByPeriod(metrics: TeamMetric[], period: PeriodFilter) 
   return metrics.filter((metric) => isMetricInPeriod(metric.week_start, metric.week_end, period))
 }
 
-function isPhonePeriodShorterThanWeeklyLaunch(period: PeriodFilter) {
-  if (!period.start || !period.end) return false
-  if (period.mode !== 'custom') return false
-
-  const start = new Date(period.start + 'T00:00:00')
-  const end = new Date(period.end + 'T00:00:00')
-  const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86400000) + 1)
-
-  return days < 5
-}
-
 function isMetricInPeriod(weekStart: string, weekEnd: string, period: PeriodFilter) {
   if (!period.start || !period.end) return true
-  if (isPhonePeriodShorterThanWeeklyLaunch(period)) return false
 
   return weekStart <= period.end && weekEnd >= period.start
 }
@@ -9092,6 +9241,14 @@ function toNumber(value: string) {
 function isEndBeforeStart(start: string, end: string) {
   if (!start || !end) return false
   return end < start
+}
+
+function getInclusiveDayCount(start: string, end: string) {
+  if (!start || !end || end < start) return 0
+
+  const startDate = new Date(`${start}T00:00:00`)
+  const endDate = new Date(`${end}T00:00:00`)
+  return Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1
 }
 
 function round(value: number) {
