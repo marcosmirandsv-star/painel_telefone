@@ -171,6 +171,23 @@ type ChatMonthlyMetric = {
       }[]
     | null
 }
+
+type ChatImportHistory = {
+  id: string
+  year: number
+  month_number: number
+  month_label: string
+  satisfaction_file_name: string
+  satisfaction_file_size: number
+  satisfaction_rows: number
+  inactivity_file_name: string
+  inactivity_file_size: number
+  inactivity_rows: number
+  analysts_processed: number
+  status: 'completed' | 'failed'
+  created_by_name: string | null
+  created_at: string
+}
 type IndividualForm = {
   analystId: string
   weekStart: string
@@ -1449,6 +1466,9 @@ function ChatModuleDashboard({
   const [chatInactiveFile, setChatInactiveFile] = useState<File | null>(null)
   const [chatImportSaving, setChatImportSaving] = useState(false)
   const [chatImportMessage, setChatImportMessage] = useState('')
+  const [chatImportHistory, setChatImportHistory] = useState<ChatImportHistory[]>([])
+  const [chatImportHistoryLoading, setChatImportHistoryLoading] = useState(false)
+  const [expandedChatImportId, setExpandedChatImportId] = useState('')
   const [chatExportMessage, setChatExportMessage] = useState('')
   const [chatFeedbackStyle, setChatFeedbackStyle] = useState<ChatFeedbackStyle>('coach')
   const [chatFeedbackGoal, setChatFeedbackGoal] = useState<FeedbackGoal>('recognition')
@@ -1464,6 +1484,26 @@ function ChatModuleDashboard({
   const [editingChatAnalystId, setEditingChatAnalystId] = useState<string | null>(null)
   const [chatAnalystSaving, setChatAnalystSaving] = useState(false)
   const [chatAnalystMessage, setChatAnalystMessage] = useState('')
+
+  async function loadChatImportHistory() {
+    if (!isManagementUser) return
+
+    setChatImportHistoryLoading(true)
+    const { data, error } = await supabase
+      .from('chat_import_history')
+      .select('id, year, month_number, month_label, satisfaction_file_name, satisfaction_file_size, satisfaction_rows, inactivity_file_name, inactivity_file_size, inactivity_rows, analysts_processed, status, created_by_name, created_at')
+      .order('created_at', { ascending: false })
+      .limit(12)
+
+    if (!error) setChatImportHistory((data ?? []) as ChatImportHistory[])
+    setChatImportHistoryLoading(false)
+  }
+
+  useEffect(() => {
+    if (!isManagementUser) return
+    void loadChatImportHistory()
+  }, [isManagementUser])
+
   async function handleChatMonthlyImport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setChatImportMessage('')
@@ -1511,9 +1551,39 @@ function ChatModuleDashboard({
 
       if (error) throw error
 
+      const { data: authData } = await supabase.auth.getUser()
+      const importingUser = authData.user
+      const importingUserName =
+        importingUser?.user_metadata?.full_name ||
+        importingUser?.user_metadata?.name ||
+        importingUser?.email ||
+        'Usuário não identificado'
+      const { error: historyError } = await supabase.from('chat_import_history').insert({
+        year,
+        month_number: monthNumber,
+        month_label: period.label,
+        satisfaction_file_name: chatSatisfactionFile.name,
+        satisfaction_file_size: chatSatisfactionFile.size,
+        satisfaction_rows: satisfactionRows.length,
+        inactivity_file_name: chatInactiveFile.name,
+        inactivity_file_size: chatInactiveFile.size,
+        inactivity_rows: inactiveRows.length,
+        analysts_processed: importRows.length,
+        status: 'completed',
+        created_by: importingUser?.id ?? null,
+        created_by_name: importingUserName,
+      })
+
+      if (historyError) {
+        throw new Error(`Os dados foram importados, mas o histórico não pôde ser registrado: ${historyError.message}`)
+      }
+
       await onImportComplete()
+      await loadChatImportHistory()
       setSelectedPeriodKey(`${year}-${monthNumber}`)
-      setChatImportMessage(`Importação concluída: ${importRows.length} analistas processados para ${period.label}.`)
+      setChatImportMessage(`Importação concluída e registrada: ${importRows.length} analistas processados para ${period.label}.`)
+      setChatSatisfactionFile(null)
+      setChatInactiveFile(null)
     } catch (error) {
       setChatImportMessage(getErrorMessage(error))
     } finally {
@@ -2554,6 +2624,7 @@ function ChatModuleDashboard({
             </Field>
             <Field label="Satisfação">
               <input
+                key={`satisfaction-${chatSatisfactionFile?.name ?? 'empty'}`}
                 accept=".xlsx,.xls,.csv,text/csv"
                 className="form-input"
                 type="file"
@@ -2562,6 +2633,7 @@ function ChatModuleDashboard({
             </Field>
             <Field label="Inatividade">
               <input
+                key={`inactivity-${chatInactiveFile?.name ?? 'empty'}`}
                 accept=".xlsx,.xls,.csv,text/csv"
                 className="form-input"
                 type="file"
@@ -2575,6 +2647,74 @@ function ChatModuleDashboard({
         </div>
 
         {chatImportMessage && <p className="mt-4 rounded-md bg-slate-900/70 px-4 py-3 text-sm text-slate-200">{chatImportMessage}</p>}
+
+        <div className="mt-6 border-t border-white/10 pt-5">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h4 className="font-semibold">Histórico de importações</h4>
+              <p className="mt-1 text-sm text-slate-400">Arquivos e resultados das 12 importações mais recentes.</p>
+            </div>
+            <button className="secondary-button self-start" type="button" onClick={() => void loadChatImportHistory()}>
+              Atualizar histórico
+            </button>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {chatImportHistory.map((item, index) => {
+              const isExpanded = expandedChatImportId
+                ? expandedChatImportId === item.id
+                : index === 0
+
+              return (
+                <article key={item.id} className="overflow-hidden rounded-lg border border-white/10 bg-slate-900/60">
+                  <button
+                    className="flex w-full flex-col gap-3 p-4 text-left md:flex-row md:items-center md:justify-between"
+                    type="button"
+                    aria-expanded={isExpanded}
+                    onClick={() => setExpandedChatImportId(isExpanded ? '__none__' : item.id)}
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold">{item.month_label}</span>
+                        <span className="rounded-full bg-emerald-400/10 px-2.5 py-1 text-xs font-semibold text-emerald-300">
+                          Concluída
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm text-slate-400">
+                        {item.analysts_processed} analistas · {formatDateTime(item.created_at)} · {item.created_by_name || 'Responsável não informado'}
+                      </p>
+                    </div>
+                    <span className="text-sm font-semibold text-cyan-200">
+                      {isExpanded ? 'Ocultar arquivos' : 'Ver arquivos'}
+                    </span>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="grid gap-3 border-t border-white/10 p-4 md:grid-cols-2">
+                      <ImportFileSummary
+                        label="Planilha de satisfação"
+                        name={item.satisfaction_file_name}
+                        size={item.satisfaction_file_size}
+                        rows={item.satisfaction_rows}
+                      />
+                      <ImportFileSummary
+                        label="Planilha de inatividade"
+                        name={item.inactivity_file_name}
+                        size={item.inactivity_file_size}
+                        rows={item.inactivity_rows}
+                      />
+                    </div>
+                  )}
+                </article>
+              )
+            })}
+
+            {chatImportHistoryLoading && <p className="text-sm text-slate-400">Carregando histórico...</p>}
+            {!chatImportHistoryLoading && !chatImportHistory.length && (
+              <EmptyState text="Nenhuma importação registrada no histórico ainda." />
+            )}
+          </div>
+        </div>
       </section>
       <div className={chatActiveTab === 'overview' ? 'grid gap-4 md:grid-cols-4' : 'hidden'}>
         <MetricCard label="Equipe" value={selectedTeamName} />
@@ -5531,6 +5671,26 @@ function ReportBlock({ title, text }: { title: string; text: string }) {
   )
 }
 
+function ImportFileSummary({
+  label,
+  name,
+  size,
+  rows,
+}: {
+  label: string
+  name: string
+  size: number
+  rows: number
+}) {
+  return (
+    <div className="min-w-0 rounded-lg bg-slate-950/70 p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">{label}</p>
+      <p className="mt-2 truncate font-medium text-slate-100" title={name}>{name}</p>
+      <p className="mt-1 text-sm text-slate-400">{rows} linha(s) lida(s) · {formatFileSize(size)}</p>
+    </div>
+  )
+}
+
 function EntriesView({
   analysts,
   selectedAnalyst,
@@ -7651,6 +7811,22 @@ function formatDate(value: string) {
   if (!value) return '-'
   const [year, month, day] = value.split('-')
   return `${day}/${month}/${year}`
+}
+
+function formatDateTime(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(date)
+}
+
+function formatFileSize(bytes: number) {
+  if (!bytes) return '0 KB'
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`
 }
 
 function formatShortDate(value: string) {
