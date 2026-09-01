@@ -3263,7 +3263,10 @@ function ChatModuleDashboard({
             <MetricCard label="CSAT" value={`${selectedChatReportMetric.csat}%`} />
             <MetricCard label="Avaliações" value={`${selectedChatReportMetric.review_percentage}%`} />
             <MetricCard label="Atendimentos" value={selectedChatReportMetric.total_tickets} />
-            <MetricCard label="Volume vs média" value={`${Number(selectedChatReportMetric.total_tickets) - averageTickets >= 0 ? '+' : ''}${Number(selectedChatReportMetric.total_tickets) - averageTickets}`} />
+            <MetricCard
+              label="Volume vs média"
+              value={`${Number(selectedChatReportMetric.total_tickets) - averageTickets >= 0 ? '+' : ''}${formatChatCount(round(Number(selectedChatReportMetric.total_tickets) - averageTickets))}`}
+            />
             <MetricCard label="Pódio" value={selectedChatPodiumPosition > 0 ? `${selectedChatPodiumPosition}º lugar` : 'Fora'} />
           </div>
         ) : (
