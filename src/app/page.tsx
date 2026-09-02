@@ -3552,8 +3552,8 @@ function ChatModuleDashboard({
                           {analyst.active ? 'Ativo' : 'Inativo'}
                         </span>
                       </td>
-                      <td className="py-3">
-                        <div className="flex flex-wrap gap-2">
+                      <td className="whitespace-nowrap py-3">
+                        <div className="flex flex-nowrap items-center gap-2">
                           <button className="small-button" type="button" onClick={() => handleEditChatAnalyst(analyst)}>
                             Editar
                           </button>
@@ -3564,11 +3564,6 @@ function ChatModuleDashboard({
                             <button className="danger-button" type="button" onClick={() => handleDeleteChatAnalyst(analyst)}>
                               Excluir cadastro
                             </button>
-                          )}
-                          {hasImportedHistory && (
-                            <span className="self-center text-xs text-slate-500" title="O histórico mensal impede a exclusão definitiva.">
-                              Histórico preservado
-                            </span>
                           )}
                           {analyst.photo_url && (
                             <button className="small-button" type="button" onClick={() => handleRemoveChatAnalystPhoto(analyst)}>
