@@ -2648,7 +2648,7 @@ function ChatModuleDashboard({
       )}
 
       <section className={chatActiveTab === 'import' ? 'panel' : 'hidden'}>
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <div>
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Importação mensal</p>
             <h3 className="mt-2 text-2xl font-bold">Atualizar base do chat</h3>
@@ -2657,7 +2657,7 @@ function ChatModuleDashboard({
             </p>
           </div>
 
-          <form className="grid flex-1 gap-3 md:grid-cols-6" onSubmit={handleChatMonthlyImport}>
+          <form className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6" onSubmit={handleChatMonthlyImport}>
             <Field label="Mês">
               <select className="form-input" value={chatImportMonth} onChange={(event) => setChatImportMonth(event.target.value)}>
                 {chatMonthOptions.map((month) => (
@@ -2695,11 +2695,11 @@ function ChatModuleDashboard({
                 onChange={(event) => setChatInactiveFile(event.target.files?.[0] ?? null)}
               />
             </Field>
-            <button className="btn-primary self-end" disabled={chatImportSaving} type="submit">
+            <button className="btn-primary min-h-12 self-end" disabled={chatImportSaving || chatMonthDeleting} type="submit">
               {chatImportSaving ? 'Importando...' : 'Importar mês'}
             </button>
             <button
-              className="danger-button self-end"
+              className="danger-button min-h-12 self-end"
               disabled={chatImportSaving || chatMonthDeleting}
               type="button"
               onClick={() => void handleDeleteChatMonth()}
@@ -2774,7 +2774,12 @@ function ChatModuleDashboard({
 
             {chatImportHistoryLoading && <p className="text-sm text-slate-400">Carregando histórico...</p>}
             {!chatImportHistoryLoading && !chatImportHistory.length && (
-              <EmptyState text="Nenhuma importação registrada no histórico ainda." />
+              <div className="rounded-lg border border-dashed border-white/15 bg-slate-900/40 px-4 py-5">
+                <p className="font-medium text-slate-200">O histórico começa na próxima importação.</p>
+                <p className="mt-1 text-sm text-slate-400">
+                  Os dados já importados continuam válidos; apenas os nomes dos arquivos antigos não foram registrados.
+                </p>
+              </div>
             )}
           </div>
         </div>
