@@ -1486,6 +1486,10 @@ function ChatModuleDashboard({
   const [editingChatAnalystId, setEditingChatAnalystId] = useState<string | null>(null)
   const [chatAnalystSaving, setChatAnalystSaving] = useState(false)
   const [chatAnalystMessage, setChatAnalystMessage] = useState('')
+  const chatAnalystIdsWithHistory = useMemo(
+    () => new Set(metrics.map((metric) => metric.analyst_id)),
+    [metrics],
+  )
 
   async function loadChatImportHistory() {
     if (!isManagementUser) return
@@ -2162,8 +2166,15 @@ function ChatModuleDashboard({
   async function handleDeleteChatAnalyst(analyst: ChatAnalyst) {
     setChatAnalystMessage('')
 
+    if (chatAnalystIdsWithHistory.has(analyst.id)) {
+      setChatAnalystMessage(
+        `${analyst.name} possui histórico importado e não pode ser excluído. Use Inativar para preservar os resultados anteriores.`,
+      )
+      return
+    }
+
     const confirmed = window.confirm(
-      `Excluir ${analyst.name}? Use exclusao apenas para cadastros criados por engano. Se houver historico importado, prefira inativar.`,
+      `Excluir definitivamente o cadastro de ${analyst.name}? Esta opção é destinada apenas a cadastros criados por engano e sem histórico.`,
     )
 
     if (!confirmed) return
@@ -3517,7 +3528,10 @@ function ChatModuleDashboard({
               <tbody className="divide-y divide-white/10">
                 {[...analysts]
                   .sort((a, b) => `${getChatTeamNameById(teams, a.team_id)} ${a.name}`.localeCompare(`${getChatTeamNameById(teams, b.team_id)} ${b.name}`))
-                  .map((analyst) => (
+                  .map((analyst) => {
+                    const hasImportedHistory = chatAnalystIdsWithHistory.has(analyst.id)
+
+                    return (
                     <tr key={analyst.id}>
                       <td className="py-3 pr-4 font-semibold">
                         <div className="flex items-center gap-3">
@@ -3540,9 +3554,16 @@ function ChatModuleDashboard({
                           <button className="small-button" type="button" onClick={() => handleToggleChatAnalyst(analyst)}>
                             {analyst.active ? 'Inativar' : 'Reativar'}
                           </button>
-                          <button className="danger-button" type="button" onClick={() => handleDeleteChatAnalyst(analyst)}>
-                            Excluir
-                          </button>
+                          {!hasImportedHistory && (
+                            <button className="danger-button" type="button" onClick={() => handleDeleteChatAnalyst(analyst)}>
+                              Excluir cadastro
+                            </button>
+                          )}
+                          {hasImportedHistory && (
+                            <span className="self-center text-xs text-slate-500" title="O histórico mensal impede a exclusão definitiva.">
+                              Histórico preservado
+                            </span>
+                          )}
                           {analyst.photo_url && (
                             <button className="small-button" type="button" onClick={() => handleRemoveChatAnalystPhoto(analyst)}>
                               Remover foto
@@ -3551,7 +3572,8 @@ function ChatModuleDashboard({
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
               </tbody>
             </table>
 
