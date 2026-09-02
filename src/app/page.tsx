@@ -1465,6 +1465,7 @@ function ChatModuleDashboard({
   const [chatSatisfactionFile, setChatSatisfactionFile] = useState<File | null>(null)
   const [chatInactiveFile, setChatInactiveFile] = useState<File | null>(null)
   const [chatImportSaving, setChatImportSaving] = useState(false)
+  const [chatMonthDeleting, setChatMonthDeleting] = useState(false)
   const [chatImportMessage, setChatImportMessage] = useState('')
   const [chatImportHistory, setChatImportHistory] = useState<ChatImportHistory[]>([])
   const [chatImportHistoryLoading, setChatImportHistoryLoading] = useState(false)
@@ -1588,6 +1589,60 @@ function ChatModuleDashboard({
       setChatImportMessage(getErrorMessage(error))
     } finally {
       setChatImportSaving(false)
+    }
+  }
+
+  async function handleDeleteChatMonth() {
+    const year = Number(chatImportYear)
+    const monthNumber = Number(chatImportMonth)
+    const period = getChatMonthPeriod(year, monthNumber)
+    const monthMetrics = metrics.filter(
+      (metric) => metric.year === year && metric.month_number === monthNumber,
+    )
+
+    if (!monthMetrics.length) {
+      setChatImportMessage(`Não existem dados importados para ${period.label}.`)
+      return
+    }
+
+    const confirmed = window.confirm(
+      `Excluir ${period.label}?\n\nSerão removidos ${monthMetrics.length} registro(s), além do pódio manual e das desconsiderações desse mês. O histórico das importações será preservado.\n\nEsta ação não pode ser desfeita.`,
+    )
+
+    if (!confirmed) return
+
+    setChatMonthDeleting(true)
+    setChatImportMessage('')
+
+    try {
+      const { error: exclusionsError } = await supabase
+        .from('chat_podium_exclusions')
+        .delete()
+        .eq('year', year)
+        .eq('month_number', monthNumber)
+      if (exclusionsError) throw exclusionsError
+
+      const { error: podiumError } = await supabase
+        .from('chat_podium_manual')
+        .delete()
+        .eq('year', year)
+        .eq('month_number', monthNumber)
+      if (podiumError) throw podiumError
+
+      const { error: metricsError } = await supabase
+        .from('chat_monthly_metrics')
+        .delete()
+        .eq('year', year)
+        .eq('month_number', monthNumber)
+      if (metricsError) throw metricsError
+
+      await onImportComplete()
+      setSelectedPeriodKey('')
+      setChatImportMessage(`${period.label} foi excluído. Agora você pode fazer uma nova importação limpa.`)
+    } catch (error) {
+      setChatImportMessage(`Não foi possível concluir a exclusão: ${getErrorMessage(error)}`)
+    } finally {
+      setChatMonthDeleting(false)
     }
   }
 
@@ -2602,7 +2657,7 @@ function ChatModuleDashboard({
             </p>
           </div>
 
-          <form className="grid flex-1 gap-3 md:grid-cols-5" onSubmit={handleChatMonthlyImport}>
+          <form className="grid flex-1 gap-3 md:grid-cols-6" onSubmit={handleChatMonthlyImport}>
             <Field label="Mês">
               <select className="form-input" value={chatImportMonth} onChange={(event) => setChatImportMonth(event.target.value)}>
                 {chatMonthOptions.map((month) => (
@@ -2642,6 +2697,14 @@ function ChatModuleDashboard({
             </Field>
             <button className="btn-primary self-end" disabled={chatImportSaving} type="submit">
               {chatImportSaving ? 'Importando...' : 'Importar mês'}
+            </button>
+            <button
+              className="danger-button self-end"
+              disabled={chatImportSaving || chatMonthDeleting}
+              type="button"
+              onClick={() => void handleDeleteChatMonth()}
+            >
+              {chatMonthDeleting ? 'Excluindo...' : 'Excluir mês'}
             </button>
           </form>
         </div>
