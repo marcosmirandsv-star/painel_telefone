@@ -1486,6 +1486,7 @@ function ChatModuleDashboard({
   const [editingChatAnalystId, setEditingChatAnalystId] = useState<string | null>(null)
   const [chatAnalystSaving, setChatAnalystSaving] = useState(false)
   const [chatAnalystMessage, setChatAnalystMessage] = useState('')
+  const [chatAnalystPhotoOverrides, setChatAnalystPhotoOverrides] = useState<Record<string, string | null>>({})
   const chatAnalystIdsWithHistory = useMemo(
     () => new Set(metrics.map((metric) => metric.analyst_id)),
     [metrics],
@@ -2094,6 +2095,7 @@ function ChatModuleDashboard({
         const photoUrl = await uploadAnalystPhoto(chatAnalystForm.photoFile, 'chat', analystId)
         const { error: photoError } = await supabase.from('chat_analysts').update({ photo_url: photoUrl }).eq('id', analystId)
         if (photoError) throw photoError
+        setChatAnalystPhotoOverrides((current) => ({ ...current, [analystId]: photoUrl }))
       }
 
       if (editingChatAnalystId) {
@@ -2205,6 +2207,7 @@ function ChatModuleDashboard({
       setChatAnalystMessage(getSupabaseMessage(error.message))
       return
     }
+    setChatAnalystPhotoOverrides((current) => ({ ...current, [analyst.id]: null }))
     await onImportComplete()
     setChatAnalystMessage('Foto personalizada removida. A imagem inicial ou as iniciais serão exibidas.')
   }
@@ -3493,7 +3496,7 @@ function ChatModuleDashboard({
               </Field>
 
               <div className="flex flex-wrap gap-3">
-                <button className="btn-primary" disabled={chatAnalystSaving} type="submit">
+                <button className="primary-button" disabled={chatAnalystSaving} type="submit">
                   {chatAnalystSaving ? 'Salvando...' : editingChatAnalystId ? 'Salvar alterações' : 'Incluir analista'}
                 </button>
 
@@ -3530,12 +3533,15 @@ function ChatModuleDashboard({
                   .sort((a, b) => `${getChatTeamNameById(teams, a.team_id)} ${a.name}`.localeCompare(`${getChatTeamNameById(teams, b.team_id)} ${b.name}`))
                   .map((analyst) => {
                     const hasImportedHistory = chatAnalystIdsWithHistory.has(analyst.id)
+                    const displayedPhotoUrl = Object.prototype.hasOwnProperty.call(chatAnalystPhotoOverrides, analyst.id)
+                      ? chatAnalystPhotoOverrides[analyst.id]
+                      : analyst.photo_url
 
                     return (
                     <tr key={analyst.id}>
                       <td className="py-3 pr-4 font-semibold">
                         <div className="flex items-center gap-3">
-                          <AnalystAvatar name={analyst.name} photoUrl={analyst.photo_url} size="sm" />
+                          <AnalystAvatar name={analyst.name} photoUrl={displayedPhotoUrl} size="sm" />
                           <span>{analyst.name}</span>
                         </div>
                       </td>
