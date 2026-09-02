@@ -1464,6 +1464,7 @@ function ChatModuleDashboard({
   const [chatImportMonth, setChatImportMonth] = useState(String(new Date().getMonth() + 1))
   const [chatSatisfactionFile, setChatSatisfactionFile] = useState<File | null>(null)
   const [chatInactiveFile, setChatInactiveFile] = useState<File | null>(null)
+  const [chatFileInputResetKey, setChatFileInputResetKey] = useState(0)
   const [chatImportSaving, setChatImportSaving] = useState(false)
   const [chatMonthDeleting, setChatMonthDeleting] = useState(false)
   const [chatImportMessage, setChatImportMessage] = useState('')
@@ -1585,6 +1586,7 @@ function ChatModuleDashboard({
       setChatImportMessage(`Importação concluída e registrada: ${importRows.length} analistas processados para ${period.label}.`)
       setChatSatisfactionFile(null)
       setChatInactiveFile(null)
+      setChatFileInputResetKey((key) => key + 1)
     } catch (error) {
       setChatImportMessage(getErrorMessage(error))
     } finally {
@@ -2679,21 +2681,23 @@ function ChatModuleDashboard({
             </Field>
             <Field label="Satisfação">
               <input
-                key={`satisfaction-${chatSatisfactionFile?.name ?? 'empty'}`}
+                key={`satisfaction-${chatFileInputResetKey}`}
                 accept=".xlsx,.xls,.csv,text/csv"
                 className="form-input"
                 type="file"
                 onChange={(event) => setChatSatisfactionFile(event.target.files?.[0] ?? null)}
               />
+              {chatSatisfactionFile && <SelectedImportFile file={chatSatisfactionFile} />}
             </Field>
             <Field label="Inatividade">
               <input
-                key={`inactivity-${chatInactiveFile?.name ?? 'empty'}`}
+                key={`inactivity-${chatFileInputResetKey}`}
                 accept=".xlsx,.xls,.csv,text/csv"
                 className="form-input"
                 type="file"
                 onChange={(event) => setChatInactiveFile(event.target.files?.[0] ?? null)}
               />
+              {chatInactiveFile && <SelectedImportFile file={chatInactiveFile} />}
             </Field>
             <button className="btn-primary min-h-12 self-end" disabled={chatImportSaving || chatMonthDeleting} type="submit">
               {chatImportSaving ? 'Importando...' : 'Importar mês'}
@@ -5738,6 +5742,17 @@ function ReportBlock({ title, text }: { title: string; text: string }) {
     <div className="rounded-lg bg-slate-900 p-5">
       <h3 className="text-lg font-bold">{title}</h3>
       <p className="mt-3 text-sm leading-6 text-slate-300">{text}</p>
+    </div>
+  )
+}
+
+function SelectedImportFile({ file }: { file: File }) {
+  return (
+    <div className="mt-2 min-w-0 rounded-md border border-emerald-400/25 bg-emerald-400/10 px-3 py-2">
+      <p className="truncate text-sm font-medium text-emerald-200" title={file.name}>
+        ✓ {file.name}
+      </p>
+      <p className="mt-0.5 text-xs text-emerald-300/80">Selecionado · {formatFileSize(file.size)}</p>
     </div>
   )
 }
