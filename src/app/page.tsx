@@ -3827,7 +3827,9 @@ function DashboardView({
   const podiumWinners = phoneManualPodium.length
     ? [1, 2, 3].map((position) => {
         const manual = phoneManualPodium.find((item) => item.position === position)
-        return manual ? periodPodium.find((item) => item.analystId === manual.analyst_id) : undefined
+        return manual
+          ? periodPodium.find((item) => item.analystId === manual.analyst_id)
+          : calculatedPodiumWinners[position - 1]
       })
     : calculatedPodiumWinners
   const isManualPhonePodium = phoneManualPodium.length > 0
@@ -4320,7 +4322,12 @@ function DashboardView({
 
   async function handleSavePhoneManualPodium() {
     const selectedEntries = [1, 2, 3]
-      .map((position) => ({ position, analystId: phoneManualPodiumDraft[position] ?? '' }))
+      .map((position) => ({
+        position,
+        analystId: phoneManualPodiumDraft[position]
+          ?? calculatedPodiumWinners[position - 1]?.analystId
+          ?? '',
+      }))
       .filter((item) => item.analystId)
     const selectedIds = selectedEntries.map((item) => item.analystId)
 
@@ -4980,7 +4987,9 @@ function DashboardView({
                   <Field key={position} label={`${position}º lugar`}>
                     <select
                       className="form-input"
-                      value={phoneManualPodiumDraft[position] ?? ''}
+                      value={phoneManualPodiumDraft[position]
+                        ?? calculatedPodiumWinners[position - 1]?.analystId
+                        ?? ''}
                       onChange={(event) => setPhoneManualPodiumDraft((current) => ({
                         ...current,
                         [position]: event.target.value,
