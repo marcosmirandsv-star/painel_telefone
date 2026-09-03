@@ -249,6 +249,15 @@ type PhonePodiumRankingRow = {
   team_average_tickets?: number
   team_average_csat?: number
 }
+
+type PhonePodiumManual = {
+  id: string
+  analyst_id: string
+  period_start: string
+  period_end: string
+  position: number
+  reason: string | null
+}
 type PeriodMode = 'week' | 'month' | 'year' | 'custom'
 
 type PeriodFilter = {
@@ -3689,6 +3698,11 @@ function DashboardView({
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>(() => createPeriodFilter('month'))
   const [managementSection, setManagementSection] = useState<'area' | 'people'>('area')
   const [phonePodiumRanking, setPhonePodiumRanking] = useState<PhonePodiumRankingRow[]>([])
+  const [phoneManualPodium, setPhoneManualPodium] = useState<PhonePodiumManual[]>([])
+  const [phoneManualPodiumDraft, setPhoneManualPodiumDraft] = useState<Record<number, string>>({})
+  const [phoneManualPodiumReason, setPhoneManualPodiumReason] = useState('')
+  const [phoneManualPodiumMessage, setPhoneManualPodiumMessage] = useState('')
+  const [phoneManualPodiumSaving, setPhoneManualPodiumSaving] = useState(false)
   const [managementAiAnalysis, setManagementAiAnalysis] = useState('')
   const [managementAiMessage, setManagementAiMessage] = useState('')
   const [managementAiLoading, setManagementAiLoading] = useState(false)
@@ -3776,11 +3790,47 @@ function DashboardView({
     }
   }, [periodFilter.start, periodFilter.end])
   useEffect(() => {
+    let active = true
+
+    async function loadPhoneManualPodium() {
+      const { data, error } = await supabase
+        .from('phone_podium_manual')
+        .select('id, analyst_id, period_start, period_end, position, reason')
+        .eq('period_start', periodFilter.start)
+        .eq('period_end', periodFilter.end)
+        .order('position')
+
+      if (!active) return
+      if (error) {
+        setPhoneManualPodium([])
+        setPhoneManualPodiumDraft({})
+        return
+      }
+
+      const rows = (data ?? []) as PhonePodiumManual[]
+      setPhoneManualPodium(rows)
+      setPhoneManualPodiumDraft(Object.fromEntries(rows.map((item) => [item.position, item.analyst_id])))
+      setPhoneManualPodiumReason(rows[0]?.reason ?? '')
+    }
+
+    void loadPhoneManualPodium()
+    return () => {
+      active = false
+    }
+  }, [periodFilter.start, periodFilter.end])
+  useEffect(() => {
     setManagementAiAnalysis('')
     setManagementAiMessage('')
   }, [periodFilter.start, periodFilter.end])
   const periodPodium = buildPeriodPodium(filteredIndividualMetrics, analysts, podiumCsatGoal, reviewGoal)
-  const podiumWinners = periodPodium.filter((item) => item.eligible).slice(0, 3)
+  const calculatedPodiumWinners = periodPodium.filter((item) => item.eligible).slice(0, 3)
+  const podiumWinners = phoneManualPodium.length
+    ? [1, 2, 3].map((position) => {
+        const manual = phoneManualPodium.find((item) => item.position === position)
+        return manual ? periodPodium.find((item) => item.analystId === manual.analyst_id) : undefined
+      })
+    : calculatedPodiumWinners
+  const isManualPhonePodium = phoneManualPodium.length > 0
   const attentionList = periodPodium.filter((item) => !item.eligible)
   const eligibleCount = periodPodium.filter((item) => item.eligible).length
   const periodLabel = formatPeriodLabel(periodFilter)
@@ -4088,7 +4138,12 @@ function DashboardView({
         reasons: secureAnalystRanking.reasons ?? [],
       }
     : localAnalystResult
-  const analystRankingPosition = secureAnalystRanking?.position ?? (localAnalystResult ? periodPodium.findIndex((item) => item.analystId === localAnalystResult.analystId) + 1 : 0)
+  const analystManualPodiumPosition = analystResult
+    ? phoneManualPodium.find((item) => item.analyst_id === analystResult.analystId)?.position ?? 0
+    : 0
+  const analystRankingPosition = analystManualPodiumPosition
+    || secureAnalystRanking?.position
+    || (localAnalystResult ? periodPodium.findIndex((item) => item.analystId === localAnalystResult.analystId) + 1 : 0)
   const analystDataLoading = isAnalystDashboard && loading
   const launchedPeriodLabel = formatLaunchedPeriodLabel(filteredIndividualMetrics, periodFilter)
   const analystRankingRead =
@@ -4098,7 +4153,9 @@ function DashboardView({
         ? `Ranking semanal calculado com os lançamentos de ${launchedPeriodLabel}.`
         : `Ranking calculado com os lançamentos de ${launchedPeriodLabel}.`
   const analystStatusText = analystResult
-    ? analystResult.eligible
+    ? analystManualPodiumPosition
+      ? 'Incluído no pódio pela gestão'
+      : analystResult.eligible
       ? 'Elegível para o pódio'
       : 'Fora do pódio neste período'
     : 'Sem lançamento no período'
@@ -4111,14 +4168,18 @@ function DashboardView({
     ? buildDevelopmentFocus(analystResult, csatDelta)
     : 'Aguardar lançamento do período para liberar recomendação individual.'
   const analystPulseText = analystResult
-    ? analystResult.eligible
+    ? analystManualPodiumPosition
+      ? `Você está no ${analystManualPodiumPosition}º lugar por decisão registrada da gestão neste período.`
+      : analystResult.eligible
       ? analystRankingPosition > 0 && analystRankingPosition <= 3
         ? 'Você esta no pódio neste recorte. O foco e sustentar os critérios ate o fechamento.'
         : 'Você cumpre os critérios, mas ainda esta fora do top 3 neste recorte.'
       : 'Sua posição aparece no ranking, mas ainda existe critério pendente para entrar no pódio.'
     : 'Ainda nao ha dados individuais para este filtro.'
   const analystPodiumPositionStatus = analystResult
-    ? !analystResult.eligible
+    ? analystManualPodiumPosition
+      ? 'No pódio por ajuste da gestão'
+      : !analystResult.eligible
       ? 'Fora do pódio por critério pendente'
       : analystRankingPosition > 0 && analystRankingPosition <= 3
         ? 'No pódio agora'
@@ -4166,8 +4227,8 @@ function DashboardView({
       label: 'Volume',
       value: analystResult
         ? analystVolumeGap > 0
-          ? `${analystResult.totalTickets} atendimentos; faltam ${analystVolumeGap} para a média do time (${podiumAverageTickets})`
-          : `${analystResult.totalTickets} atendimentos; média do time: ${podiumAverageTickets}`
+          ? `${analystResult.totalTickets} atendimentos; faltam ${analystVolumeGap} para a média do time (${formatChatCount(podiumAverageTickets)})`
+          : `${analystResult.totalTickets} atendimentos; média do time: ${formatChatCount(podiumAverageTickets)}`
         : 'sem dados',
       ok: Boolean(analystResult && podiumAverageTickets > 0 && analystVolumeGap === 0),
     },
@@ -4202,8 +4263,8 @@ function DashboardView({
           title: analystVolumeGap > 0 ? `Faltam ${analystVolumeGap} atendimentos para a média` : 'Volume dentro da média do time',
           text:
             analystVolumeGap > 0
-              ? `A média do time no recorte e ${podiumAverageTickets}. Combine com a gestão se houve fila, pausa, ausencia ou apoio a outro setor. Se a distribuicao estiver normal, o alvo e recuperar volume mantendo qualidade.`
-              : `Você esta com ${analystResult.totalTickets} atendimentos contra média de ${podiumAverageTickets}. O cuidado agora e nao ganhar volume sacrificando CSAT ou avaliação.`,
+              ? `A média do time no recorte e ${formatChatCount(podiumAverageTickets)}. Combine com a gestão se houve fila, pausa, ausencia ou apoio a outro setor. Se a distribuicao estiver normal, o alvo e recuperar volume mantendo qualidade.`
+              : `Você esta com ${analystResult.totalTickets} atendimentos contra média de ${formatChatCount(podiumAverageTickets)}. O cuidado agora e nao ganhar volume sacrificando CSAT ou avaliação.`,
         },
       ]
     : []
@@ -4233,7 +4294,7 @@ function DashboardView({
     {
       label: 'Volume',
       value: periodPodium.filter((item) => item.totalTickets >= podiumAverageTickets).length,
-      detail: `Atendimentos iguais ou acima da média de ${podiumAverageTickets}.`,
+      detail: `Atendimentos iguais ou acima da média de ${formatChatCount(podiumAverageTickets)}.`,
     },
     {
       label: 'Elegíveis',
@@ -4256,6 +4317,82 @@ function DashboardView({
     tone: item.eligible ? 'success' : item.averageCsat < podiumCsatGoal ? 'danger' : 'warning',
     detail: `${item.reviewPercentage}% avaliações`,
   }))
+
+  async function handleSavePhoneManualPodium() {
+    const selectedEntries = [1, 2, 3]
+      .map((position) => ({ position, analystId: phoneManualPodiumDraft[position] ?? '' }))
+      .filter((item) => item.analystId)
+    const selectedIds = selectedEntries.map((item) => item.analystId)
+
+    setPhoneManualPodiumMessage('')
+    if (!selectedEntries.length) {
+      setPhoneManualPodiumMessage('Selecione ao menos um analista ou restaure o pódio calculado.')
+      return
+    }
+    if (new Set(selectedIds).size !== selectedIds.length) {
+      setPhoneManualPodiumMessage('O mesmo analista não pode ocupar duas posições.')
+      return
+    }
+    if (!phoneManualPodiumReason.trim()) {
+      setPhoneManualPodiumMessage('Informe o motivo do ajuste para manter a decisão registrada.')
+      return
+    }
+
+    setPhoneManualPodiumSaving(true)
+    try {
+      const { error: deleteError } = await supabase
+        .from('phone_podium_manual')
+        .delete()
+        .eq('period_start', periodFilter.start)
+        .eq('period_end', periodFilter.end)
+      if (deleteError) throw deleteError
+
+      const { data: authData } = await supabase.auth.getUser()
+      const { data, error: insertError } = await supabase
+        .from('phone_podium_manual')
+        .insert(selectedEntries.map((item) => ({
+          analyst_id: item.analystId,
+          period_start: periodFilter.start,
+          period_end: periodFilter.end,
+          position: item.position,
+          reason: phoneManualPodiumReason.trim(),
+          created_by: authData.user?.id ?? null,
+        })))
+        .select('id, analyst_id, period_start, period_end, position, reason')
+        .order('position')
+      if (insertError) throw insertError
+
+      setPhoneManualPodium((data ?? []) as PhonePodiumManual[])
+      setPhoneManualPodiumMessage('Pódio ajustado pela gestão e salvo para este período.')
+    } catch (error) {
+      setPhoneManualPodiumMessage(getSupabaseMessage(getErrorMessage(error)))
+    } finally {
+      setPhoneManualPodiumSaving(false)
+    }
+  }
+
+  async function handleRestoreCalculatedPhonePodium() {
+    if (!window.confirm(`Restaurar o pódio calculado para ${periodLabel}? O ajuste manual deste período será removido.`)) return
+
+    setPhoneManualPodiumSaving(true)
+    setPhoneManualPodiumMessage('')
+    const { error } = await supabase
+      .from('phone_podium_manual')
+      .delete()
+      .eq('period_start', periodFilter.start)
+      .eq('period_end', periodFilter.end)
+    setPhoneManualPodiumSaving(false)
+
+    if (error) {
+      setPhoneManualPodiumMessage(getSupabaseMessage(error.message))
+      return
+    }
+
+    setPhoneManualPodium([])
+    setPhoneManualPodiumDraft({})
+    setPhoneManualPodiumReason('')
+    setPhoneManualPodiumMessage('Pódio calculado restaurado para este período.')
+  }
 
   return (
     <div className="mt-8 space-y-7">
@@ -4429,7 +4566,7 @@ function DashboardView({
         items={[
           `CSAT mínimo de ${podiumCsatGoal}%`,
           `Avaliações a partir de ${reviewGoal}%`,
-          `Volume igual ou acima da média do time (${podiumAverageTickets || 0} atendimentos)`,
+          `Volume igual ou acima da média do time (${formatChatCount(podiumAverageTickets || 0)} atendimentos)`,
         ]}
       />}
 
@@ -4731,7 +4868,7 @@ function DashboardView({
             </p>
             {!isAnalystDashboard && (
               <p className="mt-2 text-sm text-slate-400">
-                Média de atendimentos do time neste recorte: <span className="font-semibold text-slate-200">{podiumAverageTickets || 0}</span>.
+                Média de atendimentos do time neste recorte: <span className="font-semibold text-slate-200">{formatChatCount(podiumAverageTickets || 0)}</span>.
               </p>
             )}
           </div>
@@ -4811,6 +4948,81 @@ function DashboardView({
           </div>
         ) : (
           <>
+            <div className="mt-6 rounded-xl border border-cyan-400/20 bg-slate-900/60 p-5">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-lg font-bold">Ajuste do pódio pela gestão</h3>
+                    {isManualPhonePodium && (
+                      <span className="rounded-full bg-cyan-400/10 px-2.5 py-1 text-xs font-semibold text-cyan-200">
+                        Ajustado pela gestão
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-sm text-slate-400">
+                    O ranking calculado continua visível abaixo. Use este ajuste apenas para decisões reconhecidas pela gestão.
+                  </p>
+                </div>
+                {isManualPhonePodium && (
+                  <button
+                    className="secondary-button self-start"
+                    disabled={phoneManualPodiumSaving}
+                    type="button"
+                    onClick={() => void handleRestoreCalculatedPhonePodium()}
+                  >
+                    Restaurar calculado
+                  </button>
+                )}
+              </div>
+
+              <div className="mt-5 grid gap-4 md:grid-cols-3">
+                {[1, 2, 3].map((position) => (
+                  <Field key={position} label={`${position}º lugar`}>
+                    <select
+                      className="form-input"
+                      value={phoneManualPodiumDraft[position] ?? ''}
+                      onChange={(event) => setPhoneManualPodiumDraft((current) => ({
+                        ...current,
+                        [position]: event.target.value,
+                      }))}
+                    >
+                      <option value="">Vaga não definida</option>
+                      {periodPodium.map((item) => (
+                        <option key={item.analystId} value={item.analystId}>
+                          {item.analystName} · CSAT {item.averageCsat}% · {item.totalTickets} atend.
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                ))}
+              </div>
+
+              <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
+                <Field label="Motivo do ajuste">
+                  <input
+                    className="form-input"
+                    placeholder="Ex.: reconhecimento por mérito; diferença de apenas um atendimento para a média."
+                    value={phoneManualPodiumReason}
+                    onChange={(event) => setPhoneManualPodiumReason(event.target.value)}
+                  />
+                </Field>
+                <button
+                  className="primary-button min-h-12"
+                  disabled={phoneManualPodiumSaving || !periodPodium.length}
+                  type="button"
+                  onClick={() => void handleSavePhoneManualPodium()}
+                >
+                  {phoneManualPodiumSaving ? 'Salvando...' : 'Salvar pódio ajustado'}
+                </button>
+              </div>
+
+              {phoneManualPodiumMessage && (
+                <p className="mt-4 rounded-md bg-slate-950/70 px-4 py-3 text-sm text-slate-200">
+                  {phoneManualPodiumMessage}
+                </p>
+              )}
+            </div>
+
             <div className="mt-6 grid gap-4 md:grid-cols-3">
               {[0, 1, 2].map((index) => {
                 const winner = podiumWinners[index]
@@ -4857,7 +5069,10 @@ function DashboardView({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
-                  {periodPodium.map((item) => (
+                  {periodPodium.map((item) => {
+                    const manualPosition = phoneManualPodium.find((manual) => manual.analyst_id === item.analystId)?.position
+
+                    return (
                     <tr key={item.analystId}>
                       <td className="py-3 pr-4 font-bold text-cyan-300">{periodPodium.findIndex((rankingItem) => rankingItem.analystId === item.analystId) + 1}o</td>
                       <td className="py-3 pr-4">{item.analystName}</td>
@@ -4867,14 +5082,17 @@ function DashboardView({
                       <td className="py-3 pr-4">{item.reviewPercentage}%</td>
                       <td className="py-3 pr-4">{item.totalTickets}</td>
                       <td className="py-3">
-                        {item.eligible ? (
+                        {manualPosition ? (
+                          <span className="font-semibold text-cyan-200">Pódio ajustado · {manualPosition}º lugar</span>
+                        ) : item.eligible ? (
                           <span className="text-emerald-300">Elegível</span>
                         ) : (
                           <span className="text-slate-400">{item.reasons.join(', ')}</span>
                         )}
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
 
@@ -4987,7 +5205,7 @@ function ReportsView({
   const teamLossPercentage = teamTotalCalls ? round((teamAbandonedCalls / teamTotalCalls) * 100) : 0
   const weeklyEvolution = aggregateIndividualByWeek(analystMetrics)
   const supervisorAverageTickets = podium.length
-    ? Math.ceil(podium.reduce((sum, item) => sum + item.totalTickets, 0) / podium.length)
+    ? round(podium.reduce((sum, item) => sum + item.totalTickets, 0) / podium.length)
     : 0
   const supervisorVolumeGap = analystResult ? analystResult.totalTickets - supervisorAverageTickets : 0
   const supervisorReviewGap = analystResult ? round(analystResult.reviewPercentage - reviewGoal) : 0
@@ -5012,7 +5230,7 @@ function ReportsView({
       : 'Use a conversa 1:1 para identificar causa raiz: qualidade do atendimento, encerramento sem pedido de avaliação, volume abaixo da média ou contexto operacional.'
     : 'Aguardando dados para sugerir roteiro de conversa.'
   const supervisorFollowUpText = analystResult
-    ? `No próximo ciclo, acompanhar CSAT ${analystResult.averageCsat}% (${formatDelta(supervisorCsatGap, ' p.p.')} vs pódio), avaliações ${analystResult.reviewPercentage}% (${formatDelta(supervisorReviewGap, ' p.p.')} vs meta) e volume ${analystResult.totalTickets} (${formatDelta(supervisorVolumeGap, '')} vs média ${supervisorAverageTickets}).`
+    ? `No próximo ciclo, acompanhar CSAT ${analystResult.averageCsat}% (${formatDelta(supervisorCsatGap, ' p.p.')} vs pódio), avaliações ${analystResult.reviewPercentage}% (${formatDelta(supervisorReviewGap, ' p.p.')} vs meta) e volume ${analystResult.totalTickets} (${formatDelta(supervisorVolumeGap, '')} vs média ${formatChatCount(supervisorAverageTickets)}).`
     : 'Sem acompanhamento definido.'
   const supervisorPeriodTypeText =
     periodFilter.mode === 'week'
@@ -5041,7 +5259,7 @@ function ReportsView({
       label: 'Diagnóstico',
       title: supervisorCaseStatus,
       text: analystResult
-        ? `Ranking atual: ${selectedRankingPosition || '-'}o. CSAT ${analystResult.averageCsat}%, avaliações ${analystResult.reviewPercentage}% e ${analystResult.totalTickets} atendimentos contra média ${supervisorAverageTickets}.`
+        ? `Ranking atual: ${selectedRankingPosition || '-'}o. CSAT ${analystResult.averageCsat}%, avaliações ${analystResult.reviewPercentage}% e ${analystResult.totalTickets} atendimentos contra média ${formatChatCount(supervisorAverageTickets)}.`
         : 'Selecione um analista e período com dados para calcular a leitura.',
     },
     {
