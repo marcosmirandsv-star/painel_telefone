@@ -8219,7 +8219,6 @@ function exportChatIndividualReport({
     ? `${analystName} absorveu uma demanda ${formatDelta(productivityGap, '%')} superior a média da operação.`
     : `${analystName} ficou ${formatDelta(productivityGap, '%')} abaixo da média de atendimentos da operação.`
   const finalFeedback = feedbackText.trim() || buildChatFeedbackText({ metric, averageTickets, podiumPosition, style: feedbackStyle, managerNotes })
-  const feedbackTitle = getChatFeedbackStyleLabel(feedbackStyle)
   const managerNotesHtml = managerNotes.trim() ? `<h2>Observações do gestor</h2><div class="note-box">${formatChatFeedbackForReport(managerNotes)}</div>` : ''
   const evolutionRows = buildChatReportEvolutionRows(monthlyHistory)
 
@@ -8261,21 +8260,9 @@ function exportChatIndividualReport({
           .volume-track { background: #e2e8f0; height: 16px; border-radius: 2px; overflow: hidden; }
           .volume-bar { background: #059669; height: 16px; border-radius: 2px; }
           .volume-value { font-size: 10px; font-weight: bold; text-align: right; }
-          .trend-read { background: #ecfeff; border-left: 4px solid #0891b2; padding: 9px 10px; margin: 8px 0 10px; }
-          .trend-read p { margin: 0; }
           .coach { border-left: 5px solid #0891b2; background: #ecfeff; padding: 12px; margin-top: 8px; }
           .note-box { border-left: 5px solid #64748b; background: #f8fafc; padding: 12px; margin-top: 8px; }
-          .month-card { border: 1px solid #cbd5e1; background: #ffffff; padding: 10px; margin: 10px 0; page-break-inside: avoid; }
-          .month-card-title { font-size: 12px; font-weight: bold; margin: 0 0 8px; color: #0f172a; }
-          .indicator-row { display: grid; grid-template-columns: 90px 1fr 58px; gap: 8px; align-items: center; margin: 6px 0; }
-          .indicator-label { color: #334155; font-size: 10px; font-weight: bold; }
-          .indicator-track { background: #e2e8f0; height: 15px; overflow: hidden; }
-          .indicator-fill { height: 15px; }
-          .indicator-fill.csat { background: #0891b2; }
-          .indicator-fill.review { background: #7c3aed; }
-          .indicator-fill.sending { background: #d97706; }
-          .indicator-fill.volume { background: #059669; }
-          .indicator-value { color: #0f172a; font-size: 10px; font-weight: bold; text-align: right; }
+          .report-chart { display: block; width: 100%; max-width: 640px; height: auto; margin: 8px auto 16px; border: 1px solid #cbd5e1; background: #ffffff; page-break-inside: avoid; }
           .kpi-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 12px 0 16px; }
           .kpi-card { border: 1px solid #cbd5e1; background: #ffffff; padding: 10px; }
           .kpi-card span { display: block; color: #475569; font-size: 10px; margin-bottom: 5px; }
@@ -8290,7 +8277,7 @@ function exportChatIndividualReport({
           @page { margin: 18mm; }
           @media print {
             body { margin: 0; }
-            .box, .kpi-card, .strategy-card, .month-card, .coach { page-break-inside: avoid; }
+            .box, .kpi-card, .strategy-card, .report-chart, .coach { page-break-inside: avoid; }
           }
         </style>
       </head>
@@ -8355,7 +8342,7 @@ function exportChatIndividualReport({
 
         ${managerNotesHtml}
 
-        <h2>Feedback ${escapeHtml(feedbackTitle)}</h2>
+        <h2>Feedback</h2>
         <div class="coach">
           ${formatChatFeedbackForReport(finalFeedback)}
         </div>
@@ -8380,6 +8367,90 @@ function exportChatIndividualReport({
   return fileName
 }
 
+function buildChatReportLineChart(
+  history: ChatMonthlyMetric[],
+  series: Array<{
+    label: string
+    color: string
+    value: (metric: ChatMonthlyMetric) => number
+  }>,
+  maximum: number,
+  valueSuffix = '',
+) {
+  const canvas = document.createElement('canvas')
+  canvas.width = 1280
+  canvas.height = 430
+  const context = canvas.getContext('2d')
+  if (!context) return ''
+
+  const left = 90
+  const right = 36
+  const top = 82
+  const bottom = 72
+  const plotWidth = canvas.width - left - right
+  const plotHeight = canvas.height - top - bottom
+  const safeMaximum = Math.max(maximum, 1)
+  const xAt = (index: number) => history.length === 1
+    ? left + plotWidth / 2
+    : left + (index / (history.length - 1)) * plotWidth
+  const yAt = (value: number) => top + plotHeight - (Math.max(0, Math.min(safeMaximum, value)) / safeMaximum) * plotHeight
+
+  context.fillStyle = '#ffffff'
+  context.fillRect(0, 0, canvas.width, canvas.height)
+  context.font = '22px Arial'
+  context.textBaseline = 'middle'
+
+  series.forEach((item, index) => {
+    const legendX = left + index * 260
+    context.fillStyle = item.color
+    context.fillRect(legendX, 28, 24, 6)
+    context.fillStyle = '#334155'
+    context.fillText(item.label, legendX + 34, 31)
+  })
+
+  context.strokeStyle = '#dbe3ef'
+  context.lineWidth = 2
+  context.fillStyle = '#64748b'
+  context.textAlign = 'right'
+  for (let step = 0; step <= 4; step += 1) {
+    const value = (safeMaximum / 4) * step
+    const y = yAt(value)
+    context.beginPath()
+    context.moveTo(left, y)
+    context.lineTo(canvas.width - right, y)
+    context.stroke()
+    context.fillText(`${Math.round(value)}${valueSuffix}`, left - 14, y)
+  }
+
+  context.textAlign = 'center'
+  history.forEach((metric, index) => {
+    const month = metric.month_label.replace(/\s+\d{4}$/, '')
+    context.fillText(month.slice(0, 3), xAt(index), canvas.height - 35)
+  })
+
+  series.forEach((item) => {
+    context.strokeStyle = item.color
+    context.fillStyle = item.color
+    context.lineWidth = 5
+    context.lineJoin = 'round'
+    context.beginPath()
+    history.forEach((metric, index) => {
+      const x = xAt(index)
+      const y = yAt(item.value(metric))
+      if (index === 0) context.moveTo(x, y)
+      else context.lineTo(x, y)
+    })
+    context.stroke()
+    history.forEach((metric, index) => {
+      context.beginPath()
+      context.arc(xAt(index), yAt(item.value(metric)), 7, 0, Math.PI * 2)
+      context.fill()
+    })
+  })
+
+  return canvas.toDataURL('image/png')
+}
+
 function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
   if (!history.length) return '<p class="muted">Sem historico mensal suficiente para exibir evolução.</p>'
 
@@ -8387,14 +8458,10 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
   const last = history.at(-1) ?? first
   const csatDelta = round(Number(last.csat) - Number(first.csat))
   const reviewDelta = round(Number(last.review_percentage) - Number(first.review_percentage))
-  const sendingDelta = round(Number(last.sending_percentage) - Number(first.sending_percentage))
-  const ticketDelta = Number(last.total_tickets) - Number(first.total_tickets)
   const maxTickets = Math.max(...history.map((metric) => Number(metric.total_tickets)), 1)
   const bestCsat = [...history].sort((a, b) => Number(b.csat) - Number(a.csat))[0]
   const lowestCsat = [...history].sort((a, b) => Number(a.csat) - Number(b.csat))[0]
   const bestReview = [...history].sort((a, b) => Number(b.review_percentage) - Number(a.review_percentage))[0]
-  const deltaText = (value: number, suffix = '') => (value > 0 ? `+${value}${suffix}` : `${value}${suffix}`)
-  const barWidth = (value: number, max = 100) => `${Math.max(3, Math.min(100, (value / max) * 100))}%`
   const trendSignal =
     history.length <= 1
       ? 'Fotografia inicial'
@@ -8413,46 +8480,18 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
           : reviewDelta < 0
             ? 'preservar o CSAT e recuperar participação dos clientes nas avaliações.'
             : 'manter consistencia e compartilhar as praticas que sustentaram o resultado.'
-  const readText =
-    history.length > 1
-      ? `Entre ${first.month_label} e ${last.month_label}, o CSAT variou ${deltaText(csatDelta, ' p.p.')}, as avaliações variaram ${deltaText(reviewDelta, ' p.p.')}, o envio/sem avaliação variou ${deltaText(sendingDelta, ' p.p.')} e o volume mudou ${deltaText(ticketDelta)} atendimentos.`
-      : 'Há apenas um mes importado para este analista; a leitura funciona como fotografia do período.'
-  const monthCards = history
-    .map((metric) => {
-      const month = escapeHtml(metric.month_label.replace(' 2026', ''))
-      const volumeWidth = barWidth(Number(metric.total_tickets), maxTickets)
-
-      return `
-        <div class="month-card">
-          <p class="month-card-title">${month}</p>
-          <div class="indicator-row">
-            <span class="indicator-label">CSAT</span>
-            <span class="indicator-track"><span class="indicator-fill csat" style="display:block;width:${barWidth(Number(metric.csat))};"></span></span>
-            <span class="indicator-value">${metric.csat}%</span>
-          </div>
-          <div class="indicator-row">
-            <span class="indicator-label">Avaliações</span>
-            <span class="indicator-track"><span class="indicator-fill review" style="display:block;width:${barWidth(Number(metric.review_percentage))};"></span></span>
-            <span class="indicator-value">${metric.review_percentage}%</span>
-          </div>
-          <div class="indicator-row">
-            <span class="indicator-label">Sem avaliação</span>
-            <span class="indicator-track"><span class="indicator-fill sending" style="display:block;width:${barWidth(Number(metric.sending_percentage))};"></span></span>
-            <span class="indicator-value">${metric.sending_percentage}%</span>
-          </div>
-          <div class="indicator-row">
-            <span class="indicator-label">Atendimentos</span>
-            <span class="indicator-track"><span class="indicator-fill volume" style="display:block;width:${volumeWidth};"></span></span>
-            <span class="indicator-value">${metric.total_tickets}</span>
-          </div>
-        </div>
-      `
-    })
-    .join('')
+  const percentageChart = buildChatReportLineChart(history, [
+    { label: 'CSAT', color: '#0891b2', value: (metric) => Number(metric.csat) },
+    { label: 'Avaliações', color: '#7c3aed', value: (metric) => Number(metric.review_percentage) },
+    { label: 'Sem avaliação', color: '#d97706', value: (metric) => Number(metric.sending_percentage) },
+  ], 100, '%')
+  const volumeMaximum = Math.ceil(maxTickets / 100) * 100
+  const volumeChart = buildChatReportLineChart(history, [
+    { label: 'Atendimentos', color: '#059669', value: (metric) => Number(metric.total_tickets) },
+  ], volumeMaximum)
 
   return `
     <div class="trend">
-      <div class="trend-read"><p>${escapeHtml(readText)}</p></div>
       <div class="strategy-grid">
         <div class="strategy-card">
           <span>Leitura do historico</span>
@@ -8470,9 +8509,12 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
           <em>Use esta leitura para orientar o próximo ciclo mensal.</em>
         </div>
       </div>
-      <p class="chart-title">Evolução mensal em barras</p>
-      <p class="chart-legend">CSAT e avaliações usam escala percentual. Atendimentos usa escala relativa ao maior volume exibido.</p>
-      ${monthCards}
+      <p class="chart-title">Evolução mensal de qualidade e avaliações</p>
+      <p class="chart-legend">As três linhas usam escala percentual de 0% a 100%.</p>
+      <img class="report-chart" src="${percentageChart}" width="640" height="215" alt="Gráfico mensal de CSAT, avaliações e atendimentos sem avaliação" />
+      <p class="chart-title">Evolução mensal de atendimentos</p>
+      <p class="chart-legend">Volume total registrado em cada mês.</p>
+      <img class="report-chart" src="${volumeChart}" width="640" height="215" alt="Gráfico mensal do volume de atendimentos" />
     </div>
   `
 }
@@ -8763,7 +8805,6 @@ function exportWordReport({
   const reviewGapText = reviewGap >= 0
     ? `${formatDelta(reviewGap, ' p.p.')} acima da meta`
     : `${formatDelta(reviewGap, ' p.p.')} abaixo da meta`
-  const feedbackTitle = getChatFeedbackStyleLabel(feedbackStyle)
   const evolutionBars = weeklyEvolution.length
     ? weeklyEvolution
         .map((item, index) => {
@@ -8921,7 +8962,7 @@ function exportWordReport({
         <p>Performance da equipe no período: ${achieved.teamPerformance}%.</p>
         <p>Ligações atendidas pela equipe: ${achieved.teamAnsweredCalls}. Total processado: ${achieved.teamTotalCalls}.</p>
 
-        <h2>Feedback ${escapeHtml(feedbackTitle)}</h2>
+        <h2>Feedback</h2>
         <div class="callout">${formatChatFeedbackForReport(assistedFeedback)}</div>
       </body>
     </html>
