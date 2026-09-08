@@ -62,7 +62,11 @@ const goalInstructions = {
 
 function classifyFeedbackCase(body: ChatFeedbackRequest) {
   const metric = body.metric
-  if (!metric || !Number(metric.validTickets)) {
+  const hasUsableVolume = body.serviceModule === 'phone'
+    ? Number(metric?.totalTickets) > 0
+    : Number(metric?.validTickets) > 0
+
+  if (!metric || !hasUsableVolume) {
     return {
       label: 'Dados insuficientes',
       guidance: 'Apresente apenas os fatos disponíveis e registre o que precisa ser confirmado antes de definir um plano.',
@@ -161,7 +165,7 @@ function buildPrompt(body: ChatFeedbackRequest) {
     : '- Não diga para acompanhar semanalmente, porque o módulo do chat é analisado mensalmente.'
   const volumeRule = serviceModule === 'chat'
     ? '- No chat, os tickets entram em uma fila comum e não existe distribuição de chamados pela liderança ou pelo sistema. Cada analista puxa o próximo ticket conforme sua disponibilidade e carga. Nunca mencione "fluxo de distribuição", "distribuição da fila" ou garantia de volume regular. Para investigar volume abaixo da média, proponha observar juntos disponibilidade para puxar novos tickets, tempo dos atendimentos, pausas, ausências e atuação em outras atividades.'
-    : '- Quando o volume estiver abaixo da média, informe a diferença em atendimentos e proponha verificar juntos fila, pausas, ausências e atuação em outras atividades antes de responsabilizar a pessoa.'
+    : '- Quando o volume estiver abaixo da média, informe a diferença em atendimentos e proponha verificar juntos o contexto operacional, como pausas, ausências, duração dos atendimentos ou atuação em outras atividades. Nunca afirme que existe um método de distribuição de chamados nem atribua a diferença à pessoa sem evidência.'
   const caseProfile = classifyFeedbackCase(body)
   const managerHasContext = Boolean(body.managerNotes?.trim())
 
@@ -294,11 +298,11 @@ function normalizeManagerVoice(text: string) {
 
 function normalizeChatQueueLanguage(text: string) {
   return text
-    .replace(/fluxo\s+de\s+distribuição\s+de\s+chamados/gi, 'dinâmica da fila e a disponibilidade para puxar novos tickets')
-    .replace(/distribuição\s+(?:desigual|diferente)\s+(?:da|de)\s+fila/gi, 'diferenças de disponibilidade para puxar tickets da fila')
-    .replace(/distribuição\s+(?:da|de)\s+fila/gi, 'dinâmica da fila')
-    .replace(/distribuição\s+de\s+chamados/gi, 'entrada e retirada de chamados da fila')
-    .replace(/(?:eu\s+)?vou\s+validar\s+(?:a\s+)?dinâmica\s+da\s+fila/gi, 'vamos observar juntos a dinâmica da fila')
+    .replace(/fluxo\s+de\s+distribuição\s+de\s+chamados/gi, 'contexto operacional do período')
+    .replace(/distribuição\s+(?:desigual|diferente)\s+(?:da|de)\s+fila/gi, 'diferenças no contexto operacional do período')
+    .replace(/distribuição\s+(?:da|de)\s+fila/gi, 'contexto operacional')
+    .replace(/distribuição\s+de\s+chamados/gi, 'contexto operacional dos atendimentos')
+    .replace(/(?:eu\s+)?vou\s+validar\s+(?:a\s+)?dinâmica\s+da\s+fila/gi, 'vamos observar juntos o contexto operacional')
     .trim()
 }
 
@@ -452,9 +456,7 @@ export async function POST(request: Request) {
     }
 
     const managerVoiceFallback = normalizeManagerVoice(body.fallbackText?.trim() ?? '')
-    const fallbackFeedback = body.serviceModule === 'phone'
-      ? managerVoiceFallback
-      : normalizeChatQueueLanguage(managerVoiceFallback)
+    const fallbackFeedback = normalizeChatQueueLanguage(managerVoiceFallback)
 
     if (!fallbackFeedback) {
       return NextResponse.json(
@@ -471,9 +473,7 @@ export async function POST(request: Request) {
       const result = await generateExternalFeedback(prompt, body.feedbackStyle ?? 'coach')
 
       if (result.feedback) {
-        const feedback = body.serviceModule === 'phone'
-          ? result.feedback
-          : normalizeChatQueueLanguage(result.feedback)
+        const feedback = normalizeChatQueueLanguage(result.feedback)
         return NextResponse.json({ feedback, source: result.source })
       }
     } catch (providerError) {

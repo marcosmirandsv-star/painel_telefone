@@ -5320,7 +5320,6 @@ function ReportsView({
         teamPerformanceGoal,
         rankingPosition: selectedRankingPosition,
         managerNotes: phoneManagerNotes,
-        style: phoneFeedbackStyle,
         averageTickets: supervisorAverageTickets,
       })
     : ''
@@ -5359,7 +5358,7 @@ function ReportsView({
     }
 
     setPhoneFeedbackDraft(phoneFeedbackSuggestion)
-    setExportMessage('Sugestão local gerada. Revise o texto antes de exportar.')
+    setExportMessage('Base factual gerada. Use a IA para transformar os dados em um feedback personalizado.')
   }
 
   async function handleGeneratePhoneFeedbackWithAi() {
@@ -5745,7 +5744,7 @@ function ReportsView({
               type="button"
               onClick={handleGeneratePhoneFeedbackDraft}
             >
-              Gerar sugestão local
+              Gerar base factual
             </button>
             <button
               className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
@@ -5764,7 +5763,7 @@ function ReportsView({
               Melhorar texto atual
             </button>
             <p className="text-sm text-slate-300">
-              A IA usa CSAT, avaliações, atendimentos, performance da equipe, pódio, objetivo e tom para explicar o que melhorar e como fazer isso na prática.
+              A base factual reúne os números sem criar uma redação pronta. A IA usa esses fatos, o objetivo e suas observações para escrever um feedback personalizado.
             </p>
           </div>
 
@@ -5773,7 +5772,7 @@ function ReportsView({
               className="form-input min-h-48"
               value={phoneFeedbackDraft}
               onChange={(event) => setPhoneFeedbackDraft(event.target.value)}
-              placeholder="Gere uma sugestão, use a IA ou escreva aqui o texto final que irá para o relatório."
+              placeholder="Gere a base factual, use a IA ou escreva aqui o texto final que irá para o relatório."
             />
           </Field>
         </div>
@@ -8679,7 +8678,6 @@ function buildPhoneFeedbackText({
   teamPerformanceGoal,
   rankingPosition,
   managerNotes,
-  style,
   averageTickets,
 }: {
   analystName: string
@@ -8691,7 +8689,6 @@ function buildPhoneFeedbackText({
   teamPerformanceGoal: number
   rankingPosition: number
   managerNotes: string
-  style: ChatFeedbackStyle
   averageTickets: number
 }) {
   const isTopThree = rankingPosition > 0 && rankingPosition <= 3
@@ -8700,51 +8697,26 @@ function buildPhoneFeedbackText({
       ? `${rankingPosition}º lugar no pódio`
       : `${rankingPosition}ª posição no ranking, fora dos três primeiros lugares`
     : 'sem posição calculada no ranking'
-  const volumeGap = Math.max(0, Math.ceil(averageTickets - analystResult.totalTickets))
+  const volumeDifference = round(analystResult.totalTickets - averageTickets)
   const podiumGap = round(analystResult.averageCsat - podiumCsatGoal)
   const reviewGap = round(analystResult.reviewPercentage - reviewGoal)
-  const managerContext = managerNotes.trim()
-    ? ` Considere também este contexto trazido pela liderança: ${managerNotes.trim()}`
-    : ''
-  const strengths = [
-    podiumGap >= 0 ? `seu CSAT de ${analystResult.averageCsat}% está acima da referência de ${podiumCsatGoal}%` : '',
-    reviewGap >= 0 ? `suas avaliações chegaram a ${analystResult.reviewPercentage}%, acima da meta de ${reviewGoal}%` : '',
-    volumeGap === 0 ? `seu volume de ${analystResult.totalTickets} atendimentos alcançou a média do time` : '',
-  ].filter(Boolean)
-  const mainFocus =
+  const priority =
     podiumGap < 0
-      ? `Seu principal ponto de atenção é o CSAT: faltam ${Math.abs(podiumGap)} p.p. para a referência de ${podiumCsatGoal}%.`
+      ? `compreender o que influenciou o CSAT, que ficou ${Math.abs(podiumGap)} p.p. abaixo da referência`
       : reviewGap < 0
-        ? `Seu principal ponto de atenção é a participação nas avaliações: faltam ${Math.abs(reviewGap)} p.p. para a meta de ${reviewGoal}%.`
-        : volumeGap > 0
-          ? `Seu principal ponto de atenção é o volume: foram ${analystResult.totalTickets} atendimentos, e a média do time foi ${averageTickets}. A diferença é de aproximadamente ${volumeGap} atendimentos neste mesmo período.`
-          : 'Você cumpriu os três critérios objetivos. O foco agora é manter esse equilíbrio até o fechamento.'
-  const practicalAction =
-    podiumGap < 0
-      ? 'Vamos escolher juntos dois atendimentos com menor satisfação, identificar o que poderia ter sido mais claro ou resolutivo e combinar uma mudança de abordagem para você testar na próxima semana.'
-      : reviewGap < 0
-        ? 'Revise como você encerra os contatos e combine uma forma natural de convidar o cliente a avaliar, sem transformar o pedido em uma fala automática.'
-        : volumeGap > 0
-          ? 'Vamos verificar juntos se a diferença veio da distribuição da fila, ausências, pausas ou de uma oportunidade na rotina. Depois, combinaremos uma meta possível para o próximo lançamento sem perder qualidade.'
-          : 'Registre uma prática que ajudou nesse resultado e repita-a no próximo ciclo. Se puder, compartilhe esse aprendizado com a equipe.'
-  const positiveReading = strengths.length
-    ? `Há pontos importantes para reconhecer: ${strengths.join('; ')}.`
-    : 'Este período pede atenção e um combinado simples, possível de acompanhar no próximo lançamento.'
-
-  if (style === 'mimo') {
-    return [
-      `Momento observado: ${analystName}, em ${periodLabel}, você registrou CSAT de ${analystResult.averageCsat}%, ${analystResult.totalReviews} avaliações e ${analystResult.totalTickets} atendimentos. Hoje, isso coloca você na ${rankingText}.`,
-      `Impacto: ${positiveReading} ${mainFocus} Esse conjunto mostra como qualidade, avaliações e volume se completam na disputa pelo pódio.`,
-      `Melhoria ou manutenção: ${analystResult.eligible ? 'O caminho é preservar o que funcionou e evitar que um dos três indicadores perca força.' : 'A prioridade não é mudar tudo ao mesmo tempo, mas agir primeiro sobre o ponto que está impedindo sua elegibilidade.'}${managerContext}`,
-      `Orientação: ${practicalAction} No próximo lançamento, vamos conferir juntos se essa ação produziu avanço e ajustar o combinado, se necessário.`,
-    ].join('\n\n')
-  }
+        ? `ampliar a participação nas avaliações, que ficou ${Math.abs(reviewGap)} p.p. abaixo da meta`
+        : volumeDifference < 0
+          ? `entender o contexto do volume, que ficou ${Math.abs(volumeDifference)} atendimentos abaixo da média do time`
+          : 'identificar as práticas reais que ajudaram a equilibrar os indicadores e decidir como mantê-las'
+  const contextToVerify = volumeDifference < 0
+    ? 'Pausas, ausências, duração dos atendimentos e atuação em outras atividades podem ser verificados, mas os números não demonstram sozinhos a causa da diferença de volume.'
+    : 'Os indicadores não comprovam comportamentos específicos. Use exemplos reais da operação ou observações do gestor antes de relacionar o resultado a uma conduta.'
 
   return [
-    `Situação: ${analystName}, em ${periodLabel}, você registrou CSAT de ${analystResult.averageCsat}%, ${analystResult.totalReviews} avaliações e ${analystResult.totalTickets} atendimentos. Sua posição atual é ${rankingText}. ${positiveReading}`,
-    `Alinhamentos Realizados: ${mainFocus}${managerContext} A conversa deve confirmar a causa antes de atribuir o resultado apenas ao seu desempenho individual.`,
-    `Resultado Esperado: avançar no ponto principal sem perder os indicadores que já estão bons. A equipe fechou com performance de ${teamPerformance}%, diante da referência de ${teamPerformanceGoal}%.`,
-    `Expectativa e Plano de Desenvolvimento: ${practicalAction} O resultado será revisto no próximo lançamento para decidir se o plano deve ser mantido ou ajustado.`,
+    `Base factual do ciclo: ${analystName}, em ${periodLabel}, registrou CSAT de ${analystResult.averageCsat}% (referência ${podiumCsatGoal}%), ${analystResult.totalReviews} avaliações, taxa de avaliações de ${analystResult.reviewPercentage}% (meta ${reviewGoal}%) e ${analystResult.totalTickets} atendimentos. A média do time foi ${averageTickets}. Posição: ${rankingText}. Performance da equipe: ${teamPerformance}% diante da referência de ${teamPerformanceGoal}%.`,
+    `Ponto prioritário: ${priority}.`,
+    `Contexto a verificar: ${contextToVerify}`,
+    managerNotes.trim() ? `Observação registrada pelo gestor: ${managerNotes.trim()}` : 'Observação do gestor: não informada.',
   ].join('\n\n')
 }
 
