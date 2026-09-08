@@ -8541,8 +8541,22 @@ function isChatReportFeedbackComplete(text: string, style: ChatFeedbackStyle) {
 }
 
 function normalizeChatReportFeedback(text: string, fallbackText: string, style: ChatFeedbackStyle) {
-  const cleanText = cleanChatReportFeedbackText(text)
-  return isChatReportFeedbackComplete(cleanText, style) ? cleanText : cleanChatReportFeedbackText(fallbackText)
+  const cleanText = normalizeFeedbackManagerVoice(cleanChatReportFeedbackText(text))
+  return isChatReportFeedbackComplete(cleanText, style)
+    ? cleanText
+    : normalizeFeedbackManagerVoice(cleanChatReportFeedbackText(fallbackText))
+}
+
+function normalizeFeedbackManagerVoice(text: string) {
+  return text
+    .replace(/(?:recomendo\s+(?:que\s+você\s+)?conversar|converse)\s+com\s+(?:(?:a\s+)?sua\s+liderança|(?:o\s+)?seu\s+gestor)\s+para\s+(?:validar|entender|confirmar)\s+se\s+/gi, 'vamos verificar juntos se ')
+    .replace(/recomendo\s+(?:que\s+você\s+)?conversar\s+com\s+(?:a\s+)?sua\s+liderança\s+para\s+/gi, 'vamos ')
+    .replace(/converse\s+com\s+(?:a\s+)?sua\s+liderança\s+para\s+/gi, 'vamos ')
+    .replace(/converse\s+com\s+(?:o\s+)?seu\s+gestor\s+para\s+/gi, 'vamos ')
+    .replace(/alinhe\s+com\s+(?:o\s+)?seu\s+gestor\s+(?:uma\s+)?revisão\s+(?:de|das?|dos?)\s+/gi, 'vamos revisar juntos ')
+    .replace(/confira\s+com\s+(?:o\s+)?seu\s+gestor\s+se\s+/gi, 'vamos conferir juntos se ')
+    .replace(/leve\s+(?:ao|para\s+o)\s+gestor\s+/gi, 'traga para nossa conversa ')
+    .trim()
 }
 function buildChatFeedbackText({
   metric,
@@ -8583,7 +8597,7 @@ function buildChatFeedbackText({
   const volumeReading =
     productivityGap >= 0
       ? `O volume ficou ${formatDelta(productivityGap, '%')} acima da média da operação, demonstrando capacidade de sustentar entrega mesmo com demanda elevada.`
-      : `O volume ficou ${formatDelta(productivityGap, '%')} abaixo da média da operação; vale validar se houve distribuicao de fila, ausencia, emprestimo para outro setor ou oportunidade de produtividade.`
+      : `O volume ficou ${formatDelta(productivityGap, '%')} abaixo da média da operação; vamos verificar juntos se houve distribuição de fila, ausência, empréstimo para outro setor ou oportunidade de produtividade.`
   const recognition =
     status === 'Meta Superada'
       ? `${analystName} encerrou o ciclo em patamar de reconhecimento. O resultado combina qualidade percebida, amostra suficiente de avaliações e volume competitivo dentro da operação.`
@@ -8592,20 +8606,20 @@ function buildChatFeedbackText({
         : `${analystName} apresentou bons sinais no ciclo, mas ainda ha critérios que precisam ganhar consistencia para sustentar elegibilidade e reconhecimento no fechamento mensal.`
   const development =
     status === 'Meta Superada'
-      ? 'O combinado recomendado e proteger o padrao que funcionou, compartilhar boas praticas com o time e evitar acomodação apos um ciclo positivo.'
+      ? 'Nosso combinado é proteger o padrão que funcionou, compartilhar boas práticas com o time e evitar acomodação após um ciclo positivo.'
       : csatGap < 0
-        ? 'O combinado recomendado e revisar exemplos concretos de interações com menor satisfação, identificar causa raiz e escolher uma ação simples de melhoria para o próximo mes.'
+        ? 'Nosso combinado é revisar juntos exemplos concretos de interações com menor satisfação, identificar a causa e escolher uma ação simples de melhoria para o próximo mês.'
         : reviewGap < 0
-          ? 'O combinado recomendado e fortalecer o fechamento dos atendimentos, explicando ao cliente a importancia da avaliação sem transformar isso em fala mecanica.'
-          : 'O combinado recomendado e investigar o fator de volume, separar o que e contexto operacional do que e oportunidade individual e definir um alvo realista para o próximo ciclo.'
+          ? 'Nosso combinado é fortalecer o fechamento dos atendimentos, explicando ao cliente a importância da avaliação sem transformar isso em fala mecânica.'
+          : 'Nosso combinado é investigar juntos o fator de volume, separar o contexto operacional da oportunidade individual e definir um alvo realista para o próximo ciclo.'
   const practicalSteps =
     status === 'Meta Superada'
       ? 'Como colocar em pratica: escolha dois atendimentos bem avaliados do mes e registre o que se repetiu neles; transforme esse padrao em uma rotina curta de atendimento; compartilhe uma pratica com a equipe; no próximo fechamento, compare se CSAT, avaliações e volume continuaram consistentes.'
       : csatGap < 0
-        ? 'Como colocar em pratica: separe de dois a tres atendimentos com avaliação negativa ou neutra; identifique se a causa foi clareza, prazo, empatia, solucao ou encerramento; escolha uma mudanca de abordagem para testar no próximo ciclo; leve ao gestor um exemplo antes e depois para validar a evolução.'
+        ? 'Como colocar em prática: vamos separar de dois a três atendimentos com avaliação negativa ou neutra; juntos, identificaremos se a causa foi clareza, prazo, empatia, solução ou encerramento; você testará uma mudança de abordagem no próximo ciclo; depois, revisaremos um exemplo antes e depois para validar a evolução.'
         : reviewGap < 0
           ? 'Como colocar em pratica: revise o encerramento dos atendimentos e crie uma frase natural para convidar o cliente a avaliar; use essa frase nos casos resolvidos com boa percepcao; acompanhe se a quantidade de avaliações aumenta no fechamento seguinte; ajuste a abordagem se a fala parecer mecanica.'
-          : 'Como colocar em pratica: confirme com o gestor se o volume menor veio de fila, ausencia, emprestimo ou distribuicao operacional; quando for oportunidade individual, defina um alvo de produtividade realista; acompanhe a quantidade de atendimentos válidos ao longo do mes; preserve qualidade para nao trocar volume por perda de CSAT.'
+          : 'Como colocar em prática: vamos verificar se o volume menor veio de fila, ausência, empréstimo ou distribuição operacional; se houver oportunidade individual, combinaremos um alvo de produtividade realista; acompanhe a quantidade de atendimentos válidos ao longo do mês e preserve a qualidade para não trocar volume por perda de CSAT.'
 
   if (style === 'sare') {
     return [
@@ -8706,11 +8720,11 @@ function buildPhoneFeedbackText({
           : 'Você cumpriu os três critérios objetivos. O foco agora é manter esse equilíbrio até o fechamento.'
   const practicalAction =
     podiumGap < 0
-      ? 'Escolha com seu gestor dois atendimentos com menor satisfação, identifique o que poderia ter sido mais claro ou resolutivo e teste uma mudança de abordagem na próxima semana.'
+      ? 'Vamos escolher juntos dois atendimentos com menor satisfação, identificar o que poderia ter sido mais claro ou resolutivo e combinar uma mudança de abordagem para você testar na próxima semana.'
       : reviewGap < 0
         ? 'Revise como você encerra os contatos e combine uma forma natural de convidar o cliente a avaliar, sem transformar o pedido em uma fala automática.'
         : volumeGap > 0
-          ? 'Converse com seu gestor para entender se a diferença veio da distribuição da fila, ausências, pausas ou de uma oportunidade na rotina. Depois, combine uma meta possível para o próximo lançamento sem perder qualidade.'
+          ? 'Vamos verificar juntos se a diferença veio da distribuição da fila, ausências, pausas ou de uma oportunidade na rotina. Depois, combinaremos uma meta possível para o próximo lançamento sem perder qualidade.'
           : 'Registre uma prática que ajudou nesse resultado e repita-a no próximo ciclo. Se puder, compartilhe esse aprendizado com a equipe.'
   const positiveReading = strengths.length
     ? `Há pontos importantes para reconhecer: ${strengths.join('; ')}.`
@@ -8721,7 +8735,7 @@ function buildPhoneFeedbackText({
       `Momento observado: ${analystName}, em ${periodLabel}, você registrou CSAT de ${analystResult.averageCsat}%, ${analystResult.totalReviews} avaliações e ${analystResult.totalTickets} atendimentos. Hoje, isso coloca você na ${rankingText}.`,
       `Impacto: ${positiveReading} ${mainFocus} Esse conjunto mostra como qualidade, avaliações e volume se completam na disputa pelo pódio.`,
       `Melhoria ou manutenção: ${analystResult.eligible ? 'O caminho é preservar o que funcionou e evitar que um dos três indicadores perca força.' : 'A prioridade não é mudar tudo ao mesmo tempo, mas agir primeiro sobre o ponto que está impedindo sua elegibilidade.'}${managerContext}`,
-      `Orientação: ${practicalAction} No próximo lançamento, confira com seu gestor se essa ação produziu avanço e ajuste o combinado, se necessário.`,
+      `Orientação: ${practicalAction} No próximo lançamento, vamos conferir juntos se essa ação produziu avanço e ajustar o combinado, se necessário.`,
     ].join('\n\n')
   }
 

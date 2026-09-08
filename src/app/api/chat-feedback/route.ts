@@ -107,6 +107,8 @@ function buildPrompt(body: ChatFeedbackRequest) {
   return `
 Você é um coach sênior de atendimento ao cliente e editor de relatórios de performance. Sua tarefa principal é melhorar o texto base do sistema, preservando a estrutura, os números e a lógica calculada, mas elevando a qualidade humana, gerencial e prática da devolutiva.
 
+Perspectiva obrigatória: o texto será escrito e entregue pelo próprio gestor ao seu liderado. Escreva na voz dessa liderança, falando diretamente com o analista. O gestor nunca deve aparecer como uma terceira pessoa que o analista precisa procurar.
+
 Módulo analisado: ${moduleName}
 Fonte dos dados: ${sourceName}
 Intenção da IA: ${generationMode === 'improve' ? 'melhorar o texto atual mantendo a estrutura e aprofundando orientação prática' : 'gerar uma devolutiva completa a partir da sugestão local'}
@@ -117,13 +119,14 @@ Regras obrigatorias:
 - Escreva em portugues do Brasil.
 ${cadenceRule}
 - Fale diretamente com o analista usando "você". Não escreva como um parecer distante sobre "o colaborador".
+- Nunca escreva "converse com sua liderança", "alinhe com seu gestor", "procure seu líder" ou orientação equivalente. Quando a verificação depender da gestão, escreva como compromisso direto: "vamos verificar juntos", "vou validar a distribuição da fila" ou "combinamos revisar".
 - Traduza os indicadores: depois de cada número importante, explique em linguagem simples o que ele significa para a pessoa.
 - Não use expressões abstratas como "confiança da gestão", "sustentar elegibilidade" ou "proteger o indicador" sem explicar o comportamento concreto esperado.
 - Escolha um foco principal por vez. Reconheça o que está bom, indique o maior impedimento e proponha no máximo duas ações realizáveis.
-- Quando o volume estiver abaixo da média, informe a diferença em atendimentos e recomende validar fila, distribuição, ausências ou pausas antes de responsabilizar a pessoa.
+- Quando o volume estiver abaixo da média, informe a diferença em atendimentos e assuma a verificação como gestor: proponha validar juntos fila, distribuição, ausências ou pausas antes de responsabilizar a pessoa.
 - Só chame uma colocação de pódio quando ela estiver entre o primeiro e o terceiro lugar. Nas demais, diga "posição no ranking".
 - Não mencione variação contra período anterior quando não houver um valor anterior real no histórico recebido.
-- Não invente a causa de um resultado. Quando a causa não estiver nos dados ou nas observações, oriente uma conversa com a liderança para confirmá-la.
+- Não invente a causa de um resultado. Quando a causa não estiver nos dados ou nas observações, registre que gestor e analista vão verificá-la juntos.
 - Não comece com parabens generico. Comece com uma leitura profissional do ciclo.
 - Use o texto base do sistema como esqueleto obrigatorio; refine, aprofunde e humanize, mas não substitua por um texto curto.
 - Preserve todos os numeros relevantes; não invente dados e não mude cálculos.
@@ -133,7 +136,7 @@ ${cadenceRule}
 - Transforme as observações do gestor em contexto de gestão; não copie literalmente e ignore observações que sejam apenas teste tecnico.
 - Traga reconhecimento especifico quando houver pontos fortes, conectando o elogio ao comportamento observado.
 - Traga orientação prática em linguagem humana: explique o que o indicador mostra, por que isso importa para cliente/operação e como o analista pode agir.
-- Para cada orientação, descreva pelo menos uma ação concreta: exemplo de comportamento, rotina, conferência, abordagem, pedido de avaliação ou combinação com liderança.
+- Para cada orientação, descreva pelo menos uma ação concreta: exemplo de comportamento, rotina, conferência, abordagem, pedido de avaliação ou combinado entre gestor e analista.
 - Se o texto base já estiver bom, aprofunde sem alterar a conclusão; se estiver genérico, substitua por recomendações mais específicas.
 - Não termine frase pela metade. Entregue um texto completo, pronto para colar no relatório.
 - Mantenha entre 180 e 320 palavras. Prefira clareza e completude em vez de texto longo.
@@ -205,6 +208,18 @@ function cleanFeedbackText(text: string) {
     .replace(/\*\*/g, '')
     .replace(/^#+\s*/gm, '')
     .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+function normalizeManagerVoice(text: string) {
+  return text
+    .replace(/(?:recomendo\s+(?:que\s+você\s+)?conversar|converse)\s+com\s+(?:(?:a\s+)?sua\s+liderança|(?:o\s+)?seu\s+gestor)\s+para\s+(?:validar|entender|confirmar)\s+se\s+/gi, 'vamos verificar juntos se ')
+    .replace(/recomendo\s+(?:que\s+você\s+)?conversar\s+com\s+(?:a\s+)?sua\s+liderança\s+para\s+/gi, 'vamos ')
+    .replace(/converse\s+com\s+(?:a\s+)?sua\s+liderança\s+para\s+/gi, 'vamos ')
+    .replace(/converse\s+com\s+(?:o\s+)?seu\s+gestor\s+para\s+/gi, 'vamos ')
+    .replace(/alinhe\s+com\s+(?:o\s+)?seu\s+gestor\s+(?:uma\s+)?revisão\s+(?:de|das?|dos?)\s+/gi, 'vamos revisar juntos ')
+    .replace(/confira\s+com\s+(?:o\s+)?seu\s+gestor\s+se\s+/gi, 'vamos conferir juntos se ')
+    .replace(/leve\s+(?:ao|para\s+o)\s+gestor\s+/gi, 'traga para nossa conversa ')
     .trim()
 }
 
@@ -294,7 +309,7 @@ async function generateWithGemini(prompt: string, style: ChatFeedbackRequest['fe
       throw new Error(`Gemini ${model} respondeu HTTP ${response.status}: ${sanitizeProviderMessage(message)}`)
     }
 
-    return assertCompleteFeedback(extractGeminiText(data), style)
+    return assertCompleteFeedback(normalizeManagerVoice(extractGeminiText(data)), style)
   }
 
   throw new Error(`Nenhum modelo Gemini disponível respondeu para gerar o feedback. Tentativas: ${errors.join(' | ')}`)
@@ -343,7 +358,7 @@ async function generateWithGitHubModels(prompt: string) {
 
 async function generateExternalFeedback(prompt: string, style: ChatFeedbackRequest['feedbackStyle']) {
   if (process.env.CHAT_AI_PROVIDER === 'github-models') {
-    return { feedback: assertCompleteFeedback(await generateWithGitHubModels(prompt), style), source: 'github-models' }
+    return { feedback: assertCompleteFeedback(normalizeManagerVoice(await generateWithGitHubModels(prompt)), style), source: 'github-models' }
   }
 
   return { feedback: await generateWithGemini(prompt, style), source: 'gemini' }
@@ -357,7 +372,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Dados do analista não foram enviados para a IA.' }, { status: 400 })
     }
 
-    const fallbackFeedback = body.fallbackText?.trim()
+    const fallbackFeedback = normalizeManagerVoice(body.fallbackText?.trim() ?? '')
 
     if (!fallbackFeedback) {
       return NextResponse.json(
