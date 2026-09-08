@@ -1975,8 +1975,8 @@ function ChatModuleDashboard({
           ? `Avaliações: orientar ${chatNameList(chatBelowReviewNames)} a concluir o atendimento confirmando a solução e, em seguida, convidar o cliente a responder à pesquisa. Conferir no próximo fechamento se a participação aumentou.`
           : 'Avaliações: manter a forma de encerramento atual: confirmar que a solicitação foi resolvida e convidar o cliente a avaliar. Essa prática manteve a participação acima da referência de 25%.',
         chatBelowVolumeCount
-          ? `Volume: conferir se o resultado de ${chatNameList(chatBelowVolumeNames)} foi afetado por escala, ausência, empréstimo para outro setor ou distribuição desigual da fila. Só tratar como desempenho individual depois de eliminar essas causas operacionais.`
-          : 'Volume: manter a distribuição atual e monitorar apenas exceções operacionais.',
+          ? `Volume: observar se o resultado de ${chatNameList(chatBelowVolumeNames)} foi afetado por disponibilidade para puxar novos tickets, tempo dos atendimentos, pausas, ausência ou apoio a outro setor. Só tratar como desempenho individual depois de verificar o contexto operacional.`
+          : 'Volume: manter a dinâmica atual da fila e monitorar apenas exceções operacionais.',
       ]
   const chatStrategicDecision =
     !calculationMetrics.length
@@ -1984,7 +1984,7 @@ function ChatModuleDashboard({
       : chatCriticalCount > 0
         ? `Antes de publicar o fechamento, analisar individualmente ${chatNameList(chatCriticalNames)}, registrar a causa dos indicadores críticos e combinar uma ação com prazo para o próximo ciclo.`
         : chatEligibleCount >= 3
-          ? `Antes de publicar o ranking, confirme se empréstimos, ausências ou diferenças na distribuição da fila exigem algum ajuste. Depois, reconheça ${chatNameList(chatEligibleNames)} e compartilhe com a equipe os comportamentos que sustentaram os resultados.`
+          ? `Antes de publicar o ranking, confirme se apoio a outro setor, ausências, pausas ou diferenças de disponibilidade para puxar tickets exigem algum ajuste. Depois, reconheça ${chatNameList(chatEligibleNames)} e compartilhe com a equipe os comportamentos que sustentaram os resultados.`
           : 'Antes de publicar o ranking, separe as exceções operacionais dos resultados individuais. Depois, escolha o indicador com maior impacto e defina uma ação para aumentar a quantidade de elegíveis no próximo ciclo.'
   const chatStrategicTrend =
     !calculationMetrics.length
@@ -2044,7 +2044,7 @@ function ChatModuleDashboard({
       label: 'Exceções operacionais',
       title: chatBelowVolumeCount ? 'Validar volume antes do pódio' : 'Volume sem exceção relevante',
       text: chatBelowVolumeCount
-        ? `Antes de fechar o pódio, validar se ${chatNameList(chatBelowVolumeNames)} tiveram empréstimo, ausência, cobertura ou distribuição diferente de fila.`
+        ? `Antes de fechar o pódio, validar se ${chatNameList(chatBelowVolumeNames)} tiveram apoio a outro setor, ausência, pausas, atendimentos mais longos ou menor disponibilidade para puxar tickets.`
         : 'Não há alerta relevante de volume abaixo da média para justificar exceção operacional.',
     },
     {
@@ -8597,7 +8597,7 @@ function buildChatFeedbackText({
   const volumeReading =
     productivityGap >= 0
       ? `O volume ficou ${formatDelta(productivityGap, '%')} acima da média da operação, demonstrando capacidade de sustentar entrega mesmo com demanda elevada.`
-      : `O volume ficou ${formatDelta(productivityGap, '%')} abaixo da média da operação; vamos verificar juntos se houve distribuição de fila, ausência, empréstimo para outro setor ou oportunidade de produtividade.`
+      : `O volume ficou ${formatDelta(productivityGap, '%')} abaixo da média da operação; vamos observar juntos a disponibilidade para puxar novos tickets, o tempo dos atendimentos, pausas, ausências, apoio a outro setor e possíveis oportunidades na rotina.`
   const recognition =
     status === 'Meta Superada'
       ? `${analystName} encerrou o ciclo em patamar de reconhecimento. O resultado combina qualidade percebida, amostra suficiente de avaliações e volume competitivo dentro da operação.`
@@ -8619,7 +8619,7 @@ function buildChatFeedbackText({
         ? 'Como colocar em prática: vamos separar de dois a três atendimentos com avaliação negativa ou neutra; juntos, identificaremos se a causa foi clareza, prazo, empatia, solução ou encerramento; você testará uma mudança de abordagem no próximo ciclo; depois, revisaremos um exemplo antes e depois para validar a evolução.'
         : reviewGap < 0
           ? 'Como colocar em pratica: revise o encerramento dos atendimentos e crie uma frase natural para convidar o cliente a avaliar; use essa frase nos casos resolvidos com boa percepcao; acompanhe se a quantidade de avaliações aumenta no fechamento seguinte; ajuste a abordagem se a fala parecer mecanica.'
-          : 'Como colocar em prática: vamos verificar se o volume menor veio de fila, ausência, empréstimo ou distribuição operacional; se houver oportunidade individual, combinaremos um alvo de produtividade realista; acompanhe a quantidade de atendimentos válidos ao longo do mês e preserve a qualidade para não trocar volume por perda de CSAT.'
+          : 'Como colocar em prática: vamos observar a dinâmica da fila, sua disponibilidade para puxar novos tickets, o tempo dos atendimentos, pausas, ausências e apoio a outras atividades; se houver oportunidade individual, combinaremos um alvo de produtividade realista; acompanhe a quantidade de atendimentos válidos ao longo do mês e preserve a qualidade para não trocar volume por perda de CSAT.'
 
   if (style === 'sare') {
     return [

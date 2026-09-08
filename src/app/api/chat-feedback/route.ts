@@ -103,6 +103,9 @@ function buildPrompt(body: ChatFeedbackRequest) {
   const cadenceRule = serviceModule === 'phone'
     ? '- O módulo telefone é alimentado semanalmente, mas a devolutiva final é mensal. Pode orientar acompanhamento semanal quando isso ajudar o fechamento.'
     : '- Não diga para acompanhar semanalmente, porque o módulo do chat é analisado mensalmente.'
+  const volumeRule = serviceModule === 'chat'
+    ? '- No chat, os tickets entram em uma fila comum e não existe distribuição de chamados pela liderança ou pelo sistema. Cada analista puxa o próximo ticket conforme sua disponibilidade e carga. Nunca mencione "fluxo de distribuição", "distribuição da fila" ou garantia de volume regular. Para investigar volume abaixo da média, proponha observar juntos disponibilidade para puxar novos tickets, tempo dos atendimentos, pausas, ausências e atuação em outras atividades.'
+    : '- Quando o volume estiver abaixo da média, informe a diferença em atendimentos e proponha verificar juntos fila, pausas, ausências e atuação em outras atividades antes de responsabilizar a pessoa.'
 
   return `
 Você é um coach sênior de atendimento ao cliente e editor de relatórios de performance. Sua tarefa principal é melhorar o texto base do sistema, preservando a estrutura, os números e a lógica calculada, mas elevando a qualidade humana, gerencial e prática da devolutiva.
@@ -119,11 +122,11 @@ Regras obrigatorias:
 - Escreva em portugues do Brasil.
 ${cadenceRule}
 - Fale diretamente com o analista usando "você". Não escreva como um parecer distante sobre "o colaborador".
-- Nunca escreva "converse com sua liderança", "alinhe com seu gestor", "procure seu líder" ou orientação equivalente. Quando a verificação depender da gestão, escreva como compromisso direto: "vamos verificar juntos", "vou validar a distribuição da fila" ou "combinamos revisar".
+- Nunca escreva "converse com sua liderança", "alinhe com seu gestor", "procure seu líder" ou orientação equivalente. Quando a verificação depender da gestão, escreva como compromisso direto: "vamos verificar juntos", "vou observar o contexto operacional" ou "combinamos revisar".
 - Traduza os indicadores: depois de cada número importante, explique em linguagem simples o que ele significa para a pessoa.
 - Não use expressões abstratas como "confiança da gestão", "sustentar elegibilidade" ou "proteger o indicador" sem explicar o comportamento concreto esperado.
 - Escolha um foco principal por vez. Reconheça o que está bom, indique o maior impedimento e proponha no máximo duas ações realizáveis.
-- Quando o volume estiver abaixo da média, informe a diferença em atendimentos e assuma a verificação como gestor: proponha validar juntos fila, distribuição, ausências ou pausas antes de responsabilizar a pessoa.
+${volumeRule}
 - Só chame uma colocação de pódio quando ela estiver entre o primeiro e o terceiro lugar. Nas demais, diga "posição no ranking".
 - Não mencione variação contra período anterior quando não houver um valor anterior real no histórico recebido.
 - Não invente a causa de um resultado. Quando a causa não estiver nos dados ou nas observações, registre que gestor e analista vão verificá-la juntos.
@@ -220,6 +223,16 @@ function normalizeManagerVoice(text: string) {
     .replace(/alinhe\s+com\s+(?:o\s+)?seu\s+gestor\s+(?:uma\s+)?revisão\s+(?:de|das?|dos?)\s+/gi, 'vamos revisar juntos ')
     .replace(/confira\s+com\s+(?:o\s+)?seu\s+gestor\s+se\s+/gi, 'vamos conferir juntos se ')
     .replace(/leve\s+(?:ao|para\s+o)\s+gestor\s+/gi, 'traga para nossa conversa ')
+    .trim()
+}
+
+function normalizeChatQueueLanguage(text: string) {
+  return text
+    .replace(/fluxo\s+de\s+distribuição\s+de\s+chamados/gi, 'dinâmica da fila e a disponibilidade para puxar novos tickets')
+    .replace(/distribuição\s+(?:desigual|diferente)\s+(?:da|de)\s+fila/gi, 'diferenças de disponibilidade para puxar tickets da fila')
+    .replace(/distribuição\s+(?:da|de)\s+fila/gi, 'dinâmica da fila')
+    .replace(/distribuição\s+de\s+chamados/gi, 'entrada e retirada de chamados da fila')
+    .replace(/(?:eu\s+)?vou\s+validar\s+(?:a\s+)?dinâmica\s+da\s+fila/gi, 'vamos observar juntos a dinâmica da fila')
     .trim()
 }
 
@@ -372,7 +385,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Dados do analista não foram enviados para a IA.' }, { status: 400 })
     }
 
-    const fallbackFeedback = normalizeManagerVoice(body.fallbackText?.trim() ?? '')
+    const managerVoiceFallback = normalizeManagerVoice(body.fallbackText?.trim() ?? '')
+    const fallbackFeedback = body.serviceModule === 'phone'
+      ? managerVoiceFallback
+      : normalizeChatQueueLanguage(managerVoiceFallback)
 
     if (!fallbackFeedback) {
       return NextResponse.json(
@@ -389,7 +405,10 @@ export async function POST(request: Request) {
       const result = await generateExternalFeedback(prompt, body.feedbackStyle ?? 'coach')
 
       if (result.feedback) {
-        return NextResponse.json({ feedback: result.feedback, source: result.source })
+        const feedback = body.serviceModule === 'phone'
+          ? result.feedback
+          : normalizeChatQueueLanguage(result.feedback)
+        return NextResponse.json({ feedback, source: result.source })
       }
     } catch (providerError) {
       const publicReason = getPublicProviderError(providerError)
