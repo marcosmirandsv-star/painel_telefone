@@ -2532,7 +2532,7 @@ function ChatModuleDashboard({
     }
   }
 
-  function handleExportChatIndividualReport() {
+  async function handleExportChatIndividualReport() {
     const payload = buildChatReportExportPayload()
 
     if (!payload) {
@@ -2541,10 +2541,11 @@ function ChatModuleDashboard({
     }
 
     try {
-      const fileName = exportChatIndividualReport(payload)
+      setChatExportMessage('Preparando relatório e incorporando a foto do analista...')
+      const fileName = await exportChatIndividualReport(payload)
       setChatExportMessage(`Relatório individual gerado: ${fileName}. Verifique a pasta Downloads.`)
-    } catch {
-      setChatExportMessage('Não foi possível gerar o relatório individual. Tente novamente ou use outro navegador.')
+    } catch (error) {
+      setChatExportMessage(`Não foi possível gerar o relatório individual. ${getErrorMessage(error)}`)
     }
   }
 
@@ -5503,15 +5504,16 @@ function ReportsView({
     }
   }
 
-  function handleExportWordReport() {
+  async function handleExportWordReport() {
     if (!selectedAnalyst || !analystResult) {
       setExportMessage('Selecione um analista e um período com lançamento antes de exportar.')
       return
     }
 
     try {
+      setExportMessage('Preparando relatório e incorporando a foto do analista...')
       const finalPhoneFeedback = normalizePhoneReportFeedback(phoneFeedbackDraft, phoneFeedbackSuggestion, phoneFeedbackStyle)
-      const fileName = exportWordReport({
+      const fileName = await exportWordReport({
         analystName: selectedAnalyst.name,
         photoUrl: getAnalystPhoto(selectedAnalyst.name, selectedAnalyst.photo_url),
         periodLabel,
@@ -5543,8 +5545,8 @@ function ReportsView({
       })
 
       setExportMessage(`Relatorio gerado: ${fileName}. Verifique a pasta Downloads.`)
-    } catch {
-      setExportMessage('Não foi possível gerar o arquivo. Tente novamente ou use outro navegador.')
+    } catch (error) {
+      setExportMessage(`Não foi possível gerar o arquivo. ${getErrorMessage(error)}`)
     }
   }
 
@@ -8172,7 +8174,55 @@ function formatShortDate(value: string) {
   return `${day}/${month}`
 }
 
-function exportChatIndividualReport({
+async function buildEmbeddedReportPhoto(photoUrl?: string | null) {
+  if (!photoUrl) return ''
+
+  const resolvedPhotoUrl = new URL(photoUrl, window.location.origin).href
+  const response = await fetch(resolvedPhotoUrl, { cache: 'no-store' })
+  if (!response.ok) {
+    throw new Error('A foto cadastrada não pôde ser carregada. Atualize a foto do analista e tente novamente.')
+  }
+
+  const sourceBlob = await response.blob()
+  const objectUrl = URL.createObjectURL(sourceBlob)
+
+  try {
+    const image = new Image()
+    image.src = objectUrl
+    await image.decode()
+
+    const canvas = document.createElement('canvas')
+    const size = 256
+    const borderWidth = 7
+    canvas.width = size
+    canvas.height = size
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('O navegador não conseguiu preparar a foto para o relatório.')
+
+    const sourceSize = Math.min(image.naturalWidth, image.naturalHeight)
+    const sourceX = (image.naturalWidth - sourceSize) / 2
+    const sourceY = (image.naturalHeight - sourceSize) / 2
+
+    context.clearRect(0, 0, size, size)
+    context.save()
+    context.beginPath()
+    context.arc(size / 2, size / 2, size / 2 - borderWidth, 0, Math.PI * 2)
+    context.clip()
+    context.drawImage(image, sourceX, sourceY, sourceSize, sourceSize, borderWidth, borderWidth, size - borderWidth * 2, size - borderWidth * 2)
+    context.restore()
+    context.strokeStyle = '#0891b2'
+    context.lineWidth = borderWidth
+    context.beginPath()
+    context.arc(size / 2, size / 2, size / 2 - borderWidth / 2, 0, Math.PI * 2)
+    context.stroke()
+
+    return canvas.toDataURL('image/png')
+  } finally {
+    URL.revokeObjectURL(objectUrl)
+  }
+}
+
+async function exportChatIndividualReport({
   metric,
   periodLabel,
   averageTickets,
@@ -8195,9 +8245,9 @@ function exportChatIndividualReport({
 }) {
   const analystName = getChatAnalystName(metric)
   const safeName = escapeHtml(analystName)
-  const resolvedPhotoUrl = photoUrl ? new URL(photoUrl, window.location.origin).href : ''
-  const photoHtml = resolvedPhotoUrl
-    ? `<img class="profile-photo" src="${escapeHtml(resolvedPhotoUrl)}" alt="Foto de ${safeName}" width="76" height="76" style="width:76px;height:76px;max-width:76px;max-height:76px;border-radius:50%;object-fit:cover;border:2px solid #0891b2;display:block;" />`
+  const embeddedPhotoUrl = await buildEmbeddedReportPhoto(photoUrl)
+  const photoHtml = embeddedPhotoUrl
+    ? `<img class="profile-photo" src="${embeddedPhotoUrl}" alt="Foto de ${safeName}" width="76" height="76" style="width:76px;height:76px;max-width:76px;max-height:76px;display:block;" />`
     : ''
   const csatGoal = Number(metric.csat_goal) || 90
   const reviewGoal = 25
@@ -8751,7 +8801,7 @@ function normalizePhoneReportFeedback(text: string, fallbackText: string, style:
   return normalizeChatReportFeedback(text, fallbackText, style)
 }
 
-function exportWordReport({
+async function exportWordReport({
   analystName,
   photoUrl,
   periodLabel,
@@ -8787,9 +8837,9 @@ function exportWordReport({
   assistedFeedback: string
 }) {
   const safeName = escapeHtml(analystName)
-  const resolvedPhotoUrl = photoUrl ? new URL(photoUrl, window.location.origin).href : ''
-  const photoHtml = resolvedPhotoUrl
-    ? `<img class="profile-photo" src="${escapeHtml(resolvedPhotoUrl)}" alt="Foto de ${safeName}" width="76" height="76" style="width:76px;height:76px;max-width:76px;max-height:76px;border-radius:50%;object-fit:cover;border:2px solid #0891b2;display:block;" />`
+  const embeddedPhotoUrl = await buildEmbeddedReportPhoto(photoUrl)
+  const photoHtml = embeddedPhotoUrl
+    ? `<img class="profile-photo" src="${embeddedPhotoUrl}" alt="Foto de ${safeName}" width="76" height="76" style="width:76px;height:76px;max-width:76px;max-height:76px;display:block;" />`
     : ''
   const firstEvolution = weeklyEvolution[0] ?? null
   const lastEvolution = weeklyEvolution.at(-1) ?? null
