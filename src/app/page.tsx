@@ -1832,8 +1832,7 @@ function ChatModuleDashboard({
         metric: selectedChatReportMetric,
         averageTickets,
         podiumPosition: selectedChatPodiumPosition,
-        style: chatFeedbackStyle,
-        managerNotes: '',
+        managerNotes: chatManagerNotes,
       })
     : ''
   const chatExecutiveStatus =
@@ -2365,7 +2364,7 @@ function ChatModuleDashboard({
     }
 
     setChatFeedbackDraft(chatReportFeedbackSuggestion)
-    setChatExportMessage('Sugestão de feedback gerada. Revise o texto antes de exportar.')
+    setChatExportMessage('Base factual gerada. Você pode revisá-la ou pedir à IA uma devolutiva personalizada.')
   }
 
   async function handleGenerateChatFeedbackWithAi() {
@@ -2392,6 +2391,7 @@ function ChatModuleDashboard({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          serviceModule: 'chat',
           feedbackStyle: chatFeedbackStyle,
           feedbackGoal: chatFeedbackGoal,
           generationMode: 'generate',
@@ -2427,7 +2427,7 @@ function ChatModuleDashboard({
 
       const safeFeedback = normalizeChatReportFeedback(data.feedback, chatReportFeedbackSuggestion, chatFeedbackStyle)
       setChatFeedbackDraft(safeFeedback)
-      setChatExportMessage(data.warning || 'Feedback gerado com IA. Revise o texto antes de exportar.')
+      setChatExportMessage(data.warning || 'Devolutiva personalizada gerada com IA. Revise o texto antes de exportar.')
     } catch (error) {
       setChatExportMessage(getErrorMessage(error))
     } finally {
@@ -2466,6 +2466,7 @@ function ChatModuleDashboard({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          serviceModule: 'chat',
           feedbackStyle: chatFeedbackStyle,
           feedbackGoal: chatFeedbackGoal,
           generationMode: 'improve',
@@ -2501,7 +2502,7 @@ function ChatModuleDashboard({
 
       const safeFeedback = normalizeChatReportFeedback(data.feedback, baseFeedback, chatFeedbackStyle)
       setChatFeedbackDraft(safeFeedback)
-      setChatExportMessage(data.warning || 'Texto melhorado com IA. Revise antes de exportar.')
+      setChatExportMessage(data.warning || 'Texto reorganizado e personalizado com IA. Revise antes de exportar.')
     } catch (error) {
       setChatExportMessage(getErrorMessage(error))
     } finally {
@@ -2522,8 +2523,7 @@ function ChatModuleDashboard({
       monthlyHistory: metrics
         .filter((historyMetric) => historyMetric.analyst_id === selectedChatReportMetric.analyst_id)
         .sort((a, b) => (a.year === b.year ? a.month_number - b.month_number : a.year - b.year)),
-      feedbackStyle: chatFeedbackStyle,
-      managerNotes: '',
+      managerNotes: chatManagerNotes,
       feedbackText: finalFeedbackText,
       photoUrl: getAnalystPhoto(
         getChatAnalystName(selectedChatReportMetric),
@@ -3403,7 +3403,7 @@ function ChatModuleDashboard({
               type="button"
               onClick={handleGenerateChatFeedbackDraft}
             >
-              4. Gerar sugestão
+              4. Gerar base factual
             </button>
             <button
               className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
@@ -3422,7 +3422,7 @@ function ChatModuleDashboard({
               Melhorar texto atual
             </button>
             <p className="text-sm text-slate-300">
-              A IA considera objetivo, tom, números do Zendesk e suas observações para explicar o que aconteceu, por que importa e como agir no próximo fechamento.
+              A base factual resume os dados sem interpretar comportamentos. A IA usa o objetivo e suas observações para criar uma devolutiva individual e humana.
             </p>
           </div>
 
@@ -5540,7 +5540,6 @@ function ReportsView({
           teamTotalCalls,
         },
         weeklyEvolution,
-        feedbackStyle: phoneFeedbackStyle,
         assistedFeedback: finalPhoneFeedback,
       })
 
@@ -8228,7 +8227,6 @@ async function exportChatIndividualReport({
   averageTickets,
   podiumPosition,
   monthlyHistory,
-  feedbackStyle,
   managerNotes,
   feedbackText,
   photoUrl,
@@ -8238,7 +8236,6 @@ async function exportChatIndividualReport({
   averageTickets: number
   podiumPosition: number
   monthlyHistory: ChatMonthlyMetric[]
-  feedbackStyle: ChatFeedbackStyle
   managerNotes: string
   feedbackText: string
   photoUrl?: string | null
@@ -8268,7 +8265,7 @@ async function exportChatIndividualReport({
   const productivityText = productivityGap >= 0
     ? `${analystName} absorveu uma demanda ${formatDelta(productivityGap, '%')} superior a média da operação.`
     : `${analystName} ficou ${formatDelta(productivityGap, '%')} abaixo da média de atendimentos da operação.`
-  const finalFeedback = feedbackText.trim() || buildChatFeedbackText({ metric, averageTickets, podiumPosition, style: feedbackStyle, managerNotes })
+  const finalFeedback = feedbackText.trim() || buildChatFeedbackText({ metric, averageTickets, podiumPosition, managerNotes })
   const managerNotesHtml = managerNotes.trim() ? `<h2>Observações do gestor</h2><div class="note-box">${formatChatFeedbackForReport(managerNotes)}</div>` : ''
   const evolutionRows = buildChatReportEvolutionRows(monthlyHistory)
 
@@ -8612,93 +8609,47 @@ function buildChatFeedbackText({
   metric,
   averageTickets,
   podiumPosition,
-  style,
   managerNotes,
 }: {
   metric: ChatMonthlyMetric
   averageTickets: number
   podiumPosition: number
-  style: ChatFeedbackStyle
   managerNotes: string
 }) {
   const analystName = getChatAnalystName(metric)
   const csatGoal = Number(metric.csat_goal) || 90
   const reviewGoal = Number(metric.general_review_goal) || 25
-  const status = metric.status || getChatMetricStatus(Number(metric.csat), Number(metric.review_percentage), csatGoal, reviewGoal)
   const csatGap = round(Number(metric.csat) - csatGoal)
   const reviewGap = round(Number(metric.review_percentage) - reviewGoal)
-  const productivityGap = averageTickets ? round(((Number(metric.total_tickets) - averageTickets) / averageTickets) * 100) : 0
+  const ticketGap = round(Number(metric.total_tickets) - averageTickets)
   const podiumText = podiumPosition > 0 && podiumPosition <= 3
     ? `${podiumPosition}º lugar no pódio`
-    : podiumPosition > 3
-      ? `${podiumPosition}ª posição no ranking, fora dos três primeiros lugares`
-      : 'fora dos três primeiros lugares neste fechamento'
-  const notesLine = managerNotes.trim()
-    ? 'As observações do gestor devem calibrar o reconhecimento, os combinados e o tom da devolutiva.'
-    : ''
-  const qualityReading =
-    csatGap >= 0
-      ? `A satisfação ficou ${formatDelta(csatGap, ' p.p.')} em relação a meta individual de ${csatGoal}%, sinal de boa percepcao do cliente sobre a entrega.`
-      : `A satisfação ficou ${formatDelta(csatGap, ' p.p.')} em relação a meta individual de ${csatGoal}%, ponto que pede revisao qualitativa dos atendimentos com avaliação negativa.`
-  const reviewReading =
-    reviewGap >= 0
-      ? `A amostra de avaliações ficou ${formatDelta(reviewGap, ' p.p.')} acima da referência de ${reviewGoal}%, aumentando a confiabilidade da leitura do mes.`
-      : `A amostra de avaliações ficou ${formatDelta(reviewGap, ' p.p.')} abaixo da referência de ${reviewGoal}%, entao o próximo ciclo precisa ampliar a participação dos clientes.`
-  const volumeReading =
-    productivityGap >= 0
-      ? `O volume ficou ${formatDelta(productivityGap, '%')} acima da média da operação, demonstrando capacidade de sustentar entrega mesmo com demanda elevada.`
-      : `O volume ficou ${formatDelta(productivityGap, '%')} abaixo da média da operação; vamos observar juntos a disponibilidade para puxar novos tickets, o tempo dos atendimentos, pausas, ausências, apoio a outro setor e possíveis oportunidades na rotina.`
-  const recognition =
-    status === 'Meta Superada'
-      ? `${analystName} encerrou o ciclo em patamar de reconhecimento. O resultado combina qualidade percebida, amostra suficiente de avaliações e volume competitivo dentro da operação.`
-      : status === 'Critico'
-        ? `${analystName} encerrou o ciclo com sinais que pedem acompanhamento mais próximo. A prioridade e escolher poucos combinados praticos, acompanhar execucao e reduzir dispersao no próximo fechamento.`
-        : `${analystName} apresentou bons sinais no ciclo, mas ainda ha critérios que precisam ganhar consistencia para sustentar elegibilidade e reconhecimento no fechamento mensal.`
-  const development =
-    status === 'Meta Superada'
-      ? 'Nosso combinado é proteger o padrão que funcionou, compartilhar boas práticas com o time e evitar acomodação após um ciclo positivo.'
-      : csatGap < 0
-        ? 'Nosso combinado é revisar juntos exemplos concretos de interações com menor satisfação, identificar a causa e escolher uma ação simples de melhoria para o próximo mês.'
-        : reviewGap < 0
-          ? 'Nosso combinado é fortalecer o fechamento dos atendimentos, explicando ao cliente a importância da avaliação sem transformar isso em fala mecânica.'
-          : 'Nosso combinado é investigar juntos o fator de volume, separar o contexto operacional da oportunidade individual e definir um alvo realista para o próximo ciclo.'
-  const practicalSteps =
-    status === 'Meta Superada'
-      ? 'Como colocar em pratica: escolha dois atendimentos bem avaliados do mes e registre o que se repetiu neles; transforme esse padrao em uma rotina curta de atendimento; compartilhe uma pratica com a equipe; no próximo fechamento, compare se CSAT, avaliações e volume continuaram consistentes.'
-      : csatGap < 0
-        ? 'Como colocar em prática: vamos separar de dois a três atendimentos com avaliação negativa ou neutra; juntos, identificaremos se a causa foi clareza, prazo, empatia, solução ou encerramento; você testará uma mudança de abordagem no próximo ciclo; depois, revisaremos um exemplo antes e depois para validar a evolução.'
-        : reviewGap < 0
-          ? 'Como colocar em pratica: revise o encerramento dos atendimentos e crie uma frase natural para convidar o cliente a avaliar; use essa frase nos casos resolvidos com boa percepcao; acompanhe se a quantidade de avaliações aumenta no fechamento seguinte; ajuste a abordagem se a fala parecer mecanica.'
-          : 'Como colocar em prática: vamos observar a dinâmica da fila, sua disponibilidade para puxar novos tickets, o tempo dos atendimentos, pausas, ausências e apoio a outras atividades; se houver oportunidade individual, combinaremos um alvo de produtividade realista; acompanhe a quantidade de atendimentos válidos ao longo do mês e preserve a qualidade para não trocar volume por perda de CSAT.'
-
-  if (style === 'sare') {
-    return [
-      `Situação: ${recognition} No período, o resultado foi CSAT ${metric.csat}%, avaliações ${metric.review_percentage}%, envio/sem avaliação ${metric.sending_percentage}% e ${metric.total_tickets} atendimentos. A posição atual e ${podiumText}.`,
-      `Alinhamentos Realizados: ${qualityReading} ${reviewReading} ${volumeReading} ${notesLine}`.trim(),
-      'Resultado Esperado: manter o que ja gera boa experiencia para o cliente e transformar os pontos de atenção em comportamento observavel no próximo fechamento mensal.',
-      `Expectativa e Plano de Desenvolvimento: ${development} ${practicalSteps}`,
-    ]
-      .filter(Boolean)
-      .join('\n\n')
-  }
-
-  if (style === 'mimo') {
-    return [
-      `Momento observado: ${analystName}, neste fechamento você registrou CSAT de ${metric.csat}%, avaliações em ${metric.review_percentage}% e ${metric.total_tickets} atendimentos. Sua colocação foi ${podiumText}.`,
-      `Impacto: ${recognition} Em termos simples, ${qualityReading.charAt(0).toLowerCase()}${qualityReading.slice(1)}`,
-      `Melhoria ou manutenção: ${development} ${reviewReading} ${volumeReading} ${notesLine}`.trim(),
-      `Orientação: escolha primeiro o ponto que mais limita seu resultado e trabalhe nele sem abandonar o que já funciona. ${practicalSteps}`,
-    ]
-      .filter(Boolean)
-      .join('\n\n')
-  }
+    : 'fora dos três primeiros lugares'
+  const qualityFact = csatGap >= 0
+    ? `CSAT ${metric.csat}%, ${formatDelta(csatGap, ' p.p.')} acima da meta de ${csatGoal}%`
+    : `CSAT ${metric.csat}%, ${Math.abs(csatGap)} p.p. abaixo da meta de ${csatGoal}%`
+  const reviewFact = reviewGap >= 0
+    ? `avaliações ${metric.review_percentage}%, ${formatDelta(reviewGap, ' p.p.')} acima da referência de ${reviewGoal}%`
+    : `avaliações ${metric.review_percentage}%, ${Math.abs(reviewGap)} p.p. abaixo da referência de ${reviewGoal}%`
+  const volumeFact = averageTickets
+    ? `${metric.total_tickets} atendimentos totais, ${Math.abs(ticketGap)} ${ticketGap >= 0 ? 'acima' : 'abaixo'} da média de ${formatChatCount(averageTickets)}`
+    : `${metric.total_tickets} atendimentos totais`
+  const priority = csatGap < 0
+    ? 'revisar a qualidade percebida nos atendimentos avaliados negativamente'
+    : reviewGap < 0
+      ? 'aumentar a quantidade de avaliações para ampliar a amostra do resultado'
+      : ticketGap < 0
+        ? 'verificar o contexto do volume antes de definir se existe oportunidade individual'
+        : 'identificar qual prática contribuiu para o equilíbrio dos indicadores e decidir como mantê-la'
+  const verification = ticketGap < 0
+    ? 'Observar juntos disponibilidade para puxar tickets da fila, duração dos atendimentos, pausas, ausências e atuação em outras atividades. Os números não identificam sozinhos a causa da diferença.'
+    : 'Os indicadores não comprovam comportamentos específicos. Utilize exemplos reais da operação ou observações do gestor antes de associar o resultado a uma conduta.'
 
   return [
-    `Leitura do ciclo: ${analystName}, este fechamento mostra CSAT de ${metric.csat}%, avaliações de ${metric.review_percentage}%, envio/sem avaliação de ${metric.sending_percentage}% e ${metric.total_tickets} atendimentos. Sua colocação foi ${podiumText}. ${recognition}`,
-    `Evidencias observadas: ${qualityReading} ${reviewReading} ${volumeReading}`,
-    notesLine ? `Contexto do gestor: ${notesLine}` : '',
-    `Plano de desenvolvimento: ${development}`,
-    `Como fazer no próximo ciclo: ${practicalSteps}`,
+    `Base factual do ciclo: ${analystName} registrou ${qualityFact}; ${reviewFact}, com ${metric.reviews} respostas sobre ${metric.valid_tickets} atendimentos válidos; e ${volumeFact}. Posição: ${podiumText}.`,
+    `Ponto prioritário: ${priority}.`,
+    `Contexto a verificar: ${verification}`,
+    managerNotes.trim() ? `Observação registrada pelo gestor: ${managerNotes.trim()}` : 'Observação do gestor: não informada.',
   ]
     .filter(Boolean)
     .join('\n\n')
@@ -8808,7 +8759,6 @@ async function exportWordReport({
   expected,
   achieved,
   weeklyEvolution,
-  feedbackStyle,
   assistedFeedback,
 }: {
   analystName: string
@@ -8833,7 +8783,6 @@ async function exportWordReport({
     teamTotalCalls: number
   }
   weeklyEvolution: WeeklyIndividualTrend[]
-  feedbackStyle: ChatFeedbackStyle
   assistedFeedback: string
 }) {
   const safeName = escapeHtml(analystName)

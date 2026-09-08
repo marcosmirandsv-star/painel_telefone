@@ -60,6 +60,62 @@ const goalInstructions = {
     'Objetivo: desenvolver competência, conectando indicador, comportamento observado e plano prático de evolução.',
 }
 
+function classifyFeedbackCase(body: ChatFeedbackRequest) {
+  const metric = body.metric
+  if (!metric || !Number(metric.validTickets)) {
+    return {
+      label: 'Dados insuficientes',
+      guidance: 'Apresente apenas os fatos disponíveis e registre o que precisa ser confirmado antes de definir um plano.',
+    }
+  }
+
+  const csat = Number(metric.csat)
+  const csatGoal = Number(metric.csatGoal) || 90
+  const reviews = Number(metric.reviewPercentage)
+  const reviewGoal = Number(metric.reviewGoal) || 25
+  const tickets = Number(metric.totalTickets)
+  const averageTickets = Number(body.averageTickets)
+  const history = body.monthlyHistory ?? []
+  const previous = history.length > 1 ? history.at(-2) : null
+  const hasRelevantDrop = Boolean(previous)
+    && (csat <= Number(previous?.csat) - 2 || reviews <= Number(previous?.reviewPercentage) - 5)
+
+  if (hasRelevantDrop) {
+    return {
+      label: 'Mudança recente relevante',
+      guidance: 'Priorize a mudança em relação ao mês anterior, preserve os pontos ainda positivos e proponha verificar o que mudou sem inventar causas.',
+    }
+  }
+  if (csat >= csatGoal && reviews >= reviewGoal && (!averageTickets || tickets >= averageTickets)) {
+    return {
+      label: 'Reconhecimento integral',
+      guidance: 'Reconheça o equilíbrio entre qualidade, amostra de avaliações e volume. O combinado deve consolidar uma prática real, sem criar um problema artificial.',
+    }
+  }
+  if (csat >= csatGoal && reviews >= reviewGoal && averageTickets && tickets < averageTickets) {
+    return {
+      label: 'Qualidade forte com volume abaixo da média',
+      guidance: 'Valorize qualidade e avaliações. Trate o volume como tema de investigação conjunta, sem presumir baixa produtividade ou falha de comportamento.',
+    }
+  }
+  if (csat < csatGoal && (!averageTickets || tickets >= averageTickets)) {
+    return {
+      label: 'Volume consistente com qualidade abaixo da meta',
+      guidance: 'Reconheça a entrega de volume e concentre o plano na experiência percebida pelo cliente, usando exemplos reais quando existirem.',
+    }
+  }
+  if (csat >= csatGoal && reviews < reviewGoal) {
+    return {
+      label: 'Qualidade positiva com baixa amostra de avaliações',
+      guidance: 'Reconheça o CSAT, mas explique que a quantidade de respostas ainda limita a segurança da leitura. Foque no encerramento e convite natural para avaliação.',
+    }
+  }
+  return {
+    label: body.podiumPosition && body.podiumPosition <= 3 ? 'Resultado em posição de pódio' : 'Resultado misto fora do pódio',
+    guidance: 'Escolha somente o indicador que mais limita o resultado e preserve explicitamente o que já está funcionando.',
+  }
+}
+
 function getErrorText(error: unknown) {
   if (error instanceof Error) return error.message
   return 'Erro inesperado ao gerar feedback com IA.'
@@ -106,15 +162,19 @@ function buildPrompt(body: ChatFeedbackRequest) {
   const volumeRule = serviceModule === 'chat'
     ? '- No chat, os tickets entram em uma fila comum e não existe distribuição de chamados pela liderança ou pelo sistema. Cada analista puxa o próximo ticket conforme sua disponibilidade e carga. Nunca mencione "fluxo de distribuição", "distribuição da fila" ou garantia de volume regular. Para investigar volume abaixo da média, proponha observar juntos disponibilidade para puxar novos tickets, tempo dos atendimentos, pausas, ausências e atuação em outras atividades.'
     : '- Quando o volume estiver abaixo da média, informe a diferença em atendimentos e proponha verificar juntos fila, pausas, ausências e atuação em outras atividades antes de responsabilizar a pessoa.'
+  const caseProfile = classifyFeedbackCase(body)
+  const managerHasContext = Boolean(body.managerNotes?.trim())
 
   return `
-Você é um coach sênior de atendimento ao cliente e editor de relatórios de performance. Sua tarefa principal é melhorar o texto base do sistema, preservando a estrutura, os números e a lógica calculada, mas elevando a qualidade humana, gerencial e prática da devolutiva.
+Você é um coach sênior de atendimento ao cliente e editor de relatórios de performance. Sua tarefa é escrever uma devolutiva individual, específica e natural a partir de fatos calculados pelo sistema e do contexto fornecido pelo gestor.
 
 Perspectiva obrigatória: o texto será escrito e entregue pelo próprio gestor ao seu liderado. Escreva na voz dessa liderança, falando diretamente com o analista. O gestor nunca deve aparecer como uma terceira pessoa que o analista precisa procurar.
 
 Módulo analisado: ${moduleName}
 Fonte dos dados: ${sourceName}
-Intenção da IA: ${generationMode === 'improve' ? 'melhorar o texto atual mantendo a estrutura e aprofundando orientação prática' : 'gerar uma devolutiva completa a partir da sugestão local'}
+Intenção da IA: ${generationMode === 'improve' ? 'reescrever o texto atual com liberdade de organização, preservando fatos, números e intenção do gestor' : 'criar uma devolutiva original a partir da base factual, sem copiar sua redação'}
+Perfil predominante deste caso: ${caseProfile.label}
+Direção específica para este perfil: ${caseProfile.guidance}
 ${goalInstructions[feedbackGoal]}
 Tom obrigatório: humano, claro, próximo e profissional. Escreva como uma boa liderança conversaria com a pessoa em uma reunião individual: com respeito, contexto e direção prática, sem soar automática.
 
@@ -124,25 +184,30 @@ ${cadenceRule}
 - Fale diretamente com o analista usando "você". Não escreva como um parecer distante sobre "o colaborador".
 - Nunca escreva "converse com sua liderança", "alinhe com seu gestor", "procure seu líder" ou orientação equivalente. Quando a verificação depender da gestão, escreva como compromisso direto: "vamos verificar juntos", "vou observar o contexto operacional" ou "combinamos revisar".
 - Traduza os indicadores: depois de cada número importante, explique em linguagem simples o que ele significa para a pessoa.
+- A taxa de avaliações mede o tamanho da amostra; ela não prova que clientes quiseram elogiar o analista.
+- CSAT alto indica satisfação registrada, mas não comprova sozinho empatia, clareza, agilidade ou qualquer comportamento que não esteja nas observações do gestor.
+- Diferencie atendimentos totais de atendimentos válidos. A taxa de avaliações é calculada sobre os válidos; não associe essa porcentagem diretamente ao total.
 - Não use expressões abstratas como "confiança da gestão", "sustentar elegibilidade" ou "proteger o indicador" sem explicar o comportamento concreto esperado.
 - Escolha um foco principal por vez. Reconheça o que está bom, indique o maior impedimento e proponha no máximo duas ações realizáveis.
 ${volumeRule}
 - Só chame uma colocação de pódio quando ela estiver entre o primeiro e o terceiro lugar. Nas demais, diga "posição no ranking".
 - Não mencione variação contra período anterior quando não houver um valor anterior real no histórico recebido.
 - Não invente a causa de um resultado. Quando a causa não estiver nos dados ou nas observações, registre que gestor e analista vão verificá-la juntos.
-- Não comece com parabens generico. Comece com uma leitura profissional do ciclo.
-- Use o texto base do sistema como esqueleto obrigatorio; refine, aprofunde e humanize, mas não substitua por um texto curto.
-- Preserve todos os numeros relevantes; não invente dados e não mude cálculos.
+- Não comece com parabéns genérico. Comece pelo aspecto que torna este caso diferente dos demais.
+- A base do sistema é uma ficha factual, não um modelo de redação. Não copie sua ordem, frases ou cadência. Use-a somente para preservar fatos e limites da análise.
+- Se houver observações do gestor, trate-as como principal fonte de personalização e conecte-as ao combinado. Se não houver, não invente comportamento observado nem contexto operacional.
+- Preserve os números necessários para sustentar a conclusão, mas não enumere todos os campos recebidos quando eles não contribuírem para o foco principal.
 - Não use Markdown, asteriscos, bullets soltos ou titulos decorativos. Escreva em texto limpo, com nomes de seções seguidos de dois-pontos.
-- Mantenha todas as seções do modelo escolhido e escreva pelo menos 2 frases em cada secao.
+- Mantenha os nomes das seções do modelo escolhido, mas varie abertura, extensão, ritmo e construção. Não repita a mesma fórmula em todas as seções.
 - O feedback deve ser completo e útil. Se for direto, ainda assim precisa conter leitura do ciclo, orientação prática e expectativa para o próximo fechamento.
-- Transforme as observações do gestor em contexto de gestão; não copie literalmente e ignore observações que sejam apenas teste tecnico.
-- Traga reconhecimento especifico quando houver pontos fortes, conectando o elogio ao comportamento observado.
+- Transforme as observações do gestor em contexto de gestão; não copie literalmente e ignore observações que sejam apenas teste técnico.
+- Traga reconhecimento específico quando houver pontos fortes, mas conecte comportamento ao elogio somente quando ele tiver sido informado pelo gestor.
 - Traga orientação prática em linguagem humana: explique o que o indicador mostra, por que isso importa para cliente/operação e como o analista pode agir.
 - Para cada orientação, descreva pelo menos uma ação concreta: exemplo de comportamento, rotina, conferência, abordagem, pedido de avaliação ou combinado entre gestor e analista.
-- Se o texto base já estiver bom, aprofunde sem alterar a conclusão; se estiver genérico, substitua por recomendações mais específicas.
+- Evite frases prontas como "patamar de reconhecimento", "excelência na resolução", "grande confiabilidade" e "manter consistência" quando não houver uma explicação concreta adequada ao caso.
+- Em modo de melhoria, reorganize e reescreva de verdade; não faça apenas substituições de palavras.
 - Não termine frase pela metade. Entregue um texto completo, pronto para colar no relatório.
-- Mantenha entre 180 e 320 palavras. Prefira clareza e completude em vez de texto longo.
+- Mantenha entre 150 e 260 palavras. Prefira especificidade e naturalidade em vez de texto longo.
 - ${styleInstructions[feedbackStyle]}
 
 Periodo: ${body.periodLabel ?? 'Periodo não informado'}
@@ -166,8 +231,9 @@ ${JSON.stringify(body.monthlyHistory ?? [], null, 2)}
 
 Observacoes do gestor:
 ${body.managerNotes?.trim() || 'Sem observações adicionais.'}
+Contexto específico fornecido pelo gestor: ${managerHasContext ? 'sim; ele deve orientar a personalização do texto' : 'não; limite-se aos indicadores e sinalize hipóteses como pontos a verificar'}
 
-Texto base do sistema que deve ser melhorado e preservado como estrutura:
+Base factual do sistema. Preserve os fatos, mas não copie a redação nem a estrutura:
 ${body.fallbackText ?? ''}
 
 Saida esperada:
@@ -292,7 +358,7 @@ async function generateWithGemini(prompt: string, style: ChatFeedbackRequest['fe
         systemInstruction: {
           parts: [
             {
-              text: 'Você escreve devolutivas mensais de gestão, com tom humano, pratico e profissional.',
+              text: 'Você escreve devolutivas mensais individualizadas, com voz humana de liderança. Varie a construção conforme o caso e nunca deduza comportamentos apenas dos indicadores.',
             },
           ],
         },
@@ -304,7 +370,7 @@ async function generateWithGemini(prompt: string, style: ChatFeedbackRequest['fe
         ],
         generationConfig: {
           maxOutputTokens: 4096,
-          temperature: 0.35,
+          temperature: 0.65,
         },
       }),
     })
@@ -355,7 +421,7 @@ async function generateWithGitHubModels(prompt: string) {
           content: prompt,
         },
       ],
-      temperature: 0.4,
+      temperature: 0.65,
       max_tokens: 1300,
     }),
   })
