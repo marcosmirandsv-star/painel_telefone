@@ -200,6 +200,7 @@ ${volumeRule}
 - Não comece com parabéns genérico. Comece pelo aspecto que torna este caso diferente dos demais.
 - A base do sistema é uma ficha factual, não um modelo de redação. Não copie sua ordem, frases ou cadência. Use-a somente para preservar fatos e limites da análise.
 - Se houver observações do gestor, trate-as como principal fonte de personalização e conecte-as ao combinado. Se não houver, não invente comportamento observado nem contexto operacional.
+- Revise ortografia, concordância e clareza das observações do gestor antes de incorporá-las. Preserve o sentido, mas não copie erros nem apresente a observação como uma nota solta.
 - Preserve os números necessários para sustentar a conclusão, mas não enumere todos os campos recebidos quando eles não contribuírem para o foco principal.
 - Não use Markdown, asteriscos, bullets soltos ou titulos decorativos. Escreva em texto limpo, com nomes de seções seguidos de dois-pontos.
 - Mantenha os nomes das seções do modelo escolhido, mas varie abertura, extensão, ritmo e construção. Não repita a mesma fórmula em todas as seções.

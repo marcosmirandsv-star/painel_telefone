@@ -8578,9 +8578,9 @@ function isChatReportFeedbackComplete(text: string, style: ChatFeedbackStyle) {
   const normalizedText = cleanText.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
   const requiredSections =
     style === 'sare'
-      ? ['situação', 'alinhamentos', 'resultado', 'expectativa']
+      ? ['situacao', 'alinhamentos', 'resultado', 'expectativa']
       : style === 'mimo'
-        ? ['momento', 'impacto', 'melhoria', 'orientação']
+        ? ['momento', 'impacto', 'melhoria', 'orientacao']
         : ['leitura', 'forcas', 'plano', 'expectativa']
 
   return cleanText.length >= 650 && requiredSections.every((section) => normalizedText.includes(section))
