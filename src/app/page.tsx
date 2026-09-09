@@ -5139,6 +5139,7 @@ function ReportsView({
   const [phoneFeedbackStyle, setPhoneFeedbackStyle] = useState<ChatFeedbackStyle>('mimo')
   const [phoneFeedbackGoal, setPhoneFeedbackGoal] = useState<FeedbackGoal>('development')
   const [phoneAiSaving, setPhoneAiSaving] = useState(false)
+  const [phoneAiStatus, setPhoneAiStatus] = useState<'idle' | 'success' | 'fallback' | 'error'>('idle')
   const isManagementUser = role !== 'analyst'
   const reportAnalysts = useMemo(
     () => (analysts.length ? analysts : buildAnalystsFromMetrics(individualMetrics)),
@@ -5155,6 +5156,7 @@ function ReportsView({
   useEffect(() => {
     setPhoneFeedbackDraft('')
     setExportMessage('')
+    setPhoneAiStatus('idle')
   }, [periodFilter.start, periodFilter.end, selectedAnalystId, phoneFeedbackStyle])
 
 
@@ -5358,6 +5360,7 @@ function ReportsView({
     }
 
     setPhoneFeedbackDraft(phoneFeedbackSuggestion)
+    setPhoneAiStatus('idle')
     setExportMessage('Base factual gerada. Use a IA para transformar os dados em um feedback personalizado.')
   }
 
@@ -5419,10 +5422,17 @@ function ReportsView({
         throw new Error(data.error || 'Não foi possível gerar texto com IA.')
       }
 
-      setPhoneFeedbackDraft(normalizePhoneReportFeedback(data.feedback ?? '', phoneFeedbackSuggestion, phoneFeedbackStyle))
-      setExportMessage(data.warning || 'Feedback do telefone gerado com IA. Revise o texto antes de exportar.')
+      if (data.source === 'local-fallback') {
+        setPhoneAiStatus('fallback')
+        setExportMessage(data.warning || 'A IA não respondeu. A base factual foi mantida sem reescrita.')
+      } else {
+        setPhoneFeedbackDraft(cleanChatReportFeedbackText(data.feedback ?? ''))
+        setPhoneAiStatus('success')
+        setExportMessage('Texto personalizado gerado pela IA. Revise antes de exportar.')
+      }
     } catch (error) {
       setPhoneFeedbackDraft(phoneFeedbackSuggestion)
+      setPhoneAiStatus('error')
       setExportMessage(`A IA externa nao gerou um texto valido agora. Usei a sugestão local do telefone. Motivo: ${getErrorMessage(error)}`)
     } finally {
       setPhoneAiSaving(false)
@@ -5494,9 +5504,16 @@ function ReportsView({
         throw new Error(data.error || 'Não foi possível melhorar texto com IA.')
       }
 
-      setPhoneFeedbackDraft(normalizePhoneReportFeedback(data.feedback ?? '', baseFeedback, phoneFeedbackStyle))
-      setExportMessage(data.warning || 'Texto do telefone melhorado com IA. Revise antes de exportar.')
+      if (data.source === 'local-fallback') {
+        setPhoneAiStatus('fallback')
+        setExportMessage(data.warning || 'A IA não respondeu. O texto atual foi mantido sem alterações.')
+      } else {
+        setPhoneFeedbackDraft(cleanChatReportFeedbackText(data.feedback ?? ''))
+        setPhoneAiStatus('success')
+        setExportMessage('Texto reorganizado e corrigido pela IA. Revise antes de exportar.')
+      }
     } catch (error) {
+      setPhoneAiStatus('error')
       setExportMessage('A IA externa não melhorou o texto agora. Mantive o texto atual. Motivo: ' + getErrorMessage(error))
     } finally {
       setPhoneAiSaving(false)
@@ -5767,7 +5784,13 @@ function ReportsView({
             </p>
           </div>
 
-          <Field label="Texto final assistido">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-slate-300">Texto final assistido</p>
+            {phoneAiStatus === 'success' && <span className="rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-300">Gerado pela IA</span>}
+            {phoneAiStatus === 'fallback' && <span className="rounded-full bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-200">IA não respondeu · base mantida</span>}
+            {phoneAiStatus === 'error' && <span className="rounded-full bg-rose-400/10 px-3 py-1 text-xs font-semibold text-rose-300">Falha ao acessar a IA</span>}
+          </div>
+          <Field label="">
             <textarea
               className="form-input min-h-48"
               value={phoneFeedbackDraft}
