@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { calculateAverageCsat, calculateChatAverage, phoneSummary, chatSummary } from '../src/lib/indicators.ts'
-import { ApiError, findConsumer, parseQuery } from '../src/lib/integration-server.ts'
+import { ApiError, bearer, findConsumer, parseQuery, authorizeManager } from '../src/lib/integration-server.ts'
 import { currentIndicators, officialIndicators } from '../src/lib/integration-data.ts'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -22,6 +22,50 @@ function database(tables: Record<string, Record<string, unknown>[]>) {
     return builder
   } } as unknown as SupabaseClient
 }
+
+test('sessões longas do Supabase passam pela leitura do cabeçalho; credenciais externas continuam limitadas', () => {
+  const token = `eyJ${'a'.repeat(1200)}.payload.signature`
+  const request = new Request('https://example.test', { headers: { Authorization: `Bearer ${token}` } })
+  assert.equal(bearer(request, 'session'), token)
+  assert.throws(() => bearer(request), ApiError)
+  for (const value of ['', 'Basic abc', 'Bearer short', `Bearer ${'a'.repeat(8193)}`, 'Bearer two tokens longer-than-twenty']) {
+    assert.throws(() => bearer(new Request('https://example.test', { headers: { Authorization: value } }), 'session'), ApiError)
+  }
+})
+
+test('gestão valida sessão longa no Supabase e mantém verificação do perfil', async (t) => {
+  const originalUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const originalKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://supabase.example.test'
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-key'
+  t.after(() => {
+    if (originalUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL
+    else process.env.NEXT_PUBLIC_SUPABASE_URL = originalUrl
+    if (originalKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = originalKey
+  })
+  const token = `eyJ${'a'.repeat(1200)}.payload.signature`
+  let role = 'master'
+  let valid = true
+  let checkedSession = false
+  t.mock.method(globalThis, 'fetch', async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input)
+    if (url.includes('/auth/v1/user')) {
+      assert.equal(new Headers(init?.headers).get('authorization'), `Bearer ${token}`)
+      checkedSession = true
+      return valid ? Response.json({ id: 'user-test', app_metadata: {}, user_metadata: {}, aud: 'authenticated', created_at: '2026-01-01' }) : Response.json({ message: 'Invalid token' }, { status: 401 })
+    }
+    assert.ok(url.includes('/rest/v1/profiles'))
+    return Response.json({ role })
+  })
+  const request = new Request('https://example.test', { headers: { Authorization: `Bearer ${token}` } })
+  assert.equal((await authorizeManager(request)).userId, 'user-test')
+  assert.ok(checkedSession)
+  role = 'analista'
+  await assert.rejects(authorizeManager(request), (e: unknown) => e instanceof ApiError && e.status === 403)
+  valid = false
+  await assert.rejects(authorizeManager(request), (e: unknown) => e instanceof ApiError && e.status === 401)
+})
 
 test('consulta pagina mais de 1.000 registros e inclui semanas sobrepostas', async () => {
   const records = Array.from({ length: 1001 }, (_, id) => ({ id, week_start: '2026-07-27', week_end: '2026-08-02', csat: 90, total_reviews: 1, total_tickets: 2 }))

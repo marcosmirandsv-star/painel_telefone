@@ -41,6 +41,7 @@ export default function IntegrationsPage() {
         ...(approve ? { body: JSON.stringify({ conferencia: preview?.conferencia }) } : {}),
       })
       const data = await response.json()
+      if (response.status === 404 && official) throw new Error('Ainda não foi aprovado um fechamento para este mês, canal e equipe. Use “Conferir dados atuais” para consultar os números disponíveis.')
       if (!response.ok) throw new Error(data.erro || 'Consulta indisponível.')
       setPreview(data); setConfirmed(false)
       setMessage(approve ? 'Fechamento aprovado e preservado.' : official ? 'Fechamento oficial recuperado.' : 'Confira os números abaixo antes de aprovar.')
@@ -51,6 +52,16 @@ export default function IntegrationsPage() {
     <Link href="/" className="text-cyan-300 underline">Voltar ao painel</Link>
     <h1 className="text-3xl font-bold">Integrações e fechamentos</h1>
     <p>Prepare os indicadores de telefone e chat para consulta por outras plataformas da empresa. Os acessos externos são configurados individualmente pelo responsável técnico.</p>
+    <details className="rounded-xl border border-slate-700 p-4">
+      <summary className="cursor-pointer font-semibold">Como usar esta área</summary>
+      <ol className="mt-3 list-decimal space-y-2 pl-5 text-slate-300">
+        <li>Escolha o mês e o canal. No chat, escolha também a equipe.</li>
+        <li><strong>Conferir dados atuais</strong> consulta os números disponíveis, sem aprovar ou alterar nada. Use esta opção para testar.</li>
+        <li><strong>Aprovar fechamento</strong> guarda uma cópia oficial do resultado conferido, para um mês já encerrado. Nesta versão, essa cópia não pode ser substituída.</li>
+        <li><strong>Ver fechamento oficial</strong> recupera uma cópia já aprovada para o mesmo mês, canal e equipe.</li>
+      </ol>
+      <p className="mt-3 text-slate-300">Aqui você usa seu login de gestão do painel. Credenciais de integração são usadas somente por outros sistemas que consultam a API. Consultar os dados não os envia automaticamente a outras equipes.</p>
+    </details>
     <p role="status" aria-live="polite">{message}</p>
     {authorized && <>
       <fieldset disabled={busy} className="flex flex-wrap gap-4 rounded-xl border border-slate-700 p-4">

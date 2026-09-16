@@ -19,9 +19,14 @@ export async function handle(action: () => Promise<Response>) {
     return json({ erro: 'Não foi possível consultar os dados. Tente novamente.' }, 503)
   }
 }
-export function bearer(request: Request) {
-  const match = /^Bearer ([^\s]{20,512})$/i.exec(request.headers.get('authorization') ?? '')
-  if (!match) throw new ApiError(401, 'Credencial ausente ou inválida.')
+export function bearer(request: Request, kind: 'integration' | 'session' = 'integration') {
+  // Supabase session JWTs include user claims and can exceed 512 characters.
+  // Parsing is not authentication: getUser below still verifies the session.
+  const maxLength = kind === 'session' ? 8192 : 512
+  const match = /^Bearer ([^\s]+)$/i.exec(request.headers.get('authorization') ?? '')
+  if (!match || match[1].length < 20 || match[1].length > maxLength) {
+    throw new ApiError(401, kind === 'session' ? 'Sua sessão expirou ou é inválida. Entre novamente no painel.' : 'Credencial ausente ou inválida.')
+  }
   return match[1]
 }
 type Consumer = { id: string; sha256: string; expires_at: string; channels: ('telefone' | 'chat')[] }
@@ -47,8 +52,9 @@ export async function authorizeConsumer(request: Request, channel: string) {
   return admin
 }
 export async function authorizeManager(request: Request) {
+  const token = bearer(request, 'session')
   const admin = adminClient()
-  const { data, error } = await admin.auth.getUser(bearer(request))
+  const { data, error } = await admin.auth.getUser(token)
   if (error || !data.user) throw new ApiError(401, 'Sessão inválida.')
   const profile = await admin.from('profiles').select('role').eq('id', data.user.id).maybeSingle()
   if (profile.error || !['master', 'coordenadora', 'coordinator'].includes(String(profile.data?.role).toLowerCase())) throw new ApiError(403, 'Acesso exclusivo da gestão.')
