@@ -50,8 +50,8 @@ export default function IntegrationsPage() {
   }
   return <main className="mx-auto max-w-5xl space-y-6 p-6 text-slate-100">
     <Link href="/" className="text-cyan-300 underline">Voltar ao painel</Link>
-    <h1 className="text-3xl font-bold">Integrações e fechamentos</h1>
-    <p>Prepare os indicadores de telefone e chat para consulta por outras plataformas da empresa. Os acessos externos são configurados individualmente pelo responsável técnico.</p>
+    <h1 className="text-3xl font-bold">Fechamentos</h1>
+    <p>Confira os indicadores de telefone e chat e preserve os resultados mensais aprovados pela gestão.</p>
     <details className="rounded-xl border border-slate-700 p-4">
       <summary className="cursor-pointer font-semibold">Como usar esta área</summary>
       <ol className="mt-3 list-decimal space-y-2 pl-5 text-slate-300">
@@ -60,7 +60,7 @@ export default function IntegrationsPage() {
         <li><strong>Aprovar fechamento</strong> guarda uma cópia oficial do resultado conferido, para um mês já encerrado. Nesta versão, essa cópia não pode ser substituída.</li>
         <li><strong>Ver fechamento oficial</strong> recupera uma cópia já aprovada para o mesmo mês, canal e equipe.</li>
       </ol>
-      <p className="mt-3 text-slate-300">Aqui você usa seu login de gestão do painel. Credenciais de integração são usadas somente por outros sistemas que consultam a API. Consultar os dados não os envia automaticamente a outras equipes.</p>
+      <p className="mt-3 text-slate-300">Aqui você usa seu login de gestão do painel.</p>
     </details>
     <p role="status" aria-live="polite">{message}</p>
     {authorized && <>
@@ -83,5 +83,10 @@ export default function IntegrationsPage() {
         </>}
       </section>}
     </>}
+    <details className="rounded-xl border border-slate-700 p-4 text-sm text-slate-300">
+      <summary className="cursor-pointer font-semibold">Integrações com outros sistemas</summary>
+      <p className="mt-3">Outras plataformas autorizadas podem consultar os indicadores atuais ou os fechamentos oficiais pela API. Cada plataforma recebe uma credencial própria, configurada pelo responsável técnico. Essa credencial não é necessária para usar esta tela.</p>
+      <p className="mt-2">Conferir ou aprovar um fechamento não envia os dados automaticamente a outras equipes.</p>
+    </details>
   </main>
 }

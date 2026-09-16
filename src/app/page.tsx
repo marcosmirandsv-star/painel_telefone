@@ -1268,7 +1268,6 @@ export default function Home() {
             )}
           </div>
 
-          {isManagementUser && <Link className="secondary-button self-start" href="/integracoes">Integrações e fechamentos</Link>}
           <button className="secondary-button self-start" onClick={handleLogout}>
             Sair
           </button>
@@ -1323,6 +1322,7 @@ export default function Home() {
               <TabButton active={activeTab === 'users'} onClick={() => setActiveTab('users')}>
                 Usuários
               </TabButton>
+              <Link className="tab-button" href="/integracoes">Fechamentos</Link>
             </>
           )}
           </nav>
@@ -2640,6 +2640,12 @@ function ChatModuleDashboard({
                 <strong>Cadastros</strong>
                 <span>Gerenciar analistas, metas e fotos</span>
               </button>
+              {isManagementUser && (
+                <Link className="chat-tools-option" href="/integracoes" role="menuitem">
+                  <strong>Fechamentos oficiais</strong>
+                  <span>Conferir e preservar os resultados aprovados</span>
+                </Link>
+              )}
             </div>
           )}
         </div>
