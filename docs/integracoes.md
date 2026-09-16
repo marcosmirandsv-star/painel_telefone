@@ -2,6 +2,16 @@
 
 O painel oferece consultas de indicadores agregados por canal e, no chat, por equipe. Nenhuma resposta externa contém nomes de analistas, notas, evidências ou dados de clientes. A API é para comunicação entre servidores; a credencial não deve ser incluída em páginas ou aplicativos públicos.
 
+## Situação deste painel — 16/09/2026
+
+Ativado em produção em `https://painel-telefone.vercel.app`. O script do banco foi aplicado no projeto `qmetbydkepfdgfqkdkai`, e `INTEGRATION_CLIENTS_JSON` foi cadastrado como segredo de produção na Vercel. A republicação com essa configuração foi concluída.
+
+A credencial `painel-validacao` pertence ao proprietário do painel, permite somente consultas agregadas de telefone e chat e expira em **15/12/2026**. O valor secreto foi guardado no arquivo local `.env.integration-validation`, ignorado pelo Git; não está neste guia nem no repositório remoto. Não foi enviado a nenhuma outra equipe. Cada plataforma futura deverá receber sua própria credencial.
+
+Validação remota executada: consultas mensais dos dois canais e consulta semanal retornaram 200; credenciais ausentes/inválidas e uso de credencial externa na área de gestão retornaram 401; data inválida retornou 400; escrita pela API externa retornou 405. Os totais, avaliações e CSAT de agosto foram comparados com consultas diretas ao banco e coincidiram. O limite de 60 consultas e as restrições de acesso do banco foram testados em transação revertida.
+
+Para repetir a validação com a credencial local: `node --env-file=.env.integration-validation scripts/check-integration.mjs`. O comando não imprime o segredo. As aprovações de fechamentos oficiais continuam sendo uma ação da gestão, após conferência dos números.
+
 ## Ativação
 
 1. Execute `supabase/integrations.sql` no SQL Editor do Supabase do painel. O script cria fechamentos protegidos e o limite de consultas. As tabelas operacionais existentes, incluindo `chat_podium_exclusions`, precisam estar disponíveis.
