@@ -1,9 +1,11 @@
 'use client'
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
 import * as XLSX from 'xlsx'
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { calculateAverageCsat, calculateChatAverage, calculateTeamPerformance } from '@/lib/indicators'
 
 type Goal = {
   id: string
@@ -1266,6 +1268,7 @@ export default function Home() {
             )}
           </div>
 
+          {isManagementUser && <Link className="secondary-button self-start" href="/integracoes">Integrações e fechamentos</Link>}
           <button className="secondary-button self-start" onClick={handleLogout}>
             Sair
           </button>
@@ -9524,14 +9527,6 @@ function buildChatMetricRowsFromSheets({
     })
     .filter((record): record is ChatMetricImportRecord => Boolean(record))
 }
-function calculateChatAverage(
-  metrics: ChatMonthlyMetric[],
-  field: 'csat' | 'review_percentage' | 'sending_percentage',
-) {
-  if (!metrics.length) return 0
-  return round(metrics.reduce((sum, metric) => sum + Number(metric[field]), 0) / metrics.length)
-}
-
 function buildChatRanking(
   metrics: ChatMonthlyMetric[],
   averageTickets: number,
@@ -9647,24 +9642,6 @@ function buildChatMonthlyTrend(metrics: ChatMonthlyMetric[]) {
     }))
 }
 
-function calculateAverageCsat(metrics: IndividualMetric[]) {
-  if (!metrics.length) return 0
-
-  const reviewTotal = metrics.reduce((sum, metric) => sum + Number(metric.total_reviews), 0)
-
-  if (reviewTotal > 0) {
-    const weightedTotal = metrics.reduce(
-      (sum, metric) => sum + Number(metric.csat) * Number(metric.total_reviews),
-      0,
-    )
-
-    return round(weightedTotal / reviewTotal)
-  }
-
-  const total = metrics.reduce((sum, metric) => sum + Number(metric.csat), 0)
-  return round(total / metrics.length)
-}
-
 function getPeriodModeLabel(mode: PeriodMode) {
   const labels: Record<PeriodMode, string> = {
     week: 'Semana',
@@ -9707,15 +9684,6 @@ function getPreviousPeriod(period: PeriodFilter): PeriodFilter {
     start: toDateInputValue(previousStart),
     end: toDateInputValue(previousEnd),
   }
-}
-
-function calculateTeamPerformance(metrics: TeamMetric[]) {
-  if (!metrics.length) return 0
-
-  const answered = metrics.reduce((sum, metric) => sum + Number(metric.answered_calls), 0)
-  const total = metrics.reduce((sum, metric) => sum + Number(metric.total_calls), 0)
-
-  return total ? round((answered / total) * 100) : 0
 }
 
 function formatDelta(value: number, suffix = '') {

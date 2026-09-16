@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:integrations": "node --experimental-transform-types --test tests/integrations.test.mts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.5",

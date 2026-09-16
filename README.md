@@ -22,6 +22,10 @@ Ele cobre:
 - Como usar a IA assistida.
 - Checklist de fechamento mensal.
 
+## Integrações com outras plataformas
+
+Consultas mensais, semanas do telefone e preservação de fechamentos aprovados estão descritas em [docs/integracoes.md](docs/integracoes.md). A gestão acessa `/integracoes`. A ativação externa exige aplicar `supabase/integrations.sql` e configurar credenciais próprias por plataforma.
+
 ## Desenvolvimento local
 
 ```powershell
