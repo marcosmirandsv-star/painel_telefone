@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { calculateAverageCsat, calculateChatAverage, phoneSummary, chatSummary } from '../src/lib/indicators.ts'
-import { ApiError, bearer, findConsumer, parseQuery, authorizeManager } from '../src/lib/integration-server.ts'
+import { ApiError, bearer, findConsumer, parseQuery, authorizeManager, authorizeKeyAdmin } from '../src/lib/integration-server.ts'
 import { currentIndicators, officialIndicators } from '../src/lib/integration-data.ts'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -60,7 +60,11 @@ test('gestão valida sessão longa no Supabase e mantém verificação do perfil
   })
   const request = new Request('https://example.test', { headers: { Authorization: `Bearer ${token}` } })
   assert.equal((await authorizeManager(request)).userId, 'user-test')
+  assert.equal((await authorizeKeyAdmin(request)).userId, 'user-test')
   assert.ok(checkedSession)
+  role = 'coordenadora'
+  assert.equal((await authorizeManager(request)).userId, 'user-test')
+  await assert.rejects(authorizeKeyAdmin(request), (e: unknown) => e instanceof ApiError && e.status === 403)
   role = 'analista'
   await assert.rejects(authorizeManager(request), (e: unknown) => e instanceof ApiError && e.status === 403)
   valid = false

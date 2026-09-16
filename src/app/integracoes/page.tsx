@@ -3,10 +3,12 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import KeyManager from './key-manager'
 
 type Preview = { conferencia?: string; tem_dados: boolean; status: string; indicadores: Record<string, number | null>; [key: string]: unknown }
 export default function IntegrationsPage() {
   const [authorized, setAuthorized] = useState(false)
+  const [isMaster, setIsMaster] = useState(false)
   const [month, setMonth] = useState('')
   const [channel, setChannel] = useState('telefone')
   const [team, setTeam] = useState('all')
@@ -23,7 +25,7 @@ export default function IntegrationsPage() {
       const { data, error } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
       if (error || !['master', 'coordenadora', 'coordinator'].includes(String(data?.role).toLowerCase())) { if (active) setMessage('Esta área é exclusiva da gestão.'); return }
       const result = await supabase.from('chat_teams').select('id,name').order('name')
-      if (active) { setTeams(result.data ?? []); setAuthorized(true); setMessage(result.error ? 'Não foi possível carregar as equipes. Atualize a página para tentar novamente.' : '') }
+      if (active) { setTeams(result.data ?? []); setAuthorized(true); setIsMaster(String(data?.role).toLowerCase() === 'master'); setMessage(result.error ? 'Não foi possível carregar as equipes. Atualize a página para tentar novamente.' : '') }
     }
     load().catch(() => { if (active) setMessage('Não foi possível verificar o acesso. Atualize a página.') })
     return () => { active = false }
@@ -85,8 +87,9 @@ export default function IntegrationsPage() {
     </>}
     <details className="rounded-xl border border-slate-700 p-4 text-sm text-slate-300">
       <summary className="cursor-pointer font-semibold">Integrações com outros sistemas</summary>
-      <p className="mt-3">Outras plataformas autorizadas podem consultar os indicadores atuais ou os fechamentos oficiais pela API. Cada plataforma recebe uma credencial própria, configurada pelo responsável técnico. Essa credencial não é necessária para usar esta tela.</p>
+      <p className="mt-3">Outras plataformas autorizadas podem consultar os indicadores atuais ou os fechamentos oficiais pela API. O perfil Master pode gerar e revogar uma chave própria para cada sistema nesta área. Essa chave não é necessária para usar a tela de fechamentos.</p>
       <p className="mt-2">Conferir ou aprovar um fechamento não envia os dados automaticamente a outras equipes.</p>
+      {authorized && isMaster && <KeyManager />}
     </details>
   </main>
 }

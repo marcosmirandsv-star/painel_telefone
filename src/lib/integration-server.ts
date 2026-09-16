@@ -1,5 +1,5 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message) }
@@ -43,13 +43,29 @@ export function findConsumer(token: string, configuration: string | undefined): 
   return consumer
 }
 export async function authorizeConsumer(request: Request, channel: string) {
-  const consumer = findConsumer(bearer(request), process.env.INTEGRATION_CLIENTS_JSON)
-  if (!consumer.channels.includes(channel as 'telefone' | 'chat')) throw new ApiError(403, 'Canal não autorizado.')
+  const token = bearer(request)
   const admin = adminClient()
+  const consumer = await resolveConsumer(admin, token, process.env.INTEGRATION_CLIENTS_JSON)
+  if (!consumer.channels.includes(channel as 'telefone' | 'chat')) throw new ApiError(403, 'Canal não autorizado.')
   const { data, error } = await admin.rpc('consume_integration_request', { consumer_id: consumer.id })
   if (error) throw new ApiError(503, 'Controle de acesso indisponível.')
   if (!data) throw new ApiError(429, 'Limite de consultas atingido. Aguarde um minuto.')
   return admin
+}
+export async function resolveConsumer(admin: SupabaseClient, token: string, legacyConfiguration?: string) {
+  // Existing server-configured keys keep working during the additive rollout.
+  // New keys have a distinct prefix and are always checked in the database,
+  // so an old environment setting cannot reactivate a revoked managed key.
+  if (!token.startsWith('cp_') && legacyConfiguration) return findConsumer(token, legacyConfiguration)
+  const hash = createHash('sha256').update(token).digest('hex')
+  const { data, error } = await admin.from('integration_keys')
+    .select('id,channels,expires_at,revoked_at').eq('token_hash', hash).maybeSingle()
+  if (error) throw new ApiError(503, 'Consulta de chaves indisponível.')
+  if (!data || data.revoked_at || !Number.isFinite(Date.parse(data.expires_at)) || Date.parse(data.expires_at) <= Date.now()) {
+    throw new ApiError(401, 'Credencial ausente, expirada ou inválida.')
+  }
+  if (!Array.isArray(data.channels) || !data.channels.length || data.channels.some((c: unknown) => c !== 'telefone' && c !== 'chat')) throw new ApiError(503, 'Configuração da chave inválida.')
+  return { id: `key:${data.id}`, channels: data.channels as ('telefone' | 'chat')[], expires_at: data.expires_at }
 }
 export async function authorizeManager(request: Request) {
   const token = bearer(request, 'session')
@@ -58,7 +74,12 @@ export async function authorizeManager(request: Request) {
   if (error || !data.user) throw new ApiError(401, 'Sessão inválida.')
   const profile = await admin.from('profiles').select('role').eq('id', data.user.id).maybeSingle()
   if (profile.error || !['master', 'coordenadora', 'coordinator'].includes(String(profile.data?.role).toLowerCase())) throw new ApiError(403, 'Acesso exclusivo da gestão.')
-  return { admin, userId: data.user.id }
+  return { admin, userId: data.user.id, role: String(profile.data?.role).toLowerCase() }
+}
+export async function authorizeKeyAdmin(request: Request) {
+  const context = await authorizeManager(request)
+  if (context.role !== 'master') throw new ApiError(403, 'Somente o perfil Master pode gerenciar chaves de integração.')
+  return context
 }
 export function parseQuery(request: Request, weekly = false) {
   const params = new URL(request.url).searchParams

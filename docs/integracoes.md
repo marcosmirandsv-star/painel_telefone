@@ -14,6 +14,16 @@ Para repetir a validação com a credencial local: `node --env-file=.env.integra
 
 ## Ativação
 
+### Gerador de chaves no painel
+
+O perfil **Master** pode abrir **Fechamentos > Integrações com outros sistemas > Chaves de acesso**. Informe o nome do sistema destinatário, selecione Telefone/Chat e escolha validade de 30, 90, 180 ou 365 dias. Clique em **Gerar chave** e use **Copiar chave** ou **Copiar instruções de acesso**. A chave completa aparece somente nessa resposta; não é possível recuperá-la depois. Se perder, revogue e gere outra.
+
+Na lista, **Revogar acesso** exige confirmação e bloqueia novas consultas com aquela chave. Consultas que já estavam em andamento podem terminar. As chaves autorizam leitura dos canais escolhidos, incluindo dados atuais e fechamentos oficiais, sem permitir gravações ou aprovação. A permissão é por canal, não por equipe. Não há envio automático ao destinatário.
+
+Para instalar o gerador em outro ambiente, aplique também `supabase/integration-keys.sql`. O banco guarda apenas o hash SHA-256, a identificação parcial, nome, canais, prazo e responsável pela criação/revogação. A leitura e escrita diretas por usuários comuns estão bloqueadas. As rotas administrativas validam a sessão e o perfil Master no servidor. As credenciais antigas configuradas no ambiente continuam funcionando e são administradas por essa configuração; a lista da interface mostra as chaves criadas pelo painel.
+
+### Configuração técnica inicial e credenciais legadas
+
 1. Execute `supabase/integrations.sql` no SQL Editor do Supabase do painel. O script cria fechamentos protegidos e o limite de consultas. As tabelas operacionais existentes, incluindo `chat_podium_exclusions`, precisam estar disponíveis.
 2. Confira `NEXT_PUBLIC_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` no ambiente do servidor.
 3. Execute `node scripts/create-integration-key.mjs projetos` em ambiente privado. O comando exibe uma credencial aleatória e seu hash SHA-256. Entregue a credencial somente ao responsável pelo sistema consumidor.
