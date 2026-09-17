@@ -13,7 +13,7 @@ alterar usuários, chaves de integração, domínio ou configurações de produ�
 ## Preparar um ambiente Codex
 
 Conectar o repositório acima nas configurações de ambientes da conta.
-Selecionar Node.js 24 e instalar as dependências com `npm ci`.
+Selecionar Node.js 22 (validado em 22.22.2) e instalar as dependências com `npm ci`.
 Usar também `npm ci` como manutenção quando o ambiente for retomado.
 Se necessário, liberar acesso de rede para instalação de pacotes e para
 fonts.googleapis.com e fonts.gstatic.com, usados na compilação.
@@ -60,9 +60,27 @@ decisões necessárias à continuidade devem ser registradas nesta documentaçã
 
 ## Estado de implantação
 
-Preparação de arquivos não significa ambiente remoto validado. Confirmar no
-Codex a conexão, instalação e execução dos testes antes de dispensar a cópia
-local. Manter a pasta local até essa conferência e o plano de backup estarem
-concluídos.
+Em 17/09/2026 foi criado o ambiente `painel-telefone-desenvolvimento`:
+https://chatgpt.com/codex/cloud/settings/environment/6aac0c252c388191addb08402e16309e
+
+A instalação, a compilação e os 12 testes passaram no teste remoto de
+configuração, com Node 22.22.2. A conexão do terminal interativo apresentou erro
+após a conclusão dos scripts; o log confirmou `Test complete`. O ambiente foi
+salvo e sua página de detalhes foi conferida. Nenhuma tarefa de alteração de
+código foi iniciada nessa validação.
+
+O ambiente usa valores fictícios do Supabase, sem segredos e sem internet na
+fase do agente. A instalação tem acesso de rede. Compilações posteriores que
+precisem baixar fontes podem exigir ajuste restrito de rede; o teste inicial
+de compilação rodou durante a instalação. Login real e operações de banco não
+estão habilitados neste ambiente de desenvolvimento.
+
+Os documentos pendentes e esta preparação estão na branch
+`codex/preparar-trabalho-nuvem`. Selecioná-la quando precisar desses arquivos;
+a main de produção não foi modificada. Para alterações futuras, trabalhar em
+uma nova branch e revisar antes de integrar à main.
+
+Manter a pasta local até concluir também o plano de backup de dados e segredos.
+O ambiente de desenvolvimento não é um backup desses itens.
 
 Referência: https://learn.chatgpt.com/docs/environments/cloud-environment
