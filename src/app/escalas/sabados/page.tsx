@@ -6,7 +6,17 @@ import { scheduleSupabase as supabase } from '@/lib/schedule-supabase'
 
 type Person = { id: string; name: string; active: boolean }
 type SaturdayMember = { id: string; person_id: string; role: 'fixed'|'rotating'; start_date: string; end_date: string | null; active: boolean }
-type SaturdayEntry = { id?: string; person_id: string; team_id: string; date: string; entry_type: 'saturday'; value: string; source: string; locked?: boolean }
+type SaturdayEntry = {
+  id?: string
+  person_id: string
+  team_id: string
+  date: string
+  entry_type: 'saturday'
+  value: string
+  source: string
+  locked?: boolean
+  metadata?: { slot?: 'fixed' | 'rotating' }
+}
 type Team = { id: string; code: string; name: string }
 
 function saturdays(year: number) {
@@ -78,59 +88,129 @@ export default function SaturdaySchedulePage() {
 
   async function generate() {
     if (!team) return
-    const fixed = members.filter((item) => item.active && item.role === 'fixed')
-    const rotating = members.filter((item) => item.active && item.role === 'rotating')
+    const fixed = members.filter((item) => item.role === 'fixed')
+    const rotating = members.filter((item) => item.role === 'rotating')
     const counts = new Map<string, number>()
+    const eligibleCounts = new Map<string, number>()
     const rows: SaturdayEntry[] = []
 
     for (const date of dates) {
       const eligible = eligibleOnDate(date)
       const fixedEligible = fixed.filter((item) => eligible.some((e) => e.id === item.id))
       const rotatingEligible = rotating.filter((item) => eligible.some((e) => e.id === item.id))
+      const manualEntries = entries.filter(
+        (item) => item.date === date && (item.source === 'manual' || item.locked),
+      )
+      const manualFixed = manualEntries.find(
+        (item) => item.metadata?.slot === 'fixed' || item.value === 'Substituição fixa',
+      )
+      const manualRotating = manualEntries.find(
+        (item) => item.metadata?.slot === 'rotating' || item.value === 'Substituição de rodízio',
+      )
 
-      if (fixedEligible[0]) {
-        rows.push({ person_id: fixedEligible[0].person_id, team_id: team.id, date, entry_type: 'saturday', value: 'Fixo', source: 'generated' })
-        counts.set(fixedEligible[0].person_id, (counts.get(fixedEligible[0].person_id) ?? 0) + 1)
+      if (!manualFixed && fixedEligible[0]) {
+        rows.push({
+          person_id: fixedEligible[0].person_id,
+          team_id: team.id,
+          date,
+          entry_type: 'saturday',
+          value: 'Fixo',
+          source: 'generated',
+          metadata: { slot: 'fixed' },
+        })
       }
 
-      const second = rotatingEligible
-        .sort((a,b) => (counts.get(a.person_id) ?? 0) - (counts.get(b.person_id) ?? 0))[0]
+      for (const candidate of rotatingEligible) {
+        eligibleCounts.set(candidate.person_id, (eligibleCounts.get(candidate.person_id) ?? 0) + 1)
+      }
+
+      if (manualRotating) {
+        counts.set(manualRotating.person_id, (counts.get(manualRotating.person_id) ?? 0) + 1)
+        continue
+      }
+
+      const second = [...rotatingEligible]
+        .sort((a, b) => {
+          const aEligible = eligibleCounts.get(a.person_id) ?? 1
+          const bEligible = eligibleCounts.get(b.person_id) ?? 1
+          const aRate = (counts.get(a.person_id) ?? 0) / aEligible
+          const bRate = (counts.get(b.person_id) ?? 0) / bEligible
+          return aRate - bRate
+            || (counts.get(a.person_id) ?? 0) - (counts.get(b.person_id) ?? 0)
+            || a.person_id.localeCompare(b.person_id)
+        })[0]
 
       if (second) {
-        rows.push({ person_id: second.person_id, team_id: team.id, date, entry_type: 'saturday', value: 'Rodízio', source: 'generated' })
+        rows.push({
+          person_id: second.person_id,
+          team_id: team.id,
+          date,
+          entry_type: 'saturday',
+          value: 'Rodízio',
+          source: 'generated',
+          metadata: { slot: 'rotating' },
+        })
         counts.set(second.person_id, (counts.get(second.person_id) ?? 0) + 1)
       }
     }
 
-    const manualKeys = new Set(entries.filter((item) => item.source === 'manual' || item.locked).map((item) => `${item.person_id}|${item.date}`))
-    const payload = rows.filter((row) => !manualKeys.has(`${row.person_id}|${row.date}`))
-    const { error } = await supabase.from('schedule_entries').upsert(payload, { onConflict:'person_id,team_id,date,entry_type' })
+    const { error: cleanupError } = await supabase
+      .from('schedule_entries')
+      .delete()
+      .eq('team_id', team.id)
+      .eq('entry_type', 'saturday')
+      .gte('date', `${year}-01-01`)
+      .lte('date', `${year}-12-31`)
+      .eq('source', 'generated')
+      .eq('locked', false)
+    if (cleanupError) return setMessage(cleanupError.message)
+
+    const { error } = await supabase
+      .from('schedule_entries')
+      .upsert(rows, { onConflict:'person_id,team_id,date,entry_type' })
     if (error) return setMessage(error.message)
-    setMessage('Sábados futuros gerados sem sobrescrever trocas manuais.')
+    setMessage('Sábados gerados respeitando vigência, equilíbrio proporcional e trocas manuais.')
     await load()
   }
 
   async function replace(date: string, oldPersonId: string) {
     if (!team) return
+    const current = entries.find(
+      (item) => item.date === date && item.person_id === oldPersonId && item.entry_type === 'saturday',
+    )
+    if (!current) return
+    const slot: 'fixed' | 'rotating' =
+      current.metadata?.slot ??
+      (current.value === 'Fixo' || current.value === 'Substituição fixa' ? 'fixed' : 'rotating')
+
+    const alreadyScheduled = new Set(
+      entries.filter((item) => item.date === date && item.person_id !== oldPersonId).map((item) => item.person_id),
+    )
     const eligible = eligibleOnDate(date)
-    const names = eligible.map((item) => people.find((person) => person.id === item.person_id)).filter(Boolean) as Person[]
-    const chosenName = window.prompt('Digite exatamente o nome do substituto:\n' + names.map((item) => item.name).join('\n'))
+    const names = eligible
+      .map((item) => people.find((person) => person.id === item.person_id))
+      .filter((person): person is Person => Boolean(person) && !alreadyScheduled.has(person.id))
+
+    const chosenName = window.prompt(
+      'Digite exatamente o nome do substituto:\n' + names.map((item) => item.name).join('\n'),
+    )
     if (!chosenName) return
     const chosen = names.find((item) => item.name.toLowerCase() === chosenName.trim().toLowerCase())
     if (!chosen) return setMessage('Nome não encontrado entre os elegíveis para este sábado.')
 
-    const current = entries.find((item) => item.date === date && item.person_id === oldPersonId && item.entry_type === 'saturday')
-    if (current?.id) await supabase.from('schedule_entries').delete().eq('id', current.id)
+    if (current.id) await supabase.from('schedule_entries').delete().eq('id', current.id)
     const { error } = await supabase.from('schedule_entries').upsert({
       person_id: chosen.id,
       team_id: team.id,
       date,
       entry_type:'saturday',
-      value:'Substituição',
+      value: slot === 'fixed' ? 'Substituição fixa' : 'Substituição de rodízio',
       source:'manual',
       locked:true,
+      metadata:{ slot },
     }, { onConflict:'person_id,team_id,date,entry_type' })
     if (error) return setMessage(error.message)
+    setMessage('Troca registrada e protegida contra nova geração.')
     await load()
   }
 
