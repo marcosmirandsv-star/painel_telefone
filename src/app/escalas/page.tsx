@@ -676,6 +676,7 @@ export default function EscalasPage() {
                       <option value="DAY_OFF">Day Off</option>
                       <option value="FOLGA">Folga</option>
                       <option value="PREMIACAO">Premiação</option>
+                      <option value="BANCO_HORAS">Banco de horas</option>
                       <option value="SENAC">Senac</option>
                       <option value="OUTRA">Outra</option>
                     </select>
