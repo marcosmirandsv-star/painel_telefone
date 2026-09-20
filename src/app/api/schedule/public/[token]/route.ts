@@ -6,11 +6,12 @@ export async function GET(
   context: { params: Promise<{ token: string }> },
 ) {
   const { token } = await context.params
-  const supabaseUrl = process.env.NEXT_PUBLIC_SCHEDULE_SUPABASE_URL
-  const publishableKey = process.env.NEXT_PUBLIC_SCHEDULE_SUPABASE_PUBLISHABLE_KEY
-  if (!supabaseUrl || !publishableKey) {
-    return NextResponse.json({ error: 'Ambiente de homologação não configurado.' }, { status: 500 })
-  }
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SCHEDULE_SUPABASE_URL ??
+    'https://vvtorcvchnqhcredhorv.supabase.co'
+  const publishableKey =
+    process.env.NEXT_PUBLIC_SCHEDULE_SUPABASE_PUBLISHABLE_KEY ??
+    'sb_publishable_mqTX2u1bJ69dNKWD0lO-iw_p2Wa9B2t'
 
   const admin = createClient(supabaseUrl, publishableKey, {
     auth: { autoRefreshToken: false, persistSession: false },
