@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { scheduleSupabase as supabase } from '@/lib/schedule-supabase'
 import { generateMonthlySchedule, validateSchedule } from '@/lib/schedule-engine'
+import { ScheduleDateList } from '@/components/schedule-date-list'
 import type {
   ScheduleAbsence,
   ScheduleEntry,
@@ -715,6 +716,29 @@ export default function EscalasPage() {
 
         {section === 'scale' && (
           <>
+            <section className="schedule-overview-grid mt-6">
+              <div className="schedule-overview-card">
+                <span>Equipe</span>
+                <strong>{selectedTeam?.name ?? '—'}</strong>
+                <small>{activeTeamPeople.length} colaborador(es) na vigência</small>
+              </div>
+              <div className="schedule-overview-card">
+                <span>Período</span>
+                <strong>{MONTHS[month - 1]} {year}</strong>
+                <small>{monthDays.filter((day) => day.business).length} dias úteis</small>
+              </div>
+              <div className="schedule-overview-card">
+                <span>Calendário</span>
+                <strong>{context.holidays.length + context.optional_days.length + (context.click_days?.length ?? 0)}</strong>
+                <small>feriados, facultativos e Click Days</small>
+              </div>
+              <div className={`schedule-overview-card ${validationSummary.errors ? 'schedule-overview-danger' : validationSummary.warnings ? 'schedule-overview-warning' : ''}`}>
+                <span>Validação</span>
+                <strong>{validationSummary.errors ? `${validationSummary.errors} erro(s)` : validationSummary.warnings ? `${validationSummary.warnings} atenção(ões)` : 'Sem bloqueios'}</strong>
+                <small>{validations.length ? 'resultado da última geração' : 'gere a escala para validar'}</small>
+              </div>
+            </section>
+
             <section className="schedule-card mt-6 grid gap-4 p-5 lg:grid-cols-[1fr_1fr_auto]">
               <label className="grid gap-1 text-sm text-slate-300">
                 Time
@@ -740,17 +764,37 @@ export default function EscalasPage() {
 
             {isManagement && (
               <>
-                <section className="schedule-card mt-4 grid gap-4 p-5 lg:grid-cols-3">
-                  <label className="grid gap-1 text-sm text-slate-300">Feriados (AAAA-MM-DD, separados por vírgula)
-                    <input className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2" value={context.holidays.join(', ')} onChange={(event) => setContext({ ...context, holidays: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} />
-                  </label>
-                  <label className="grid gap-1 text-sm text-slate-300">Pontos facultativos
-                    <input className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2" value={context.optional_days.join(', ')} onChange={(event) => setContext({ ...context, optional_days: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} />
-                  </label>
-                  <label className="grid gap-1 text-sm text-slate-300">Click Day
-                    <input className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2" placeholder="AAAA-MM-DD" value={(context.click_days ?? []).join(', ')} onChange={(event) => setContext({ ...context, click_days: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} />
-                    <span className="text-xs text-slate-500">Todos ficam presenciais; o HO do dia é remanejado e não há Estendido.</span>
-                  </label>
+                <section className="schedule-card mt-4 p-5">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <p className="schedule-kicker">Contexto do mês</p>
+                      <h2 className="schedule-heading mt-1 text-lg font-bold">Datas que alteram a geração</h2>
+                      <p className="schedule-subtitle mt-1 text-sm">Cadastre as exceções do calendário antes de gerar a escala.</p>
+                    </div>
+                    <span className="text-xs text-slate-500">As datas são reaproveitadas na semana operacional, inclusive na virada do mês.</span>
+                  </div>
+                  <div className="mt-5 grid gap-4 lg:grid-cols-3">
+                    <ScheduleDateList
+                      label="Feriados"
+                      help="Contam como um dos dois dias de Home Office da semana."
+                      value={context.holidays}
+                      onChange={(holidays) => setContext({ ...context, holidays })}
+                      accent="amber"
+                    />
+                    <ScheduleDateList
+                      label="Pontos facultativos"
+                      help="Seguem a mesma lógica de crédito semanal dos feriados."
+                      value={context.optional_days}
+                      onChange={(optional_days) => setContext({ ...context, optional_days })}
+                    />
+                    <ScheduleDateList
+                      label="Click Day"
+                      help="Todos ficam presenciais, sem Estendido; o HO é remanejado dentro da semana."
+                      value={context.click_days ?? []}
+                      onChange={(click_days) => setContext({ ...context, click_days })}
+                      accent="violet"
+                    />
+                  </div>
                 </section>
 
                 <section className="schedule-card mt-4 p-5">
