@@ -207,7 +207,8 @@ test('Suporte Outros preserva alvo de 5 pessoas às 12h e cobertura experiente q
   ]
 
   const result = generateMonthlySchedule(baseInput(team, persons, rules))
-  assert.equal(result.validations.filter((item) => item.level === 'error').length, 0)
+  const errors = result.validations.filter((item) => item.level === 'error')
+  assert.deepEqual(errors, [], JSON.stringify(errors, null, 2))
 
   const dates = [...new Set(result.entries
     .filter((entry) => entry.entry_type === 'lunch')
