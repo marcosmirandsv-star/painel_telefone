@@ -219,17 +219,17 @@ export default function SaturdaySchedulePage() {
   ), [dates])
 
   return (
-    <main className="min-h-screen bg-slate-950 p-4 text-white sm:p-7">
+    <main className="schedule-shell p-4 sm:p-7">
       <section className="mx-auto max-w-[1600px]">
-        <div className="mb-4 rounded-xl border border-amber-400/40 bg-amber-950/30 px-4 py-3 text-sm">🧪 Homologação — rodízio de sábados</div>
-        <header className="flex flex-col gap-4 border-b border-white/10 pb-5 lg:flex-row lg:items-center lg:justify-between">
-          <div><p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-300">Painel de Escalas</p><h1 className="mt-2 text-3xl font-bold">Sábados {year}</h1><p className="mt-2 text-slate-400">Uma vaga fixa e uma vaga de rodízio, com trocas manuais preservadas.</p></div>
+        <div className="schedule-banner-homologation mb-4 px-4 py-3 text-sm"><strong>Ambiente de homologação</strong> · rodízio de sábados</div>
+        <header className="schedule-topbar flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div><p className="schedule-kicker">Painel de Escalas</p><h1 className="schedule-heading mt-2 text-3xl font-bold">Sábados {year}</h1><p className="schedule-subtitle mt-2">Uma vaga fixa e uma vaga de rodízio, com trocas manuais preservadas.</p></div>
           <div className="flex gap-2"><Link className="secondary-button" href="/escalas">Escalas mensais</Link><Link className="secondary-button" href="/">Performance</Link></div>
         </header>
 
         {message && <div className="mt-4 rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-sm">{message}</div>}
 
-        <section className="mt-6 grid gap-4 rounded-2xl border border-white/10 bg-slate-900/60 p-5 lg:grid-cols-[160px_1fr_auto]">
+        <section className="mt-6 grid gap-4 schedule-card p-5 lg:grid-cols-[160px_1fr_auto]">
           <label className="grid gap-1 text-sm">Ano<input className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2" type="number" value={year} onChange={(e)=>setYear(Number(e.target.value))}/></label>
           <div className="grid gap-3 sm:grid-cols-3">
             <select className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2" value={newPersonId} onChange={(e)=>setNewPersonId(e.target.value)}><option value="">Adicionar participante...</option>{people.filter((p)=>p.active).map((p)=><option key={p.id} value={p.id}>{p.name}</option>)}</select>
@@ -239,12 +239,12 @@ export default function SaturdaySchedulePage() {
           <div className="flex items-end gap-2"><button className="secondary-button" onClick={addMember}>Adicionar</button><button className="primary-button" onClick={generate}>Gerar sábados</button></div>
         </section>
 
-        <section className="mt-5 rounded-2xl border border-white/10 bg-slate-900/60 p-5">
+        <section className="mt-5 schedule-card p-5">
           <h2 className="text-lg font-bold">Equipe do rodízio</h2>
           <div className="mt-3 flex flex-wrap gap-2">{members.map((member)=>{const person=people.find((p)=>p.id===member.person_id); return <div key={member.id} className="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm"><strong>{person?.name ?? 'Pessoa'}</strong> · {member.role === 'fixed' ? 'Fixo' : 'Rodízio'} · desde {member.start_date}{member.end_date ? ` até ${member.end_date}` : ''} {!member.end_date && <button className="ml-2 text-amber-300" onClick={()=>endMember(member)}>Encerrar</button>}</div>})}</div>
         </section>
 
-        <section className="mt-5 overflow-x-auto rounded-2xl border border-white/10 bg-slate-900/60 p-4">
+        <section className="mt-5 overflow-x-auto schedule-card p-4">
           <div className="grid min-w-[1200px] grid-cols-4 gap-4 xl:grid-cols-6">
             {byMonth.map((monthDates, monthIndex)=>(
               <div key={monthIndex} className="rounded-xl border border-white/10 bg-slate-950/60 p-3">
