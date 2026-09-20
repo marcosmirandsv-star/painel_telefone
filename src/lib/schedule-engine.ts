@@ -771,7 +771,32 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
 
     entries.push(...distributeLunch(input, date, getActivePeople(input, date, 'lunch'), entries))
     entries.push(...distributeSnack(input, date, getActivePeople(input, date, 'snack'), entries, snackUsage))
-    entries.push(...distributeExtended(input, date, getActivePeople(input, date, 'extended'), entries, extendedCounts))
+    const dailyExtended = distributeExtended(
+      input,
+      date,
+      getActivePeople(input, date, 'extended'),
+      entries,
+      extendedCounts,
+    )
+    entries.push(...dailyExtended)
+
+    // O horário final exibido no almoço precisa refletir a jornada efetiva.
+    // Quem foi escolhido para o Estendido não pode continuar aparecendo como saída às 18h.
+    for (const extended of dailyExtended) {
+      const lunch = entries.find(
+        (entry) =>
+          entry.person_id === extended.person_id &&
+          entry.date === date &&
+          entry.entry_type === 'lunch',
+      )
+      if (!lunch) continue
+      const extendedEnd = extended.value.split('-').at(-1) ?? extended.value
+      lunch.metadata = {
+        ...(lunch.metadata ?? {}),
+        shift_end: extendedEnd,
+        extended_shift: extended.value,
+      }
+    }
   }
 
   validations.push(...validateSchedule(input, entries))
