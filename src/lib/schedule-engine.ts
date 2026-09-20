@@ -229,15 +229,25 @@ function distributeLunch(
     (person) => !absenceOnDate(input.absences, person.id, date) && !isHoliday(input, date),
   )
   const teamRules = rulesForDate(input.rules, input.team.id, null, date)
+  const policy = ruleValue<string>(teamRules, 'lunch_policy', 'legacy')
   const defaultTime = ruleValue<string>(teamRules, 'lunch_default_time', '13:00')
-  const teamHoTime = ruleValue<string>(teamRules, 'ho_lunch_time', '13:00')
+  const presentPreferred = ruleValue<string>(teamRules, 'lunch_presential_preferred_time', '12:00')
+  const hoPreferred = ruleValue<string>(teamRules, 'lunch_ho_preferred_time', ruleValue<string>(teamRules, 'ho_lunch_time', '13:00'))
+  const modalStrict = ruleValue<boolean>(teamRules, 'lunch_modal_strict', false)
   const slotTargets = ruleValue<Record<string, number> | null>(teamRules, 'lunch_slot_targets', null)
+  const lunchWindows = ruleValue<Record<string, string>>(teamRules, 'lunch_windows', {})
+  const shiftEndByLunch = ruleValue<Record<string, string>>(teamRules, 'shift_end_by_lunch', {})
   const experiencedNames = ruleValue<string[]>(teamRules, 'experienced_people', [])
 
   const assigned = new Map<string, string>()
+  const preferredByPerson = new Map<string, string>()
+
   for (const person of available) {
     const personRules = rulesForDate(input.rules, input.team.id, person.id, date)
     const isHo = hybrid.get(person.id) === 'HO'
+    const preferred = isHo ? hoPreferred : presentPreferred
+    preferredByPerson.set(person.id, preferred)
+
     const conditional = isHo
       ? ruleValue<string | null>(personRules, 'lunch_ho_time', null)
       : ruleValue<string | null>(personRules, 'lunch_presential_time', null)
@@ -248,45 +258,68 @@ function distributeLunch(
     else if (fixed) assigned.set(person.id, fixed)
     else if (alternating?.length) {
       const dayIndex = Math.max(0, atUtcDate(date).getUTCDate() - 1)
-      assigned.set(person.id, alternating[dayIndex % alternating.length] ?? defaultTime)
-    } else if (isHo) assigned.set(person.id, teamHoTime)
+      assigned.set(person.id, alternating[dayIndex % alternating.length] ?? preferred)
+    } else if (modalStrict) {
+      assigned.set(person.id, preferred)
+    }
   }
 
   const unassigned = available.filter((person) => !assigned.has(person.id))
-  unassigned.sort((a, b) => {
-    const ai = experiencedNames.includes(a.name) ? 0 : 1
-    const bi = experiencedNames.includes(b.name) ? 0 : 1
-    return ai - bi || a.name.localeCompare(b.name)
-  })
 
   if (slotTargets) {
-    const targetSlots = Object.entries(slotTargets)
-      .filter(([, target]) => Number.isFinite(Number(target)) && Number(target) > 0)
-      .sort(([a], [b]) => a.localeCompare(b))
-
-    for (const [slot, rawTarget] of targetSlots) {
+    for (const [slot, rawTarget] of Object.entries(slotTargets)) {
       const target = Number(rawTarget)
+      if (!Number.isFinite(target) || target <= 0) continue
+
       let current = [...assigned.values()].filter((value) => value === slot).length
-      for (const person of unassigned) {
+      const candidates = unassigned
+        .filter((person) => !assigned.has(person.id))
+        .sort((a, b) => {
+          const ap = preferredByPerson.get(a.id) === slot ? 0 : 1
+          const bp = preferredByPerson.get(b.id) === slot ? 0 : 1
+          const ae = slot === '12:00' && experiencedNames.includes(a.name) ? 0 : 1
+          const be = slot === '12:00' && experiencedNames.includes(b.name) ? 0 : 1
+          return ap - bp || ae - be || a.name.localeCompare(b.name)
+        })
+
+      for (const person of candidates) {
         if (current >= target) break
-        if (assigned.has(person.id)) continue
         assigned.set(person.id, slot)
         current += 1
       }
     }
-  } else {
-    const noonTarget = Math.floor(available.length / 2)
-    let currentNoon = [...assigned.values()].filter((time) => time === '12:00').length
-    for (const person of unassigned) {
-      if (currentNoon >= noonTarget) break
-      if (assigned.has(person.id)) continue
-      assigned.set(person.id, '12:00')
-      currentNoon += 1
+  } else if (!modalStrict && policy !== 'legacy') {
+    const earlySlot = presentPreferred
+    const earlyTarget = Math.floor(available.length / 2)
+    let earlyCount = [...assigned.values()].filter((value) => value === earlySlot).length
+
+    const earlyCandidates = unassigned
+      .filter((person) => !assigned.has(person.id))
+      .sort((a, b) => {
+        const ap = preferredByPerson.get(a.id) === earlySlot ? 0 : 1
+        const bp = preferredByPerson.get(b.id) === earlySlot ? 0 : 1
+        return ap - bp || a.name.localeCompare(b.name)
+      })
+
+    for (const person of earlyCandidates) {
+      if (earlyCount >= earlyTarget) break
+      assigned.set(person.id, earlySlot)
+      earlyCount += 1
+    }
+  }
+
+  for (const person of unassigned) {
+    if (assigned.has(person.id)) continue
+    if (policy === 'legacy') {
+      assigned.set(person.id, hybrid.get(person.id) === 'HO' ? hoPreferred : defaultTime)
+    } else {
+      assigned.set(person.id, preferredByPerson.get(person.id) ?? defaultTime)
     }
   }
 
   for (const person of available) {
     const value = assigned.get(person.id) ?? defaultTime
+    const preferred = preferredByPerson.get(person.id) ?? defaultTime
     result.push({
       person_id: person.id,
       team_id: input.team.id,
@@ -294,6 +327,12 @@ function distributeLunch(
       entry_type: 'lunch',
       value,
       source: 'generated',
+      metadata: {
+        return_time: lunchWindows[value] ?? null,
+        shift_end: shiftEndByLunch[value] ?? null,
+        preferred_start: preferred,
+        preference_met: value === preferred,
+      },
     })
   }
   return result
@@ -304,37 +343,116 @@ function distributeSnack(
   date: string,
   people: SchedulePerson[],
   entries: ScheduleEntry[],
+  monthlyUsage: Map<string, number>,
 ) {
-  const lunchMap = new Map(entries.filter((entry) => entry.date === date && entry.entry_type === 'lunch').map((entry) => [entry.person_id, entry.value]))
-  const slotsByLunch: Record<string, string[]> = {
+  const lunchMap = new Map(
+    entries
+      .filter((entry) => entry.date === date && entry.entry_type === 'lunch')
+      .map((entry) => [entry.person_id, entry.value]),
+  )
+  const teamRules = rulesForDate(input.rules, input.team.id, null, date)
+  const policy = ruleValue<string>(teamRules, 'snack_policy', 'legacy')
+  const earlySlots = ruleValue<string[]>(
+    teamRules,
+    'snack_early_slots',
+    ['15:45', '16:00', '16:15', '16:30'],
+  )
+  const lateSlots = ruleValue<string[]>(
+    teamRules,
+    'snack_late_slots',
+    ['16:30', '16:45', '17:00', '17:15'],
+  )
+  const legacySlots: Record<string, string[]> = {
     '12:00': ['15:45', '16:15', '16:30'],
     '13:00': ['16:45', '17:00', '17:15'],
     '11:30': ['15:45', '16:15', '16:30'],
   }
+
   const counts = new Map<string, number>()
   const result: ScheduleEntry[] = []
+  const available = people.filter(
+    (person) => !absenceOnDate(input.absences, person.id, date) && !isHoliday(input, date),
+  )
 
-  for (const person of people) {
-    if (absenceOnDate(input.absences, person.id, date) || isHoliday(input, date)) continue
+  const fixedPeople: SchedulePerson[] = []
+  const flexiblePeople: SchedulePerson[] = []
+  for (const person of available) {
     const personRules = rulesForDate(input.rules, input.team.id, person.id, date)
     const fixed = ruleValue<string | null>(personRules, 'snack_fixed_time', null)
-    const lunch = lunchMap.get(person.id)
-    const slots = fixed ? [fixed] : slotsByLunch[lunch ?? '13:00'] ?? slotsByLunch['13:00']
-    const picked = slots
-      .map((slot) => ({ slot, count: counts.get(slot) ?? 0 }))
-      .filter((item) => item.count < 2)
-      .sort((a, b) => a.count - b.count || a.slot.localeCompare(b.slot))[0]
-    const value = picked?.slot ?? slots[0]
-    counts.set(value, (counts.get(value) ?? 0) + 1)
+    if (fixed) fixedPeople.push(person)
+    else flexiblePeople.push(person)
+  }
+
+  for (const person of fixedPeople) {
+    const personRules = rulesForDate(input.rules, input.team.id, person.id, date)
+    const fixed = ruleValue<string>(personRules, 'snack_fixed_time', '16:15')
+    counts.set(fixed, (counts.get(fixed) ?? 0) + 1)
+    monthlyUsage.set(`${person.id}|${fixed}`, (monthlyUsage.get(`${person.id}|${fixed}`) ?? 0) + 1)
     result.push({
       person_id: person.id,
       team_id: input.team.id,
       date,
       entry_type: 'snack',
-      value,
+      value: fixed,
       source: 'generated',
+      metadata: { policy: 'fixed' },
     })
   }
+
+  for (const person of flexiblePeople) {
+    const lunch = lunchMap.get(person.id) ?? '13:00'
+    let slots: string[]
+    let preferLater = false
+
+    if (policy === 'balanced_by_lunch') {
+      const earlyLunch = lunch <= '12:00'
+      slots = earlyLunch ? earlySlots : lateSlots
+      preferLater = !earlyLunch
+    } else {
+      slots = legacySlots[lunch] ?? legacySlots['13:00']
+    }
+
+    const ranked = slots
+      .map((slot, index) => ({
+        slot,
+        index,
+        dayCount: counts.get(slot) ?? 0,
+        personCount: monthlyUsage.get(`${person.id}|${slot}`) ?? 0,
+      }))
+      .filter((item) => item.dayCount < 2)
+      .sort((a, b) =>
+        a.personCount - b.personCount ||
+        a.dayCount - b.dayCount ||
+        (preferLater ? b.index - a.index : a.index - b.index),
+      )
+
+    const picked = ranked[0] ?? {
+      slot: slots[0],
+      dayCount: counts.get(slots[0]) ?? 0,
+      personCount: monthlyUsage.get(`${person.id}|${slots[0]}`) ?? 0,
+      index: 0,
+    }
+
+    counts.set(picked.slot, (counts.get(picked.slot) ?? 0) + 1)
+    monthlyUsage.set(
+      `${person.id}|${picked.slot}`,
+      (monthlyUsage.get(`${person.id}|${picked.slot}`) ?? 0) + 1,
+    )
+
+    result.push({
+      person_id: person.id,
+      team_id: input.team.id,
+      date,
+      entry_type: 'snack',
+      value: picked.slot,
+      source: 'generated',
+      metadata: {
+        policy,
+        lunch_start: lunch,
+      },
+    })
+  }
+
   return result
 }
 
@@ -502,9 +620,26 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
   }
 
   const extendedCounts = new Map<string, number>()
+  const snackUsage = new Map<string, number>()
+  for (const existing of input.existingEntries ?? []) {
+    if (
+      existing.entry_type === 'extended' &&
+      (existing.locked || existing.source === 'manual' || existing.source === 'exception')
+    ) {
+      extendedCounts.set(existing.person_id, (extendedCounts.get(existing.person_id) ?? 0) + 1)
+    }
+    if (
+      existing.entry_type === 'snack' &&
+      (existing.locked || existing.source === 'manual' || existing.source === 'exception')
+    ) {
+      const key = `${existing.person_id}|${existing.value}`
+      snackUsage.set(key, (snackUsage.get(key) ?? 0) + 1)
+    }
+  }
+
   for (const date of dates) {
     entries.push(...distributeLunch(input, date, getActivePeople(input, date, 'lunch'), entries))
-    entries.push(...distributeSnack(input, date, getActivePeople(input, date, 'snack'), entries))
+    entries.push(...distributeSnack(input, date, getActivePeople(input, date, 'snack'), entries, snackUsage))
     entries.push(...distributeExtended(input, date, getActivePeople(input, date, 'extended'), entries, extendedCounts))
   }
 
@@ -536,20 +671,28 @@ export function validateSchedule(input: ScheduleGenerationInput, entries: Schedu
     const hybrid = new Map(entries.filter((entry) => entry.date === date && entry.entry_type === 'hybrid').map((entry) => [entry.person_id, entry.value]))
     const lunches = entries.filter((entry) => entry.date === date && entry.entry_type === 'lunch')
     const teamRules = rulesForDate(input.rules, input.team.id, null, date)
-    const teamHoLunchTime = ruleValue<string>(teamRules, 'ho_lunch_time', '13:00')
+    const presentPreferred = ruleValue<string>(teamRules, 'lunch_presential_preferred_time', '12:00')
+    const hoPreferred = ruleValue<string>(
+      teamRules,
+      'lunch_ho_preferred_time',
+      ruleValue<string>(teamRules, 'ho_lunch_time', '13:00'),
+    )
+    const modalStrict = ruleValue<boolean>(teamRules, 'lunch_modal_strict', false)
     const experiencedNames = ruleValue<string[]>(teamRules, 'experienced_people', [])
     const experiencedMinAtNoon = Number(ruleValue(teamRules, 'experienced_min_at_12', 0))
-    for (const lunch of lunches) {
-      const personRules = rulesForDate(input.rules, input.team.id, lunch.person_id, date)
-      const expectedHoTime = ruleValue<string>(personRules, 'lunch_ho_time', teamHoLunchTime)
-      if (hybrid.get(lunch.person_id) === 'HO' && lunch.value !== expectedHoTime) {
-        validations.push({
-          level: 'error',
-          code: 'HO_LUNCH_NOT_13',
-          message: `Colaborador em HO precisa almoçar às ${expectedHoTime}.`,
-          date,
-          person_id: lunch.person_id,
-        })
+
+    if (modalStrict) {
+      for (const lunch of lunches) {
+        const expected = hybrid.get(lunch.person_id) === 'HO' ? hoPreferred : presentPreferred
+        if (lunch.value !== expected) {
+          validations.push({
+            level: 'error',
+            code: 'LUNCH_MODALITY_MISMATCH',
+            message: `Almoço incompatível com a modalidade. Esperado: ${expected}.`,
+            date,
+            person_id: lunch.person_id,
+          })
+        }
       }
     }
 
