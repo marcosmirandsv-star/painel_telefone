@@ -115,3 +115,11 @@ O aviso ao time não expõe o motivo pessoal da solicitação. Ele informa apena
 ## Continuidade entre meses
 
 A semana operacional é tratada de segunda a sexta e não reinicia no primeiro dia do mês. Ao gerar o mês seguinte, o motor lê a parte já calculada da mesma semana no mês anterior e completa somente o que falta. Assim, em uma semana que termine com quinta-feira no último dia de um mês e sexta-feira no dia 1º do mês seguinte, a cota de HO continua sendo calculada sobre a semana inteira.
+
+
+## Ajuste de Estendido — Especializado
+
+- O Estendido do Suporte Especializado considera segunda a sexta-feira.
+- A sexta-feira participa normalmente do planejamento e da validação.
+- Na semana com feriado, cada pessoa continua com somente 1 HO adicional, porque o feriado já conta como o outro dia.
+- Com 7 pessoas, isso gera 7 posições de HO adicionais na semana. Se houver 4 dias úteis restantes e forem desejadas 2 vagas de Estendido por dia, seriam necessárias 8 posições. O motor distribui a cobertura de forma equilibrada, prioriza dias com menos pessoas elegíveis e sinaliza a única insuficiência inevitável em vez de concentrá-la sempre na sexta-feira.
