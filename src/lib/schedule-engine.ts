@@ -590,6 +590,41 @@ export function validateSchedule(input: ScheduleGenerationInput, entries: Schedu
         })
       }
     }
+
+    const extendedSeats = Number(ruleValue(teamRules, 'extended_people_per_day', 0))
+    const extendedWeekdays = ruleArray(teamRules, 'extended_weekdays', [1, 2, 3, 4])
+    const shouldHaveExtended =
+      extendedSeats > 0 &&
+      extendedWeekdays.includes(atUtcDate(date).getUTCDay()) &&
+      !isHoliday(input, date)
+
+    if (shouldHaveExtended && extended.length < extendedSeats) {
+      validations.push({
+        level: 'error',
+        code: 'EXTENDED_UNDER_CAPACITY',
+        message: `Estendido precisa de ${extendedSeats} pessoa(s), mas foram escaladas ${extended.length}.`,
+        date,
+      })
+    }
+  }
+
+  const extendedCounts = new Map<string, number>()
+  for (const entry of entries.filter((item) => item.entry_type === 'extended')) {
+    extendedCounts.set(entry.person_id, (extendedCounts.get(entry.person_id) ?? 0) + 1)
+  }
+  const eligibleExtendedPeople = input.people.filter((person) =>
+    dates.some((date) =>
+      personMembershipOnDate(input.memberships, person.id, input.team.id, date, 'extended') &&
+      !absenceOnDate(input.absences, person.id, date),
+    ),
+  )
+  const distribution = eligibleExtendedPeople.map((person) => extendedCounts.get(person.id) ?? 0)
+  if (distribution.length > 1 && Math.max(...distribution) - Math.min(...distribution) > 1) {
+    validations.push({
+      level: 'warning',
+      code: 'EXTENDED_UNBALANCED',
+      message: 'Distribuição do estendido ficou com diferença maior que 1 entre participantes elegíveis.',
+    })
   }
 
   const errors = validations.filter((item) => item.level === 'error').length
