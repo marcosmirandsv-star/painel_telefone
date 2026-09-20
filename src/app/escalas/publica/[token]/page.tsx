@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { scheduleSupabase } from '@/lib/schedule-supabase'
 
@@ -90,18 +90,37 @@ export default function PublicSchedulePage() {
   const [requestMessage, setRequestMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  useEffect(() => {
-    fetch(`/api/schedule/public/${params.token}`, { cache: 'no-store' })
-      .then(async (response) => {
-        const body = await response.json()
-        if (!response.ok) throw new Error(body.error || 'Não foi possível carregar a escala.')
-        setSnapshot(body)
-        const seen = seenChangeIds(params.token)
-        const unseen = (body.changes ?? []).find((item: TeamChange) => !seen.has(item.id))
-        if (unseen) setChangePopup(unseen)
-      })
-      .catch((reason) => setError(reason instanceof Error ? reason.message : 'Erro ao carregar escala.'))
+  const refreshSnapshot = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/schedule/public/${params.token}`, { cache: 'no-store' })
+      const body = await response.json()
+      if (!response.ok) throw new Error(body.error || 'Não foi possível carregar a escala.')
+      setSnapshot(body)
+      const seen = seenChangeIds(params.token)
+      const unseen = (body.changes ?? []).find((item: TeamChange) => !seen.has(item.id))
+      if (unseen) setChangePopup(unseen)
+      setError('')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Erro ao carregar escala.')
+    }
   }, [params.token])
+
+  useEffect(() => {
+    refreshSnapshot()
+  }, [refreshSnapshot])
+
+  useEffect(() => {
+    const onFocus = () => refreshSnapshot()
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') refreshSnapshot()
+    }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [refreshSnapshot])
 
   const days = useMemo(() => snapshot ? businessDays(snapshot.year, snapshot.month) : [], [snapshot])
   const changedDates = useMemo(
@@ -129,13 +148,7 @@ export default function PublicSchedulePage() {
           const change = payload.new as TeamChange
           setChangePopup(change)
           browserNotifyChange(change)
-          try {
-            const response = await fetch(`/api/schedule/public/${params.token}`, { cache: 'no-store' })
-            const body = await response.json()
-            if (response.ok) setSnapshot(body)
-          } catch {
-            // Mantém a escala atual e o aviso; o usuário pode atualizar manualmente.
-          }
+          refreshSnapshot()
         },
       )
       .subscribe()
@@ -143,7 +156,7 @@ export default function PublicSchedulePage() {
     return () => {
       scheduleSupabase.removeChannel(channel)
     }
-  }, [params.token, snapshot?.team?.id])
+  }, [refreshSnapshot, snapshot?.team?.id])
 
   async function enableTeamAlerts() {
     if (typeof window === 'undefined' || !('Notification' in window)) {
