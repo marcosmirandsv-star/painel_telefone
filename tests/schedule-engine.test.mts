@@ -888,3 +888,111 @@ test('Semana operacional atravessa a virada do mês sem reiniciar a cota de HO',
     'A semana completa da virada não deve gerar desequilíbrio de HO',
   )
 })
+
+
+test('Especializado mantém Estendido nas sextas de setembro, inclusive na semana do feriado de 07/09', () => {
+  const team: ScheduleTeam = {
+    id: 'team-specialized-september',
+    code: 'especializado',
+    name: 'Suporte Especializado',
+    manager_name: 'Gestão',
+    manager_profile_id: null,
+    active: true,
+    settings: null,
+  }
+
+  const persons = people(7, 'SET')
+  const vanessa = persons[0]
+  vanessa.name = 'Vanessa Silva'
+
+  const rules: ScheduleRule[] = [
+    rule('s1', team.id, 'lunch_policy', 'coverage_weighted'),
+    rule('s2', team.id, 'lunch_presential_preferred_time', '12:00'),
+    rule('s3', team.id, 'lunch_ho_preferred_time', '13:00'),
+    rule('s4', team.id, 'lunch_modal_strict', false),
+    rule('s5', team.id, 'lunch_windows', { '12:00': '13:00', '13:00': '14:30' }),
+    rule('s6', team.id, 'shift_end_by_lunch', { '12:00': '17:30', '13:00': '18:00' }),
+    rule('s7', team.id, 'snack_policy', 'balanced_by_lunch'),
+    rule('s8', team.id, 'snack_early_slots', ['15:45','16:00','16:15','16:30']),
+    rule('s9', team.id, 'snack_late_slots', ['16:30','16:45','17:00','17:15']),
+    rule('s10', team.id, 'extended_people_per_day', 2),
+    rule('s11', team.id, 'extended_weekdays', [1,2,3,4,5]),
+    rule('s12', team.id, 'extended_shifts', ['09:00-18:30','09:30-19:00']),
+    rule('s13', team.id, 'extended_allowed_weekdays', [3,4], vanessa.id),
+    rule('s14', team.id, 'hybrid_fixed_weekdays', [3,4], vanessa.id),
+  ]
+
+  const input = baseInput(team, persons, rules)
+  input.year = 2026
+  input.month = 9
+  input.context = {
+    year: 2026,
+    month: 9,
+    holidays: ['2026-09-07'],
+    optional_days: [],
+    click_days: [],
+  }
+
+  const result = generateMonthlySchedule(input)
+  const septemberFridays = ['2026-09-04','2026-09-11','2026-09-18','2026-09-25']
+
+  for (const friday of septemberFridays) {
+    const extended = result.entries.filter(
+      (entry) => entry.date === friday && entry.entry_type === 'extended',
+    )
+    assert.equal(
+      extended.length,
+      2,
+      `Sexta-feira ${friday} deve ter 2 pessoas no Estendido`,
+    )
+
+    for (const entry of extended) {
+      const hybrid = result.entries.find(
+        (item) =>
+          item.person_id === entry.person_id &&
+          item.date === friday &&
+          item.entry_type === 'hybrid',
+      )
+      assert.equal(hybrid?.value, 'HO', 'Toda pessoa no Estendido precisa estar em Home Office')
+    }
+  }
+
+  const holidayWeek = ['2026-09-07','2026-09-08','2026-09-09','2026-09-10','2026-09-11']
+  for (const person of persons) {
+    const rows = result.entries.filter(
+      (entry) =>
+        entry.person_id === person.id &&
+        entry.entry_type === 'hybrid' &&
+        holidayWeek.includes(entry.date),
+    )
+    assert.equal(rows.filter((entry) => entry.value === 'FERIADO').length, 1)
+    assert.equal(
+      rows.filter((entry) => entry.value === 'HO').length,
+      1,
+      'Na semana de feriado cada pessoa deve ter somente 1 HO adicional',
+    )
+  }
+
+  const holidayWeekExtended = holidayWeek
+    .filter((date) => date !== '2026-09-07')
+    .map((date) => ({
+      date,
+      count: result.entries.filter(
+        (entry) => entry.date === date && entry.entry_type === 'extended',
+      ).length,
+    }))
+
+  assert.equal(
+    holidayWeekExtended.find((item) => item.date === '2026-09-11')?.count,
+    2,
+    'A sexta da semana com feriado não deve ser sistematicamente prejudicada',
+  )
+
+  const shortages = holidayWeekExtended.filter((item) => item.count < 2)
+  assert.equal(
+    shortages.length,
+    1,
+    'Com 7 pessoas e somente 1 HO adicional por pessoa, existe exatamente 1 vaga de Estendido impossível de preencher nessa semana',
+  )
+  assert.notEqual(shortages[0]?.date, '2026-09-11')
+})
