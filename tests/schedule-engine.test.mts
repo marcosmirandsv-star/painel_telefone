@@ -99,13 +99,21 @@ test('Especializado usa almoço preferencial flexível, janelas completas e caf�
   assert.equal(result.validations.filter((item) => item.level === 'error').length, 0)
 
   for (const lunch of result.entries.filter((entry) => entry.entry_type === 'lunch')) {
+    const extended = result.entries.find(
+      (entry) =>
+        entry.person_id === lunch.person_id &&
+        entry.date === lunch.date &&
+        entry.entry_type === 'extended',
+    )
+    const extendedEnd = extended?.value.split('-').at(-1)
+
     if (lunch.value === '12:00') {
       assert.equal(lunch.metadata?.return_time, '13:00')
-      assert.equal(lunch.metadata?.shift_end, '17:30')
+      assert.equal(lunch.metadata?.shift_end, extendedEnd ?? '17:30')
     }
     if (lunch.value === '13:00') {
       assert.equal(lunch.metadata?.return_time, '14:30')
-      assert.equal(lunch.metadata?.shift_end, '18:00')
+      assert.equal(lunch.metadata?.shift_end, extendedEnd ?? '18:00')
     }
   }
 
