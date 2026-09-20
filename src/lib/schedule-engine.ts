@@ -585,7 +585,12 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
             existing.locked ||
             existing.source === 'manual' ||
             existing.source === 'exception')
-        if (preserve && existing.value === 'HO') preservedHoDates.push(date)
+        if (
+          preserve &&
+          existing.value === 'HO' &&
+          !isHoliday(input, date) &&
+          !isClickDay(input, date)
+        ) preservedHoDates.push(date)
       }
 
       const candidates = activeWeek
