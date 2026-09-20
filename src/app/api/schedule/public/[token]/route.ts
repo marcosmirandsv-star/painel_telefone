@@ -46,19 +46,22 @@ export async function GET(
   }
 
   const prefix = `${link.year}-${String(link.month).padStart(2, '0')}`
+  const monthStart = `${prefix}-01`
+  const monthEnd = new Date(Date.UTC(link.year, link.month, 0, 12)).toISOString().slice(0, 10)
+
   const [{ data: entries, error: entriesError }, { data: memberships }, { data: people }] = await Promise.all([
     admin
       .from('schedule_entries')
       .select('person_id,team_id,date,entry_type,value,source,locked')
       .eq('team_id', link.team_id)
-      .gte('date', `${prefix}-01`)
-      .lte('date', `${prefix}-31`)
+      .gte('date', monthStart)
+      .lte('date', monthEnd)
       .order('date'),
     admin
       .from('schedule_memberships')
-      .select('person_id,team_id,start_date,end_date,participates_in_schedule')
+      .select('person_id,team_id,start_date,end_date,participates_in_schedule,participates_hybrid,participates_lunch,participates_snack,participates_extended')
       .eq('team_id', link.team_id)
-      .lte('start_date', `${prefix}-31`),
+      .lte('start_date', monthEnd),
     admin.from('schedule_people').select('id,name,active').order('name'),
   ])
 
@@ -69,7 +72,7 @@ export async function GET(
     year: link.year,
     month: link.month,
     people: people ?? [],
-    memberships: (memberships ?? []).filter((item) => !item.end_date || item.end_date >= `${prefix}-01`),
+    memberships: (memberships ?? []).filter((item) => !item.end_date || item.end_date >= monthStart),
     entries: entries ?? [],
   }, {
     headers: {
