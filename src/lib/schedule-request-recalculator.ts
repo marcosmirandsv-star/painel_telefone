@@ -205,6 +205,14 @@ export async function approveAndRecalculateScheduleRequest(
     }
   }
 
+  const { year, month, start: monthStart, end: monthEnd } = monthRange(request.target_date)
+  const { data: priorTargetRows } = await supabase
+    .from('schedule_entries')
+    .select('*')
+    .eq('team_id', request.team_id)
+    .eq('date', request.target_date)
+  const priorTargetEntries = (priorTargetRows ?? []) as ScheduleEntry[]
+
   if (!personId) {
     await supabase
       .from('schedule_requests')
@@ -299,7 +307,6 @@ export async function approveAndRecalculateScheduleRequest(
     if (error) throw new Error(error.message)
   }
 
-  const { year, month, start: monthStart, end: monthEnd } = monthRange(request.target_date)
   const paddedStart = addDays(monthStart, -7)
   const paddedEnd = addDays(monthEnd, 7)
 
@@ -350,11 +357,15 @@ export async function approveAndRecalculateScheduleRequest(
     existingEntries,
   })
 
-  const oldMonthEntries = existingEntries.filter(
+  const currentMonthEntries = existingEntries.filter(
     (entry) => entry.date >= monthStart && entry.date <= monthEnd,
   )
+  const baselineMonthEntries = [
+    ...currentMonthEntries.filter((entry) => entry.date !== request.target_date),
+    ...priorTargetEntries,
+  ]
 
-  const protectedEntries = oldMonthEntries.filter(
+  const protectedEntries = currentMonthEntries.filter(
     (entry) =>
       (entry.locked || entry.source === 'manual' || entry.source === 'exception') &&
       !(kind && entry.person_id === personId && entry.date === request.target_date),
@@ -363,7 +374,7 @@ export async function approveAndRecalculateScheduleRequest(
   const generatedEntries = generated.entries.filter((entry) => !protectedKeys.has(entryKey(entry)))
   const finalMonthEntries = [...generatedEntries, ...protectedEntries]
 
-  const oldMap = new Map(oldMonthEntries.map((entry) => [entryKey(entry), entry]))
+  const oldMap = new Map(baselineMonthEntries.map((entry) => [entryKey(entry), entry]))
   const newMap = new Map(finalMonthEntries.map((entry) => [entryKey(entry), entry]))
   const week = operationalWeek(request.target_date).filter(
     (date) => date >= monthStart && date <= monthEnd,
@@ -373,7 +384,7 @@ export async function approveAndRecalculateScheduleRequest(
   for (const date of week) {
     const peopleIds = new Set(
       [
-        ...oldMonthEntries.filter((entry) => entry.date === date && entry.entry_type === 'hybrid'),
+        ...baselineMonthEntries.filter((entry) => entry.date === date && entry.entry_type === 'hybrid'),
         ...finalMonthEntries.filter((entry) => entry.date === date && entry.entry_type === 'hybrid'),
       ].map((entry) => entry.person_id),
     )
@@ -433,7 +444,7 @@ export async function approveAndRecalculateScheduleRequest(
   }
 
   const postMonthEntries = [
-    ...oldMonthEntries.filter((entry) => !affected.has(entry.date)),
+    ...currentMonthEntries.filter((entry) => !affected.has(entry.date)),
     ...entriesToPersist,
   ]
   const validations = validateSchedule(
@@ -459,7 +470,7 @@ export async function approveAndRecalculateScheduleRequest(
     for (const type of ENTRY_TYPES) {
       const ids = new Set(
         [
-          ...oldMonthEntries.filter((entry) => entry.date === date && entry.entry_type === type),
+          ...baselineMonthEntries.filter((entry) => entry.date === date && entry.entry_type === type),
           ...entriesToPersist.filter((entry) => entry.date === date && entry.entry_type === type),
         ].map((entry) => entry.person_id),
       )
