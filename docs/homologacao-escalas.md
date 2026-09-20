@@ -59,7 +59,7 @@ A homologação deve usar:
 - Transferência/inativação não altera histórico anterior.
 - Pessoa fora da vigência não entra em nenhum cálculo.
 - Férias, feriados e pontos facultativos entram na geração.
-- HO → almoço 13h.
+- Regras de almoço respeitam preferências por time: Chat HO prefere 13h, Telefone HO prefere 11h30, com flexibilidade controlada por cobertura.
 - Estendido somente em HO e respeitando restrições cadastradas.
 - Lanche sem mais de 2 pessoas por horário.
 - Trocas manuais não são sobrescritas.
@@ -71,7 +71,7 @@ A homologação deve usar:
 
 ## Observação
 
-A criação do projeto Supabase de homologação e do projeto/ambiente Vercel depende das conexões autorizadas desses serviços. O código foi mantido isolado nesta branch até essa configuração.
+O Supabase de homologação está separado da produção e a branch possui Preview Deployment próprio na Vercel. O código continua isolado até a aprovação formal para produção.
 
 
 ## Regras operacionais refinadas
