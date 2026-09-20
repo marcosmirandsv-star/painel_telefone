@@ -792,6 +792,22 @@ test('Click Day força presencial, remove Estendido, preserva almoço/café e re
       )
       assert.equal(after?.value, before?.value, `${type} deve ser preservado no Click Day`)
     }
+
+    const baselineExtended = baseline.entries.find(
+      (entry) => entry.person_id === person.id && entry.date === clickDate && entry.entry_type === 'extended',
+    )
+    if (baselineExtended) {
+      const afterLunch = result.entries.find(
+        (entry) => entry.person_id === person.id && entry.date === clickDate && entry.entry_type === 'lunch',
+      )
+      const expectedNormalEnd = afterLunch?.value === '12:00' ? '17:30' : '18:00'
+      assert.equal(
+        afterLunch?.metadata?.shift_end,
+        expectedNormalEnd,
+        'Click Day remove a jornada estendida, mas preserva o horário de almoço',
+      )
+      assert.equal(afterLunch?.metadata?.extended_shift, undefined)
+    }
   }
 
   const clickErrors = result.validations.filter((item) =>
