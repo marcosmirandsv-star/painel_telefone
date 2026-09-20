@@ -660,9 +660,9 @@ export default function EscalasPage() {
   return (
     <main className="schedule-shell p-4 sm:p-7">
       {popup && (
-        <div className="fixed right-4 top-4 z-50 w-[min(420px,calc(100vw-2rem))] rounded-2xl border border-cyan-400/50 bg-slate-900 p-5 shadow-2xl shadow-cyan-950/50">
+        <div className="schedule-toast fixed right-4 top-4 z-50 w-[min(420px,calc(100vw-2rem))] p-5">
           <div className="flex items-start gap-3">
-            <div className="animate-bounce text-2xl">🔔</div>
+            <div className="schedule-bell-attention text-2xl">🔔</div>
             <div className="flex-1">
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Nova solicitação</p>
               <h2 className="mt-1 text-lg font-bold">{popup.title}</h2>
@@ -688,7 +688,7 @@ export default function EscalasPage() {
             <p className="schedule-subtitle mt-2">Geração, validação, publicação e manutenção da escala em um único fluxo.</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <button className={`relative rounded-xl border border-white/10 bg-slate-900 px-4 py-3 ${notifications.some((item) => !item.seen_at) ? 'animate-bounce' : ''}`} onClick={() => setSection('requests')}>
+            <button className={`relative rounded-xl border border-white/10 bg-slate-900 px-4 py-3 ${notifications.some((item) => !item.seen_at) ? 'schedule-bell-attention' : ''}`} onClick={() => setSection('requests')}>
               🔔
               {notifications.filter((item) => !item.seen_at).length > 0 && (
                 <span className="absolute -right-2 -top-2 rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold">
