@@ -664,8 +664,8 @@ button:disabled {
 }
 
 .schedule-day-head {
-  min-width: 68px;
-  padding: 9px 6px;
+  min-width: 86px;
+  padding: 9px 7px;
   text-align: center;
 }
 
@@ -673,25 +673,33 @@ button:disabled {
   display: block;
 }
 
+.schedule-day-head .schedule-day-number {
+  color: #f8fafc;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
 .schedule-day-head .weekday {
-  margin-top: 2px;
-  color: #64748b;
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  margin-top: 3px;
+  color: #a8b7ca;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
 }
 
 .schedule-cell-button {
-  min-height: 38px;
+  min-height: 40px;
+  min-width: 82px;
   width: 100%;
   border: 1px solid transparent;
-  border-radius: 7px;
-  padding: 6px 8px;
-  font-size: 0.75rem;
-  font-weight: 700;
+  border-radius: 8px;
+  padding: 7px 9px;
+  font-size: 0.73rem;
+  font-weight: 800;
   line-height: 1.15;
-  transition: border-color 120ms ease, filter 120ms ease;
+  letter-spacing: 0.01em;
+  transition: border-color 120ms ease, filter 120ms ease, transform 120ms ease;
 }
 
 .schedule-cell-button:hover {
@@ -699,17 +707,49 @@ button:disabled {
   filter: brightness(1.08);
 }
 
-.schedule-status-p { background: #162235; color: #dbeafe; }
-.schedule-status-ho { background: #172554; color: #bfdbfe; }
-.schedule-status-click-day { background: #3b1d5a; color: #e9d5ff; }
-.schedule-status-feriado { background: #263447; color: #cbd5e1; }
-.schedule-status-ferias { background: #3b2715; color: #fde68a; }
+.schedule-status-p {
+  background: rgb(22 101 52 / 0.48);
+  border-color: rgb(74 222 128 / 0.44);
+  color: #dcfce7;
+}
+.schedule-status-ho {
+  background: rgb(30 64 175 / 0.46);
+  border-color: rgb(96 165 250 / 0.48);
+  color: #dbeafe;
+}
+.schedule-status-click-day {
+  background: rgb(109 40 217 / 0.42);
+  border-color: rgb(196 181 253 / 0.44);
+  color: #f3e8ff;
+}
+.schedule-status-feriado {
+  background: rgb(71 85 105 / 0.55);
+  border-color: rgb(148 163 184 / 0.34);
+  color: #f1f5f9;
+}
+.schedule-status-ferias {
+  background: rgb(146 64 14 / 0.42);
+  border-color: rgb(251 191 36 / 0.42);
+  color: #fef3c7;
+}
 .schedule-status-day-off,
 .schedule-status-folga,
 .schedule-status-premiacao,
-.schedule-status-banco-horas { background: #34231a; color: #fdba74; }
-.schedule-status-senac { background: #14313a; color: #a5f3fc; }
-.schedule-status-default { background: #162235; color: #e2e8f0; }
+.schedule-status-banco-horas {
+  background: rgb(154 52 18 / 0.40);
+  border-color: rgb(251 146 60 / 0.40);
+  color: #ffedd5;
+}
+.schedule-status-senac {
+  background: rgb(15 118 110 / 0.40);
+  border-color: rgb(45 212 191 / 0.38);
+  color: #ccfbf1;
+}
+.schedule-status-default {
+  background: #162235;
+  border-color: rgb(148 163 184 / 0.16);
+  color: #e2e8f0;
+}
 
 .schedule-manual-indicator {
   box-shadow: 0 0 0 1px rgb(251 191 36 / 0.65) inset;
@@ -1060,4 +1100,19 @@ button:disabled {
   color: #9fb3c9;
   font-size: 0.78rem;
   line-height: 1.5;
+}
+
+
+.schedule-readonly-cell {
+  display: inline-flex;
+  min-height: 34px;
+  min-width: 78px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 6px 9px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.15;
 }
