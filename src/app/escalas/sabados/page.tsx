@@ -189,7 +189,7 @@ export default function SaturdaySchedulePage() {
     const eligible = eligibleOnDate(date)
     const names = eligible
       .map((item) => people.find((person) => person.id === item.person_id))
-      .filter((person): person is Person => Boolean(person) && !alreadyScheduled.has(person.id))
+      .filter((person): person is Person => person !== undefined && !alreadyScheduled.has(person.id))
 
     const chosenName = window.prompt(
       'Digite exatamente o nome do substituto:\n' + names.map((item) => item.name).join('\n'),
