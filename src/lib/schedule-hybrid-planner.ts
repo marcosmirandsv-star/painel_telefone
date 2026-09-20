@@ -16,6 +16,7 @@ export type WeeklyHybridPerson = {
 export type WeeklyHybridPlanInput = {
   people: WeeklyHybridPerson[]
   requiredHoByDate: Record<string, number>
+  requiredEligibleByDate?: Record<string, string[]>
 }
 
 function adjacent(a: string, b: string) {
@@ -28,7 +29,13 @@ export function planWeeklyHybrid(input: WeeklyHybridPlanInput) {
   const assignments = new Map<string, Set<string>>()
   const remaining = new Map<string, number>()
   const dayCounts = new Map<string, number>()
+  const coverageCounts = new Map<string, number>()
   const byId = new Map(input.people.map((person) => [person.id, person]))
+
+  function coversRequirement(personId: string, date: string) {
+    const eligible = input.requiredEligibleByDate?.[date]
+    return !eligible || eligible.includes(personId)
+  }
 
   for (const person of input.people) {
     const dates = new Set(person.preservedHoDates)
@@ -36,6 +43,9 @@ export function planWeeklyHybrid(input: WeeklyHybridPlanInput) {
     remaining.set(person.id, Math.max(0, person.remaining))
     for (const date of dates) {
       dayCounts.set(date, (dayCounts.get(date) ?? 0) + 1)
+      if (coversRequirement(person.id, date)) {
+        coverageCounts.set(date, (coverageCounts.get(date) ?? 0) + 1)
+      }
     }
   }
 
@@ -51,6 +61,9 @@ export function planWeeklyHybrid(input: WeeklyHybridPlanInput) {
     assignments.get(personId)?.add(date)
     remaining.set(personId, (remaining.get(personId) ?? 0) - 1)
     dayCounts.set(date, (dayCounts.get(date) ?? 0) + 1)
+    if (coversRequirement(personId, date)) {
+      coverageCounts.set(date, (coverageCounts.get(date) ?? 0) + 1)
+    }
     return true
   }
 
@@ -69,9 +82,9 @@ export function planWeeklyHybrid(input: WeeklyHybridPlanInput) {
   }
 
   for (const [date, required] of Object.entries(input.requiredHoByDate)) {
-    while ((dayCounts.get(date) ?? 0) < required) {
+    while ((coverageCounts.get(date) ?? 0) < required) {
       const candidatePeople = input.people
-        .filter((person) => canAssign(person.id, date))
+        .filter((person) => canAssign(person.id, date) && coversRequirement(person.id, date))
         .sort((a, b) => {
           const aw = a.candidates.find((item) => item.date === date)?.weekday
           const bw = b.candidates.find((item) => item.date === date)?.weekday
@@ -98,7 +111,7 @@ export function planWeeklyHybrid(input: WeeklyHybridPlanInput) {
       options.sort((a, b) => {
         const score = (candidate: HybridCandidate) => {
           const required = input.requiredHoByDate[candidate.date] ?? 0
-          const deficit = Math.max(0, required - (dayCounts.get(candidate.date) ?? 0))
+          const deficit = Math.max(0, required - (coverageCounts.get(candidate.date) ?? 0))
           const preferred = person.preferredWeekdays.includes(candidate.weekday) ? 25 : 0
           const consecutive = [...current].some((date) => adjacent(date, candidate.date)) ? 20 : 0
           const balancePenalty = (dayCounts.get(candidate.date) ?? 0) * 5
