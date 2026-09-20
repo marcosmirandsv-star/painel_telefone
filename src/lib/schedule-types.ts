@@ -26,6 +26,10 @@ export type ScheduleMembership = {
   start_date: string
   end_date: string | null
   participates_in_schedule: boolean
+  participates_hybrid?: boolean
+  participates_lunch?: boolean
+  participates_snack?: boolean
+  participates_extended?: boolean
 }
 
 export type ScheduleAbsence = {
