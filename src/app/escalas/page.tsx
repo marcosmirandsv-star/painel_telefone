@@ -56,6 +56,16 @@ function beep() {
   }
 }
 
+function browserNotify(item: Notification) {
+  if (typeof window === 'undefined' || !('Notification' in window)) return
+  if (window.Notification.permission !== 'granted') return
+  try {
+    new window.Notification(item.title, { body: item.message, tag: item.id })
+  } catch {
+    // O pop-up interno continua sendo o canal principal.
+  }
+}
+
 function ymd(year: number, month: number) {
   return `${year}-${String(month).padStart(2, '0')}`
 }
@@ -215,6 +225,7 @@ export default function EscalasPage() {
           setNotifications((current) => [item, ...current])
           setPopup(item)
           beep()
+          browserNotify(item)
           document.title = '🔔 Nova solicitação de escala'
         },
       )
@@ -234,12 +245,29 @@ export default function EscalasPage() {
         beep()
       }
     }
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') onFocus()
+    }
     window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
     return () => {
       window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
       supabase.removeChannel(channel)
     }
   }, [popup, profile?.id])
+
+  async function enableBrowserNotifications() {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      return setMessage('Este navegador não oferece notificações do sistema.')
+    }
+    const permission = await window.Notification.requestPermission()
+    setMessage(
+      permission === 'granted'
+        ? 'Alertas do navegador ativados.'
+        : 'O navegador não autorizou notificações. O pop-up e o sino continuam ativos.',
+    )
+  }
 
   async function markSeen(item: Notification) {
     await supabase.from('schedule_notifications').update({ seen_at: new Date().toISOString() }).eq('id', item.id)
@@ -574,6 +602,7 @@ export default function EscalasPage() {
                 </span>
               )}
             </button>
+            {isManagement && <button className="secondary-button" onClick={enableBrowserNotifications}>Ativar alertas</button>}
             {isManagement && <Link className="secondary-button" href="/escalas/sabados">Sábados</Link>}
             {isManagement && <Link className="secondary-button" href="/escalas/gestao">Gestão</Link>}
             <Link className="secondary-button" href="/">Voltar ao Performance</Link>
