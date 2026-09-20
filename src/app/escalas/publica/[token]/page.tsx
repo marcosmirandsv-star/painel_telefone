@@ -29,7 +29,14 @@ type Snapshot = {
     participates_snack?: boolean
     participates_extended?: boolean
   }>
-  entries: Array<{ person_id: string; team_id: string; date: string; entry_type: string; value: string }>
+  entries: Array<{
+    person_id: string
+    team_id: string
+    date: string
+    entry_type: string
+    value: string
+    metadata?: { return_time?: string | null; shift_end?: string | null }
+  }>
   changes: TeamChange[]
 }
 
@@ -97,6 +104,10 @@ export default function PublicSchedulePage() {
   }, [params.token])
 
   const days = useMemo(() => snapshot ? businessDays(snapshot.year, snapshot.month) : [], [snapshot])
+  const changedDates = useMemo(
+    () => new Set((snapshot?.changes ?? []).flatMap((change) => change.affected_dates ?? [])),
+    [snapshot?.changes],
+  )
 
   useEffect(() => {
     if (!requestDate && days[0]) setRequestDate(days[0].value)
@@ -242,7 +253,7 @@ export default function PublicSchedulePage() {
           <table className="min-w-max border-collapse text-sm">
             <thead className="bg-slate-900"><tr>
               <th className="sticky left-0 z-10 min-w-48 border-b border-r border-white/10 bg-slate-900 px-4 py-3 text-left">Colaborador</th>
-              {days.map((day) => <th key={day.value} className="min-w-16 border-b border-r border-white/10 px-2 py-3 text-center">{day.day}</th>)}
+              {days.map((day) => <th key={day.value} className={`min-w-16 border-b border-r px-2 py-3 text-center ${changedDates.has(day.value) ? 'border-amber-400/50 bg-amber-950/40 text-amber-200' : 'border-white/10'}`}>{day.day}{changedDates.has(day.value) ? <span className="ml-1">●</span> : null}</th>)}
             </tr></thead>
             <tbody>
               {visiblePeople.map((person) => (
@@ -252,7 +263,13 @@ export default function PublicSchedulePage() {
                     const membership = snapshot.memberships.find((item) => item.person_id === person.id && item.start_date <= day.value && (!item.end_date || item.end_date >= day.value))
                     if (!membershipAllows(membership, entryType)) return <td key={day.value} className="border-b border-r border-white/10 text-center text-slate-600">—</td>
                     const entry = snapshot.entries.find((item) => item.person_id === person.id && item.date === day.value && item.entry_type === entryType)
-                    return <td key={day.value} className="border-b border-r border-white/10 px-2 py-3 text-center">{entry?.value ?? '—'}</td>
+                    const lunchDetail = entryType === 'lunch' && entry?.metadata?.return_time
+                      ? `${entry.value}–${entry.metadata.return_time}`
+                      : entry?.value ?? '—'
+                    return <td key={day.value} className={`border-b border-r px-2 py-3 text-center ${changedDates.has(day.value) ? 'border-amber-400/30 bg-amber-950/10' : 'border-white/10'}`}>
+                      <span>{lunchDetail}</span>
+                      {entryType === 'lunch' && entry?.metadata?.shift_end ? <span className="block text-[10px] text-slate-500">saída {entry.metadata.shift_end}</span> : null}
+                    </td>
                   })}
                 </tr>
               ))}
