@@ -72,3 +72,39 @@ A homologação deve usar:
 ## Observação
 
 A criação do projeto Supabase de homologação e do projeto/ambiente Vercel depende das conexões autorizadas desses serviços. O código foi mantido isolado nesta branch até essa configuração.
+
+
+## Regras operacionais refinadas
+
+- Suporte Outros: mantém a regra específica de cobertura de almoço definida pela gestão, com referência de 5 pessoas às 12h e cobertura técnica mínima quando aplicável.
+- Suporte Especializado: não possui a obrigação numérica de almoço do Suporte Outros. Presencial prefere 12h–13h e HO prefere 13h–14h30, mas cobertura pode exigir exceções.
+- Telefone: HO prefere 11h30–13h e Presencial prefere 13h–14h. A preferência pode ser flexibilizada por cobertura. O café é fixo por pessoa.
+- N2, Liderança e Implantação: preferências de almoço 12h–13h e 13h–14h30.
+- Chat (Outros e Especializado): café distribuído entre 15h45 e 17h15, de 15 em 15 minutos, no máximo duas pessoas por horário. Quem almoça mais cedo recebe prioridade para cafés mais cedo.
+- Estendido: permanece restrito às pessoas elegíveis e é distribuído buscando diferença máxima de 1 participação quando possível.
+- Dias e preferências individuais continuam vigentes, com prioridade abaixo de restrições e cobertura.
+
+## Recálculo depois de solicitação aprovada
+
+Para Telefone, Suporte Especializado, Suporte Outros e N2:
+
+1. Day Off, Premiação, Banco de Horas e Folga viram indisponibilidades reais da pessoa na data.
+2. Alteração estruturada de Home Office aplica a modalidade aprovada como exceção protegida.
+3. O motor preserva dias já passados e prioriza manter o desenho já publicado nos dias futuros.
+4. Híbrido é reavaliado na semana operacional somente quando necessário.
+5. Almoço, café e, nos times aplicáveis, Estendido são recalculados nas datas impactadas.
+6. Sábados não participam desse recálculo.
+7. Se alguma regra obrigatória ficar sem solução, a solicitação fica marcada para revisão da gestão.
+
+## Aviso ao time após mudança
+
+Quando o recálculo realmente altera a escala:
+
+- é criado um evento de alteração para o time;
+- a consulta publicada mostra um aviso destacado;
+- os dias afetados ficam visualmente marcados;
+- se a consulta estiver aberta, a alteração chega em tempo real;
+- ao voltar para a aba ou reabrir a escala, o sistema reconcilia as mudanças e mostra o aviso ainda não reconhecido;
+- o colaborador pode autorizar a notificação nativa do navegador.
+
+O aviso ao time não expõe o motivo pessoal da solicitação. Ele informa apenas que a escala foi atualizada e quais datas devem ser conferidas novamente.
