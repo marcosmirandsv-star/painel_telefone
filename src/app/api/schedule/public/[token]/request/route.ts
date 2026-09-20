@@ -19,6 +19,7 @@ export async function POST(
 ) {
   const { token } = await context.params
   const body = await request.json().catch(() => null)
+  const requesterPersonId = typeof body?.requesterPersonId === 'string' ? body.requesterPersonId.trim() : ''
   const requesterName = typeof body?.requesterName === 'string' ? body.requesterName.trim() : ''
   const requesterEmail = typeof body?.requesterEmail === 'string' ? body.requesterEmail.trim().toLowerCase() : ''
   const targetDate = typeof body?.targetDate === 'string' ? body.targetDate : ''
@@ -26,9 +27,9 @@ export async function POST(
   const requestedValue = typeof body?.requestedValue === 'string' ? body.requestedValue.trim() : ''
   const reason = typeof body?.reason === 'string' ? body.reason.trim() : ''
 
-  if (!requesterName || !targetDate || !requestType) {
+  if ((!requesterPersonId && !requesterName) || !targetDate || !requestType) {
     return NextResponse.json(
-      { error: 'Informe nome, data e tipo da solicitação.' },
+      { error: 'Informe a pessoa, a data e o tipo da solicitação.' },
       { status: 400 },
     )
   }
@@ -68,10 +69,42 @@ export async function POST(
     return NextResponse.json({ error: 'Este mês ainda não foi liberado.' }, { status: 403 })
   }
 
+  let resolvedPersonId: string | null = null
+  let resolvedPersonName = requesterName
+
+  if (requesterPersonId) {
+    const { data: person } = await supabase
+      .from('schedule_people')
+      .select('id,name,active')
+      .eq('id', requesterPersonId)
+      .maybeSingle()
+
+    const { data: membership } = await supabase
+      .from('schedule_memberships')
+      .select('id')
+      .eq('person_id', requesterPersonId)
+      .eq('team_id', link.team_id)
+      .eq('participates_in_schedule', true)
+      .lte('start_date', targetDate)
+      .or(`end_date.is.null,end_date.gte.${targetDate}`)
+      .maybeSingle()
+
+    if (!person?.active || !membership) {
+      return NextResponse.json(
+        { error: 'A pessoa selecionada não pertence a este time na data informada.' },
+        { status: 400 },
+      )
+    }
+
+    resolvedPersonId = person.id
+    resolvedPersonName = person.name
+  }
+
   const { data, error } = await supabase
     .from('schedule_requests')
     .insert({
-      requester_name: requesterName,
+      requester_person_id: resolvedPersonId,
+      requester_name: resolvedPersonName,
       requester_email: requesterEmail || null,
       team_id: link.team_id,
       target_date: targetDate,
