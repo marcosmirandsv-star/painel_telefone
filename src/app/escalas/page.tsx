@@ -106,6 +106,10 @@ export default function EscalasPage() {
   const [memberTeamId, setMemberTeamId] = useState('')
   const [memberPersonId, setMemberPersonId] = useState('')
   const [memberStart, setMemberStart] = useState(`${ymd(year, month)}-01`)
+  const [absencePersonId, setAbsencePersonId] = useState('')
+  const [absenceKind, setAbsenceKind] = useState<ScheduleAbsence['kind']>('FERIAS')
+  const [absenceStart, setAbsenceStart] = useState(`${ymd(year, month)}-01`)
+  const [absenceEnd, setAbsenceEnd] = useState(`${ymd(year, month)}-01`)
   const [requestDate, setRequestDate] = useState(`${ymd(year, month)}-01`)
   const [requestType, setRequestType] = useState('Troca de escala')
   const [requestReason, setRequestReason] = useState('')
@@ -261,6 +265,30 @@ export default function EscalasPage() {
     const { error } = await supabase.from('schedule_memberships').update({ end_date: endDate }).eq('id', membership.id)
     if (error) return setMessage(error.message)
     setMemberships((current) => current.map((item) => item.id === membership.id ? { ...item, end_date: endDate } : item))
+  }
+
+  async function addAbsence() {
+    if (!absencePersonId || !absenceStart || !absenceEnd) return
+    if (absenceEnd < absenceStart) return setMessage('A data final não pode ser anterior à data inicial.')
+    const { data: auth } = await supabase.auth.getUser()
+    const { data, error } = await supabase.from('schedule_absences').insert({
+      person_id: absencePersonId,
+      kind: absenceKind,
+      start_date: absenceStart,
+      end_date: absenceEnd,
+      created_by: auth.user?.id ?? null,
+    }).select('*').single()
+    if (error) return setMessage(error.message)
+    setAbsences((current) => [...current, data as ScheduleAbsence])
+    setMessage(absenceKind === 'FERIAS' ? 'Férias registradas para a geração.' : 'Indisponibilidade registrada.')
+  }
+
+  async function removeAbsence(absence: ScheduleAbsence) {
+    if (!absence.id) return
+    const { error } = await supabase.from('schedule_absences').delete().eq('id', absence.id)
+    if (error) return setMessage(error.message)
+    setAbsences((current) => current.filter((item) => item.id !== absence.id))
+    setMessage('Indisponibilidade removida.')
   }
 
   async function saveContextAndGenerate() {
@@ -531,14 +559,53 @@ export default function EscalasPage() {
             </section>
 
             {isManagement && (
-              <section className="mt-4 grid gap-4 rounded-2xl border border-white/10 bg-slate-900/60 p-4 md:grid-cols-2">
-                <label className="grid gap-1 text-sm text-slate-300">Feriados (AAAA-MM-DD, separados por vírgula)
-                  <input className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2" value={context.holidays.join(', ')} onChange={(event) => setContext({ ...context, holidays: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} />
-                </label>
-                <label className="grid gap-1 text-sm text-slate-300">Pontos facultativos
-                  <input className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2" value={context.optional_days.join(', ')} onChange={(event) => setContext({ ...context, optional_days: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} />
-                </label>
-              </section>
+              <>
+                <section className="mt-4 grid gap-4 rounded-2xl border border-white/10 bg-slate-900/60 p-4 md:grid-cols-2">
+                  <label className="grid gap-1 text-sm text-slate-300">Feriados (AAAA-MM-DD, separados por vírgula)
+                    <input className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2" value={context.holidays.join(', ')} onChange={(event) => setContext({ ...context, holidays: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} />
+                  </label>
+                  <label className="grid gap-1 text-sm text-slate-300">Pontos facultativos
+                    <input className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2" value={context.optional_days.join(', ')} onChange={(event) => setContext({ ...context, optional_days: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} />
+                  </label>
+                </section>
+
+                <section className="mt-4 rounded-2xl border border-white/10 bg-slate-900/60 p-4">
+                  <div>
+                    <h2 className="font-bold">Férias e indisponibilidades</h2>
+                    <p className="mt-1 text-sm text-slate-400">Essas datas entram no cálculo antes da geração da escala.</p>
+                  </div>
+                  <div className="mt-4 grid gap-3 lg:grid-cols-[1.3fr_1fr_1fr_1fr_auto]">
+                    <select className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2" value={absencePersonId} onChange={(event) => setAbsencePersonId(event.target.value)}>
+                      <option value="">Selecione a pessoa</option>
+                      {activeTeamPeople.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
+                    </select>
+                    <select className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2" value={absenceKind} onChange={(event) => setAbsenceKind(event.target.value as ScheduleAbsence['kind'])}>
+                      <option value="FERIAS">Férias</option>
+                      <option value="DAY_OFF">Day Off</option>
+                      <option value="FOLGA">Folga</option>
+                      <option value="PREMIACAO">Premiação</option>
+                      <option value="SENAC">Senac</option>
+                      <option value="OUTRA">Outra</option>
+                    </select>
+                    <input className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2" type="date" value={absenceStart} onChange={(event) => setAbsenceStart(event.target.value)} />
+                    <input className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2" type="date" value={absenceEnd} onChange={(event) => setAbsenceEnd(event.target.value)} />
+                    <button className="secondary-button" onClick={addAbsence}>Adicionar</button>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {absences
+                      .filter((absence) => activeTeamPeople.some((person) => person.id === absence.person_id))
+                      .map((absence) => {
+                        const person = people.find((item) => item.id === absence.person_id)
+                        return (
+                          <div key={absence.id ?? `${absence.person_id}-${absence.start_date}`} className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-sm">
+                            <strong>{person?.name ?? 'Pessoa'}</strong> · {absence.kind} · {absence.start_date} → {absence.end_date}
+                            {absence.id && <button className="ml-3 text-red-300" onClick={() => removeAbsence(absence)}>Remover</button>}
+                          </div>
+                        )
+                      })}
+                  </div>
+                </section>
+              </>
             )}
 
             <div className="mt-5 flex flex-wrap gap-2">
