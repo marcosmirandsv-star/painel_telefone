@@ -1274,7 +1274,7 @@ export default function Home() {
         </header>
 
         {isManagementUser && (
-          <div className="mt-6 grid gap-3 md:grid-cols-2">
+          <div className="mt-6 grid gap-3 md:grid-cols-3">
             <button
               className={activeModule === 'phone' ? 'module-card-active' : 'module-card'}
               type="button"
@@ -1296,6 +1296,11 @@ export default function Home() {
               <strong>Performance de atendimento via chat</strong>
               <small>Dados do Zendesk, importação mensal, ranking, pódio e relatórios individuais.</small>
             </button>
+            <Link className="module-card" href="/escalas">
+              <span>Módulo escalas</span>
+              <strong>Escalas e solicitações</strong>
+              <small>Homologação: geração mensal, pessoas, sábados, publicação e alertas.</small>
+            </Link>
           </div>
         )}
         {activeModule === 'phone' && (
