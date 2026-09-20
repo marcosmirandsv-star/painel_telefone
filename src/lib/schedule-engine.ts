@@ -7,8 +7,8 @@ import {
   SchedulePerson,
   ScheduleRule,
   ScheduleValidation,
-} from './schedule-types'
-import { planWeeklyHybrid } from './schedule-hybrid-planner'
+} from './schedule-types.ts'
+import { planWeeklyHybrid } from './schedule-hybrid-planner.ts'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const WEEKDAY = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 }
