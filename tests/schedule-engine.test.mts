@@ -539,3 +539,77 @@ test('Click Day preserva almoço/café existentes por pessoa e completa eventuai
     assert.equal(after?.value, preserved.value)
   }
 })
+
+
+test('Dias fixos de HO não são deslocados para dias fora da restrição', () => {
+  const team: ScheduleTeam = {
+    id: 'team-fixed',
+    code: 'especializado',
+    name: 'Especializado',
+    manager_name: 'Marcos',
+    manager_profile_id: null,
+    active: true,
+    settings: null,
+  }
+  const persons = people(3, 'FX')
+  const fixedPerson = persons[0]
+  const rules = [
+    rule('fx1', team.id, 'hybrid_fixed_weekdays', [3,4], fixedPerson.id),
+    rule('fx2', team.id, 'lunch_policy', 'coverage_weighted'),
+    rule('fx3', team.id, 'lunch_presential_preferred_time', '12:00'),
+    rule('fx4', team.id, 'lunch_ho_preferred_time', '13:00'),
+    rule('fx5', team.id, 'snack_policy', 'balanced_by_lunch'),
+  ]
+  const input = baseInput(team, persons, rules)
+  input.context = { year: 2026, month: 10, holidays: [], optional_days: [], click_days: [] }
+  const result = generateMonthlySchedule(input)
+
+  const hoDays = result.entries.filter(
+    (entry) => entry.person_id === fixedPerson.id && entry.entry_type === 'hybrid' && entry.value === 'HO',
+  )
+  assert.ok(hoDays.length > 0)
+  assert.ok(
+    hoDays.every((entry) => [3,4].includes(new Date(`${entry.date}T12:00:00Z`).getUTCDay())),
+    JSON.stringify(hoDays, null, 2),
+  )
+})
+
+test('Click Day em dia fixo não empurra a pessoa para um dia proibido', () => {
+  const team: ScheduleTeam = {
+    id: 'team-fixed-click',
+    code: 'especializado',
+    name: 'Especializado',
+    manager_name: 'Marcos',
+    manager_profile_id: null,
+    active: true,
+    settings: null,
+  }
+  const persons = people(3, 'FC')
+  const fixedPerson = persons[0]
+  const rules = [
+    rule('fc1', team.id, 'hybrid_fixed_weekdays', [3,4], fixedPerson.id),
+    rule('fc2', team.id, 'lunch_policy', 'coverage_weighted'),
+    rule('fc3', team.id, 'lunch_presential_preferred_time', '12:00'),
+    rule('fc4', team.id, 'lunch_ho_preferred_time', '13:00'),
+    rule('fc5', team.id, 'snack_policy', 'balanced_by_lunch'),
+  ]
+  const input = baseInput(team, persons, rules)
+  input.context = {
+    year: 2026,
+    month: 10,
+    holidays: [],
+    optional_days: [],
+    click_days: ['2026-10-21'],
+  }
+  const result = generateMonthlySchedule(input)
+
+  const weekRows = result.entries.filter(
+    (entry) =>
+      entry.person_id === fixedPerson.id &&
+      entry.entry_type === 'hybrid' &&
+      entry.date >= '2026-10-19' &&
+      entry.date <= '2026-10-23',
+  )
+  assert.ok(weekRows.every((entry) => entry.value !== 'HO' || [3,4].includes(new Date(`${entry.date}T12:00:00Z`).getUTCDay())))
+  assert.ok(weekRows.some((entry) => entry.date === '2026-10-21' && entry.value === 'CLICK_DAY'))
+})
