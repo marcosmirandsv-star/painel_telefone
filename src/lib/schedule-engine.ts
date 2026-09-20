@@ -725,7 +725,8 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
       continue
     }
 
-    if (isClickDay(input, date)) {
+    const clickDay = isClickDay(input, date)
+    if (clickDay || input.preserveExistingLunchSnack) {
       const previousDaily = (input.existingEntries ?? []).filter(
         (entry) =>
           entry.date === date &&
@@ -750,6 +751,16 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
       ).filter((entry) => !previousKeys.has(entryKey(entry)))
 
       entries.push(...generatedSnack, ...previousDaily)
+
+      if (!clickDay) {
+        entries.push(...distributeExtended(
+          input,
+          date,
+          getActivePeople(input, date, 'extended'),
+          entries,
+          extendedCounts,
+        ))
+      }
       continue
     }
 

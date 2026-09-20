@@ -320,6 +320,7 @@ test('Click Day força presencialidade, remaneja o HO, mantém almoço/café já
     ...initialInput,
     context: { ...initialInput.context, click_days: ['2026-10-21'] },
     existingEntries: initial.entries,
+    preserveExistingLunchSnack: true,
   }
   const recalculated = generateMonthlySchedule(clickInput)
   assert.deepEqual(
@@ -327,6 +328,22 @@ test('Click Day força presencialidade, remaneja o HO, mantém almoço/café já
     [],
     JSON.stringify(recalculated.validations.filter((item) => item.level === 'error'), null, 2),
   )
+
+  for (const previous of initial.entries.filter(
+    (entry) => entry.entry_type === 'lunch' || entry.entry_type === 'snack',
+  )) {
+    const after = recalculated.entries.find(
+      (entry) =>
+        entry.person_id === previous.person_id &&
+        entry.date === previous.date &&
+        entry.entry_type === previous.entry_type,
+    )
+    assert.equal(
+      after?.value,
+      previous.value,
+      `Click Day não deve reorganizar ${previous.entry_type} já publicado em ${previous.date}`,
+    )
+  }
 
   const clickHybrid = recalculated.entries.filter(
     (entry) => entry.date === '2026-10-21' && entry.entry_type === 'hybrid',

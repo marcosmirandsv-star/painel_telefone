@@ -96,6 +96,7 @@ export type ScheduleGenerationInput = {
   existingEntries?: ScheduleEntry[]
   stabilityMode?: 'standard' | 'preserve_existing'
   stabilityReferenceDate?: string
+  preserveExistingLunchSnack?: boolean
 }
 
 export type ScheduleGenerationResult = {

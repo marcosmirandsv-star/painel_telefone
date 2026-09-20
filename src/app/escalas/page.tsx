@@ -452,6 +452,10 @@ export default function EscalasPage() {
 
   async function saveContextAndGenerate() {
     if (!selectedTeam || !isManagement) return
+    const previousMonthContext = monthContexts.find((item) => item.year === year && item.month === month)
+    const previousClickDays = [...(previousMonthContext?.click_days ?? [])].sort()
+    const nextClickDays = [...(context.click_days ?? [])].sort()
+    const clickDaysChanged = JSON.stringify(previousClickDays) !== JSON.stringify(nextClickDays)
     const { data: auth } = await supabase.auth.getUser()
     const contextPayload = {
       year,
@@ -503,6 +507,7 @@ export default function EscalasPage() {
       year,
       month,
       existingEntries: existingEntriesForGeneration,
+      preserveExistingLunchSnack: clickDaysChanged,
     })
 
     const protectedEntries = existingEntriesForGeneration.filter(
