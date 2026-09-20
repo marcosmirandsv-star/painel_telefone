@@ -60,6 +60,18 @@ function ymd(year: number, month: number) {
   return `${year}-${String(month).padStart(2, '0')}`
 }
 
+function monthRange(year: number, month: number) {
+  const start = `${ymd(year, month)}-01`
+  const end = new Date(Date.UTC(year, month, 0, 12)).toISOString().slice(0, 10)
+  return { start, end }
+}
+
+function shiftIsoDate(value: string, days: number) {
+  const date = new Date(`${value}T12:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + days)
+  return date.toISOString().slice(0, 10)
+}
+
 function daysInMonth(year: number, month: number) {
   const total = new Date(year, month, 0).getDate()
   return Array.from({ length: total }, (_, index) => {
@@ -93,6 +105,7 @@ export default function EscalasPage() {
   const [absences, setAbsences] = useState<ScheduleAbsence[]>([])
   const [entries, setEntries] = useState<ScheduleEntry[]>([])
   const [context, setContext] = useState<ScheduleMonthContext>({ year, month, holidays: [], optional_days: [] })
+  const [monthContexts, setMonthContexts] = useState<ScheduleMonthContext[]>([])
   const [selectedTeamId, setSelectedTeamId] = useState('')
   const [section, setSection] = useState<'scale'|'people'|'rules'|'requests'>('scale')
   const [entryType, setEntryType] = useState<'hybrid'|'lunch'|'snack'|'extended'>('hybrid')
@@ -119,6 +132,9 @@ export default function EscalasPage() {
   const selectedTeam = teams.find((team) => team.id === selectedTeamId) ?? null
   const monthDays = useMemo(() => daysInMonth(year, month), [year, month])
   const monthPrefix = ymd(year, month)
+  const { start: monthStartDate, end: monthEndDate } = useMemo(() => monthRange(year, month), [year, month])
+  const paddedStartDate = useMemo(() => shiftIsoDate(monthStartDate, -7), [monthStartDate])
+  const paddedEndDate = useMemo(() => shiftIsoDate(monthEndDate, 7), [monthEndDate])
 
   const loadAll = useCallback(async () => {
     setLoading(true)
@@ -132,7 +148,7 @@ export default function EscalasPage() {
       rulesResult,
       absencesResult,
       entriesResult,
-      contextResult,
+      contextsResult,
       notificationResult,
     ] = await Promise.all([
       user
@@ -142,9 +158,9 @@ export default function EscalasPage() {
       supabase.from('schedule_people').select('*').order('name'),
       supabase.from('schedule_memberships').select('*').order('start_date'),
       supabase.from('schedule_rules').select('*').eq('active', true).order('start_date'),
-      supabase.from('schedule_absences').select('*').lte('start_date', `${monthPrefix}-31`).gte('end_date', `${monthPrefix}-01`),
-      supabase.from('schedule_entries').select('*').gte('date', `${monthPrefix}-01`).lte('date', `${monthPrefix}-31`),
-      supabase.from('schedule_month_contexts').select('*').eq('year', year).eq('month', month).maybeSingle(),
+      supabase.from('schedule_absences').select('*').lte('start_date', paddedEndDate).gte('end_date', paddedStartDate),
+      supabase.from('schedule_entries').select('*').gte('date', paddedStartDate).lte('date', paddedEndDate),
+      supabase.from('schedule_month_contexts').select('*').order('year').order('month'),
       supabase.from('schedule_notifications').select('*').order('created_at', { ascending: false }).limit(30),
     ])
 
@@ -158,15 +174,18 @@ export default function EscalasPage() {
     setRules((rulesResult.data ?? []) as ScheduleRule[])
     setAbsences((absencesResult.data ?? []) as ScheduleAbsence[])
     setEntries((entriesResult.data ?? []) as ScheduleEntry[])
+    const loadedContexts = (contextsResult.data ?? []) as ScheduleMonthContext[]
+    setMonthContexts(loadedContexts)
+    const currentContext = loadedContexts.find((item) => item.year === year && item.month === month)
     setContext(
-      contextResult.data
+      currentContext
         ? {
-            id: contextResult.data.id,
+            id: currentContext.id,
             year,
             month,
-            holidays: contextResult.data.holidays ?? [],
-            optional_days: contextResult.data.optional_days ?? [],
-            notes: contextResult.data.notes,
+            holidays: currentContext.holidays ?? [],
+            optional_days: currentContext.optional_days ?? [],
+            notes: currentContext.notes,
           }
         : { year, month, holidays: [], optional_days: [] },
     )
@@ -176,7 +195,7 @@ export default function EscalasPage() {
     setNotifications(loadedNotifications)
     latestNotificationIds.current = new Set(loadedNotifications.map((item) => item.id))
     setLoading(false)
-  }, [month, monthPrefix, year])
+  }, [month, paddedEndDate, paddedStartDate, year])
 
   useEffect(() => {
     loadAll()
@@ -309,28 +328,43 @@ export default function EscalasPage() {
       .single()
     if (contextError) return setMessage(contextError.message)
 
-    const currentEntries = entries.filter((entry) => entry.team_id === selectedTeam.id)
+    const existingEntriesForGeneration = entries.filter((entry) => entry.team_id === selectedTeam.id)
+    const otherContexts = monthContexts.filter((item) => !(item.year === year && item.month === month))
+    const generationContext: ScheduleMonthContext = {
+      id: savedContext.id,
+      year,
+      month,
+      holidays: [...new Set([
+        ...(savedContext.holidays ?? []),
+        ...otherContexts.flatMap((item) => item.holidays ?? []),
+      ])],
+      optional_days: [...new Set([
+        ...(savedContext.optional_days ?? []),
+        ...otherContexts.flatMap((item) => item.optional_days ?? []),
+      ])],
+      notes: savedContext.notes,
+    }
+    setMonthContexts((current) => [
+      ...current.filter((item) => !(item.year === year && item.month === month)),
+      generationContext,
+    ])
     const result = generateMonthlySchedule({
       team: selectedTeam,
       people,
       memberships,
       absences,
       rules,
-      context: {
-        id: savedContext.id,
-        year,
-        month,
-        holidays: savedContext.holidays ?? [],
-        optional_days: savedContext.optional_days ?? [],
-        notes: savedContext.notes,
-      },
+      context: generationContext,
       year,
       month,
-      existingEntries: currentEntries,
+      existingEntries: existingEntriesForGeneration,
     })
 
-    const protectedEntries = currentEntries.filter(
-      (entry) => entry.locked || entry.source === 'manual' || entry.source === 'exception',
+    const protectedEntries = existingEntriesForGeneration.filter(
+      (entry) =>
+        entry.date >= monthStartDate &&
+        entry.date <= monthEndDate &&
+        (entry.locked || entry.source === 'manual' || entry.source === 'exception'),
     )
     const protectedKeys = new Set(
       protectedEntries.map((entry) => `${entry.person_id}|${entry.team_id}|${entry.date}|${entry.entry_type}`),
@@ -346,17 +380,10 @@ export default function EscalasPage() {
         memberships,
         absences,
         rules,
-        context: {
-          id: savedContext.id,
-          year,
-          month,
-          holidays: savedContext.holidays ?? [],
-          optional_days: savedContext.optional_days ?? [],
-          notes: savedContext.notes,
-        },
+        context: generationContext,
         year,
         month,
-        existingEntries: currentEntries,
+        existingEntries: existingEntriesForGeneration,
       },
       finalEntries,
     )
@@ -365,8 +392,8 @@ export default function EscalasPage() {
       .from('schedule_entries')
       .delete()
       .eq('team_id', selectedTeam.id)
-      .gte('date', `${monthPrefix}-01`)
-      .lte('date', `${monthPrefix}-31`)
+      .gte('date', monthStartDate)
+      .lte('date', monthEndDate)
       .eq('source', 'generated')
       .eq('locked', false)
     if (cleanupError) return setMessage(cleanupError.message)
@@ -471,11 +498,11 @@ export default function EscalasPage() {
         membership.person_id === person.id &&
         membership.team_id === selectedTeam.id &&
         membership.participates_in_schedule &&
-        membership.start_date <= `${monthPrefix}-31` &&
-        (!membership.end_date || membership.end_date >= `${monthPrefix}-01`),
+        membership.start_date <= monthEndDate &&
+        (!membership.end_date || membership.end_date >= monthStartDate),
       ),
     )
-  }, [memberships, monthPrefix, people, selectedTeam])
+  }, [memberships, monthEndDate, monthStartDate, people, selectedTeam])
 
   if (loading) return <main className="min-h-screen bg-slate-950 p-8 text-white">Carregando módulo de escalas...</main>
 
@@ -593,7 +620,12 @@ export default function EscalasPage() {
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
                     {absences
-                      .filter((absence) => activeTeamPeople.some((person) => person.id === absence.person_id))
+                      .filter(
+                        (absence) =>
+                          absence.start_date <= monthEndDate &&
+                          absence.end_date >= monthStartDate &&
+                          activeTeamPeople.some((person) => person.id === absence.person_id),
+                      )
                       .map((absence) => {
                         const person = people.find((item) => item.id === absence.person_id)
                         return (
