@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
+import { scheduleSupabase as supabase } from '@/lib/schedule-supabase'
 
 type Person = { id: string; name: string; active: boolean }
 type SaturdayMember = { id: string; person_id: string; role: 'fixed'|'rotating'; start_date: string; end_date: string | null; active: boolean }
