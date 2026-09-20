@@ -128,6 +128,24 @@ test('Especializado usa almoço preferencial flexível, janelas completas e caf�
       assert.ok([3,4].includes(weekday))
     }
   }
+
+  for (const hybrid of result.entries.filter((entry) => entry.entry_type === 'hybrid' && ['P','HO'].includes(entry.value))) {
+    const lunch = result.entries.find((entry) =>
+      entry.person_id === hybrid.person_id &&
+      entry.date === hybrid.date &&
+      entry.entry_type === 'lunch'
+    )
+    const snack = result.entries.find((entry) =>
+      entry.person_id === hybrid.person_id &&
+      entry.date === hybrid.date &&
+      entry.entry_type === 'snack'
+    )
+    assert.ok(lunch, `Almoço ausente para ${hybrid.person_id} em ${hybrid.date}`)
+    assert.ok(snack, `Café ausente para ${hybrid.person_id} em ${hybrid.date}`)
+
+    if (lunch?.value === '12:00') assert.ok((snack?.value ?? '') <= '16:30')
+    if (lunch?.value === '13:00') assert.ok((snack?.value ?? '') >= '16:30')
+  }
 })
 
 test('Telefone mantém café fixo e usa 11h30/13h como preferências de almoço por modalidade', () => {
@@ -612,4 +630,193 @@ test('Click Day em dia fixo não empurra a pessoa para um dia proibido', () => {
   )
   assert.ok(weekRows.every((entry) => entry.value !== 'HO' || [3,4].includes(new Date(`${entry.date}T12:00:00Z`).getUTCDay())))
   assert.ok(weekRows.some((entry) => entry.date === '2026-10-21' && entry.value === 'CLICK_DAY'))
+})
+
+
+test('Feriado conta como um dos dois dias de Home Office da semana', () => {
+  const team: ScheduleTeam = {
+    id: 'team-holiday',
+    code: 'holiday-test',
+    name: 'Feriado',
+    manager_name: 'Gestão',
+    manager_profile_id: null,
+    active: true,
+    settings: null,
+  }
+  const persons = people(5, 'F')
+  const input = baseInput(team, persons, [])
+  input.context = {
+    year: 2026,
+    month: 10,
+    holidays: ['2026-10-12'],
+    optional_days: [],
+    click_days: [],
+  }
+
+  const result = generateMonthlySchedule(input)
+  const week = ['2026-10-12','2026-10-13','2026-10-14','2026-10-15','2026-10-16']
+
+  for (const person of persons) {
+    const hybrid = result.entries.filter(
+      (entry) =>
+        entry.person_id === person.id &&
+        entry.entry_type === 'hybrid' &&
+        week.includes(entry.date),
+    )
+    assert.equal(hybrid.filter((entry) => entry.value === 'FERIADO').length, 1)
+    assert.equal(
+      hybrid.filter((entry) => entry.value === 'HO').length,
+      1,
+      `${person.name} deve ter somente 1 HO adicional na semana com feriado`,
+    )
+  }
+})
+
+test('Click Day força presencial, remove Estendido, preserva almoço/café e remaneja HO', () => {
+  const team: ScheduleTeam = {
+    id: 'team-click',
+    code: 'especializado',
+    name: 'Especializado',
+    manager_name: 'Gestão',
+    manager_profile_id: null,
+    active: true,
+    settings: null,
+  }
+  const persons = people(7, 'C')
+  const rules: ScheduleRule[] = [
+    rule('c1', team.id, 'lunch_policy', 'coverage_weighted'),
+    rule('c2', team.id, 'lunch_presential_preferred_time', '12:00'),
+    rule('c3', team.id, 'lunch_ho_preferred_time', '13:00'),
+    rule('c4', team.id, 'lunch_modal_strict', false),
+    rule('c5', team.id, 'lunch_windows', { '12:00': '13:00', '13:00': '14:30' }),
+    rule('c6', team.id, 'shift_end_by_lunch', { '12:00': '17:30', '13:00': '18:00' }),
+    rule('c7', team.id, 'snack_policy', 'balanced_by_lunch'),
+    rule('c8', team.id, 'snack_early_slots', ['15:45','16:00','16:15','16:30']),
+    rule('c9', team.id, 'snack_late_slots', ['16:30','16:45','17:00','17:15']),
+    rule('c10', team.id, 'extended_people_per_day', 2),
+    rule('c11', team.id, 'extended_weekdays', [1,2,3,4]),
+    rule('c12', team.id, 'extended_shifts', ['09:00-18:30','09:30-19:00']),
+  ]
+
+  const baselineInput = baseInput(team, persons, rules)
+  baselineInput.context = { year: 2026, month: 10, holidays: [], optional_days: [], click_days: [] }
+  const baseline = generateMonthlySchedule(baselineInput)
+
+  const clickDate = '2026-10-14'
+  const withClickInput = baseInput(team, persons, rules)
+  withClickInput.context = { year: 2026, month: 10, holidays: [], optional_days: [], click_days: [clickDate] }
+  withClickInput.existingEntries = baseline.entries
+
+  const result = generateMonthlySchedule(withClickInput)
+  const week = ['2026-10-12','2026-10-13','2026-10-14','2026-10-15','2026-10-16']
+
+  assert.equal(
+    result.entries.filter((entry) => entry.date === clickDate && entry.entry_type === 'extended').length,
+    0,
+    'Click Day não pode ter Estendido',
+  )
+
+  for (const person of persons) {
+    const clickHybrid = result.entries.find(
+      (entry) => entry.person_id === person.id && entry.date === clickDate && entry.entry_type === 'hybrid',
+    )
+    assert.equal(clickHybrid?.value, 'CLICK_DAY')
+
+    const weeklyHo = result.entries.filter(
+      (entry) =>
+        entry.person_id === person.id &&
+        entry.entry_type === 'hybrid' &&
+        entry.value === 'HO' &&
+        week.includes(entry.date),
+    )
+    assert.equal(weeklyHo.length, 2, `${person.name} deve manter os 2 HOs na semana do Click Day`)
+
+    for (const type of ['lunch','snack'] as const) {
+      const before = baseline.entries.find(
+        (entry) => entry.person_id === person.id && entry.date === clickDate && entry.entry_type === type,
+      )
+      const after = result.entries.find(
+        (entry) => entry.person_id === person.id && entry.date === clickDate && entry.entry_type === type,
+      )
+      assert.equal(after?.value, before?.value, `${type} deve ser preservado no Click Day`)
+    }
+  }
+
+  const clickErrors = result.validations.filter((item) =>
+    item.code === 'CLICK_DAY_HO' || item.code === 'CLICK_DAY_EXTENDED',
+  )
+  assert.deepEqual(clickErrors, [])
+})
+
+test('Semana operacional atravessa a virada do mês sem reiniciar a cota de HO', () => {
+  const team: ScheduleTeam = {
+    id: 'team-boundary',
+    code: 'boundary-test',
+    name: 'Virada do mês',
+    manager_name: 'Gestão',
+    manager_profile_id: null,
+    active: true,
+    settings: null,
+  }
+  const persons = people(4, 'V')
+  const memberships = persons.map((person, index) => ({
+    id: `boundary-m-${index}`,
+    person_id: person.id,
+    team_id: team.id,
+    manager_profile_id: null,
+    start_date: '2024-01-01',
+    end_date: null,
+    participates_in_schedule: true,
+    participates_hybrid: true,
+    participates_lunch: true,
+    participates_snack: true,
+    participates_extended: false,
+  }))
+
+  const october = generateMonthlySchedule({
+    team,
+    people: persons,
+    memberships,
+    absences: [],
+    rules: [],
+    context: { year: 2024, month: 10, holidays: [], optional_days: [], click_days: [] },
+    year: 2024,
+    month: 10,
+  })
+
+  const november = generateMonthlySchedule({
+    team,
+    people: persons,
+    memberships,
+    absences: [],
+    rules: [],
+    context: { year: 2024, month: 11, holidays: [], optional_days: [], click_days: [] },
+    year: 2024,
+    month: 11,
+    existingEntries: october.entries,
+  })
+
+  const boundaryWeek = ['2024-10-28','2024-10-29','2024-10-30','2024-10-31','2024-11-01']
+  const combined = [...october.entries, ...november.entries]
+
+  for (const person of persons) {
+    const weeklyHo = combined.filter(
+      (entry) =>
+        entry.person_id === person.id &&
+        entry.entry_type === 'hybrid' &&
+        entry.value === 'HO' &&
+        boundaryWeek.includes(entry.date),
+    )
+    assert.equal(
+      weeklyHo.length,
+      2,
+      `${person.name} deve ter exatamente 2 HOs na semana 28/10–01/11, mesmo atravessando o mês`,
+    )
+  }
+
+  assert.equal(
+    november.validations.filter((item) => item.code === 'HYBRID_WEEKLY_BALANCE').length,
+    0,
+    'A semana completa da virada não deve gerar desequilíbrio de HO',
+  )
 })
