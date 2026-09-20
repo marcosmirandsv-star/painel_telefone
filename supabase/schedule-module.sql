@@ -69,7 +69,7 @@ create table if not exists public.schedule_month_contexts (
 create table if not exists public.schedule_absences (
   id uuid primary key default gen_random_uuid(),
   person_id uuid not null references public.schedule_people(id) on delete cascade,
-  kind text not null check (kind in ('FERIAS','DAY_OFF','FOLGA','PREMIACAO','SENAC','OUTRA')),
+  kind text not null check (kind in ('FERIAS','DAY_OFF','FOLGA','PREMIACAO','BANCO_HORAS','SENAC','OUTRA')),
   start_date date not null,
   end_date date not null,
   notes text,
