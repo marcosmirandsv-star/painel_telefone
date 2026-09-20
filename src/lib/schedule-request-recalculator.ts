@@ -356,6 +356,7 @@ export async function approveAndRecalculateScheduleRequest(
     month,
     existingEntries,
     stabilityMode: 'preserve_existing',
+    stabilityReferenceDate: request.target_date,
   })
 
   const currentMonthEntries = existingEntries.filter(
