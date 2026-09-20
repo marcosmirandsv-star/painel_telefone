@@ -286,6 +286,35 @@ export default function EscalasPage() {
     setMemberships((current) => current.map((item) => item.id === membership.id ? { ...item, end_date: endDate } : item))
   }
 
+  async function transferMembership(membership: ScheduleMembership) {
+    const person = people.find((item) => item.id === membership.person_id)
+    const currentTeam = teams.find((item) => item.id === membership.team_id)
+    const options = teams.filter((item) => item.id !== membership.team_id)
+    const targetName = window.prompt(
+      `Transferir ${person?.name ?? 'pessoa'} de ${currentTeam?.name ?? 'time atual'} para qual time?\n\n` +
+      options.map((item) => item.name).join('\n'),
+    )
+    if (!targetName) return
+    const target = options.find((item) => item.name.toLowerCase() === targetName.trim().toLowerCase())
+    if (!target) return setMessage('Time de destino não encontrado.')
+
+    const effectiveDate = window.prompt(
+      'Data em que a pessoa passa a pertencer ao novo time (AAAA-MM-DD):',
+      new Date().toISOString().slice(0, 10),
+    )
+    if (!effectiveDate) return
+
+    const { error } = await supabase.rpc('transfer_schedule_membership', {
+      p_membership_id: membership.id,
+      p_target_team_id: target.id,
+      p_effective_date: effectiveDate,
+    })
+    if (error) return setMessage(error.message)
+
+    setMessage(`${person?.name ?? 'Pessoa'} transferido(a) para ${target.name} a partir de ${effectiveDate}.`)
+    await loadAll()
+  }
+
   async function addAbsence() {
     if (!absencePersonId || !absenceStart || !absenceEnd) return
     if (absenceEnd < absenceStart) return setMessage('A data final não pode ser anterior à data inicial.')
@@ -730,6 +759,7 @@ export default function EscalasPage() {
                         <td>{membership.start_date} → {membership.end_date ?? 'atual'}</td>
                         <td>{person.active ? 'Ativo' : 'Inativo'}</td>
                         <td className="flex gap-2 py-2">
+                          {!membership.end_date && <button className="small-button" onClick={() => transferMembership(membership)}>Transferir</button>}
                           {!membership.end_date && <button className="small-button" onClick={() => {
                             const value = window.prompt('Data final do vínculo (AAAA-MM-DD):', new Date().toISOString().slice(0,10))
                             if (value) closeMembership(membership, value)
