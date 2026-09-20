@@ -722,7 +722,21 @@ test('Click Day força presencial, remove Estendido, preserva almoço/café e re
   const clickDate = '2026-10-14'
   const withClickInput = baseInput(team, persons, rules)
   withClickInput.context = { year: 2026, month: 10, holidays: [], optional_days: [], click_days: [clickDate] }
-  withClickInput.existingEntries = baseline.entries
+  const manualHoOnClickDay = {
+    person_id: persons[0].id,
+    team_id: team.id,
+    date: clickDate,
+    entry_type: 'hybrid' as const,
+    value: 'HO',
+    source: 'manual' as const,
+    locked: true,
+  }
+  withClickInput.existingEntries = [
+    ...baseline.entries.filter(
+      (entry) => !(entry.person_id === persons[0].id && entry.date === clickDate && entry.entry_type === 'hybrid'),
+    ),
+    manualHoOnClickDay,
+  ]
 
   const result = generateMonthlySchedule(withClickInput)
   const week = ['2026-10-12','2026-10-13','2026-10-14','2026-10-15','2026-10-16']
