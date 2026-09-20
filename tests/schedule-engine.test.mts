@@ -123,6 +123,19 @@ test('Especializado usa almoço preferencial flexível, janelas completas e caf�
       entry.entry_type === 'hybrid'
     )
     assert.equal(hybrid?.value, 'HO')
+
+    const lunch = result.entries.find((entry) =>
+      entry.person_id === extended.person_id &&
+      entry.date === extended.date &&
+      entry.entry_type === 'lunch'
+    )
+    const expectedEnd = extended.value.split('-').at(-1) ?? extended.value
+    assert.equal(
+      lunch?.metadata?.shift_end,
+      expectedEnd,
+      'A saída exibida no almoço deve acompanhar o horário efetivo do Estendido',
+    )
+
     if (extended.person_id === persons[0].id) {
       const weekday = new Date(`${extended.date}T12:00:00Z`).getUTCDay()
       assert.ok([3,4].includes(weekday))
