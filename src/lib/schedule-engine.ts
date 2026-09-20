@@ -567,6 +567,7 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
       )
       const holidayCredits = activeWeek.filter((date) => isHoliday(input, date)).length
       const targetHo = Math.max(0, 2 - holidayCredits)
+      const fixedWeekdays = ruleArray(personRules, 'hybrid_fixed_weekdays', [])
       const preservedHoDates: string[] = []
 
       for (const date of activeWeek) {
@@ -588,6 +589,7 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
       const candidates = activeWeek
         .filter((date) => {
           if (!targetDates.has(date) || isHoliday(input, date) || isClickDay(input, date)) return false
+          if (fixedWeekdays.length && !fixedWeekdays.includes(atUtcDate(date).getUTCDay())) return false
           if (
             input.stabilityMode === 'preserve_existing' &&
             input.stabilityReferenceDate &&
@@ -618,7 +620,7 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
         remaining: Math.max(0, targetHo - preservedHoDates.length),
         preservedHoDates,
         candidates,
-        fixedWeekdays: ruleArray(personRules, 'hybrid_fixed_weekdays', []),
+        fixedWeekdays,
         preferredWeekdays: ruleArray(personRules, 'hybrid_preferred_weekdays', []),
         preferredDates,
       }
