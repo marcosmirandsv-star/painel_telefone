@@ -304,6 +304,11 @@ test('Click Day força presencialidade, remaneja o HO, mantém almoço/café já
     existingEntries: initial.entries,
   }
   const recalculated = generateMonthlySchedule(clickInput)
+  assert.deepEqual(
+    recalculated.validations.filter((item) => item.level === 'error'),
+    [],
+    JSON.stringify(recalculated.validations.filter((item) => item.level === 'error'), null, 2),
+  )
 
   const clickHybrid = recalculated.entries.filter(
     (entry) => entry.date === '2026-10-21' && entry.entry_type === 'hybrid',
@@ -404,6 +409,11 @@ test('Semana atravessando a virada do mês não reinicia a contagem de HO', () =
     existingEntries: october.entries,
   })
 
+  assert.ok(
+    !november.validations.some((item) => item.code === 'HYBRID_WEEKLY_BALANCE'),
+    JSON.stringify(november.validations.filter((item) => item.code === 'HYBRID_WEEKLY_BALANCE'), null, 2),
+  )
+
   const combined = [...october.entries, ...november.entries]
   for (const person of persons) {
     const week = combined.filter(
@@ -465,4 +475,67 @@ test('Café acompanha a faixa do almoço e nunca ultrapassa duas pessoas por hor
     counts.set(key, (counts.get(key) ?? 0) + 1)
   }
   assert.ok([...counts.values()].every((count) => count <= 2))
+})
+
+
+test('Click Day preserva almoço/café existentes por pessoa e completa eventuais lacunas', () => {
+  const team: ScheduleTeam = {
+    id: 'team-click-partial',
+    code: 'especializado',
+    name: 'Especializado',
+    manager_name: 'Marcos',
+    manager_profile_id: null,
+    active: true,
+    settings: null,
+  }
+  const persons = people(5, 'CP')
+  const rules = [
+    rule('cp1', team.id, 'lunch_policy', 'coverage_weighted'),
+    rule('cp2', team.id, 'lunch_presential_preferred_time', '12:00'),
+    rule('cp3', team.id, 'lunch_ho_preferred_time', '13:00'),
+    rule('cp4', team.id, 'snack_policy', 'balanced_by_lunch'),
+    rule('cp5', team.id, 'snack_early_slots', ['15:45','16:00','16:15','16:30']),
+    rule('cp6', team.id, 'snack_late_slots', ['16:30','16:45','17:00','17:15']),
+  ]
+  const initialInput = baseInput(team, persons, rules)
+  initialInput.context = { year: 2026, month: 10, holidays: [], optional_days: [], click_days: [] }
+  const initial = generateMonthlySchedule(initialInput)
+
+  const date = '2026-10-21'
+  const preservedPerson = persons[0]
+  const preservedDaily = initial.entries.filter(
+    (entry) =>
+      entry.person_id === preservedPerson.id &&
+      entry.date === date &&
+      (entry.entry_type === 'lunch' || entry.entry_type === 'snack'),
+  )
+  assert.equal(preservedDaily.length, 2)
+
+  const click = generateMonthlySchedule({
+    ...initialInput,
+    context: { ...initialInput.context, click_days: [date] },
+    existingEntries: [
+      ...initial.entries.filter(
+        (entry) =>
+          entry.date !== date ||
+          entry.entry_type === 'hybrid' ||
+          entry.person_id === preservedPerson.id,
+      ),
+    ],
+  })
+
+  const clickLunches = click.entries.filter((entry) => entry.date === date && entry.entry_type === 'lunch')
+  const clickSnacks = click.entries.filter((entry) => entry.date === date && entry.entry_type === 'snack')
+  assert.equal(clickLunches.length, persons.length)
+  assert.equal(clickSnacks.length, persons.length)
+
+  for (const preserved of preservedDaily) {
+    const after = click.entries.find(
+      (entry) =>
+        entry.person_id === preserved.person_id &&
+        entry.date === preserved.date &&
+        entry.entry_type === preserved.entry_type,
+    )
+    assert.equal(after?.value, preserved.value)
+  }
 })
