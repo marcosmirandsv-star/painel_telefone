@@ -59,6 +59,7 @@ create table if not exists public.schedule_month_contexts (
   month integer not null check (month between 1 and 12),
   holidays jsonb not null default '[]'::jsonb,
   optional_days jsonb not null default '[]'::jsonb,
+  click_days jsonb not null default '[]'::jsonb,
   notes text,
   created_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default now(),
