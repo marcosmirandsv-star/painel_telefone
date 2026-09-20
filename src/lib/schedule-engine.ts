@@ -113,6 +113,10 @@ function isHoliday(input: ScheduleGenerationInput, date: string) {
   return input.context.holidays.includes(date) || input.context.optional_days.includes(date)
 }
 
+function isClickDay(input: ScheduleGenerationInput, date: string) {
+  return (input.context.click_days ?? []).includes(date)
+}
+
 function getActivePeople(input: ScheduleGenerationInput, date: string, entryType: MembershipEntryType) {
   return input.people.filter(
     (person) =>
@@ -480,7 +484,7 @@ function distributeExtended(
   const day = atUtcDate(date).getUTCDay()
   const teamRules = rulesForDate(input.rules, input.team.id, null, date)
   const allowedWeekdays = ruleArray(teamRules, 'extended_weekdays', [1, 2, 3, 4])
-  if (!allowedWeekdays.includes(day) || isHoliday(input, date)) return []
+  if (!allowedWeekdays.includes(day) || isHoliday(input, date) || isClickDay(input, date)) return []
 
   const seats = Number(ruleValue(teamRules, 'extended_people_per_day', 0))
   if (!Number.isFinite(seats) || seats <= 0) return []
@@ -539,7 +543,7 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
 
     if (extendedSeats > 0) {
       for (const date of week) {
-        if (!targetDates.has(date) || isHoliday(input, date)) continue
+        if (!targetDates.has(date) || isHoliday(input, date) || isClickDay(input, date)) continue
         const weekday = atUtcDate(date).getUTCDay()
         if (!extendedWeekdays.includes(weekday)) continue
         requiredHoByDate[date] = extendedSeats
@@ -583,7 +587,7 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
 
       const candidates = activeWeek
         .filter((date) => {
-          if (!targetDates.has(date) || isHoliday(input, date)) return false
+          if (!targetDates.has(date) || isHoliday(input, date) || isClickDay(input, date)) return false
           if (
             input.stabilityMode === 'preserve_existing' &&
             input.stabilityReferenceDate &&
@@ -633,11 +637,18 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
           input.stabilityReferenceDate &&
           date < input.stabilityReferenceDate &&
           existing
+        const clickDay = isClickDay(input, date)
+        const clickDayOverridesWorkingMode =
+          clickDay && existing && ['P', 'HO', 'CLICK_DAY'].includes(existing.value)
+
         if (
-          preservePast ||
-          existing?.locked ||
-          existing?.source === 'manual' ||
-          existing?.source === 'exception'
+          !clickDayOverridesWorkingMode &&
+          (
+            preservePast ||
+            existing?.locked ||
+            existing?.source === 'manual' ||
+            existing?.source === 'exception'
+          )
         ) {
           if (existing) entries.push(existing)
           continue
@@ -647,6 +658,7 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
         let value = 'P'
         if (isHoliday(input, date)) value = 'FERIADO'
         else if (absence) value = absence.kind
+        else if (clickDay) value = 'CLICK_DAY'
         else if (isForcedPresentialAroundVacation(input.absences, person.id, date)) value = 'P'
         else if (weeklyHo.get(person.id)?.has(date)) value = 'HO'
 
@@ -695,6 +707,22 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
               entry.entry_type === 'extended'),
         ),
       )
+      continue
+    }
+
+    if (isClickDay(input, date)) {
+      const previousDaily = (input.existingEntries ?? []).filter(
+        (entry) =>
+          entry.date === date &&
+          (entry.entry_type === 'lunch' || entry.entry_type === 'snack'),
+      )
+
+      if (previousDaily.length) {
+        entries.push(...previousDaily)
+      } else {
+        entries.push(...distributeLunch(input, date, getActivePeople(input, date, 'lunch'), entries))
+        entries.push(...distributeSnack(input, date, getActivePeople(input, date, 'snack'), entries, snackUsage))
+      }
       continue
     }
 
@@ -788,6 +816,33 @@ export function validateSchedule(input: ScheduleGenerationInput, entries: Schedu
           level: 'error',
           code: 'SNACK_OVER_CAPACITY',
           message: `Mais de 2 pessoas no lanche das ${slot}.`,
+          date,
+        })
+      }
+    }
+
+    if (isClickDay(input, date)) {
+      const clickHybrid = [...hybrid.entries()]
+      for (const [personId, value] of clickHybrid) {
+        if (value === 'HO') {
+          validations.push({
+            level: 'error',
+            code: 'CLICK_DAY_HO',
+            message: 'Click Day não pode manter Home Office.',
+            date,
+            person_id: personId,
+          })
+        }
+      }
+
+      const clickExtended = entries.filter(
+        (entry) => entry.date === date && entry.entry_type === 'extended',
+      )
+      if (clickExtended.length) {
+        validations.push({
+          level: 'error',
+          code: 'CLICK_DAY_EXTENDED',
+          message: 'Click Day não pode ter Estendido.',
           date,
         })
       }
