@@ -716,13 +716,25 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
           entry.date === date &&
           (entry.entry_type === 'lunch' || entry.entry_type === 'snack'),
       )
+      const previousKeys = new Set(previousDaily.map(entryKey))
 
-      if (previousDaily.length) {
-        entries.push(...previousDaily)
-      } else {
-        entries.push(...distributeLunch(input, date, getActivePeople(input, date, 'lunch'), entries))
-        entries.push(...distributeSnack(input, date, getActivePeople(input, date, 'snack'), entries, snackUsage))
-      }
+      const generatedLunch = distributeLunch(
+        input,
+        date,
+        getActivePeople(input, date, 'lunch'),
+        entries,
+      ).filter((entry) => !previousKeys.has(entryKey(entry)))
+      entries.push(...generatedLunch)
+
+      const generatedSnack = distributeSnack(
+        input,
+        date,
+        getActivePeople(input, date, 'snack'),
+        [...entries, ...previousDaily],
+        snackUsage,
+      ).filter((entry) => !previousKeys.has(entryKey(entry)))
+
+      entries.push(...generatedSnack, ...previousDaily)
       continue
     }
 
@@ -866,7 +878,8 @@ export function validateSchedule(input: ScheduleGenerationInput, entries: Schedu
     const shouldHaveExtended =
       extendedSeats > 0 &&
       extendedWeekdays.includes(atUtcDate(date).getUTCDay()) &&
-      !isHoliday(input, date)
+      !isHoliday(input, date) &&
+      !isClickDay(input, date)
 
     if (shouldHaveExtended && extended.length < extendedSeats) {
       validations.push({
@@ -879,23 +892,35 @@ export function validateSchedule(input: ScheduleGenerationInput, entries: Schedu
   }
 
   const weekStarts = [...new Set(dates.map(mondayOf))]
+  const hybridReference = new Map<string, ScheduleEntry>()
+  for (const entry of input.existingEntries ?? []) {
+    if (entry.entry_type === 'hybrid' && entry.team_id === input.team.id) {
+      hybridReference.set(`${entry.person_id}|${entry.date}`, entry)
+    }
+  }
+  for (const entry of entries) {
+    if (entry.entry_type === 'hybrid' && entry.team_id === input.team.id) {
+      hybridReference.set(`${entry.person_id}|${entry.date}`, entry)
+    }
+  }
+
   for (const monday of weekStarts) {
     const week = weekDays(monday)
     for (const person of input.people) {
       const activeDays = week.filter((date) =>
-        dates.includes(date) &&
         personMembershipOnDate(input.memberships, person.id, input.team.id, date, 'hybrid'),
       )
       if (!activeDays.length) continue
 
+      const completeWeek = activeDays.every(
+        (date) => hybridReference.has(`${person.id}|${date}`) || isHoliday(input, date),
+      )
+      if (!completeWeek) continue
+
       const holidayCredits = activeDays.filter((date) => isHoliday(input, date)).length
       const expectedHo = Math.max(0, 2 - holidayCredits)
-      const actualHo = entries.filter(
-        (entry) =>
-          entry.person_id === person.id &&
-          entry.entry_type === 'hybrid' &&
-          activeDays.includes(entry.date) &&
-          entry.value === 'HO',
+      const actualHo = activeDays.filter(
+        (date) => hybridReference.get(`${person.id}|${date}`)?.value === 'HO',
       ).length
 
       if (actualHo !== expectedHo) {
