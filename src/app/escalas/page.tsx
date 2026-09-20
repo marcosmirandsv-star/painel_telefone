@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { scheduleSupabase as supabase } from '@/lib/schedule-supabase'
-import { generateMonthlySchedule } from '@/lib/schedule-engine'
+import { generateMonthlySchedule, validateSchedule } from '@/lib/schedule-engine'
 import type {
   ScheduleAbsence,
   ScheduleEntry,
@@ -18,6 +18,7 @@ import type {
 type Profile = { id: string; full_name: string | null; role: string | null }
 type Notification = {
   id: string
+  profile_id: string
   title: string
   message: string
   seen_at: string | null
@@ -29,7 +30,6 @@ const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','A
 const STATUS = [
   ['P','Presencial'],
   ['HO','Home Office'],
-  ['EST','Estendido'],
   ['FOLGA','Folga'],
   ['DAY_OFF','Day Off'],
   ['PREMIACAO','Premiação'],
@@ -133,7 +133,8 @@ export default function EscalasPage() {
       supabase.from('schedule_notifications').select('*').order('created_at', { ascending: false }).limit(30),
     ])
 
-    setProfile((profileResult.data as Profile | null) ?? { id: 'homologacao', full_name: 'Marcos Miranda', role: 'master' })
+    const loadedProfile = (profileResult.data as Profile | null) ?? { id: 'homologacao', full_name: 'Marcos Miranda', role: 'master' }
+    setProfile(loadedProfile)
     const loadedTeams = (teamResult.data ?? []) as ScheduleTeam[]
     setTeams(loadedTeams)
     setSelectedTeamId((current) => current || loadedTeams[0]?.id || '')
@@ -154,7 +155,9 @@ export default function EscalasPage() {
           }
         : { year, month, holidays: [], optional_days: [] },
     )
-    const loadedNotifications = (notificationResult.data ?? []) as Notification[]
+    const loadedNotifications = ((notificationResult.data ?? []) as Notification[]).filter(
+      (item) => item.profile_id === loadedProfile.id,
+    )
     setNotifications(loadedNotifications)
     latestNotificationIds.current = new Set(loadedNotifications.map((item) => item.id))
     setLoading(false)
@@ -184,7 +187,13 @@ export default function EscalasPage() {
       .subscribe()
 
     const onFocus = async () => {
-      const { data } = await supabase.from('schedule_notifications').select('*').is('seen_at', null).order('created_at', { ascending: false }).limit(1)
+      const { data } = await supabase
+        .from('schedule_notifications')
+        .select('*')
+        .eq('profile_id', profile.id)
+        .is('seen_at', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
       const unseen = (data?.[0] ?? null) as Notification | null
       if (unseen && !popup) {
         setPopup(unseen)
@@ -281,7 +290,49 @@ export default function EscalasPage() {
       existingEntries: currentEntries,
     })
 
-    const payload = result.entries.map((entry) => ({
+    const protectedEntries = currentEntries.filter(
+      (entry) => entry.locked || entry.source === 'manual' || entry.source === 'exception',
+    )
+    const protectedKeys = new Set(
+      protectedEntries.map((entry) => `${entry.person_id}|${entry.team_id}|${entry.date}|${entry.entry_type}`),
+    )
+    const generatedEntries = result.entries.filter(
+      (entry) => !protectedKeys.has(`${entry.person_id}|${entry.team_id}|${entry.date}|${entry.entry_type}`),
+    )
+    const finalEntries = [...generatedEntries, ...protectedEntries]
+    const finalValidations = validateSchedule(
+      {
+        team: selectedTeam,
+        people,
+        memberships,
+        absences,
+        rules,
+        context: {
+          id: savedContext.id,
+          year,
+          month,
+          holidays: savedContext.holidays ?? [],
+          optional_days: savedContext.optional_days ?? [],
+          notes: savedContext.notes,
+        },
+        year,
+        month,
+        existingEntries: currentEntries,
+      },
+      finalEntries,
+    )
+
+    const { error: cleanupError } = await supabase
+      .from('schedule_entries')
+      .delete()
+      .eq('team_id', selectedTeam.id)
+      .gte('date', `${monthPrefix}-01`)
+      .lte('date', `${monthPrefix}-31`)
+      .eq('source', 'generated')
+      .eq('locked', false)
+    if (cleanupError) return setMessage(cleanupError.message)
+
+    const payload = finalEntries.map((entry) => ({
       person_id: entry.person_id,
       team_id: entry.team_id,
       date: entry.date,
@@ -295,12 +346,12 @@ export default function EscalasPage() {
     }))
     const { error } = await supabase.from('schedule_entries').upsert(payload, { onConflict: 'person_id,team_id,date,entry_type' })
     if (error) return setMessage(error.message)
-    setValidations(result.validations)
+    setValidations(finalValidations)
     setEntries((current) => [
       ...current.filter((entry) => entry.team_id !== selectedTeam.id || !entry.date.startsWith(monthPrefix)),
-      ...result.entries,
+      ...finalEntries,
     ])
-    setMessage(result.validations.some((item) => item.level === 'error') ? 'Escala gerada com alertas para revisão.' : 'Escala gerada e validada sem conflitos obrigatórios.')
+    setMessage(finalValidations.some((item) => item.level === 'error') ? 'Escala gerada com alertas para revisão.' : 'Escala gerada e validada sem conflitos obrigatórios.')
   }
 
   async function cycleCell(personId: string, date: string) {
@@ -412,7 +463,7 @@ export default function EscalasPage() {
             <p className="mt-2 text-slate-400">Composição do time, geração, validação, publicação e solicitações em um único fluxo.</p>
           </div>
           <div className="flex items-center gap-3">
-            <button className="relative rounded-xl border border-white/10 bg-slate-900 px-4 py-3" onClick={() => setSection('requests')}>
+            <button className={`relative rounded-xl border border-white/10 bg-slate-900 px-4 py-3 ${notifications.some((item) => !item.seen_at) ? 'animate-bounce' : ''}`} onClick={() => setSection('requests')}>
               🔔
               {notifications.filter((item) => !item.seen_at).length > 0 && (
                 <span className="absolute -right-2 -top-2 rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold">
