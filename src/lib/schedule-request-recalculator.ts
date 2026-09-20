@@ -90,6 +90,11 @@ function isSaturday(dateValue: string) {
   return new Date(`${dateValue}T12:00:00Z`).getUTCDay() === 6
 }
 
+function localTodayIso() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
 async function resolvePerson(
   supabase: SupabaseClient,
   request: ScheduleRequestForReview,
@@ -356,7 +361,7 @@ export async function approveAndRecalculateScheduleRequest(
     month,
     existingEntries,
     stabilityMode: 'preserve_existing',
-    stabilityReferenceDate: request.target_date,
+    stabilityReferenceDate: localTodayIso(),
   })
 
   const currentMonthEntries = existingEntries.filter(
