@@ -32,4 +32,9 @@ jobs:
         run: npm run test:integrations
 
       - name: Build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-publishable-key
+          NEXT_PUBLIC_SCHEDULE_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SCHEDULE_SUPABASE_PUBLISHABLE_KEY: test-publishable-key
         run: npm run build
