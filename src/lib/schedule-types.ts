@@ -72,6 +72,7 @@ export type ScheduleMonthContext = {
   month: number
   holidays: string[]
   optional_days: string[]
+  click_days?: string[]
   notes?: string | null
 }
 
