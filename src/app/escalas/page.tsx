@@ -222,6 +222,9 @@ export default function EscalasPage() {
   const selectedTeam = teams.find((team) => team.id === selectedTeamId) ?? null
   const monthDays = useMemo(() => daysInMonth(year, month), [year, month])
   const monthPrefix = ymd(year, month)
+  const businessMonthDays = useMemo(() => monthDays.filter((day) => day.business), [monthDays])
+  const crossesPreviousMonth = Boolean(businessMonthDays[0] && businessMonthDays[0].dow > 1)
+  const crossesNextMonth = Boolean(businessMonthDays.at(-1) && (businessMonthDays.at(-1)?.dow ?? 5) < 5)
   const { start: monthStartDate, end: monthEndDate } = useMemo(() => monthRange(year, month), [year, month])
   const paddedStartDate = useMemo(() => shiftIsoDate(monthStartDate, -7), [monthStartDate])
   const paddedEndDate = useMemo(() => shiftIsoDate(monthEndDate, 7), [monthEndDate])
@@ -771,6 +774,13 @@ export default function EscalasPage() {
 
         {section === 'scale' && (
           <>
+            {(crossesPreviousMonth || crossesNextMonth) && (
+              <div className="schedule-inline-note mt-6">
+                <strong>Semana operacional atravessando a virada do mês.</strong>{' '}
+                O motor considera os dias do mês anterior e/ou seguinte para fechar a distribuição semanal de Presencial e Home Office sem reiniciar a contagem no dia 1º.
+              </div>
+            )}
+
             <section className="schedule-overview-grid mt-6">
               <div className="schedule-overview-card">
                 <span>Equipe</span>
