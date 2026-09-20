@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { scheduleSupabase as supabase } from '@/lib/schedule-supabase'
+import { ScheduleModal } from '@/components/schedule-modal'
 
 type Person = { id: string; name: string; active: boolean }
 type SaturdayMember = { id: string; person_id: string; role: 'fixed'|'rotating'; start_date: string; end_date: string | null; active: boolean }
@@ -39,6 +40,10 @@ export default function SaturdaySchedulePage() {
   const [newPersonId, setNewPersonId] = useState('')
   const [newRole, setNewRole] = useState<'fixed'|'rotating'>('rotating')
   const [newStart, setNewStart] = useState(`${year}-01-01`)
+  const [endDialogMember, setEndDialogMember] = useState<SaturdayMember | null>(null)
+  const [endDate, setEndDate] = useState(new Date().toISOString().slice(0,10))
+  const [replaceDialog, setReplaceDialog] = useState<{date:string; current:SaturdayEntry; slot:'fixed'|'rotating'; candidates:Person[]}|null>(null)
+  const [replacementPersonId, setReplacementPersonId] = useState('')
 
   const dates = useMemo(() => saturdays(year), [year])
 
@@ -78,11 +83,20 @@ export default function SaturdaySchedulePage() {
     await load()
   }
 
-  async function endMember(member: SaturdayMember) {
-    const endDate = window.prompt('Encerrar participação em (AAAA-MM-DD):', new Date().toISOString().slice(0,10))
-    if (!endDate) return
-    const { error } = await supabase.from('schedule_saturday_members').update({ end_date: endDate, active: false }).eq('id', member.id)
+  function openEndMember(member: SaturdayMember) {
+    setEndDate(new Date().toISOString().slice(0,10))
+    setEndDialogMember(member)
+  }
+
+  async function confirmEndMember() {
+    if (!endDialogMember || !endDate) return
+    const { error } = await supabase
+      .from('schedule_saturday_members')
+      .update({ end_date: endDate, active: false })
+      .eq('id', endDialogMember.id)
     if (error) return setMessage(error.message)
+    setEndDialogMember(null)
+    setMessage('Participação encerrada com vigência preservada.')
     await load()
   }
 
@@ -173,7 +187,7 @@ export default function SaturdaySchedulePage() {
     await load()
   }
 
-  async function replace(date: string, oldPersonId: string) {
+  function openReplace(date: string, oldPersonId: string) {
     if (!team) return
     const current = entries.find(
       (item) => item.date === date && item.person_id === oldPersonId && item.entry_type === 'saturday',
@@ -186,30 +200,36 @@ export default function SaturdaySchedulePage() {
     const alreadyScheduled = new Set(
       entries.filter((item) => item.date === date && item.person_id !== oldPersonId).map((item) => item.person_id),
     )
-    const eligible = eligibleOnDate(date)
-    const names = eligible
+    const candidates = eligibleOnDate(date)
       .map((item) => people.find((person) => person.id === item.person_id))
       .filter((person): person is Person => person !== undefined && !alreadyScheduled.has(person.id))
 
-    const chosenName = window.prompt(
-      'Digite exatamente o nome do substituto:\n' + names.map((item) => item.name).join('\n'),
-    )
-    if (!chosenName) return
-    const chosen = names.find((item) => item.name.toLowerCase() === chosenName.trim().toLowerCase())
-    if (!chosen) return setMessage('Nome não encontrado entre os elegíveis para este sábado.')
+    setReplacementPersonId(candidates[0]?.id ?? '')
+    setReplaceDialog({ date, current, slot, candidates })
+  }
 
-    if (current.id) await supabase.from('schedule_entries').delete().eq('id', current.id)
+  async function confirmReplace() {
+    if (!team || !replaceDialog || !replacementPersonId) return
+    const chosen = replaceDialog.candidates.find((item) => item.id === replacementPersonId)
+    if (!chosen) return setMessage('Selecione uma pessoa elegível para este sábado.')
+
+    if (replaceDialog.current.id) {
+      await supabase.from('schedule_entries').delete().eq('id', replaceDialog.current.id)
+    }
+
     const { error } = await supabase.from('schedule_entries').upsert({
       person_id: chosen.id,
       team_id: team.id,
-      date,
+      date: replaceDialog.date,
       entry_type:'saturday',
-      value: slot === 'fixed' ? 'Substituição fixa' : 'Substituição de rodízio',
+      value: replaceDialog.slot === 'fixed' ? 'Substituição fixa' : 'Substituição de rodízio',
       source:'manual',
       locked:true,
-      metadata:{ slot },
+      metadata:{ slot: replaceDialog.slot },
     }, { onConflict:'person_id,team_id,date,entry_type' })
     if (error) return setMessage(error.message)
+
+    setReplaceDialog(null)
     setMessage('Troca registrada e protegida contra nova geração.')
     await load()
   }
@@ -220,6 +240,55 @@ export default function SaturdaySchedulePage() {
 
   return (
     <main className="schedule-shell p-4 sm:p-7">
+      {endDialogMember && (
+        <ScheduleModal
+          title="Encerrar participação no rodízio"
+          description="O histórico dos sábados anteriores será preservado."
+          tone="danger"
+          onClose={() => setEndDialogMember(null)}
+          footer={
+            <>
+              <button className="secondary-button" onClick={() => setEndDialogMember(null)}>Cancelar</button>
+              <button className="danger-button" onClick={confirmEndMember}>Encerrar participação</button>
+            </>
+          }
+        >
+          <div className="schedule-inline-note">
+            <strong>{people.find((person) => person.id === endDialogMember.person_id)?.name ?? 'Pessoa'}</strong>
+            <br />
+            {endDialogMember.role === 'fixed' ? 'Participante fixo' : 'Participante do rodízio'}
+          </div>
+          <label className="schedule-field">
+            Último dia de participação
+            <input className="px-3 py-2" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+          </label>
+        </ScheduleModal>
+      )}
+
+      {replaceDialog && (
+        <ScheduleModal
+          title="Substituir pessoa no sábado"
+          description="A troca será protegida e não será sobrescrita quando os sábados forem gerados novamente."
+          onClose={() => setReplaceDialog(null)}
+          footer={
+            <>
+              <button className="secondary-button" onClick={() => setReplaceDialog(null)}>Cancelar</button>
+              <button className="primary-button" onClick={confirmReplace} disabled={!replacementPersonId}>Confirmar troca</button>
+            </>
+          }
+        >
+          <div className="schedule-inline-note">
+            {new Date(`${replaceDialog.date}T12:00:00`).toLocaleDateString('pt-BR')} · {replaceDialog.slot === 'fixed' ? 'Vaga fixa' : 'Vaga de rodízio'}
+          </div>
+          <label className="schedule-field">
+            Substituto
+            <select className="px-3 py-2" value={replacementPersonId} onChange={(event) => setReplacementPersonId(event.target.value)}>
+              {replaceDialog.candidates.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
+            </select>
+          </label>
+        </ScheduleModal>
+      )}
+
       <section className="mx-auto max-w-[1600px]">
         <div className="schedule-banner-homologation mb-4 px-4 py-3 text-sm"><strong>Ambiente de homologação</strong> · rodízio de sábados</div>
         <header className="schedule-topbar flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -241,7 +310,7 @@ export default function SaturdaySchedulePage() {
 
         <section className="mt-5 schedule-card p-5">
           <h2 className="text-lg font-bold">Equipe do rodízio</h2>
-          <div className="mt-3 flex flex-wrap gap-2">{members.map((member)=>{const person=people.find((p)=>p.id===member.person_id); return <div key={member.id} className="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm"><strong>{person?.name ?? 'Pessoa'}</strong> · {member.role === 'fixed' ? 'Fixo' : 'Rodízio'} · desde {member.start_date}{member.end_date ? ` até ${member.end_date}` : ''} {!member.end_date && <button className="ml-2 text-amber-300" onClick={()=>endMember(member)}>Encerrar</button>}</div>})}</div>
+          <div className="mt-3 flex flex-wrap gap-2">{members.map((member)=>{const person=people.find((p)=>p.id===member.person_id); return <div key={member.id} className="rounded-xl border border-white/10 bg-slate-950 px-3 py-2 text-sm"><strong>{person?.name ?? 'Pessoa'}</strong> · {member.role === 'fixed' ? 'Fixo' : 'Rodízio'} · desde {member.start_date}{member.end_date ? ` até ${member.end_date}` : ''} {!member.end_date && <button className="ml-2 text-amber-300" onClick={()=>openEndMember(member)}>Encerrar</button>}</div>})}</div>
         </section>
 
         <section className="mt-5 overflow-x-auto schedule-card p-4">
@@ -252,7 +321,7 @@ export default function SaturdaySchedulePage() {
                 <div className="grid gap-3">
                   {monthDates.map((date)=>{
                     const dayEntries=entries.filter((item)=>item.date===date)
-                    return <div key={date} className="rounded-lg border border-white/10 p-3"><div className="text-xs text-slate-400">{new Date(`${date}T12:00:00`).toLocaleDateString('pt-BR')}</div>{dayEntries.map((item)=>{const person=people.find((p)=>p.id===item.person_id); return <button key={item.id ?? item.person_id} className="mt-2 block w-full rounded-md bg-slate-800 px-2 py-2 text-left text-sm hover:bg-slate-700" onClick={()=>replace(date,item.person_id)}>{person?.name ?? '—'} <span className="float-right text-xs text-slate-500">{item.value}</span></button>})}{dayEntries.length<2 && <div className="mt-2 text-sm text-amber-300">Vaga disponível</div>}</div>
+                    return <div key={date} className="rounded-lg border border-white/10 p-3"><div className="text-xs text-slate-400">{new Date(`${date}T12:00:00`).toLocaleDateString('pt-BR')}</div>{dayEntries.map((item)=>{const person=people.find((p)=>p.id===item.person_id); return <button key={item.id ?? item.person_id} className="mt-2 block w-full rounded-md bg-slate-800 px-2 py-2 text-left text-sm hover:bg-slate-700" onClick={()=>openReplace(date,item.person_id)}>{person?.name ?? '—'} <span className="float-right text-xs text-slate-500">{item.value}</span></button>})}{dayEntries.length<2 && <div className="mt-2 text-sm text-amber-300">Vaga disponível</div>}</div>
                   })}
                 </div>
               </div>
