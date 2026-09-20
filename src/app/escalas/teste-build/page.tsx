@@ -1,4 +1,6 @@
 import { planWeeklyHybrid } from '@/lib/schedule-hybrid-planner'
+import { generateMonthlySchedule } from '@/lib/schedule-engine'
+import type { ScheduleGenerationInput } from '@/lib/schedule-types'
 
 export const dynamic = 'force-static'
 
@@ -89,7 +91,133 @@ function runPlannerSelfTest() {
   return 'OK'
 }
 
-const status = runPlannerSelfTest()
+function runEngineSelfTest() {
+  const team = {
+    id: 'team-test',
+    code: 'especializado',
+    name: 'Time teste',
+    manager_name: 'Gestor',
+    manager_profile_id: null,
+    active: true,
+    settings: null,
+  }
+  const people = Array.from({ length: 4 }, (_, index) => ({
+    id: `person-${index + 1}`,
+    name: `Analista ${index + 1}`,
+    email: null,
+    active: true,
+    phone_analyst_id: null,
+    chat_analyst_id: null,
+    profile_id: null,
+  }))
+  const memberships = people.map((person, index) => ({
+    id: `membership-${index + 1}`,
+    person_id: person.id,
+    team_id: team.id,
+    manager_profile_id: null,
+    start_date: '2026-01-01',
+    end_date: null,
+    participates_in_schedule: true,
+    participates_hybrid: true,
+    participates_lunch: true,
+    participates_snack: true,
+    participates_extended: true,
+  }))
+  const rules = [
+    {
+      id: 'rule-1', team_id: team.id, person_id: null,
+      rule_key: 'extended_people_per_day', rule_value: { value: 2 },
+      start_date: '2026-01-01', end_date: null, active: true,
+    },
+    {
+      id: 'rule-2', team_id: team.id, person_id: null,
+      rule_key: 'extended_weekdays', rule_value: { value: [1, 2, 3, 4] },
+      start_date: '2026-01-01', end_date: null, active: true,
+    },
+    {
+      id: 'rule-3', team_id: team.id, person_id: null,
+      rule_key: 'ho_lunch_time', rule_value: { value: '13:00' },
+      start_date: '2026-01-01', end_date: null, active: true,
+    },
+  ]
+
+  const input: ScheduleGenerationInput = {
+    team,
+    people,
+    memberships,
+    absences: [],
+    rules,
+    context: { year: 2026, month: 11, holidays: [], optional_days: [] },
+    year: 2026,
+    month: 11,
+    existingEntries: [{
+      person_id: 'person-1',
+      team_id: team.id,
+      date: '2026-11-03',
+      entry_type: 'hybrid',
+      value: 'P',
+      source: 'manual',
+      locked: true,
+    }],
+  }
+
+  const result = generateMonthlySchedule(input)
+  const errors = result.validations.filter((item) => item.level === 'error')
+  assert(errors.length === 0, `motor completo retornou ${errors.length} erro(s)`)
+
+  const manual = result.entries.find(
+    (entry) =>
+      entry.person_id === 'person-1' &&
+      entry.date === '2026-11-03' &&
+      entry.entry_type === 'hybrid',
+  )
+  assert(manual?.value === 'P' && manual.locked === true, 'ajuste manual deve ser preservado')
+
+  const extendedDates = [...new Set(
+    result.entries.filter((entry) => entry.entry_type === 'extended').map((entry) => entry.date),
+  )]
+  for (const date of extendedDates) {
+    const extended = result.entries.filter(
+      (entry) => entry.date === date && entry.entry_type === 'extended',
+    )
+    assert(extended.length === 2, `${date} precisa ter 2 pessoas no estendido`)
+    for (const item of extended) {
+      const hybrid = result.entries.find(
+        (entry) =>
+          entry.person_id === item.person_id &&
+          entry.date === date &&
+          entry.entry_type === 'hybrid',
+      )
+      assert(hybrid?.value === 'HO', 'estendido precisa estar em HO')
+    }
+  }
+
+  for (const lunch of result.entries.filter((entry) => entry.entry_type === 'lunch')) {
+    const hybrid = result.entries.find(
+      (entry) =>
+        entry.person_id === lunch.person_id &&
+        entry.date === lunch.date &&
+        entry.entry_type === 'hybrid',
+    )
+    if (hybrid?.value === 'HO') {
+      assert(lunch.value === '13:00', 'HO deve almoçar às 13:00')
+    }
+  }
+
+  const snackGroups = new Map<string, number>()
+  for (const snack of result.entries.filter((entry) => entry.entry_type === 'snack')) {
+    const key = `${snack.date}|${snack.value}`
+    snackGroups.set(key, (snackGroups.get(key) ?? 0) + 1)
+  }
+  assert(
+    [...snackGroups.values()].every((count) => count <= 2),
+    'lanche não pode ultrapassar 2 pessoas por horário',
+  )
+
+  return 'OK'
+}
+
+const status = `${runPlannerSelfTest()} / ${runEngineSelfTest()}`
 
 export default function ScheduleBuildTestPage() {
   return (
