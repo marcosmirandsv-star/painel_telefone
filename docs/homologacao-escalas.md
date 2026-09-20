@@ -15,7 +15,7 @@ Esta branch foi criada para desenvolver o novo módulo de escalas sem alterar a 
 - Vínculos de pessoa com time usando data de início e fim.
 - Saída/transferência no meio do mês refletida na grade com “—” fora da vigência.
 - Times iniciais: Suporte Outros, Suporte Especializado, Telefone, Implantação, N2, Liderança e Sábados.
-- Contexto mensal com feriados e pontos facultativos.
+- Contexto mensal com feriados, pontos facultativos e Click Day.
 - Motor inicial de geração de Híbrido, Almoço, Lanche e Estendido.
 - Validação automática de regras objetivas.
 - Alteração manual de célula com bloqueio para não ser sobrescrita por nova geração.
@@ -59,6 +59,8 @@ A homologação deve usar:
 - Transferência/inativação não altera histórico anterior.
 - Pessoa fora da vigência não entra em nenhum cálculo.
 - Férias, feriados e pontos facultativos entram na geração.
+- Semana com feriado: o feriado conta como um dos dois dias de HO, portanto a referência da semana passa a ser 1 HO + feriado.
+- Click Day: todos ficam presenciais nesse dia, o HO eventualmente previsto é remanejado dentro da semana, almoço e café já calculados são preservados e não há Estendido.
 - Regras de almoço respeitam preferências por time: Chat HO prefere 13h, Telefone HO prefere 11h30, com flexibilidade controlada por cobertura.
 - Estendido somente em HO e respeitando restrições cadastradas.
 - Lanche sem mais de 2 pessoas por horário.
@@ -108,3 +110,8 @@ Quando o recálculo realmente altera a escala:
 - o colaborador pode autorizar a notificação nativa do navegador.
 
 O aviso ao time não expõe o motivo pessoal da solicitação. Ele informa apenas que a escala foi atualizada e quais datas devem ser conferidas novamente.
+
+
+## Continuidade entre meses
+
+A semana operacional é tratada de segunda a sexta e não reinicia no primeiro dia do mês. Ao gerar o mês seguinte, o motor lê a parte já calculada da mesma semana no mês anterior e completa somente o que falta. Assim, em uma semana que termine com quinta-feira no último dia de um mês e sexta-feira no dia 1º do mês seguinte, a cota de HO continua sendo calculada sobre a semana inteira.
