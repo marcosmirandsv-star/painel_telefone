@@ -57,6 +57,23 @@ function scheduleCellTone(value?: string) {
   return 'schedule-status-default'
 }
 
+function scheduleCellLabel(value?: string) {
+  if (!value) return '—'
+  const labels: Record<string, string> = {
+    P: 'Presencial',
+    HO: 'Home Office',
+    FOLGA: 'Folga',
+    DAY_OFF: 'Day Off',
+    PREMIACAO: 'Premiação',
+    BANCO_HORAS: 'Banco de horas',
+    FERIAS: 'Férias',
+    CLICK_DAY: 'Click Day',
+    FERIADO: 'Feriado',
+    SENAC: 'Senac',
+  }
+  return labels[value] ?? value
+}
+
 function changeSeenKey(token: string) {
   return `schedule-change-seen:${token}`
 }
@@ -302,7 +319,9 @@ export default function PublicSchedulePage() {
                     const entry = snapshot.entries.find((item) => item.person_id === person.id && item.date === day.value && item.entry_type === entryType)
                     const lunchDetail = entryType === 'lunch' && entry?.metadata?.return_time
                       ? `${entry.value}–${entry.metadata.return_time}`
-                      : entry?.value ?? '—'
+                      : entryType === 'hybrid'
+                        ? scheduleCellLabel(entry?.value)
+                        : entry?.value ?? '—'
                     return <td key={day.value} className={`p-1.5 text-center ${changedDates.has(day.value) ? 'bg-amber-950/10' : ''}`}>
                       <div className={`schedule-cell-button cursor-default ${scheduleCellTone(entry?.value)}`}>
                         <span>{lunchDetail}</span>
