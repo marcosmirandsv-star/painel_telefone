@@ -29,6 +29,62 @@ type Notification = {
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 const WEEKDAY_LABEL = ['DOM','SEG','TER','QUA','QUI','SEX','SÁB']
 
+const RULE_LABELS: Record<string, string> = {
+  experienced_min_at_12: 'Cobertura experiente às 12h',
+  experienced_people: 'Pessoas experientes para cobertura',
+  extended_allowed_weekdays: 'Dias permitidos para Estendido',
+  extended_blocked_weekdays: 'Dias bloqueados para Estendido',
+  extended_people_per_day: 'Pessoas no Estendido por dia',
+  extended_shifts: 'Horários do Estendido',
+  extended_weekdays: 'Dias da semana com Estendido',
+  ho_lunch_time: 'Almoço em Home Office',
+  hybrid_fixed_weekdays: 'Dias fixos de Home Office',
+  hybrid_preferred_weekdays: 'Dias preferenciais de Home Office',
+  lunch_default_time: 'Horário padrão de almoço',
+  lunch_ho_preferred_time: 'Almoço preferencial em Home Office',
+  lunch_modal_strict: 'Vínculo rígido entre modalidade e almoço',
+  lunch_policy: 'Política de distribuição do almoço',
+  lunch_presential_preferred_time: 'Almoço preferencial presencial',
+  lunch_slot_targets: 'Distribuição de almoço por horário',
+  lunch_windows: 'Janelas completas de almoço',
+  shift_end_by_lunch: 'Saída prevista por janela de almoço',
+  snack_early_slots: 'Faixa de café para almoço mais cedo',
+  snack_fixed_time: 'Café fixo',
+  snack_late_slots: 'Faixa de café para almoço mais tarde',
+  snack_policy: 'Política de distribuição do café',
+}
+
+const RULE_POLICY_LABELS: Record<string, string> = {
+  coverage_weighted: 'Preferência com ajuste por cobertura',
+  by_modality: 'Preferência conforme Presencial / Home Office',
+  balanced_by_lunch: 'Balanceado conforme o horário de almoço',
+  fixed_by_person: 'Horário fixo por pessoa',
+  legacy: 'Regra anterior',
+}
+
+function weekdayName(value: number) {
+  return ['domingo','segunda','terça','quarta','quinta','sexta','sábado'][value] ?? String(value)
+}
+
+function readableRuleValue(rule: ScheduleRule) {
+  const value = rule.rule_value?.value
+  if (typeof value === 'boolean') return value ? 'Sim' : 'Não'
+  if (typeof value === 'number') return String(value)
+  if (typeof value === 'string') return RULE_POLICY_LABELS[value] ?? value
+  if (Array.isArray(value)) {
+    if (value.every((item) => typeof item === 'number')) {
+      return value.map((item) => weekdayName(Number(item))).join(', ')
+    }
+    return value.join(', ')
+  }
+  if (value && typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([key, item]) => `${key} → ${String(item)}`)
+      .join(' · ')
+  }
+  return '—'
+}
+
 const STATUS = [
   ['P','Presencial'],
   ['HO','Home Office'],
@@ -876,17 +932,41 @@ export default function EscalasPage() {
         )}
 
         {section === 'rules' && isManagement && (
-          <section className="mt-6 rounded-2xl border border-white/10 bg-slate-900/60 p-5">
-            <h2 className="text-xl font-bold">Regras vigentes</h2>
-            <p className="mt-2 text-sm text-slate-400">As regras podem ser gerais, por time ou por pessoa e possuem vigência. Nesta primeira homologação, a edição detalhada será feita depois da validação do modelo de cadastro.</p>
-            <div className="mt-4 grid gap-2">
-              {rules.map((rule) => (
-                <div key={rule.id} className="rounded-lg border border-white/10 bg-slate-950 p-3 text-sm">
-                  <strong>{rule.rule_key}</strong> · {rule.start_date} → {rule.end_date ?? 'atual'}
-                  <pre className="mt-2 overflow-x-auto text-xs text-slate-400">{JSON.stringify(rule.rule_value)}</pre>
-                </div>
-              ))}
-              {!rules.length && <p className="text-slate-400">Nenhuma regra cadastrada ainda.</p>}
+          <section className="schedule-card mt-6 p-5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="schedule-kicker">Configuração operacional</p>
+                <h2 className="schedule-heading mt-1 text-xl font-bold">Regras vigentes</h2>
+                <p className="schedule-subtitle mt-2 text-sm">Leitura amigável das regras que o motor usa para gerar e validar a escala.</p>
+              </div>
+              <span className="text-xs text-slate-500">{rules.length} regra(s) ativa(s)</span>
+            </div>
+            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {rules.map((rule) => {
+                const team = rule.team_id ? teams.find((item) => item.id === rule.team_id) : null
+                const person = rule.person_id ? people.find((item) => item.id === rule.person_id) : null
+                return (
+                  <article key={rule.id} className="schedule-card-muted p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-bold text-slate-100">{RULE_LABELS[rule.rule_key] ?? rule.rule_key}</p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {person ? person.name : team ? team.name : 'Regra geral'}
+                        </p>
+                      </div>
+                      <span className="rounded-full border border-white/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                        Vigente
+                      </span>
+                    </div>
+                    <p className="mt-4 text-sm leading-6 text-slate-300">{readableRuleValue(rule)}</p>
+                    <p className="mt-3 text-xs text-slate-600">
+                      Desde {new Date(`${rule.start_date}T12:00:00`).toLocaleDateString('pt-BR')}
+                      {rule.end_date ? ` até ${new Date(`${rule.end_date}T12:00:00`).toLocaleDateString('pt-BR')}` : ''}
+                    </p>
+                  </article>
+                )
+              })}
+              {!rules.length && <div className="schedule-empty md:col-span-2 xl:col-span-3">Nenhuma regra cadastrada.</div>}
             </div>
           </section>
         )}
