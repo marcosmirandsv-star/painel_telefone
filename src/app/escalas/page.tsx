@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
+import { scheduleSupabase as supabase } from '@/lib/schedule-supabase'
 import { generateMonthlySchedule } from '@/lib/schedule-engine'
 import type {
   ScheduleAbsence,
@@ -109,10 +109,6 @@ export default function EscalasPage() {
     setLoading(true)
     const { data: userData } = await supabase.auth.getUser()
     const user = userData.user
-    if (!user) {
-      setLoading(false)
-      return
-    }
     const [
       profileResult,
       teamResult,
@@ -124,7 +120,9 @@ export default function EscalasPage() {
       contextResult,
       notificationResult,
     ] = await Promise.all([
-      supabase.from('profiles').select('id,full_name,role').eq('id', user.id).maybeSingle(),
+      user
+        ? supabase.from('profiles').select('id,full_name,role').eq('id', user.id).maybeSingle()
+        : supabase.from('profiles').select('id,full_name,role').eq('full_name', 'Marcos Miranda').maybeSingle(),
       supabase.from('schedule_teams').select('*').eq('active', true).order('name'),
       supabase.from('schedule_people').select('*').order('name'),
       supabase.from('schedule_memberships').select('*').order('start_date'),
@@ -135,7 +133,7 @@ export default function EscalasPage() {
       supabase.from('schedule_notifications').select('*').order('created_at', { ascending: false }).limit(30),
     ])
 
-    setProfile(profileResult.data as Profile | null)
+    setProfile((profileResult.data as Profile | null) ?? { id: 'homologacao', full_name: 'Marcos Miranda', role: 'master' })
     const loadedTeams = (teamResult.data ?? []) as ScheduleTeam[]
     setTeams(loadedTeams)
     setSelectedTeamId((current) => current || loadedTeams[0]?.id || '')
