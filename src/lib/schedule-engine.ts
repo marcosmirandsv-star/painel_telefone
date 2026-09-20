@@ -403,13 +403,24 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
     const extendedSeats = Number(ruleValue(teamRules, 'extended_people_per_day', 0))
     const extendedWeekdays = ruleArray(teamRules, 'extended_weekdays', [1, 2, 3, 4])
     const requiredHoByDate: Record<string, number> = {}
+    const requiredEligibleByDate: Record<string, string[]> = {}
 
     if (extendedSeats > 0) {
       for (const date of week) {
         if (!targetDates.has(date) || isHoliday(input, date)) continue
-        if (extendedWeekdays.includes(atUtcDate(date).getUTCDay())) {
-          requiredHoByDate[date] = extendedSeats
-        }
+        const weekday = atUtcDate(date).getUTCDay()
+        if (!extendedWeekdays.includes(weekday)) continue
+        requiredHoByDate[date] = extendedSeats
+        requiredEligibleByDate[date] = peopleInWeek
+          .filter((person) => {
+            if (!personMembershipOnDate(input.memberships, person.id, input.team.id, date, 'extended')) return false
+            if (absenceOnDate(input.absences, person.id, date)) return false
+            const personRules = rulesForDate(input.rules, input.team.id, person.id, date)
+            const allowed = ruleArray(personRules, 'extended_allowed_weekdays', [1, 2, 3, 4, 5])
+            const blocked = ruleArray(personRules, 'extended_blocked_weekdays', [])
+            return allowed.includes(weekday) && !blocked.includes(weekday)
+          })
+          .map((person) => person.id)
       }
     }
 
@@ -458,7 +469,7 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
       }
     })
 
-    const weeklyHo = planWeeklyHybrid({ people: plannerPeople, requiredHoByDate })
+    const weeklyHo = planWeeklyHybrid({ people: plannerPeople, requiredHoByDate, requiredEligibleByDate })
 
     for (const person of peopleInWeek) {
       for (const date of week) {
