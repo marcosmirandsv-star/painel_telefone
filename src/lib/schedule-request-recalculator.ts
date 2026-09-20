@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { generateMonthlySchedule, validateSchedule } from './schedule-engine'
+import { generateMonthlySchedule, validateSchedule } from './schedule-engine.ts'
 import type {
   ScheduleAbsence,
   ScheduleEntry,
@@ -8,7 +8,7 @@ import type {
   SchedulePerson,
   ScheduleRule,
   ScheduleTeam,
-} from './schedule-types'
+} from './schedule-types.ts'
 
 export type ScheduleRequestForReview = {
   id: string
