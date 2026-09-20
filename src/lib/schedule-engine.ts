@@ -46,12 +46,30 @@ function dateInRange(date: string, start: string, end: string | null | undefined
   return date >= start && (!end || date <= end)
 }
 
-function personMembershipOnDate(memberships: ScheduleMembership[], personId: string, teamId: string, date: string) {
+type MembershipEntryType = 'hybrid' | 'lunch' | 'snack' | 'extended'
+
+function membershipAllowsEntry(membership: ScheduleMembership, entryType?: MembershipEntryType) {
+  if (!membership.participates_in_schedule) return false
+  if (!entryType) return true
+  if (entryType === 'hybrid') return membership.participates_hybrid !== false
+  if (entryType === 'lunch') return membership.participates_lunch !== false
+  if (entryType === 'snack') return membership.participates_snack !== false
+  if (entryType === 'extended') return membership.participates_extended !== false
+  return true
+}
+
+function personMembershipOnDate(
+  memberships: ScheduleMembership[],
+  personId: string,
+  teamId: string,
+  date: string,
+  entryType?: MembershipEntryType,
+) {
   return memberships.some(
     (membership) =>
       membership.person_id === personId &&
       membership.team_id === teamId &&
-      membership.participates_in_schedule &&
+      membershipAllowsEntry(membership, entryType) &&
       dateInRange(date, membership.start_date, membership.end_date),
   )
 }
@@ -94,11 +112,11 @@ function isHoliday(input: ScheduleGenerationInput, date: string) {
   return input.context.holidays.includes(date) || input.context.optional_days.includes(date)
 }
 
-function getActivePeople(input: ScheduleGenerationInput, date: string) {
+function getActivePeople(input: ScheduleGenerationInput, date: string, entryType: MembershipEntryType) {
   return input.people.filter(
     (person) =>
       person.active &&
-      personMembershipOnDate(input.memberships, person.id, input.team.id, date),
+      personMembershipOnDate(input.memberships, person.id, input.team.id, date, entryType),
   )
 }
 
@@ -128,7 +146,9 @@ function chooseHoDays(
   existingMap: Map<string, ScheduleEntry>,
 ) {
   const existingHo = week.filter((date) => existingMap.get(`${person.id}|${input.team.id}|${date}|hybrid`)?.value === 'HO')
-  const holidays = week.filter((date) => isHoliday(input, date) && personMembershipOnDate(input.memberships, person.id, input.team.id, date))
+  const holidays = week.filter(
+    (date) => isHoliday(input, date) && personMembershipOnDate(input.memberships, person.id, input.team.id, date, 'hybrid'),
+  )
   const targetHo = Math.max(0, 2 - holidays.length)
   if (existingHo.length >= targetHo) return existingHo.slice(0, targetHo)
 
@@ -143,7 +163,7 @@ function chooseHoDays(
 
   const available = week.filter((date) => {
     const day = atUtcDate(date).getUTCDay()
-    if (!personMembershipOnDate(input.memberships, person.id, input.team.id, date)) return false
+    if (!personMembershipOnDate(input.memberships, person.id, input.team.id, date, 'hybrid')) return false
     if (isHoliday(input, date)) return false
     if (absenceOnDate(input.absences, person.id, date)) return false
     if (isForcedPresentialAroundVacation(input.absences, person.id, date)) return false
@@ -192,32 +212,73 @@ function distributeLunch(
   entries: ScheduleEntry[],
 ) {
   const result: ScheduleEntry[] = []
-  const hybrid = new Map(entries.filter((entry) => entry.date === date && entry.entry_type === 'hybrid').map((entry) => [entry.person_id, entry.value]))
-  const available = people.filter((person) => !absenceOnDate(input.absences, person.id, date) && !isHoliday(input, date))
+  const hybrid = new Map(
+    entries
+      .filter((entry) => entry.date === date && entry.entry_type === 'hybrid')
+      .map((entry) => [entry.person_id, entry.value]),
+  )
+  const available = people.filter(
+    (person) => !absenceOnDate(input.absences, person.id, date) && !isHoliday(input, date),
+  )
   const teamRules = rulesForDate(input.rules, input.team.id, null, date)
-  const noonTarget = Math.floor(available.length / 2)
+  const defaultTime = ruleValue<string>(teamRules, 'lunch_default_time', '13:00')
+  const teamHoTime = ruleValue<string>(teamRules, 'ho_lunch_time', '13:00')
+  const slotTargets = ruleValue<Record<string, number> | null>(teamRules, 'lunch_slot_targets', null)
+  const experiencedNames = ruleValue<string[]>(teamRules, 'experienced_people', [])
 
-  const fixedLunch = new Map<string, string>()
+  const assigned = new Map<string, string>()
   for (const person of available) {
     const personRules = rulesForDate(input.rules, input.team.id, person.id, date)
+    const isHo = hybrid.get(person.id) === 'HO'
+    const conditional = isHo
+      ? ruleValue<string | null>(personRules, 'lunch_ho_time', null)
+      : ruleValue<string | null>(personRules, 'lunch_presential_time', null)
     const fixed = ruleValue<string | null>(personRules, 'lunch_fixed_time', null)
-    if (fixed) fixedLunch.set(person.id, fixed)
-    if (hybrid.get(person.id) === 'HO') fixedLunch.set(person.id, '13:00')
+    const alternating = ruleValue<string[] | null>(personRules, 'lunch_alternating_times', null)
+
+    if (conditional) assigned.set(person.id, conditional)
+    else if (fixed) assigned.set(person.id, fixed)
+    else if (alternating?.length) {
+      const dayIndex = Math.max(0, atUtcDate(date).getUTCDate() - 1)
+      assigned.set(person.id, alternating[dayIndex % alternating.length] ?? defaultTime)
+    } else if (isHo) assigned.set(person.id, teamHoTime)
   }
 
-  const noonCandidates = available.filter((person) => !fixedLunch.has(person.id) && hybrid.get(person.id) !== 'HO')
-  const experiencedNames = ruleValue<string[]>(teamRules, 'experienced_people', [])
-  noonCandidates.sort((a, b) => {
+  const unassigned = available.filter((person) => !assigned.has(person.id))
+  unassigned.sort((a, b) => {
     const ai = experiencedNames.includes(a.name) ? 0 : 1
     const bi = experiencedNames.includes(b.name) ? 0 : 1
     return ai - bi || a.name.localeCompare(b.name)
   })
 
-  const noonNeeded = Math.max(0, noonTarget - [...fixedLunch.values()].filter((time) => time === '12:00').length)
-  const noonIds = new Set(noonCandidates.slice(0, noonNeeded).map((person) => person.id))
+  if (slotTargets) {
+    const targetSlots = Object.entries(slotTargets)
+      .filter(([, target]) => Number.isFinite(Number(target)) && Number(target) > 0)
+      .sort(([a], [b]) => a.localeCompare(b))
+
+    for (const [slot, rawTarget] of targetSlots) {
+      const target = Number(rawTarget)
+      let current = [...assigned.values()].filter((value) => value === slot).length
+      for (const person of unassigned) {
+        if (current >= target) break
+        if (assigned.has(person.id)) continue
+        assigned.set(person.id, slot)
+        current += 1
+      }
+    }
+  } else {
+    const noonTarget = Math.floor(available.length / 2)
+    let currentNoon = [...assigned.values()].filter((time) => time === '12:00').length
+    for (const person of unassigned) {
+      if (currentNoon >= noonTarget) break
+      if (assigned.has(person.id)) continue
+      assigned.set(person.id, '12:00')
+      currentNoon += 1
+    }
+  }
 
   for (const person of available) {
-    const value = fixedLunch.get(person.id) ?? (noonIds.has(person.id) ? '12:00' : '13:00')
+    const value = assigned.get(person.id) ?? defaultTime
     result.push({
       person_id: person.id,
       team_id: input.team.id,
@@ -281,7 +342,7 @@ function distributeExtended(
   const allowedWeekdays = ruleArray(teamRules, 'extended_weekdays', [1, 2, 3, 4])
   if (!allowedWeekdays.includes(day) || isHoliday(input, date)) return []
 
-  const seats = Number(ruleValue(teamRules, 'extended_people_per_day', 2))
+  const seats = Number(ruleValue(teamRules, 'extended_people_per_day', 0))
   if (!Number.isFinite(seats) || seats <= 0) return []
 
   const hybrid = new Map(entries.filter((entry) => entry.date === date && entry.entry_type === 'hybrid').map((entry) => [entry.person_id, entry.value]))
@@ -322,12 +383,14 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
 
   for (const monday of weeks) {
     const week = weekDays(monday)
-    const peopleInWeek = input.people.filter((person) => week.some((date) => personMembershipOnDate(input.memberships, person.id, input.team.id, date)))
+    const peopleInWeek = input.people.filter((person) =>
+      week.some((date) => personMembershipOnDate(input.memberships, person.id, input.team.id, date, 'hybrid')),
+    )
     for (const person of peopleInWeek) {
       const hoDays = new Set(chooseHoDays(input, person, week, existingMap))
       for (const date of week) {
         if (!dates.includes(date)) continue
-        if (!personMembershipOnDate(input.memberships, person.id, input.team.id, date)) continue
+        if (!personMembershipOnDate(input.memberships, person.id, input.team.id, date, 'hybrid')) continue
 
         const existing = existingMap.get(`${person.id}|${input.team.id}|${date}|hybrid`)
         if (existing?.locked || existing?.source === 'manual' || existing?.source === 'exception') {
@@ -356,10 +419,9 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
 
   const extendedCounts = new Map<string, number>()
   for (const date of dates) {
-    const activePeople = getActivePeople(input, date)
-    entries.push(...distributeLunch(input, date, activePeople, entries))
-    entries.push(...distributeSnack(input, date, activePeople, entries))
-    entries.push(...distributeExtended(input, date, activePeople, entries, extendedCounts))
+    entries.push(...distributeLunch(input, date, getActivePeople(input, date, 'lunch'), entries))
+    entries.push(...distributeSnack(input, date, getActivePeople(input, date, 'snack'), entries))
+    entries.push(...distributeExtended(input, date, getActivePeople(input, date, 'extended'), entries, extendedCounts))
   }
 
   validations.push(...validateSchedule(input, entries))
@@ -371,7 +433,11 @@ export function validateSchedule(input: ScheduleGenerationInput, entries: Schedu
   const dates = monthDays(input.year, input.month)
 
   for (const entry of entries) {
-    if (!personMembershipOnDate(input.memberships, entry.person_id, input.team.id, entry.date)) {
+    const entryMembershipType =
+      entry.entry_type === 'hybrid' || entry.entry_type === 'lunch' || entry.entry_type === 'snack' || entry.entry_type === 'extended'
+        ? entry.entry_type
+        : undefined
+    if (!personMembershipOnDate(input.memberships, entry.person_id, input.team.id, entry.date, entryMembershipType)) {
       validations.push({
         level: 'error',
         code: 'PERSON_OUTSIDE_TEAM',
@@ -385,14 +451,42 @@ export function validateSchedule(input: ScheduleGenerationInput, entries: Schedu
   for (const date of dates) {
     const hybrid = new Map(entries.filter((entry) => entry.date === date && entry.entry_type === 'hybrid').map((entry) => [entry.person_id, entry.value]))
     const lunches = entries.filter((entry) => entry.date === date && entry.entry_type === 'lunch')
+    const teamRules = rulesForDate(input.rules, input.team.id, null, date)
+    const teamHoLunchTime = ruleValue<string>(teamRules, 'ho_lunch_time', '13:00')
+    const experiencedNames = ruleValue<string[]>(teamRules, 'experienced_people', [])
+    const experiencedMinAtNoon = Number(ruleValue(teamRules, 'experienced_min_at_12', 0))
     for (const lunch of lunches) {
-      if (hybrid.get(lunch.person_id) === 'HO' && lunch.value !== '13:00') {
+      const personRules = rulesForDate(input.rules, input.team.id, lunch.person_id, date)
+      const expectedHoTime = ruleValue<string>(personRules, 'lunch_ho_time', teamHoLunchTime)
+      if (hybrid.get(lunch.person_id) === 'HO' && lunch.value !== expectedHoTime) {
         validations.push({
           level: 'error',
           code: 'HO_LUNCH_NOT_13',
-          message: 'Colaborador em HO precisa almoçar às 13:00.',
+          message: `Colaborador em HO precisa almoçar às ${expectedHoTime}.`,
           date,
           person_id: lunch.person_id,
+        })
+      }
+    }
+
+    if (experiencedMinAtNoon > 0) {
+      const experiencedAtNoon = lunches.filter((lunch) => {
+        const person = input.people.find((item) => item.id === lunch.person_id)
+        return lunch.value === '12:00' && Boolean(person && experiencedNames.includes(person.name))
+      }).length
+      const experiencedAvailable = input.people.filter(
+        (person) =>
+          experiencedNames.includes(person.name) &&
+          personMembershipOnDate(input.memberships, person.id, input.team.id, date, 'lunch') &&
+          !absenceOnDate(input.absences, person.id, date),
+      ).length
+      const required = Math.min(experiencedMinAtNoon, experiencedAvailable)
+      if (experiencedAtNoon < required) {
+        validations.push({
+          level: 'error',
+          code: 'LUNCH_EXPERIENCED_COVERAGE',
+          message: `Almoço das 12:00 precisa manter pelo menos ${required} pessoa(s) experiente(s).`,
+          date,
         })
       }
     }
