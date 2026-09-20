@@ -526,7 +526,7 @@ export default function EscalasPage() {
       value = values[(index + 1) % values.length]
     } else if (entryType === 'lunch') value = value === '12:00' ? '13:00' : value === '13:00' ? '11:30' : '12:00'
     else if (entryType === 'snack') {
-      const values = ['15:45','16:15','16:30','16:45','17:00','17:15']
+      const values = ['15:45','16:00','16:15','16:30','16:45','17:00','17:15']
       value = values[(values.indexOf(value) + 1) % values.length]
     } else {
       value = value === '09:00-18:30' ? '09:30-19:00' : '09:00-18:30'
