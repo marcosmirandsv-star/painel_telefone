@@ -140,17 +140,17 @@ export default function ScheduleManagementPage() {
   function personName(id:string){return profiles.find((p)=>p.id===id)?.full_name??'Perfil'}
   function teamName(id:string|null){return id?teams.find((t)=>t.id===id)?.name??'Time':'Todos os times'}
 
-  return <main className="min-h-screen bg-slate-950 p-4 text-white sm:p-7">
+  return <main className="schedule-shell p-4 sm:p-7">
     <section className="mx-auto max-w-7xl">
-      <div className="mb-4 rounded-xl border border-amber-400/40 bg-amber-950/30 px-4 py-3 text-sm">🧪 Homologação — configurações e solicitações</div>
-      <header className="flex flex-col gap-4 border-b border-white/10 pb-5 lg:flex-row lg:items-center lg:justify-between">
-        <div><p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-300">Painel de Escalas</p><h1 className="mt-2 text-3xl font-bold">Gestão</h1><p className="mt-2 text-slate-400">Alertas, solicitações e links de consulta.</p></div>
+      <div className="schedule-banner-homologation mb-4 px-4 py-3 text-sm"><strong>Ambiente de homologação</strong> · configurações e solicitações</div>
+      <header className="schedule-topbar flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div><p className="schedule-kicker">Painel de Escalas</p><h1 className="schedule-heading mt-2 text-3xl font-bold">Gestão</h1><p className="schedule-subtitle mt-2">Alertas, solicitações e links de consulta.</p></div>
         <div className="flex gap-2"><Link className="secondary-button" href="/escalas">Escalas</Link><Link className="secondary-button" href="/escalas/sabados">Sábados</Link></div>
       </header>
       {message&&<div className="mt-4 rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-sm">{message}</div>}
 
       <div className="mt-6 grid gap-5 lg:grid-cols-2">
-        <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
+        <section className="schedule-card p-5">
           <h2 className="text-xl font-bold">Quem recebe alertas</h2>
           <p className="mt-2 text-sm text-slate-400">Use “todos os times” para coordenação ou acompanhamento geral.</p>
           <div className="mt-4 grid gap-3">
@@ -162,7 +162,7 @@ export default function ScheduleManagementPage() {
           <div className="mt-5 grid gap-2">{recipients.map((r)=><div key={r.id} className="flex items-center justify-between rounded-lg border border-white/10 bg-slate-950 p-3 text-sm"><span><strong>{personName(r.profile_id)}</strong> · {r.receive_all?'Todos os times':teamName(r.team_id)}</span><button className="text-red-300" onClick={()=>removeRecipient(r.id)}>Remover</button></div>)}</div>
         </section>
 
-        <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
+        <section className="schedule-card p-5">
           <h2 className="text-xl font-bold">Link da escala sem login</h2>
           <p className="mt-2 text-sm text-slate-400">O link mostra somente um mês já liberado e permite enviar solicitações. Regras e gestão não ficam expostas. No Preview de homologação, a Vercel ainda pode pedir autenticação própria; em produção, o acesso do colaborador será pelo link publicado.</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -186,7 +186,7 @@ export default function ScheduleManagementPage() {
         </section>
       </div>
 
-      <section className="mt-5 rounded-2xl border border-white/10 bg-slate-900/60 p-5">
+      <section className="mt-5 schedule-card p-5">
         <h2 className="text-xl font-bold">Solicitações</h2>
         <div className="mt-4 overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="text-left text-slate-400"><th className="pb-3">Pessoa</th><th>Time</th><th>Data</th><th>Pedido</th><th>Motivo</th><th>Status</th><th>Ação</th></tr></thead><tbody>{requests.map((r)=><tr key={r.id} className="border-t border-white/10"><td className="py-3 font-semibold">{r.requester_name}</td><td>{teamName(r.team_id)}</td><td>{r.target_date}</td><td>{r.request_type}{r.requested_value? <span className="block text-xs text-slate-500">{r.requested_value}</span>:null}</td><td className="max-w-xs">{r.reason??'—'}</td><td>{r.status}</td><td className="flex gap-2 py-2">{r.status==='pending'&&<><button className="small-button" onClick={()=>reviewRequest(r,'approved')}>Aprovar e recalcular</button><button className="danger-button" onClick={()=>reviewRequest(r,'rejected')}>Recusar</button></>}</td></tr>)}</tbody></table></div>
       </section>
