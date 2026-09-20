@@ -809,6 +809,38 @@ export function validateSchedule(input: ScheduleGenerationInput, entries: Schedu
     }
   }
 
+  const weekStarts = [...new Set(dates.map(mondayOf))]
+  for (const monday of weekStarts) {
+    const week = weekDays(monday)
+    for (const person of input.people) {
+      const activeDays = week.filter((date) =>
+        dates.includes(date) &&
+        personMembershipOnDate(input.memberships, person.id, input.team.id, date, 'hybrid'),
+      )
+      if (!activeDays.length) continue
+
+      const holidayCredits = activeDays.filter((date) => isHoliday(input, date)).length
+      const expectedHo = Math.max(0, 2 - holidayCredits)
+      const actualHo = entries.filter(
+        (entry) =>
+          entry.person_id === person.id &&
+          entry.entry_type === 'hybrid' &&
+          activeDays.includes(entry.date) &&
+          entry.value === 'HO',
+      ).length
+
+      if (actualHo !== expectedHo) {
+        validations.push({
+          level: 'warning',
+          code: 'HYBRID_WEEKLY_BALANCE',
+          message: `${person.name}: semana de ${monday} ficou com ${actualHo} dia(s) de HO; referência operacional: ${expectedHo}.`,
+          date: monday,
+          person_id: person.id,
+        })
+      }
+    }
+  }
+
   const extendedCounts = new Map<string, number>()
   for (const entry of entries.filter((item) => item.entry_type === 'extended')) {
     extendedCounts.set(entry.person_id, (extendedCounts.get(entry.person_id) ?? 0) + 1)
