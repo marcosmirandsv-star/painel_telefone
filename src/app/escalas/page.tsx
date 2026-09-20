@@ -523,12 +523,20 @@ export default function EscalasPage() {
       preserveExistingLunchSnack: clickDaysChanged,
     })
 
-    const protectedEntries = existingEntriesForGeneration.filter(
-      (entry) =>
-        entry.date >= monthStartDate &&
-        entry.date <= monthEndDate &&
-        (entry.locked || entry.source === 'manual' || entry.source === 'exception'),
-    )
+    const clickDays = new Set(generationContext.click_days ?? [])
+    const protectedEntries = existingEntriesForGeneration.filter((entry) => {
+      const manuallyProtected = entry.locked || entry.source === 'manual' || entry.source === 'exception'
+      if (!manuallyProtected || entry.date < monthStartDate || entry.date > monthEndDate) return false
+
+      const clickDayOverridesEntry =
+        clickDays.has(entry.date) &&
+        (
+          entry.entry_type === 'extended' ||
+          (entry.entry_type === 'hybrid' && ['P', 'HO', 'CLICK_DAY'].includes(entry.value))
+        )
+
+      return !clickDayOverridesEntry
+    })
     const protectedKeys = new Set(
       protectedEntries.map((entry) => `${entry.person_id}|${entry.team_id}|${entry.date}|${entry.entry_type}`),
     )
