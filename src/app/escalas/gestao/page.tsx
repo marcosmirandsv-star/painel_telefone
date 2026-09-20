@@ -105,6 +105,16 @@ export default function ScheduleManagementPage() {
     await load()
   }
 
+  async function copyPublicLink(link: PublicLink) {
+    const url=`${window.location.origin}/escalas/publica/${link.token}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setMessage('Link copiado.')
+    } catch {
+      setMessage(url)
+    }
+  }
+
   function personName(id:string){return profiles.find((p)=>p.id===id)?.full_name??'Perfil'}
   function teamName(id:string|null){return id?teams.find((t)=>t.id===id)?.name??'Time':'Todos os times'}
 
@@ -131,15 +141,26 @@ export default function ScheduleManagementPage() {
         </section>
 
         <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
-          <h2 className="text-xl font-bold">Link de consulta sem login</h2>
-          <p className="mt-2 text-sm text-slate-400">O link só mostra um mês já liberado. Regras e gestão não ficam expostas.</p>
+          <h2 className="text-xl font-bold">Link da escala sem login</h2>
+          <p className="mt-2 text-sm text-slate-400">O link mostra somente um mês já liberado e permite enviar solicitações. Regras e gestão não ficam expostas.</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <select className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2" value={linkTeamId} onChange={(e)=>setLinkTeamId(e.target.value)}>{teams.map((t)=><option key={t.id} value={t.id}>{t.name}</option>)}</select>
             <input className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2" type="number" value={month} min={1} max={12} onChange={(e)=>setMonth(Number(e.target.value))}/>
             <input className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2" type="number" value={year} onChange={(e)=>setYear(Number(e.target.value))}/>
           </div>
           <button className="primary-button mt-3" onClick={createPublicLink}>Criar e copiar link</button>
-          <div className="mt-5 grid gap-2">{links.map((l)=><div key={l.id} className="flex items-center justify-between rounded-lg border border-white/10 bg-slate-950 p-3 text-sm"><span>{teamName(l.team_id)} · {l.month}/{l.year} · {l.active?'Ativo':'Desativado'}</span><button className="small-button" onClick={()=>toggleLink(l)}>{l.active?'Desativar':'Ativar'}</button></div>)}</div>
+          <div className="mt-5 grid gap-2">
+            {links.map((l)=>
+              <div key={l.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-950 p-3 text-sm">
+                <span>{teamName(l.team_id)} · {l.month}/{l.year} · {l.active?'Ativo':'Desativado'}</span>
+                <div className="flex gap-2">
+                  <button className="small-button" onClick={()=>copyPublicLink(l)}>Copiar</button>
+                  <button className="small-button" onClick={()=>window.open(`/escalas/publica/${l.token}`,'_blank','noopener,noreferrer')}>Abrir</button>
+                  <button className="small-button" onClick={()=>toggleLink(l)}>{l.active?'Desativar':'Ativar'}</button>
+                </div>
+              </div>
+            )}
+          </div>
         </section>
       </div>
 
