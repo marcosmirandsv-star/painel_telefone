@@ -65,7 +65,7 @@ export async function GET(
     admin.from('schedule_people').select('id,name,active').order('name'),
     admin
       .from('schedule_change_events')
-      .select('id,target_date,affected_dates,summary,details,created_at')
+      .select('id,target_date,affected_dates,summary,created_at')
       .eq('team_id', link.team_id)
       .eq('visible_to_team', true)
       .gte('target_date', monthStart)
