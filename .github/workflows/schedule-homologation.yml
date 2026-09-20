@@ -1,0 +1,35 @@
+name: Homologacao Escalas
+
+on:
+  push:
+    branches:
+      - homologacao-escala
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  schedule-tests:
+    if: github.head_ref == 'homologacao-escala' || github.ref == 'refs/heads/homologacao-escala'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Schedule tests
+        run: npm run test:schedule
+
+      - name: Existing integration tests
+        run: npm run test:integrations
+
+      - name: Build
+        run: npm run build
