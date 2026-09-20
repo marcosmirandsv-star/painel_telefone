@@ -40,6 +40,22 @@ type Snapshot = {
 }
 
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+const WEEKDAY_LABEL = ['DOM','SEG','TER','QUA','QUI','SEX','SÁB']
+
+function scheduleCellTone(value?: string) {
+  const key = (value ?? '').toLowerCase().replaceAll('_', '-')
+  if (key === 'p') return 'schedule-status-p'
+  if (key === 'ho') return 'schedule-status-ho'
+  if (key === 'click-day') return 'schedule-status-click-day'
+  if (key === 'feriado') return 'schedule-status-feriado'
+  if (key === 'ferias') return 'schedule-status-ferias'
+  if (key === 'day-off') return 'schedule-status-day-off'
+  if (key === 'folga') return 'schedule-status-folga'
+  if (key === 'premiacao') return 'schedule-status-premiacao'
+  if (key === 'banco-horas') return 'schedule-status-banco-horas'
+  if (key === 'senac') return 'schedule-status-senac'
+  return 'schedule-status-default'
+}
 
 function changeSeenKey(token: string) {
   return `schedule-change-seen:${token}`
@@ -208,8 +224,8 @@ export default function PublicSchedulePage() {
     }
   }
 
-  if (error) return <main className="min-h-screen bg-slate-950 p-8 text-white"><div className="mx-auto max-w-xl rounded-2xl border border-red-400/30 bg-red-950/30 p-6">{error}</div></main>
-  if (!snapshot) return <main className="min-h-screen bg-slate-950 p-8 text-white">Carregando escala...</main>
+  if (error) return <main className="schedule-shell p-8"><div className="schedule-card mx-auto max-w-xl border-red-400/30 p-6">{error}</div></main>
+  if (!snapshot) return <main className="schedule-shell p-8">Carregando escala...</main>
 
   const visiblePeople = snapshot.people.filter((person) =>
     snapshot.memberships.some((membership) => membership.person_id === person.id),
@@ -228,7 +244,7 @@ export default function PublicSchedulePage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 p-4 text-white sm:p-7">
+    <main className="schedule-shell p-4 sm:p-7">
       {changePopup && (
         <div className="fixed right-4 top-4 z-50 w-[min(460px,calc(100vw-2rem))] rounded-2xl border border-amber-400/50 bg-slate-900 p-5 shadow-2xl">
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-300">⚠️ Escala atualizada</p>
@@ -238,14 +254,16 @@ export default function PublicSchedulePage() {
         </div>
       )}
       <section className="mx-auto max-w-[1600px]">
-        <header className="border-b border-white/10 pb-5">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-300">Escala publicada</p>
-          <h1 className="mt-2 text-3xl font-bold">{snapshot.team.name}</h1>
-          <p className="mt-2 text-slate-400">{MONTHS[snapshot.month - 1]} de {snapshot.year}</p>
-          <button className="secondary-button mt-4" onClick={enableTeamAlerts}>Ativar alertas desta escala</button>
+        <header className="schedule-topbar flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="schedule-kicker">Escala publicada</p>
+            <h1 className="schedule-heading mt-2 text-3xl font-bold">{snapshot.team.name}</h1>
+            <p className="schedule-subtitle mt-2">{MONTHS[snapshot.month - 1]} de {snapshot.year}</p>
+          </div>
+          <button className="secondary-button self-start" onClick={enableTeamAlerts}>Ativar alertas</button>
         </header>
         {snapshot.changes.length > 0 && (
-          <section className="mt-5 rounded-2xl border border-amber-400/30 bg-amber-950/20 p-4">
+          <section className="schedule-change-banner mt-5 rounded-xl p-4">
             <h2 className="font-bold text-amber-200">Atualizações recentes da escala</h2>
             <div className="mt-3 grid gap-2">
               {snapshot.changes.slice(0, 5).map((change) => (
@@ -256,31 +274,40 @@ export default function PublicSchedulePage() {
             </div>
           </section>
         )}
-        <div className="mt-5 flex flex-wrap gap-2">
-          {[['hybrid','Híbrido'],['lunch','Almoço'],['snack','Lanche'],['extended','Estendido']].map(([value,label]) => (
-            <button key={value} className={entryType === value ? 'primary-button' : 'secondary-button'} onClick={() => setEntryType(value)}>{label}</button>
-          ))}
+        <div className="mt-5">
+          <div className="schedule-segmented">
+            {[['hybrid','Híbrido'],['lunch','Almoço'],['snack','Café'],['extended','Estendido']].map(([value,label]) => (
+              <button key={value} className={entryType === value ? 'is-active' : ''} onClick={() => setEntryType(value)}>{label}</button>
+            ))}
+          </div>
         </div>
-        <section className="mt-5 overflow-x-auto rounded-2xl border border-white/10 bg-slate-900/60">
-          <table className="min-w-max border-collapse text-sm">
-            <thead className="bg-slate-900"><tr>
-              <th className="sticky left-0 z-10 min-w-48 border-b border-r border-white/10 bg-slate-900 px-4 py-3 text-left">Colaborador</th>
-              {days.map((day) => <th key={day.value} className={`min-w-16 border-b border-r px-2 py-3 text-center ${changedDates.has(day.value) ? 'border-amber-400/50 bg-amber-950/40 text-amber-200' : 'border-white/10'}`}>{day.day}{changedDates.has(day.value) ? <span className="ml-1">●</span> : null}</th>)}
+        <section className="schedule-table-wrap mt-5">
+          <table className="schedule-table">
+            <thead className="sticky top-0 z-20"><tr>
+              <th className="schedule-person-cell px-4 py-3 text-left">Colaborador</th>
+              {days.map((day) => (
+                <th key={day.value} className={`schedule-day-head ${changedDates.has(day.value) ? 'bg-amber-950/50 text-amber-200' : ''}`}>
+                  <span>{String(day.day).padStart(2,'0')}{changedDates.has(day.value) ? ' •' : ''}</span>
+                  <span className="weekday">{WEEKDAY_LABEL[day.dow]}</span>
+                </th>
+              ))}
             </tr></thead>
             <tbody>
               {visiblePeople.map((person) => (
                 <tr key={person.id}>
-                  <td className="sticky left-0 border-b border-r border-white/10 bg-slate-950 px-4 py-3 font-semibold">{person.name}</td>
+                  <td className="schedule-person-cell px-4 py-3 font-semibold">{person.name}</td>
                   {days.map((day) => {
                     const membership = snapshot.memberships.find((item) => item.person_id === person.id && item.start_date <= day.value && (!item.end_date || item.end_date >= day.value))
-                    if (!membershipAllows(membership, entryType)) return <td key={day.value} className="border-b border-r border-white/10 text-center text-slate-600">—</td>
+                    if (!membershipAllows(membership, entryType)) return <td key={day.value} className="px-2 py-3 text-center text-slate-600">—</td>
                     const entry = snapshot.entries.find((item) => item.person_id === person.id && item.date === day.value && item.entry_type === entryType)
                     const lunchDetail = entryType === 'lunch' && entry?.metadata?.return_time
                       ? `${entry.value}–${entry.metadata.return_time}`
                       : entry?.value ?? '—'
-                    return <td key={day.value} className={`border-b border-r px-2 py-3 text-center ${changedDates.has(day.value) ? 'border-amber-400/30 bg-amber-950/10' : 'border-white/10'}`}>
-                      <span>{lunchDetail}</span>
-                      {entryType === 'lunch' && entry?.metadata?.shift_end ? <span className="block text-[10px] text-slate-500">saída {entry.metadata.shift_end}</span> : null}
+                    return <td key={day.value} className={`p-1.5 text-center ${changedDates.has(day.value) ? 'bg-amber-950/10' : ''}`}>
+                      <div className={`schedule-cell-button cursor-default ${scheduleCellTone(entry?.value)}`}>
+                        <span>{lunchDetail}</span>
+                        {entryType === 'lunch' && entry?.metadata?.shift_end ? <span className="mt-1 block text-[10px] font-medium opacity-70">saída {entry.metadata.shift_end}</span> : null}
+                      </div>
                     </td>
                   })}
                 </tr>
@@ -288,7 +315,7 @@ export default function PublicSchedulePage() {
             </tbody>
           </table>
         </section>
-        <section className="mt-6 rounded-2xl border border-white/10 bg-slate-900/60 p-5">
+        <section className="schedule-card mt-6 p-5">
           <h2 className="text-xl font-bold">Solicitar alteração</h2>
           <p className="mt-2 text-sm text-slate-400">
             A solicitação vai para a gestão responsável e gera alerta no painel.
