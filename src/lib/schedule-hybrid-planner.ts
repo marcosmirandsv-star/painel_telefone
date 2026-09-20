@@ -11,6 +11,7 @@ export type WeeklyHybridPerson = {
   candidates: HybridCandidate[]
   fixedWeekdays: number[]
   preferredWeekdays: number[]
+  preferredDates?: string[]
 }
 
 export type WeeklyHybridPlanInput = {
@@ -112,10 +113,11 @@ export function planWeeklyHybrid(input: WeeklyHybridPlanInput) {
         const score = (candidate: HybridCandidate) => {
           const required = input.requiredHoByDate[candidate.date] ?? 0
           const deficit = Math.max(0, required - (coverageCounts.get(candidate.date) ?? 0))
+          const existingDate = person.preferredDates?.includes(candidate.date) ? 45 : 0
           const preferred = person.preferredWeekdays.includes(candidate.weekday) ? 25 : 0
           const consecutive = [...current].some((date) => adjacent(date, candidate.date)) ? 20 : 0
           const balancePenalty = (dayCounts.get(candidate.date) ?? 0) * 5
-          return deficit * 100 + preferred + consecutive - balancePenalty
+          return deficit * 100 + existingDate + preferred + consecutive - balancePenalty
         }
         return score(b) - score(a) || a.date.localeCompare(b.date)
       })
