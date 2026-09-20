@@ -312,8 +312,22 @@ function distributeLunch(
     if (assigned.has(person.id)) continue
     if (policy === 'legacy') {
       assigned.set(person.id, hybrid.get(person.id) === 'HO' ? hoPreferred : defaultTime)
+      continue
+    }
+
+    const preferred = preferredByPerson.get(person.id) ?? defaultTime
+    const preferredTarget = slotTargets?.[preferred]
+    const preferredCount = [...assigned.values()].filter((value) => value === preferred).length
+
+    if (
+      slotTargets &&
+      Number.isFinite(Number(preferredTarget)) &&
+      preferredCount >= Number(preferredTarget)
+    ) {
+      const alternative = preferred === presentPreferred ? hoPreferred : defaultTime
+      assigned.set(person.id, alternative)
     } else {
-      assigned.set(person.id, preferredByPerson.get(person.id) ?? defaultTime)
+      assigned.set(person.id, preferred)
     }
   }
 
@@ -742,7 +756,7 @@ export function validateSchedule(input: ScheduleGenerationInput, entries: Schedu
       }
     }
 
-    if (experiencedMinAtNoon > 0) {
+    if (experiencedMinAtNoon > 0 && !isHoliday(input, date)) {
       const experiencedAtNoon = lunches.filter((lunch) => {
         const person = input.people.find((item) => item.id === lunch.person_id)
         return lunch.value === '12:00' && Boolean(person && experiencedNames.includes(person.name))
