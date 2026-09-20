@@ -106,8 +106,7 @@ async function resolvePerson(
     .select('id,name')
     .ilike('name', request.requester_name)
 
-  const candidates = people ?? []
-  for (const person of candidates) {
+  for (const person of people ?? []) {
     const { data: membership } = await supabase
       .from('schedule_memberships')
       .select('id')
@@ -117,30 +116,32 @@ async function resolvePerson(
       .lte('start_date', request.target_date)
       .or(`end_date.is.null,end_date.gte.${request.target_date}`)
       .maybeSingle()
+
     if (membership) return String(person.id)
   }
+
   return null
 }
 
-async function createChangeEvent(
+async function updateRequestOnly(
   supabase: SupabaseClient,
-  request: ScheduleRequestForReview,
-  result: RecalculationResult,
+  requestId: string,
+  reviewNotes: string | null | undefined,
+  recalculationStatus: string,
+  recalculationSummary: Record<string, unknown>,
 ) {
-  if (!result.affectedDates.length || !result.changes.length) return
-  await supabase.from('schedule_change_events').insert({
-    team_id: request.team_id,
-    request_id: request.id,
-    target_date: request.target_date,
-    affected_dates: result.affectedDates,
-    summary: result.summary,
-    details: {
-      changes: result.changes,
-      validation_errors: result.validationErrors,
-      recalculation_status: result.status,
-    },
-    visible_to_team: true,
-  })
+  const { error } = await supabase
+    .from('schedule_requests')
+    .update({
+      status: 'approved',
+      reviewed_at: new Date().toISOString(),
+      review_notes: reviewNotes || null,
+      recalculation_status: recalculationStatus,
+      recalculation_summary: recalculationSummary,
+    })
+    .eq('id', requestId)
+
+  if (error) throw new Error(error.message)
 }
 
 export async function approveAndRecalculateScheduleRequest(
@@ -149,32 +150,25 @@ export async function approveAndRecalculateScheduleRequest(
   reviewNotes?: string | null,
 ): Promise<RecalculationResult> {
   const personId = await resolvePerson(supabase, request)
-  const { data: teamRow } = await supabase
+  const { data: teamRow, error: teamError } = await supabase
     .from('schedule_teams')
     .select('*')
     .eq('id', request.team_id)
     .maybeSingle()
 
-  const team = teamRow as ScheduleTeam | null
-  if (!team) {
-    throw new Error('Time da solicitação não encontrado.')
-  }
+  if (teamError) throw new Error(teamError.message)
 
-  const baseUpdate = {
-    status: 'approved',
-    reviewed_at: new Date().toISOString(),
-    review_notes: reviewNotes || null,
-  }
+  const team = teamRow as ScheduleTeam | null
+  if (!team) throw new Error('Time da solicitação não encontrado.')
 
   if (isSaturday(request.target_date) || team.code === 'sabados') {
-    await supabase
-      .from('schedule_requests')
-      .update({
-        ...baseUpdate,
-        recalculation_status: 'not_applicable',
-        recalculation_summary: { reason: 'Sábado não participa do recálculo automático.' },
-      })
-      .eq('id', request.id)
+    await updateRequestOnly(
+      supabase,
+      request.id,
+      reviewNotes,
+      'not_applicable',
+      { reason: 'Sábado não participa do recálculo automático.' },
+    )
 
     return {
       status: 'not_applicable',
@@ -190,16 +184,13 @@ export async function approveAndRecalculateScheduleRequest(
   const hybridRequest = isHybridChange(request.request_type)
 
   if (!autoTeams.has(team.code) || (!kind && !hybridRequest)) {
-    await supabase
-      .from('schedule_requests')
-      .update({
-        ...baseUpdate,
-        recalculation_status: 'manual_required',
-        recalculation_summary: {
-          reason: 'Tipo de solicitação ou time exige ajuste manual antes de avisar a equipe.',
-        },
-      })
-      .eq('id', request.id)
+    await updateRequestOnly(
+      supabase,
+      request.id,
+      reviewNotes,
+      'manual_required',
+      { reason: 'Tipo de solicitação ou time exige ajuste manual antes de avisar a equipe.' },
+    )
 
     return {
       status: 'manual_required',
@@ -210,23 +201,14 @@ export async function approveAndRecalculateScheduleRequest(
     }
   }
 
-  const { year, month, start: monthStart, end: monthEnd } = monthRange(request.target_date)
-  const { data: priorTargetRows } = await supabase
-    .from('schedule_entries')
-    .select('*')
-    .eq('team_id', request.team_id)
-    .eq('date', request.target_date)
-  const priorTargetEntries = (priorTargetRows ?? []) as ScheduleEntry[]
-
   if (!personId) {
-    await supabase
-      .from('schedule_requests')
-      .update({
-        ...baseUpdate,
-        recalculation_status: 'needs_review',
-        recalculation_summary: { reason: 'Não foi possível identificar a pessoa da solicitação.' },
-      })
-      .eq('id', request.id)
+    await updateRequestOnly(
+      supabase,
+      request.id,
+      reviewNotes,
+      'needs_review',
+      { reason: 'Não foi possível identificar a pessoa da solicitação.' },
+    )
 
     return {
       status: 'needs_review',
@@ -237,81 +219,31 @@ export async function approveAndRecalculateScheduleRequest(
     }
   }
 
-  if (kind) {
-    const { data: existingAbsence } = await supabase
-      .from('schedule_absences')
-      .select('id')
-      .eq('person_id', personId)
-      .eq('kind', kind)
-      .lte('start_date', request.target_date)
-      .gte('end_date', request.target_date)
-      .limit(1)
-      .maybeSingle()
-
-    if (!existingAbsence) {
-      const { error } = await supabase.from('schedule_absences').insert({
-        person_id: personId,
-        kind,
-        start_date: request.target_date,
-        end_date: request.target_date,
-        notes: `Criado automaticamente pela solicitação ${request.id}.`,
-      })
-      if (error) throw new Error(error.message)
-    }
-
-    await supabase
-      .from('schedule_entries')
-      .delete()
-      .eq('team_id', request.team_id)
-      .eq('person_id', personId)
-      .eq('date', request.target_date)
-      .in('entry_type', [...ENTRY_TYPES])
-  }
-
-  if (hybridRequest) {
-    const value = request.requested_value === 'HO' || request.requested_value === 'P'
+  const hybridValue = hybridRequest
+    ? request.requested_value === 'HO' || request.requested_value === 'P'
       ? request.requested_value
       : null
+    : null
 
-    if (!value) {
-      await supabase
-        .from('schedule_requests')
-        .update({
-          ...baseUpdate,
-          recalculation_status: 'needs_review',
-          recalculation_summary: {
-            reason: 'A solicitação de Home Office não informou a modalidade desejada.',
-          },
-        })
-        .eq('id', request.id)
+  if (hybridRequest && !hybridValue) {
+    await updateRequestOnly(
+      supabase,
+      request.id,
+      reviewNotes,
+      'needs_review',
+      { reason: 'A solicitação de Home Office não informou a modalidade desejada.' },
+    )
 
-      return {
-        status: 'needs_review',
-        summary: 'Solicitação aprovada, mas falta informar Home Office ou Presencial.',
-        affectedDates: [],
-        changes: [],
-        validationErrors: ['Modalidade desejada não informada.'],
-      }
+    return {
+      status: 'needs_review',
+      summary: 'Solicitação aprovada, mas falta informar Home Office ou Presencial.',
+      affectedDates: [],
+      changes: [],
+      validationErrors: ['Modalidade desejada não informada.'],
     }
-
-    const { error } = await supabase.from('schedule_entries').upsert({
-      person_id: personId,
-      team_id: request.team_id,
-      date: request.target_date,
-      entry_type: 'hybrid',
-      value,
-      source: 'exception',
-      locked: true,
-      metadata: {
-        approved_request_id: request.id,
-        requested_change: true,
-      },
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'person_id,team_id,date,entry_type' })
-
-    if (error) throw new Error(error.message)
   }
 
+  const { year, month, start: monthStart, end: monthEnd } = monthRange(request.target_date)
   const paddedStart = addDays(monthStart, -7)
   const paddedEnd = addDays(monthEnd, 7)
 
@@ -331,14 +263,94 @@ export async function approveAndRecalculateScheduleRequest(
     supabase.from('schedule_month_contexts').select('*').order('year').order('month'),
   ])
 
+  const queryErrors = [
+    peopleResult.error,
+    membershipsResult.error,
+    rulesResult.error,
+    absencesResult.error,
+    entriesResult.error,
+    contextsResult.error,
+  ].filter(Boolean)
+
+  if (queryErrors.length) throw new Error(queryErrors[0]?.message ?? 'Erro ao carregar dados da escala.')
+
   const people = (peopleResult.data ?? []) as SchedulePerson[]
   const memberships = ((membershipsResult.data ?? []) as ScheduleMembership[]).filter(
     (membership) => !membership.end_date || membership.end_date >= paddedStart,
   )
   const rules = (rulesResult.data ?? []) as ScheduleRule[]
-  const absences = (absencesResult.data ?? []) as ScheduleAbsence[]
-  const existingEntries = (entriesResult.data ?? []) as ScheduleEntry[]
+  const baselineAbsences = (absencesResult.data ?? []) as ScheduleAbsence[]
+  const baselineEntries = (entriesResult.data ?? []) as ScheduleEntry[]
   const contexts = (contextsResult.data ?? []) as ScheduleMonthContext[]
+
+  const priorTargetEntries = baselineEntries.filter((entry) => entry.date === request.target_date)
+  const simulatedAbsences = [...baselineAbsences]
+  let absencePayload: Record<string, unknown> | null = null
+
+  if (kind) {
+    const existingAbsence = simulatedAbsences.some(
+      (absence) =>
+        absence.person_id === personId &&
+        absence.kind === kind &&
+        absence.start_date <= request.target_date &&
+        absence.end_date >= request.target_date,
+    )
+
+    if (!existingAbsence) {
+      const newAbsence: ScheduleAbsence = {
+        person_id: personId,
+        kind,
+        start_date: request.target_date,
+        end_date: request.target_date,
+        notes: `Criado automaticamente pela solicitação ${request.id}.`,
+      }
+      simulatedAbsences.push(newAbsence)
+      absencePayload = newAbsence
+    }
+  }
+
+  let simulatedEntries = [...baselineEntries]
+
+  if (kind) {
+    simulatedEntries = simulatedEntries.filter(
+      (entry) =>
+        !(
+          entry.person_id === personId &&
+          entry.team_id === request.team_id &&
+          entry.date === request.target_date &&
+          ENTRY_TYPES.includes(entry.entry_type as typeof ENTRY_TYPES[number])
+        ),
+    )
+  }
+
+  if (hybridValue) {
+    const exceptionEntry: ScheduleEntry = {
+      person_id: personId,
+      team_id: request.team_id,
+      date: request.target_date,
+      entry_type: 'hybrid',
+      value: hybridValue,
+      source: 'exception',
+      locked: true,
+      metadata: {
+        approved_request_id: request.id,
+        requested_change: true,
+      },
+    }
+
+    simulatedEntries = [
+      ...simulatedEntries.filter(
+        (entry) =>
+          !(
+            entry.person_id === personId &&
+            entry.team_id === request.team_id &&
+            entry.date === request.target_date &&
+            entry.entry_type === 'hybrid'
+          ),
+      ),
+      exceptionEntry,
+    ]
+  }
 
   const currentContext = contexts.find((item) => item.year === year && item.month === month)
   const context: ScheduleMonthContext = {
@@ -354,28 +366,25 @@ export async function approveAndRecalculateScheduleRequest(
     team,
     people,
     memberships,
-    absences,
+    absences: simulatedAbsences,
     rules,
     context,
     year,
     month,
-    existingEntries,
+    existingEntries: simulatedEntries,
     stabilityMode: 'preserve_existing',
     stabilityReferenceDate: localTodayIso(),
   })
 
-  const currentMonthEntries = existingEntries.filter(
+  const baselineMonthEntries = baselineEntries.filter(
     (entry) => entry.date >= monthStart && entry.date <= monthEnd,
   )
-  const baselineMonthEntries = [
-    ...currentMonthEntries.filter((entry) => entry.date !== request.target_date),
-    ...priorTargetEntries,
-  ]
+  const simulatedMonthEntries = simulatedEntries.filter(
+    (entry) => entry.date >= monthStart && entry.date <= monthEnd,
+  )
 
-  const protectedEntries = currentMonthEntries.filter(
-    (entry) =>
-      (entry.locked || entry.source === 'manual' || entry.source === 'exception') &&
-      !(kind && entry.person_id === personId && entry.date === request.target_date),
+  const protectedEntries = simulatedMonthEntries.filter(
+    (entry) => entry.locked || entry.source === 'manual' || entry.source === 'exception',
   )
   const protectedKeys = new Set(protectedEntries.map(entryKey))
   const generatedEntries = generated.entries.filter((entry) => !protectedKeys.has(entryKey(entry)))
@@ -395,6 +404,7 @@ export async function approveAndRecalculateScheduleRequest(
         ...finalMonthEntries.filter((entry) => entry.date === date && entry.entry_type === 'hybrid'),
       ].map((entry) => entry.person_id),
     )
+
     for (const id of peopleIds) {
       const key = `${id}|${request.team_id}|${date}|hybrid`
       const before = oldMap.get(key)?.value ?? null
@@ -404,67 +414,26 @@ export async function approveAndRecalculateScheduleRequest(
   }
 
   const affectedDates = [...affected].sort()
-
-  for (const date of affectedDates) {
-    const { error: cleanupError } = await supabase
-      .from('schedule_entries')
-      .delete()
-      .eq('team_id', request.team_id)
-      .eq('date', date)
-      .eq('source', 'generated')
-      .eq('locked', false)
-
-    if (cleanupError) throw new Error(cleanupError.message)
-  }
-
-  if (kind) {
-    await supabase
-      .from('schedule_entries')
-      .delete()
-      .eq('team_id', request.team_id)
-      .eq('person_id', personId)
-      .eq('date', request.target_date)
-      .in('entry_type', [...ENTRY_TYPES])
-  }
-
-  const entriesToPersist = finalMonthEntries.filter(
-    (entry) => affected.has(entry.date),
-  )
-
-  if (entriesToPersist.length) {
-    const { error: upsertError } = await supabase.from('schedule_entries').upsert(
-      entriesToPersist.map((entry) => ({
-        person_id: entry.person_id,
-        team_id: entry.team_id,
-        date: entry.date,
-        entry_type: entry.entry_type,
-        value: entry.value,
-        source: entry.source,
-        locked: entry.locked ?? false,
-        metadata: entry.metadata ?? {},
-        updated_at: new Date().toISOString(),
-      })),
-      { onConflict: 'person_id,team_id,date,entry_type' },
-    )
-
-    if (upsertError) throw new Error(upsertError.message)
-  }
+  const entriesToPersist = finalMonthEntries.filter((entry) => affected.has(entry.date))
 
   const postMonthEntries = [
-    ...currentMonthEntries.filter((entry) => !affected.has(entry.date)),
+    ...baselineMonthEntries.filter((entry) => !affected.has(entry.date)),
     ...entriesToPersist,
   ]
+
   const validations = validateSchedule(
     {
       team,
       people,
       memberships,
-      absences,
+      absences: simulatedAbsences,
       rules,
       context,
       year,
       month,
       existingEntries: postMonthEntries,
+      stabilityMode: 'preserve_existing',
+      stabilityReferenceDate: localTodayIso(),
     },
     postMonthEntries,
   )
@@ -481,6 +450,7 @@ export async function approveAndRecalculateScheduleRequest(
           ...entriesToPersist.filter((entry) => entry.date === date && entry.entry_type === type),
         ].map((entry) => entry.person_id),
       )
+
       for (const id of ids) {
         const key = `${id}|${request.team_id}|${date}|${type}`
         const before = oldMap.get(key)?.value ?? null
@@ -520,20 +490,50 @@ export async function approveAndRecalculateScheduleRequest(
     validationErrors: errors.map((item) => item.message),
   }
 
-  await supabase
-    .from('schedule_requests')
-    .update({
-      ...baseUpdate,
-      applied_at: new Date().toISOString(),
-      recalculation_status: result.status,
-      recalculation_summary: {
-        affected_dates: affectedDates,
-        changes_count: changes.length,
-        validation_errors: result.validationErrors,
-      },
-    })
-    .eq('id', request.id)
+  const entriesPayload = entriesToPersist.map((entry) => ({
+    person_id: entry.person_id,
+    team_id: entry.team_id,
+    date: entry.date,
+    entry_type: entry.entry_type,
+    value: entry.value,
+    source: entry.source,
+    locked: entry.locked ?? false,
+    metadata: entry.metadata ?? {},
+  }))
 
-  await createChangeEvent(supabase, request, result)
+  const eventPayload = changes.length
+    ? {
+        team_id: request.team_id,
+        target_date: request.target_date,
+        affected_dates: affectedDates,
+        summary: result.summary,
+        details: {
+          changes,
+          validation_errors: result.validationErrors,
+          recalculation_status: result.status,
+        },
+        visible_to_team: true,
+      }
+    : null
+
+  const { error: applyError } = await supabase.rpc('apply_schedule_request_recalculation', {
+    p_request_id: request.id,
+    p_review_notes: reviewNotes || '',
+    p_recalculation_status: result.status,
+    p_recalculation_summary: {
+      affected_dates: affectedDates,
+      changes_count: changes.length,
+      validation_errors: result.validationErrors,
+    },
+    p_absence: absencePayload,
+    p_absence_person_id: kind ? personId : null,
+    p_absence_target_date: kind ? request.target_date : null,
+    p_affected_dates: affectedDates,
+    p_entries: entriesPayload,
+    p_event: eventPayload,
+  })
+
+  if (applyError) throw new Error(applyError.message)
+
   return result
 }
