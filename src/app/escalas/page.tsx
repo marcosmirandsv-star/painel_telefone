@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { scheduleSupabase as supabase } from '@/lib/schedule-supabase'
 import { generateMonthlySchedule, validateSchedule } from '@/lib/schedule-engine'
 import { ScheduleDateList } from '@/components/schedule-date-list'
+import { ScheduleModal } from '@/components/schedule-modal'
 import type {
   ScheduleAbsence,
   ScheduleEntry,
@@ -211,6 +212,9 @@ export default function EscalasPage() {
   const [requestDate, setRequestDate] = useState(`${ymd(year, month)}-01`)
   const [requestType, setRequestType] = useState('Troca de escala')
   const [requestReason, setRequestReason] = useState('')
+  const [membershipDialog, setMembershipDialog] = useState<{ mode: 'transfer' | 'end'; membership: ScheduleMembership } | null>(null)
+  const [membershipActionDate, setMembershipActionDate] = useState(new Date().toISOString().slice(0, 10))
+  const [transferTeamId, setTransferTeamId] = useState('')
   const latestNotificationIds = useRef(new Set<string>())
 
   const isManagement = ['master','coordenadora','coordinator'].includes((profile?.role ?? '').toLowerCase())
@@ -397,32 +401,37 @@ export default function EscalasPage() {
     setMemberships((current) => current.map((item) => item.id === membership.id ? { ...item, end_date: endDate } : item))
   }
 
-  async function transferMembership(membership: ScheduleMembership) {
-    const person = people.find((item) => item.id === membership.person_id)
-    const currentTeam = teams.find((item) => item.id === membership.team_id)
-    const options = teams.filter((item) => item.id !== membership.team_id)
-    const targetName = window.prompt(
-      `Transferir ${person?.name ?? 'pessoa'} de ${currentTeam?.name ?? 'time atual'} para qual time?\n\n` +
-      options.map((item) => item.name).join('\n'),
-    )
-    if (!targetName) return
-    const target = options.find((item) => item.name.toLowerCase() === targetName.trim().toLowerCase())
-    if (!target) return setMessage('Time de destino não encontrado.')
+  function openMembershipAction(mode: 'transfer' | 'end', membership: ScheduleMembership) {
+    setMembershipActionDate(new Date().toISOString().slice(0, 10))
+    const fallbackTeam = teams.find((item) => item.id !== membership.team_id)
+    setTransferTeamId(fallbackTeam?.id ?? '')
+    setMembershipDialog({ mode, membership })
+  }
 
-    const effectiveDate = window.prompt(
-      'Data em que a pessoa passa a pertencer ao novo time (AAAA-MM-DD):',
-      new Date().toISOString().slice(0, 10),
-    )
-    if (!effectiveDate) return
+  async function confirmMembershipAction() {
+    if (!membershipDialog || !membershipActionDate) return
+    const { membership, mode } = membershipDialog
+    const person = people.find((item) => item.id === membership.person_id)
+
+    if (mode === 'end') {
+      await closeMembership(membership, membershipActionDate)
+      setMessage(`Vínculo de ${person?.name ?? 'Pessoa'} encerrado em ${membershipActionDate}.`)
+      setMembershipDialog(null)
+      return
+    }
+
+    const target = teams.find((item) => item.id === transferTeamId)
+    if (!target) return setMessage('Selecione o time de destino.')
 
     const { error } = await supabase.rpc('transfer_schedule_membership', {
       p_membership_id: membership.id,
       p_target_team_id: target.id,
-      p_effective_date: effectiveDate,
+      p_effective_date: membershipActionDate,
     })
     if (error) return setMessage(error.message)
 
-    setMessage(`${person?.name ?? 'Pessoa'} transferido(a) para ${target.name} a partir de ${effectiveDate}.`)
+    setMessage(`${person?.name ?? 'Pessoa'} transferido(a) para ${target.name} a partir de ${membershipActionDate}.`)
+    setMembershipDialog(null)
     await loadAll()
   }
 
@@ -664,6 +673,46 @@ export default function EscalasPage() {
 
   return (
     <main className="schedule-shell p-4 sm:p-7">
+      {membershipDialog && (
+        <ScheduleModal
+          title={membershipDialog.mode === 'transfer' ? 'Transferir colaborador' : 'Encerrar vínculo'}
+          description={
+            membershipDialog.mode === 'transfer'
+              ? 'A vigência mantém o histórico anterior intacto e aplica o novo time somente a partir da data informada.'
+              : 'A pessoa deixa de participar dos cálculos da escala após a data final do vínculo.'
+          }
+          tone={membershipDialog.mode === 'end' ? 'danger' : 'default'}
+          onClose={() => setMembershipDialog(null)}
+          footer={
+            <>
+              <button className="secondary-button" onClick={() => setMembershipDialog(null)}>Cancelar</button>
+              <button className={membershipDialog.mode === 'transfer' ? 'primary-button' : 'danger-button'} onClick={confirmMembershipAction}>
+                {membershipDialog.mode === 'transfer' ? 'Confirmar transferência' : 'Encerrar vínculo'}
+              </button>
+            </>
+          }
+        >
+          <div className="schedule-inline-note">
+            <strong>{people.find((item) => item.id === membershipDialog.membership.person_id)?.name ?? 'Pessoa'}</strong>
+            <br />
+            Time atual: {teams.find((item) => item.id === membershipDialog.membership.team_id)?.name ?? '—'}
+          </div>
+          {membershipDialog.mode === 'transfer' && (
+            <label className="schedule-field">
+              Novo time
+              <select className="px-3 py-2" value={transferTeamId} onChange={(event) => setTransferTeamId(event.target.value)}>
+                {teams.filter((item) => item.id !== membershipDialog.membership.team_id).map((team) => (
+                  <option key={team.id} value={team.id}>{team.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label className="schedule-field">
+            {membershipDialog.mode === 'transfer' ? 'Início no novo time' : 'Último dia no time'}
+            <input className="px-3 py-2" type="date" value={membershipActionDate} onChange={(event) => setMembershipActionDate(event.target.value)} />
+          </label>
+        </ScheduleModal>
+      )}
       {popup && (
         <div className="schedule-toast fixed right-4 top-4 z-50 w-[min(420px,calc(100vw-2rem))] p-5">
           <div className="flex items-start gap-3">
@@ -959,11 +1008,8 @@ export default function EscalasPage() {
                         <td>{membership.start_date} → {membership.end_date ?? 'atual'}</td>
                         <td>{person.active ? 'Ativo' : 'Inativo'}</td>
                         <td className="flex gap-2 py-2">
-                          {!membership.end_date && <button className="small-button" onClick={() => transferMembership(membership)}>Transferir</button>}
-                          {!membership.end_date && <button className="small-button" onClick={() => {
-                            const value = window.prompt('Data final do vínculo (AAAA-MM-DD):', new Date().toISOString().slice(0,10))
-                            if (value) closeMembership(membership, value)
-                          }}>Encerrar vínculo</button>}
+                          {!membership.end_date && <button className="small-button" onClick={() => openMembershipAction('transfer', membership)}>Transferir</button>}
+                          {!membership.end_date && <button className="small-button" onClick={() => openMembershipAction('end', membership)}>Encerrar vínculo</button>}
                           {index === 0 && <button className="small-button" onClick={() => togglePerson(person)}>{person.active ? 'Inativar' : 'Reativar'}</button>}
                         </td>
                       </tr>
