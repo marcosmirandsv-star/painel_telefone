@@ -553,9 +553,14 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
 
       for (const date of activeWeek) {
         const existing = existingMap.get(`${person.id}|${input.team.id}|${date}|hybrid`)
+        const beforeReference =
+          input.stabilityMode === 'preserve_existing' &&
+          Boolean(input.stabilityReferenceDate) &&
+          date < (input.stabilityReferenceDate as string)
         const preserve =
           existing &&
           (!targetDates.has(date) ||
+            beforeReference ||
             existing.locked ||
             existing.source === 'manual' ||
             existing.source === 'exception')
@@ -565,6 +570,11 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
       const candidates = activeWeek
         .filter((date) => {
           if (!targetDates.has(date) || isHoliday(input, date)) return false
+          if (
+            input.stabilityMode === 'preserve_existing' &&
+            input.stabilityReferenceDate &&
+            date < input.stabilityReferenceDate
+          ) return false
           if (absenceOnDate(input.absences, person.id, date)) return false
           if (isForcedPresentialAroundVacation(input.absences, person.id, date)) return false
           const existing = existingMap.get(`${person.id}|${input.team.id}|${date}|hybrid`)
@@ -604,8 +614,18 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
         if (!personMembershipOnDate(input.memberships, person.id, input.team.id, date, 'hybrid')) continue
 
         const existing = existingMap.get(`${person.id}|${input.team.id}|${date}|hybrid`)
-        if (existing?.locked || existing?.source === 'manual' || existing?.source === 'exception') {
-          entries.push(existing)
+        const preservePast =
+          input.stabilityMode === 'preserve_existing' &&
+          input.stabilityReferenceDate &&
+          date < input.stabilityReferenceDate &&
+          existing
+        if (
+          preservePast ||
+          existing?.locked ||
+          existing?.source === 'manual' ||
+          existing?.source === 'exception'
+        ) {
+          if (existing) entries.push(existing)
           continue
         }
 
@@ -630,16 +650,20 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
 
   const extendedCounts = new Map<string, number>()
   const snackUsage = new Map<string, number>()
+  const preserveBefore =
+    input.stabilityMode === 'preserve_existing' ? input.stabilityReferenceDate : undefined
+
   for (const existing of input.existingEntries ?? []) {
+    const historical = Boolean(preserveBefore && existing.date < preserveBefore)
     if (
       existing.entry_type === 'extended' &&
-      (existing.locked || existing.source === 'manual' || existing.source === 'exception')
+      (historical || existing.locked || existing.source === 'manual' || existing.source === 'exception')
     ) {
       extendedCounts.set(existing.person_id, (extendedCounts.get(existing.person_id) ?? 0) + 1)
     }
     if (
       existing.entry_type === 'snack' &&
-      (existing.locked || existing.source === 'manual' || existing.source === 'exception')
+      (historical || existing.locked || existing.source === 'manual' || existing.source === 'exception')
     ) {
       const key = `${existing.person_id}|${existing.value}`
       snackUsage.set(key, (snackUsage.get(key) ?? 0) + 1)
@@ -647,6 +671,19 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
   }
 
   for (const date of dates) {
+    if (preserveBefore && date < preserveBefore) {
+      entries.push(
+        ...(input.existingEntries ?? []).filter(
+          (entry) =>
+            entry.date === date &&
+            (entry.entry_type === 'lunch' ||
+              entry.entry_type === 'snack' ||
+              entry.entry_type === 'extended'),
+        ),
+      )
+      continue
+    }
+
     entries.push(...distributeLunch(input, date, getActivePeople(input, date, 'lunch'), entries))
     entries.push(...distributeSnack(input, date, getActivePeople(input, date, 'snack'), entries, snackUsage))
     entries.push(...distributeExtended(input, date, getActivePeople(input, date, 'extended'), entries, extendedCounts))
