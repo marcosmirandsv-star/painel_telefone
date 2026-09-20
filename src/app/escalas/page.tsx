@@ -481,7 +481,7 @@ export default function EscalasPage() {
             <h1 className="mt-2 text-3xl font-bold">Painel de Escalas</h1>
             <p className="mt-2 text-slate-400">Composição do time, geração, validação, publicação e solicitações em um único fluxo.</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <button className={`relative rounded-xl border border-white/10 bg-slate-900 px-4 py-3 ${notifications.some((item) => !item.seen_at) ? 'animate-bounce' : ''}`} onClick={() => setSection('requests')}>
               🔔
               {notifications.filter((item) => !item.seen_at).length > 0 && (
@@ -490,6 +490,8 @@ export default function EscalasPage() {
                 </span>
               )}
             </button>
+            {isManagement && <Link className="secondary-button" href="/escalas/sabados">Sábados</Link>}
+            {isManagement && <Link className="secondary-button" href="/escalas/gestao">Gestão</Link>}
             <Link className="secondary-button" href="/">Voltar ao Performance</Link>
           </div>
         </header>
