@@ -8,6 +8,7 @@ import {
   ScheduleRule,
   ScheduleValidation,
 } from './schedule-types'
+import { planWeeklyHybrid } from './schedule-hybrid-planner'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const WEEKDAY = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 }
@@ -388,15 +389,80 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
   const existingMap = new Map((input.existingEntries ?? []).map((entry) => [entryKey(entry), entry]))
   const weeks = [...new Set(dates.map(mondayOf))]
 
+  const targetDates = new Set(dates)
+
   for (const monday of weeks) {
     const week = weekDays(monday)
     const peopleInWeek = input.people.filter((person) =>
-      week.some((date) => personMembershipOnDate(input.memberships, person.id, input.team.id, date, 'hybrid')),
+      week.some((date) =>
+        personMembershipOnDate(input.memberships, person.id, input.team.id, date, 'hybrid'),
+      ),
     )
-    for (const person of peopleInWeek) {
-      const hoDays = new Set(chooseHoDays(input, person, week, existingMap))
+
+    const teamRules = rulesForDate(input.rules, input.team.id, null, monday)
+    const extendedSeats = Number(ruleValue(teamRules, 'extended_people_per_day', 0))
+    const extendedWeekdays = ruleArray(teamRules, 'extended_weekdays', [1, 2, 3, 4])
+    const requiredHoByDate: Record<string, number> = {}
+
+    if (extendedSeats > 0) {
       for (const date of week) {
-        if (!dates.includes(date)) continue
+        if (!targetDates.has(date) || isHoliday(input, date)) continue
+        if (extendedWeekdays.includes(atUtcDate(date).getUTCDay())) {
+          requiredHoByDate[date] = extendedSeats
+        }
+      }
+    }
+
+    const plannerPeople = peopleInWeek.map((person) => {
+      const personRules = rulesForDate(input.rules, input.team.id, person.id, monday)
+      const activeWeek = week.filter((date) =>
+        personMembershipOnDate(input.memberships, person.id, input.team.id, date, 'hybrid'),
+      )
+      const holidayCredits = activeWeek.filter((date) => isHoliday(input, date)).length
+      const targetHo = Math.max(0, 2 - holidayCredits)
+      const preservedHoDates: string[] = []
+
+      for (const date of activeWeek) {
+        const existing = existingMap.get(`${person.id}|${input.team.id}|${date}|hybrid`)
+        const preserve =
+          existing &&
+          (!targetDates.has(date) ||
+            existing.locked ||
+            existing.source === 'manual' ||
+            existing.source === 'exception')
+        if (preserve && existing.value === 'HO') preservedHoDates.push(date)
+      }
+
+      const candidates = activeWeek
+        .filter((date) => {
+          if (!targetDates.has(date) || isHoliday(input, date)) return false
+          if (absenceOnDate(input.absences, person.id, date)) return false
+          if (isForcedPresentialAroundVacation(input.absences, person.id, date)) return false
+          const existing = existingMap.get(`${person.id}|${input.team.id}|${date}|hybrid`)
+          if (
+            existing &&
+            (existing.locked || existing.source === 'manual' || existing.source === 'exception')
+          ) return false
+          return true
+        })
+        .map((date) => ({ date, weekday: atUtcDate(date).getUTCDay() }))
+
+      return {
+        id: person.id,
+        name: person.name,
+        remaining: Math.max(0, targetHo - preservedHoDates.length),
+        preservedHoDates,
+        candidates,
+        fixedWeekdays: ruleArray(personRules, 'hybrid_fixed_weekdays', []),
+        preferredWeekdays: ruleArray(personRules, 'hybrid_preferred_weekdays', []),
+      }
+    })
+
+    const weeklyHo = planWeeklyHybrid({ people: plannerPeople, requiredHoByDate })
+
+    for (const person of peopleInWeek) {
+      for (const date of week) {
+        if (!targetDates.has(date)) continue
         if (!personMembershipOnDate(input.memberships, person.id, input.team.id, date, 'hybrid')) continue
 
         const existing = existingMap.get(`${person.id}|${input.team.id}|${date}|hybrid`)
@@ -410,7 +476,7 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
         if (isHoliday(input, date)) value = 'FERIADO'
         else if (absence) value = absence.kind
         else if (isForcedPresentialAroundVacation(input.absences, person.id, date)) value = 'P'
-        else if (hoDays.has(date)) value = 'HO'
+        else if (weeklyHo.get(person.id)?.has(date)) value = 'HO'
 
         entries.push({
           person_id: person.id,
