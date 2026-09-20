@@ -31,60 +31,225 @@ type Notification = {
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 const WEEKDAY_LABEL = ['DOM','SEG','TER','QUA','QUI','SEX','SÁB']
 
-const RULE_LABELS: Record<string, string> = {
-  experienced_min_at_12: 'Cobertura experiente às 12h',
-  experienced_people: 'Pessoas experientes para cobertura',
-  extended_allowed_weekdays: 'Dias permitidos para Estendido',
-  extended_blocked_weekdays: 'Dias bloqueados para Estendido',
-  extended_people_per_day: 'Pessoas no Estendido por dia',
-  extended_shifts: 'Horários do Estendido',
-  extended_weekdays: 'Dias da semana com Estendido',
-  ho_lunch_time: 'Almoço em Home Office',
-  hybrid_fixed_weekdays: 'Dias fixos de Home Office',
-  hybrid_preferred_weekdays: 'Dias preferenciais de Home Office',
-  lunch_default_time: 'Horário padrão de almoço',
-  lunch_ho_preferred_time: 'Almoço preferencial em Home Office',
-  lunch_modal_strict: 'Vínculo rígido entre modalidade e almoço',
-  lunch_policy: 'Política de distribuição do almoço',
-  lunch_presential_preferred_time: 'Almoço preferencial presencial',
-  lunch_slot_targets: 'Distribuição de almoço por horário',
-  lunch_windows: 'Janelas completas de almoço',
-  shift_end_by_lunch: 'Saída prevista por janela de almoço',
-  snack_early_slots: 'Faixa de café para almoço mais cedo',
-  snack_fixed_time: 'Café fixo',
-  snack_late_slots: 'Faixa de café para almoço mais tarde',
-  snack_policy: 'Política de distribuição do café',
+type RuleCategory = 'hybrid' | 'lunch' | 'snack' | 'extended' | 'coverage'
+
+const RULE_CATEGORY_META: Record<RuleCategory, { label: string; description: string }> = {
+  hybrid: {
+    label: 'Híbrido',
+    description: 'Define dias fixos e preferenciais de Home Office.',
+  },
+  lunch: {
+    label: 'Almoço',
+    description: 'Controla preferências, janelas e distribuição dos horários de almoço.',
+  },
+  snack: {
+    label: 'Café',
+    description: 'Define horários fixos ou faixas usadas para distribuir o café da tarde.',
+  },
+  extended: {
+    label: 'Estendido',
+    description: 'Controla quantidade, dias, horários e restrições do expediente estendido.',
+  },
+  coverage: {
+    label: 'Cobertura',
+    description: 'Regras que protegem a quantidade e a experiência mínima disponível na operação.',
+  },
+}
+
+const RULE_DEFINITIONS: Record<string, {
+  title: string
+  description: string
+  category: RuleCategory
+}> = {
+  experienced_min_at_12: {
+    title: 'Cobertura experiente às 12h',
+    description: 'Quantidade mínima de pessoas experientes que precisam permanecer disponíveis no horário das 12h.',
+    category: 'coverage',
+  },
+  experienced_people: {
+    title: 'Pessoas consideradas experientes',
+    description: 'Colaboradores que o motor pode contar para atender a cobertura mínima de experiência.',
+    category: 'coverage',
+  },
+  extended_allowed_weekdays: {
+    title: 'Dias permitidos para Estendido',
+    description: 'Restringe uma pessoa aos dias da semana em que ela pode participar do Estendido.',
+    category: 'extended',
+  },
+  extended_blocked_weekdays: {
+    title: 'Dias bloqueados para Estendido',
+    description: 'Dias da semana em que a pessoa não pode ser escolhida para o Estendido.',
+    category: 'extended',
+  },
+  extended_people_per_day: {
+    title: 'Quantidade no Estendido por dia',
+    description: 'Número de pessoas que o motor tenta escalar no Estendido em cada dia aplicável.',
+    category: 'extended',
+  },
+  extended_shifts: {
+    title: 'Jornadas do Estendido',
+    description: 'Horários disponíveis para as pessoas selecionadas no Estendido.',
+    category: 'extended',
+  },
+  extended_weekdays: {
+    title: 'Dias da semana com Estendido',
+    description: 'Dias em que o motor deve tentar montar o Estendido para o time.',
+    category: 'extended',
+  },
+  ho_lunch_time: {
+    title: 'Almoço quando está em Home Office',
+    description: 'Horário usado para uma pessoa específica quando ela estiver trabalhando em Home Office.',
+    category: 'lunch',
+  },
+  hybrid_fixed_weekdays: {
+    title: 'Dias fixos de Home Office',
+    description: 'Dias obrigatórios de Home Office para a pessoa. O motor respeita essa restrição antes das preferências.',
+    category: 'hybrid',
+  },
+  hybrid_preferred_weekdays: {
+    title: 'Dias preferenciais de Home Office',
+    description: 'Dias que o motor tenta priorizar para Home Office, sem transformar a preferência em obrigação.',
+    category: 'hybrid',
+  },
+  lunch_default_time: {
+    title: 'Horário padrão de almoço',
+    description: 'Horário de referência usado quando não existe uma regra mais específica para a pessoa ou modalidade.',
+    category: 'lunch',
+  },
+  lunch_ho_preferred_time: {
+    title: 'Almoço preferencial em Home Office',
+    description: 'Horário que o motor tenta usar para quem está em Home Office, podendo ser ajustado quando a cobertura exigir.',
+    category: 'lunch',
+  },
+  lunch_modal_strict: {
+    title: 'Almoço preso à modalidade',
+    description: 'Indica se o horário de almoço é obrigatório pela modalidade ou apenas uma preferência operacional.',
+    category: 'lunch',
+  },
+  lunch_policy: {
+    title: 'Forma de distribuir o almoço',
+    description: 'Estratégia usada pelo motor para distribuir os horários de almoço entre as pessoas disponíveis.',
+    category: 'lunch',
+  },
+  lunch_presential_preferred_time: {
+    title: 'Almoço preferencial no Presencial',
+    description: 'Horário que o motor tenta usar para quem está presencial, podendo ser alterado para manter a cobertura.',
+    category: 'lunch',
+  },
+  lunch_slot_targets: {
+    title: 'Quantidade desejada por horário de almoço',
+    description: 'Define quantas pessoas devem ocupar determinados horários de almoço quando o time possui uma meta específica.',
+    category: 'coverage',
+  },
+  lunch_windows: {
+    title: 'Duração das janelas de almoço',
+    description: 'Define o horário de saída e de retorno de cada janela de almoço.',
+    category: 'lunch',
+  },
+  shift_end_by_lunch: {
+    title: 'Horário normal de saída por jornada',
+    description: 'Relaciona a janela de almoço ao horário normal de encerramento do expediente.',
+    category: 'lunch',
+  },
+  snack_early_slots: {
+    title: 'Cafés para quem almoça mais cedo',
+    description: 'Faixa de horários que o motor usa prioritariamente para quem realizou o almoço mais cedo.',
+    category: 'snack',
+  },
+  snack_fixed_time: {
+    title: 'Horário fixo de café',
+    description: 'Horário individual que não entra no rodízio automático do café.',
+    category: 'snack',
+  },
+  snack_late_slots: {
+    title: 'Cafés para quem almoça mais tarde',
+    description: 'Faixa de horários que o motor usa prioritariamente para quem realizou o almoço mais tarde.',
+    category: 'snack',
+  },
+  snack_policy: {
+    title: 'Forma de distribuir o café',
+    description: 'Estratégia utilizada para escolher os horários de café da equipe.',
+    category: 'snack',
+  },
 }
 
 const RULE_POLICY_LABELS: Record<string, string> = {
-  coverage_weighted: 'Preferência com ajuste por cobertura',
-  by_modality: 'Preferência conforme Presencial / Home Office',
-  balanced_by_lunch: 'Balanceado conforme o horário de almoço',
-  fixed_by_person: 'Horário fixo por pessoa',
+  coverage_weighted: 'Preferência com ajuste para manter a cobertura',
+  by_modality: 'Preferência conforme Presencial ou Home Office',
+  balanced_by_lunch: 'Distribuição equilibrada conforme o horário de almoço',
+  fixed_by_person: 'Horário fixo definido individualmente',
   legacy: 'Regra anterior',
 }
 
 function weekdayName(value: number) {
-  return ['domingo','segunda','terça','quarta','quinta','sexta','sábado'][value] ?? String(value)
+  return ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'][value] ?? String(value)
+}
+
+function formatRuleObject(rule: ScheduleRule, value: Record<string, unknown>) {
+  if (rule.rule_key === 'lunch_windows') {
+    return Object.entries(value)
+      .map(([start, end]) => `${start} às ${String(end)}`)
+      .join(' · ')
+  }
+
+  if (rule.rule_key === 'shift_end_by_lunch') {
+    return Object.entries(value)
+      .map(([lunch, end]) => `Almoço ${lunch} → saída ${String(end)}`)
+      .join(' · ')
+  }
+
+  if (rule.rule_key === 'lunch_slot_targets') {
+    return Object.entries(value)
+      .map(([time, total]) => `${time}: ${String(total)} pessoa(s)`)
+      .join(' · ')
+  }
+
+  return Object.entries(value)
+    .map(([key, item]) => `${key}: ${String(item)}`)
+    .join(' · ')
 }
 
 function readableRuleValue(rule: ScheduleRule) {
   const value = rule.rule_value?.value
+
+  if (rule.rule_key === 'lunch_modal_strict' && typeof value === 'boolean') {
+    return value
+      ? 'Obrigatório: a modalidade determina o horário de almoço.'
+      : 'Flexível: é uma preferência e pode mudar para preservar a cobertura.'
+  }
+
+  if (rule.rule_key === 'extended_people_per_day' && typeof value === 'number') {
+    return `${value} pessoa(s) por dia`
+  }
+
+  if (rule.rule_key === 'experienced_min_at_12' && typeof value === 'number') {
+    return `Mínimo de ${value} pessoa(s) experientes disponíveis às 12h`
+  }
+
   if (typeof value === 'boolean') return value ? 'Sim' : 'Não'
   if (typeof value === 'number') return String(value)
   if (typeof value === 'string') return RULE_POLICY_LABELS[value] ?? value
+
   if (Array.isArray(value)) {
     if (value.every((item) => typeof item === 'number')) {
       return value.map((item) => weekdayName(Number(item))).join(', ')
     }
-    return value.join(', ')
+    return value.join(' · ')
   }
+
   if (value && typeof value === 'object') {
-    return Object.entries(value as Record<string, unknown>)
-      .map(([key, item]) => `${key} → ${String(item)}`)
-      .join(' · ')
+    return formatRuleObject(rule, value as Record<string, unknown>)
   }
+
   return '—'
+}
+
+function ruleDefinition(rule: ScheduleRule) {
+  return RULE_DEFINITIONS[rule.rule_key] ?? {
+    title: 'Regra operacional',
+    description: 'Configuração interna utilizada pelo motor de geração da escala.',
+    category: 'coverage' as RuleCategory,
+  }
 }
 
 const STATUS = [
@@ -1062,45 +1227,102 @@ export default function EscalasPage() {
           </div>
         )}
 
-        {section === 'rules' && isManagement && (
-          <section className="schedule-card mt-6 p-5">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <p className="schedule-kicker">Configuração operacional</p>
-                <h2 className="schedule-heading mt-1 text-xl font-bold">Regras vigentes</h2>
-                <p className="schedule-subtitle mt-2 text-sm">Leitura amigável das regras que o motor usa para gerar e validar a escala.</p>
-              </div>
-              <span className="text-xs text-slate-500">{rules.length} regra(s) ativa(s)</span>
-            </div>
-            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {rules.map((rule) => {
-                const team = rule.team_id ? teams.find((item) => item.id === rule.team_id) : null
-                const person = rule.person_id ? people.find((item) => item.id === rule.person_id) : null
-                return (
-                  <article key={rule.id} className="schedule-card-muted p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-bold text-slate-100">{RULE_LABELS[rule.rule_key] ?? rule.rule_key}</p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          {person ? person.name : team ? team.name : 'Regra geral'}
-                        </p>
-                      </div>
-                      <span className="rounded-full border border-white/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">
-                        Vigente
-                      </span>
-                    </div>
-                    <p className="mt-4 text-sm leading-6 text-slate-300">{readableRuleValue(rule)}</p>
-                    <p className="mt-3 text-xs text-slate-600">
-                      Desde {new Date(`${rule.start_date}T12:00:00`).toLocaleDateString('pt-BR')}
-                      {rule.end_date ? ` até ${new Date(`${rule.end_date}T12:00:00`).toLocaleDateString('pt-BR')}` : ''}
+        {section === 'rules' && isManagement && (() => {
+          const visibleRules = rules.filter(
+            (rule) => !selectedTeamId || rule.team_id === selectedTeamId || rule.team_id === null,
+          )
+          const teamWide = visibleRules.filter((rule) => !rule.person_id)
+          const individual = visibleRules.filter((rule) => Boolean(rule.person_id))
+          const categoryOrder: RuleCategory[] = ['hybrid', 'lunch', 'snack', 'extended', 'coverage']
+
+          return (
+            <div className="mt-6 grid gap-5">
+              <section className="schedule-card p-5">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <p className="schedule-kicker">Configuração operacional</p>
+                    <h2 className="schedule-heading mt-1 text-xl font-bold">
+                      Regras de {selectedTeam?.name ?? 'Escalas'}
+                    </h2>
+                    <p className="schedule-subtitle mt-2 max-w-3xl text-sm">
+                      Aqui aparecem as regras em linguagem operacional. Os nomes técnicos usados pelo sistema ficam ocultos para não atrapalhar a leitura.
                     </p>
-                  </article>
+                  </div>
+                  <div className="schedule-rule-summary">
+                    <div><span>Regras do time</span><strong>{teamWide.length}</strong></div>
+                    <div><span>Exceções individuais</span><strong>{individual.length}</strong></div>
+                  </div>
+                </div>
+
+                <div className="schedule-rule-help mt-5">
+                  <strong>Como ler esta tela:</strong> “Regra do time” vale para todos. Quando aparece o nome de uma pessoa, é uma exceção ou preferência individual que tem prioridade sobre a regra geral.
+                </div>
+              </section>
+
+              {categoryOrder.map((category) => {
+                const categoryRules = visibleRules.filter(
+                  (rule) => ruleDefinition(rule).category === category,
+                )
+                if (!categoryRules.length) return null
+                const meta = RULE_CATEGORY_META[category]
+
+                return (
+                  <section key={category} className="schedule-rule-group">
+                    <header className="schedule-rule-group-header">
+                      <div>
+                        <p className="schedule-kicker">{meta.label}</p>
+                        <h3>{meta.label}</h3>
+                        <p>{meta.description}</p>
+                      </div>
+                      <span>{categoryRules.length} configuração(ões)</span>
+                    </header>
+
+                    <div className="schedule-rule-grid">
+                      {categoryRules.map((rule) => {
+                        const definition = ruleDefinition(rule)
+                        const team = rule.team_id ? teams.find((item) => item.id === rule.team_id) : null
+                        const person = rule.person_id ? people.find((item) => item.id === rule.person_id) : null
+                        const scopeLabel = person
+                          ? `Exceção individual · ${person.name}`
+                          : team
+                            ? `Regra do time · ${team.name}`
+                            : 'Regra geral'
+
+                        return (
+                          <article key={rule.id} className="schedule-rule-card">
+                            <div className="schedule-rule-card-top">
+                              <span className={person ? 'schedule-rule-scope individual' : 'schedule-rule-scope'}>
+                                {scopeLabel}
+                              </span>
+                              <span className="schedule-rule-active">Vigente</span>
+                            </div>
+
+                            <h4>{definition.title}</h4>
+                            <p className="schedule-rule-description">{definition.description}</p>
+
+                            <div className="schedule-rule-value">
+                              <span>Configuração atual</span>
+                              <strong>{readableRuleValue(rule)}</strong>
+                            </div>
+
+                            <div className="schedule-rule-vigency">
+                              Desde {new Date(`${rule.start_date}T12:00:00`).toLocaleDateString('pt-BR')}
+                              {rule.end_date ? ` até ${new Date(`${rule.end_date}T12:00:00`).toLocaleDateString('pt-BR')}` : ' · sem data final'}
+                            </div>
+                          </article>
+                        )
+                      })}
+                    </div>
+                  </section>
                 )
               })}
-              {!rules.length && <div className="schedule-empty md:col-span-2 xl:col-span-3">Nenhuma regra cadastrada.</div>}
+
+              {!visibleRules.length && (
+                <div className="schedule-empty">Nenhuma regra cadastrada para este time.</div>
+              )}
             </div>
-          </section>
-        )}
+          )
+        })()}
 
         {section === 'requests' && (
           <div className="mt-6 grid gap-5 lg:grid-cols-[420px_1fr]">
