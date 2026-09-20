@@ -9,7 +9,6 @@ type TeamChange = {
   target_date: string
   affected_dates: string[]
   summary: string
-  details: Record<string, unknown> | null
   created_at: string
 }
 
