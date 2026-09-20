@@ -576,6 +576,14 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
         })
         .map((date) => ({ date, weekday: atUtcDate(date).getUTCDay() }))
 
+      const preferredDates =
+        input.stabilityMode === 'preserve_existing'
+          ? activeWeek.filter((date) => {
+              const existing = existingMap.get(`${person.id}|${input.team.id}|${date}|hybrid`)
+              return existing?.value === 'HO' && !preservedHoDates.includes(date)
+            })
+          : []
+
       return {
         id: person.id,
         name: person.name,
@@ -584,6 +592,7 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
         candidates,
         fixedWeekdays: ruleArray(personRules, 'hybrid_fixed_weekdays', []),
         preferredWeekdays: ruleArray(personRules, 'hybrid_preferred_weekdays', []),
+        preferredDates,
       }
     })
 
