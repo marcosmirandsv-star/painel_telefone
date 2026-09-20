@@ -142,7 +142,7 @@ export default function ScheduleManagementPage() {
 
         <section className="rounded-2xl border border-white/10 bg-slate-900/60 p-5">
           <h2 className="text-xl font-bold">Link da escala sem login</h2>
-          <p className="mt-2 text-sm text-slate-400">O link mostra somente um mês já liberado e permite enviar solicitações. Regras e gestão não ficam expostas.</p>
+          <p className="mt-2 text-sm text-slate-400">O link mostra somente um mês já liberado e permite enviar solicitações. Regras e gestão não ficam expostas. No Preview de homologação, a Vercel ainda pode pedir autenticação própria; em produção, o acesso do colaborador será pelo link publicado.</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <select className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2" value={linkTeamId} onChange={(e)=>setLinkTeamId(e.target.value)}>{teams.map((t)=><option key={t.id} value={t.id}>{t.name}</option>)}</select>
             <input className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2" type="number" value={month} min={1} max={12} onChange={(e)=>setMonth(Number(e.target.value))}/>
