@@ -114,7 +114,7 @@ export default function EscalasPage() {
   const [rules, setRules] = useState<ScheduleRule[]>([])
   const [absences, setAbsences] = useState<ScheduleAbsence[]>([])
   const [entries, setEntries] = useState<ScheduleEntry[]>([])
-  const [context, setContext] = useState<ScheduleMonthContext>({ year, month, holidays: [], optional_days: [] })
+  const [context, setContext] = useState<ScheduleMonthContext>({ year, month, holidays: [], optional_days: [], click_days: [] })
   const [monthContexts, setMonthContexts] = useState<ScheduleMonthContext[]>([])
   const [selectedTeamId, setSelectedTeamId] = useState('')
   const [section, setSection] = useState<'scale'|'people'|'rules'|'requests'>('scale')
@@ -195,9 +195,10 @@ export default function EscalasPage() {
             month,
             holidays: currentContext.holidays ?? [],
             optional_days: currentContext.optional_days ?? [],
+            click_days: currentContext.click_days ?? [],
             notes: currentContext.notes,
           }
-        : { year, month, holidays: [], optional_days: [] },
+        : { year, month, holidays: [], optional_days: [], click_days: [] },
     )
     const loadedNotifications = ((notificationResult.data ?? []) as Notification[]).filter(
       (item) => item.profile_id === loadedProfile.id,
@@ -382,6 +383,7 @@ export default function EscalasPage() {
       month,
       holidays: context.holidays,
       optional_days: context.optional_days,
+      click_days: context.click_days ?? [],
       notes: context.notes ?? null,
       created_by: auth.user?.id ?? null,
     }
@@ -405,6 +407,10 @@ export default function EscalasPage() {
       optional_days: [...new Set([
         ...(savedContext.optional_days ?? []),
         ...otherContexts.flatMap((item) => item.optional_days ?? []),
+      ])],
+      click_days: [...new Set([
+        ...(savedContext.click_days ?? []),
+        ...otherContexts.flatMap((item) => item.click_days ?? []),
       ])],
       notes: savedContext.notes,
     }
@@ -652,12 +658,16 @@ export default function EscalasPage() {
 
             {isManagement && (
               <>
-                <section className="mt-4 grid gap-4 rounded-2xl border border-white/10 bg-slate-900/60 p-4 md:grid-cols-2">
+                <section className="mt-4 grid gap-4 rounded-2xl border border-white/10 bg-slate-900/60 p-4 lg:grid-cols-3">
                   <label className="grid gap-1 text-sm text-slate-300">Feriados (AAAA-MM-DD, separados por vírgula)
                     <input className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2" value={context.holidays.join(', ')} onChange={(event) => setContext({ ...context, holidays: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} />
                   </label>
                   <label className="grid gap-1 text-sm text-slate-300">Pontos facultativos
                     <input className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2" value={context.optional_days.join(', ')} onChange={(event) => setContext({ ...context, optional_days: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} />
+                  </label>
+                  <label className="grid gap-1 text-sm text-slate-300">Click Day
+                    <input className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2" placeholder="AAAA-MM-DD" value={(context.click_days ?? []).join(', ')} onChange={(event) => setContext({ ...context, click_days: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} />
+                    <span className="text-xs text-slate-500">Todos ficam presenciais; o HO do dia é remanejado e não há Estendido.</span>
                   </label>
                 </section>
 
