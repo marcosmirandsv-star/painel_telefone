@@ -212,6 +212,13 @@ export default function EscalasPage() {
   }, [loadAll])
 
   useEffect(() => {
+    if (!memberStart.startsWith(monthPrefix)) setMemberStart(monthStartDate)
+    if (!absenceStart.startsWith(monthPrefix)) setAbsenceStart(monthStartDate)
+    if (!absenceEnd.startsWith(monthPrefix)) setAbsenceEnd(monthStartDate)
+    if (!requestDate.startsWith(monthPrefix)) setRequestDate(monthStartDate)
+  }, [absenceEnd, absenceStart, memberStart, monthPrefix, monthStartDate, requestDate])
+
+  useEffect(() => {
     if (!profile?.id) return
     const channel = supabase
       .channel(`schedule-notifications-${profile.id}`)
