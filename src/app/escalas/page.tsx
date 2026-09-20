@@ -27,6 +27,8 @@ type Notification = {
 }
 
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+const WEEKDAY_LABEL = ['DOM','SEG','TER','QUA','QUI','SEX','SÁB']
+
 const STATUS = [
   ['P','Presencial'],
   ['HO','Home Office'],
@@ -90,6 +92,22 @@ function daysInMonth(year: number, month: number) {
     const dow = new Date(`${value}T12:00:00`).getDay()
     return { value, day, dow, business: dow >= 1 && dow <= 5 }
   })
+}
+
+function scheduleCellTone(value?: string) {
+  const key = (value ?? '').toLowerCase().replaceAll('_', '-')
+  if (!key) return 'schedule-status-default'
+  if (key === 'p') return 'schedule-status-p'
+  if (key === 'ho') return 'schedule-status-ho'
+  if (key === 'click-day') return 'schedule-status-click-day'
+  if (key === 'feriado') return 'schedule-status-feriado'
+  if (key === 'ferias') return 'schedule-status-ferias'
+  if (key === 'day-off') return 'schedule-status-day-off'
+  if (key === 'folga') return 'schedule-status-folga'
+  if (key === 'premiacao') return 'schedule-status-premiacao'
+  if (key === 'banco-horas') return 'schedule-status-banco-horas'
+  if (key === 'senac') return 'schedule-status-senac'
+  return 'schedule-status-default'
 }
 
 function membershipAllowsTab(
@@ -561,6 +579,12 @@ export default function EscalasPage() {
     setMessage('Solicitação enviada. A gestão foi notificada.')
   }
 
+  const validationSummary = useMemo(() => ({
+    errors: validations.filter((item) => item.level === 'error').length,
+    warnings: validations.filter((item) => item.level === 'warning').length,
+    ok: validations.filter((item) => item.level === 'ok').length,
+  }), [validations])
+
   const activeTeamPeople = useMemo(() => {
     if (!selectedTeam) return []
     return people.filter((person) =>
@@ -574,10 +598,10 @@ export default function EscalasPage() {
     )
   }, [memberships, monthEndDate, monthStartDate, people, selectedTeam])
 
-  if (loading) return <main className="min-h-screen bg-slate-950 p-8 text-white">Carregando módulo de escalas...</main>
+  if (loading) return <main className="schedule-shell p-8">Carregando módulo de escalas...</main>
 
   return (
-    <main className="min-h-screen bg-slate-950 p-4 text-white sm:p-7">
+    <main className="schedule-shell p-4 sm:p-7">
       {popup && (
         <div className="fixed right-4 top-4 z-50 w-[min(420px,calc(100vw-2rem))] rounded-2xl border border-cyan-400/50 bg-slate-900 p-5 shadow-2xl shadow-cyan-950/50">
           <div className="flex items-start gap-3">
@@ -596,15 +620,15 @@ export default function EscalasPage() {
       )}
 
       <section className="mx-auto max-w-[1600px]">
-        <div className="mb-4 rounded-xl border border-amber-400/40 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">
-          🧪 <strong>Ambiente de homologação.</strong> Este módulo está isolado da produção até aprovação da gestão.
+        <div className="schedule-banner-homologation mb-4 px-4 py-3 text-sm">
+          <strong>Ambiente de homologação</strong> · Nenhuma alteração desta tela afeta a produção.
         </div>
 
-        <header className="flex flex-col gap-4 border-b border-white/10 pb-5 lg:flex-row lg:items-center lg:justify-between">
+        <header className="schedule-topbar flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-cyan-300">Central de Performance</p>
-            <h1 className="mt-2 text-3xl font-bold">Painel de Escalas</h1>
-            <p className="mt-2 text-slate-400">Composição do time, geração, validação, publicação e solicitações em um único fluxo.</p>
+            <p className="schedule-kicker">Central de Performance · Escalas</p>
+            <h1 className="schedule-heading mt-2 text-3xl font-bold">Planejamento operacional</h1>
+            <p className="schedule-subtitle mt-2">Geração, validação, publicação e manutenção da escala em um único fluxo.</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <button className={`relative rounded-xl border border-white/10 bg-slate-900 px-4 py-3 ${notifications.some((item) => !item.seen_at) ? 'animate-bounce' : ''}`} onClick={() => setSection('requests')}>
@@ -622,18 +646,20 @@ export default function EscalasPage() {
           </div>
         </header>
 
-        <div className="mt-5 flex flex-wrap gap-2">
-          <button className={section === 'scale' ? 'primary-button' : 'secondary-button'} onClick={() => setSection('scale')}>Escalas</button>
-          {isManagement && <button className={section === 'people' ? 'primary-button' : 'secondary-button'} onClick={() => setSection('people')}>Pessoas e Times</button>}
-          {isManagement && <button className={section === 'rules' ? 'primary-button' : 'secondary-button'} onClick={() => setSection('rules')}>Regras</button>}
-          <button className={section === 'requests' ? 'primary-button' : 'secondary-button'} onClick={() => setSection('requests')}>Solicitações</button>
+        <div className="mt-5">
+          <div className="schedule-segmented">
+            <button className={section === 'scale' ? 'is-active' : ''} onClick={() => setSection('scale')}>Escalas</button>
+            {isManagement && <button className={section === 'people' ? 'is-active' : ''} onClick={() => setSection('people')}>Pessoas e times</button>}
+            {isManagement && <button className={section === 'rules' ? 'is-active' : ''} onClick={() => setSection('rules')}>Regras</button>}
+            <button className={section === 'requests' ? 'is-active' : ''} onClick={() => setSection('requests')}>Solicitações</button>
+          </div>
         </div>
 
         {message && <div className="mt-4 rounded-xl border border-white/10 bg-slate-900 px-4 py-3 text-sm">{message}</div>}
 
         {section === 'scale' && (
           <>
-            <section className="mt-6 grid gap-4 rounded-2xl border border-white/10 bg-slate-900/60 p-4 lg:grid-cols-[1fr_1fr_auto]">
+            <section className="schedule-card mt-6 grid gap-4 p-5 lg:grid-cols-[1fr_1fr_auto]">
               <label className="grid gap-1 text-sm text-slate-300">
                 Time
                 <select className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2" value={selectedTeamId} onChange={(event) => setSelectedTeamId(event.target.value)}>
@@ -658,7 +684,7 @@ export default function EscalasPage() {
 
             {isManagement && (
               <>
-                <section className="mt-4 grid gap-4 rounded-2xl border border-white/10 bg-slate-900/60 p-4 lg:grid-cols-3">
+                <section className="schedule-card mt-4 grid gap-4 p-5 lg:grid-cols-3">
                   <label className="grid gap-1 text-sm text-slate-300">Feriados (AAAA-MM-DD, separados por vírgula)
                     <input className="rounded-lg border border-white/10 bg-slate-950 px-3 py-2" value={context.holidays.join(', ')} onChange={(event) => setContext({ ...context, holidays: event.target.value.split(',').map((item) => item.trim()).filter(Boolean) })} />
                   </label>
@@ -671,7 +697,7 @@ export default function EscalasPage() {
                   </label>
                 </section>
 
-                <section className="mt-4 rounded-2xl border border-white/10 bg-slate-900/60 p-4">
+                <section className="schedule-card mt-4 p-5">
                   <div>
                     <h2 className="font-bold">Férias e indisponibilidades</h2>
                     <p className="mt-1 text-sm text-slate-400">Essas datas entram no cálculo antes da geração da escala.</p>
@@ -716,45 +742,67 @@ export default function EscalasPage() {
               </>
             )}
 
-            <div className="mt-5 flex flex-wrap gap-2">
-              {(['hybrid','lunch','snack','extended'] as const).map((type) => (
-                <button key={type} className={entryType === type ? 'primary-button' : 'secondary-button'} onClick={() => setEntryType(type)}>
-                  {{ hybrid: 'Híbrido', lunch: 'Almoço', snack: 'Lanche', extended: 'Estendido' }[type]}
-                </button>
-              ))}
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+              <div className="schedule-segmented">
+                {(['hybrid','lunch','snack','extended'] as const).map((type) => (
+                  <button key={type} className={entryType === type ? 'is-active' : ''} onClick={() => setEntryType(type)}>
+                    {{ hybrid: 'Híbrido', lunch: 'Almoço', snack: 'Café', extended: 'Estendido' }[type]}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-slate-500">Clique em uma célula para ajustar manualmente. Ajustes manuais ficam protegidos.</p>
             </div>
 
             {validations.length > 0 && (
-              <div className="mt-4 grid gap-2">
-                {validations.map((validation, index) => (
-                  <div key={index} className={`rounded-lg border px-3 py-2 text-sm ${validation.level === 'error' ? 'border-red-400/30 bg-red-950/30 text-red-100' : validation.level === 'warning' ? 'border-amber-400/30 bg-amber-950/30 text-amber-100' : 'border-emerald-400/30 bg-emerald-950/30 text-emerald-100'}`}>
-                    {validation.level === 'error' ? '❌' : validation.level === 'warning' ? '⚠️' : '✅'} {validation.message} {validation.date ? `— ${validation.date}` : ''}
+              <section className="schedule-card mt-4 p-4">
+                <div className="schedule-validation-summary">
+                  <div className="schedule-metric"><span>Erros</span><strong>{validationSummary.errors}</strong></div>
+                  <div className="schedule-metric"><span>Atenções</span><strong>{validationSummary.warnings}</strong></div>
+                  <div className="schedule-metric"><span>Validações OK</span><strong>{validationSummary.ok}</strong></div>
+                </div>
+                {(validationSummary.errors > 0 || validationSummary.warnings > 0) && (
+                  <div className="mt-3 grid gap-2">
+                    {validations.filter((item) => item.level !== 'ok').map((validation, index) => (
+                      <div key={index} className={`rounded-lg border px-3 py-2 text-sm ${validation.level === 'error' ? 'border-red-400/30 bg-red-950/20 text-red-100' : 'border-amber-400/30 bg-amber-950/20 text-amber-100'}`}>
+                        <strong>{validation.level === 'error' ? 'Erro' : 'Atenção'}:</strong> {validation.message} {validation.date ? `— ${new Date(`${validation.date}T12:00:00`).toLocaleDateString('pt-BR')}` : ''}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                )}
+              </section>
             )}
 
-            <section className="mt-5 overflow-x-auto rounded-2xl border border-white/10 bg-slate-900/60">
-              <table className="min-w-max border-collapse text-sm">
-                <thead className="sticky top-0 z-10 bg-slate-900">
+            <section className="schedule-table-wrap mt-5">
+              <table className="schedule-table">
+                <thead className="sticky top-0 z-20">
                   <tr>
-                    <th className="sticky left-0 z-20 min-w-48 border-b border-r border-white/10 bg-slate-900 px-4 py-3 text-left">Colaborador</th>
-                    {monthDays.filter((day) => day.business).map((day) => <th key={day.value} className="min-w-16 border-b border-r border-white/10 px-2 py-3 text-center">{day.day}</th>)}
+                    <th className="schedule-person-cell px-4 py-3 text-left">Colaborador</th>
+                    {monthDays.filter((day) => day.business).map((day) => (
+                      <th key={day.value} className="schedule-day-head">
+                        <span>{String(day.day).padStart(2, '0')}</span>
+                        <span className="weekday">{WEEKDAY_LABEL[day.dow]}</span>
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {activeTeamPeople.map((person) => (
                     <tr key={person.id}>
-                      <td className="sticky left-0 z-10 border-b border-r border-white/10 bg-slate-950 px-4 py-3 font-semibold">{person.name}</td>
+                      <td className="schedule-person-cell px-4 py-3 font-semibold">{person.name}</td>
                       {monthDays.filter((day) => day.business).map((day) => {
                         const membership = memberships.find((item) => item.person_id === person.id && item.team_id === selectedTeamId && item.start_date <= day.value && (!item.end_date || item.end_date >= day.value))
                         if (!membership || !membershipAllowsTab(membership, entryType)) {
-                          return <td key={day.value} className="border-b border-r border-white/10 bg-slate-950/40 text-center text-slate-600">—</td>
+                          return <td key={day.value} className="px-2 py-2 text-center text-slate-600">—</td>
                         }
                         const entry = entries.find((item) => item.person_id === person.id && item.team_id === selectedTeamId && item.date === day.value && item.entry_type === entryType)
+                        const manual = Boolean(entry?.locked || entry?.source === 'manual' || entry?.source === 'exception')
                         return (
-                          <td key={day.value} className="border-b border-r border-white/10 p-1 text-center">
-                            <button className="min-h-9 w-full rounded-md bg-slate-800 px-2 py-1 text-xs hover:bg-slate-700" onClick={() => cycleCell(person.id, day.value)}>
+                          <td key={day.value} className="p-1.5 text-center">
+                            <button
+                              className={`schedule-cell-button ${scheduleCellTone(entry?.value)} ${manual ? 'schedule-manual-indicator' : ''}`}
+                              onClick={() => cycleCell(person.id, day.value)}
+                              title={manual ? 'Ajuste manual protegido' : 'Clique para alterar'}
+                            >
                               {entry?.value ?? '—'}
                             </button>
                           </td>
