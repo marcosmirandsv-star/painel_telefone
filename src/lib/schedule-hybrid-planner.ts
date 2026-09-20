@@ -82,20 +82,48 @@ export function planWeeklyHybrid(input: WeeklyHybridPlanInput) {
     }
   }
 
-  for (const [date, required] of Object.entries(input.requiredHoByDate)) {
-    while ((coverageCounts.get(date) ?? 0) < required) {
+  const requiredDates = Object.entries(input.requiredHoByDate)
+    .map(([date, required]) => ({
+      date,
+      required,
+      eligibleCount: input.people.filter(
+        (person) =>
+          person.candidates.some((candidate) => candidate.date === date) &&
+          coversRequirement(person.id, date),
+      ).length,
+    }))
+
+  const maxRequired = requiredDates.reduce((max, item) => Math.max(max, item.required), 0)
+
+  // Preenche cobertura por rodadas. Assim, quando a quantidade total de HOs da
+  // semana não for suficiente para completar todos os assentos do Estendido
+  // (ex.: semana com feriado e time ímpar), o déficit não cai sempre na sexta.
+  // Dias com menos pessoas elegíveis recebem prioridade.
+  for (let round = 1; round <= maxRequired; round += 1) {
+    const datesThisRound = requiredDates
+      .filter((item) => item.required >= round)
+      .sort((a, b) =>
+        a.eligibleCount - b.eligibleCount ||
+        (coverageCounts.get(a.date) ?? 0) - (coverageCounts.get(b.date) ?? 0) ||
+        b.date.localeCompare(a.date)
+      )
+
+    for (const item of datesThisRound) {
+      if ((coverageCounts.get(item.date) ?? 0) >= round) continue
+
       const candidatePeople = input.people
-        .filter((person) => canAssign(person.id, date) && coversRequirement(person.id, date))
+        .filter((person) => canAssign(person.id, item.date) && coversRequirement(person.id, item.date))
         .sort((a, b) => {
-          const aw = a.candidates.find((item) => item.date === date)?.weekday
-          const bw = b.candidates.find((item) => item.date === date)?.weekday
+          const aw = a.candidates.find((candidate) => candidate.date === item.date)?.weekday
+          const bw = b.candidates.find((candidate) => candidate.date === item.date)?.weekday
           const ap = aw !== undefined && a.preferredWeekdays.includes(aw) ? 0 : 1
           const bp = bw !== undefined && b.preferredWeekdays.includes(bw) ? 0 : 1
           return ap - bp
             || a.candidates.length - b.candidates.length
             || a.name.localeCompare(b.name)
         })
-      if (!candidatePeople[0] || !assign(candidatePeople[0].id, date)) break
+
+      if (candidatePeople[0]) assign(candidatePeople[0].id, item.date)
     }
   }
 
