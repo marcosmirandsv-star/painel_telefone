@@ -56,10 +56,17 @@ function runPlannerSelfTest() {
   assert(plan.get('p1')?.has('2026-10-05') === true, 'dia fixo de segunda deve ser respeitado')
   assert(plan.get('p1')?.has('2026-10-06') === true, 'dia fixo de terça deve ser respeitado')
 
+  const holidayCandidates = [
+    { date: '2026-10-13', weekday: 2 },
+    { date: '2026-10-14', weekday: 3 },
+    { date: '2026-10-15', weekday: 4 },
+    { date: '2026-10-16', weekday: 5 },
+  ]
   const holidayPeople = people.map((person) => ({
     ...person,
     remaining: 1,
     fixedWeekdays: [],
+    candidates: holidayCandidates,
   }))
   const holidayPlan = planWeeklyHybrid({
     people: holidayPeople,
