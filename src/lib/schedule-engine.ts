@@ -551,7 +551,8 @@ export function validateSchedule(input: ScheduleGenerationInput, entries: Schedu
         (person) =>
           experiencedNames.includes(person.name) &&
           personMembershipOnDate(input.memberships, person.id, input.team.id, date, 'lunch') &&
-          !absenceOnDate(input.absences, person.id, date),
+          !absenceOnDate(input.absences, person.id, date) &&
+          hybrid.get(person.id) !== 'HO',
       ).length
       const required = Math.min(experiencedMinAtNoon, experiencedAvailable)
       if (experiencedAtNoon < required) {
