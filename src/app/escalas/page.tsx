@@ -70,6 +70,17 @@ function daysInMonth(year: number, month: number) {
   })
 }
 
+function membershipAllowsTab(
+  membership: ScheduleMembership,
+  entryType: 'hybrid' | 'lunch' | 'snack' | 'extended',
+) {
+  if (!membership.participates_in_schedule) return false
+  if (entryType === 'hybrid') return membership.participates_hybrid !== false
+  if (entryType === 'lunch') return membership.participates_lunch !== false
+  if (entryType === 'snack') return membership.participates_snack !== false
+  return membership.participates_extended !== false
+}
+
 export default function EscalasPage() {
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
@@ -356,6 +367,14 @@ export default function EscalasPage() {
 
   async function cycleCell(personId: string, date: string) {
     if (!selectedTeam || !isManagement) return
+    const membership = memberships.find(
+      (item) =>
+        item.person_id === personId &&
+        item.team_id === selectedTeam.id &&
+        item.start_date <= date &&
+        (!item.end_date || item.end_date >= date),
+    )
+    if (!membership || !membershipAllowsTab(membership, entryType)) return
     const current = entries.find((entry) => entry.person_id === personId && entry.team_id === selectedTeam.id && entry.date === date && entry.entry_type === entryType)
     let value = current?.value ?? ''
     if (entryType === 'hybrid') {
@@ -552,7 +571,9 @@ export default function EscalasPage() {
                       <td className="sticky left-0 z-10 border-b border-r border-white/10 bg-slate-950 px-4 py-3 font-semibold">{person.name}</td>
                       {monthDays.filter((day) => day.business).map((day) => {
                         const membership = memberships.find((item) => item.person_id === person.id && item.team_id === selectedTeamId && item.start_date <= day.value && (!item.end_date || item.end_date >= day.value))
-                        if (!membership) return <td key={day.value} className="border-b border-r border-white/10 bg-slate-950/40 text-center text-slate-600">—</td>
+                        if (!membership || !membershipAllowsTab(membership, entryType)) {
+                          return <td key={day.value} className="border-b border-r border-white/10 bg-slate-950/40 text-center text-slate-600">—</td>
+                        }
                         const entry = entries.find((item) => item.person_id === person.id && item.team_id === selectedTeamId && item.date === day.value && item.entry_type === entryType)
                         return (
                           <td key={day.value} className="border-b border-r border-white/10 p-1 text-center">
