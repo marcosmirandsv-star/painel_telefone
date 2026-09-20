@@ -93,6 +93,7 @@ export type ScheduleGenerationInput = {
   year: number
   month: number
   existingEntries?: ScheduleEntry[]
+  stabilityMode?: 'standard' | 'preserve_existing'
 }
 
 export type ScheduleGenerationResult = {
