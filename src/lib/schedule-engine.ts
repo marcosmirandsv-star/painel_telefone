@@ -526,6 +526,8 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
   const weeks = [...new Set(dates.map(mondayOf))]
 
   const targetDates = new Set(dates)
+  const firstTargetDate = dates[0]
+  const lastTargetDate = dates.at(-1) ?? dates[0]
 
   for (const monday of weeks) {
     const week = weekDays(monday)
@@ -543,7 +545,7 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
 
     if (extendedSeats > 0) {
       for (const date of week) {
-        if (!targetDates.has(date) || isHoliday(input, date) || isClickDay(input, date)) continue
+        if (isHoliday(input, date) || isClickDay(input, date)) continue
         const weekday = atUtcDate(date).getUTCDay()
         if (!extendedWeekdays.includes(weekday)) continue
         requiredHoByDate[date] = extendedSeats
@@ -588,7 +590,7 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
 
       const candidates = activeWeek
         .filter((date) => {
-          if (!targetDates.has(date) || isHoliday(input, date) || isClickDay(input, date)) return false
+          if (isHoliday(input, date) || isClickDay(input, date)) return false
           if (fixedWeekdays.length && !fixedWeekdays.includes(atUtcDate(date).getUTCDay())) return false
           if (
             input.stabilityMode === 'preserve_existing' &&
@@ -597,7 +599,18 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
           ) return false
           if (absenceOnDate(input.absences, person.id, date)) return false
           if (isForcedPresentialAroundVacation(input.absences, person.id, date)) return false
+
           const existing = existingMap.get(`${person.id}|${input.team.id}|${date}|hybrid`)
+          const outsideCurrentMonth = !targetDates.has(date)
+
+          // A semana operacional atravessa a virada do mês. Dias do mês anterior
+          // nunca são replanejados; apenas contam se já possuem escala.
+          if (outsideCurrentMonth && firstTargetDate && date < firstTargetDate) return false
+
+          // Dias do mês seguinte podem participar do planejamento como reserva
+          // virtual. Se já possuem escala, ela é tratada como compromisso fechado.
+          if (outsideCurrentMonth && lastTargetDate && date > lastTargetDate && existing) return false
+
           if (
             existing &&
             (existing.locked || existing.source === 'manual' || existing.source === 'exception')
