@@ -93,6 +93,7 @@ const STATUS = [
   ['FOLGA','Folga'],
   ['DAY_OFF','Day Off'],
   ['PREMIACAO','Premiação'],
+  ['BANCO_HORAS','Banco de horas'],
   ['FERIAS','Férias'],
   ['CLICK_DAY','Click Day'],
   ['SENAC','Senac'],
