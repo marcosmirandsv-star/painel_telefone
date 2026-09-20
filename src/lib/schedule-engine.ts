@@ -120,10 +120,17 @@ function getActivePeople(input: ScheduleGenerationInput, date: string, entryType
   )
 }
 
+function adjacentBusinessDay(dateValue: string, direction: -1 | 1) {
+  let cursor = atUtcDate(dateValue)
+  do {
+    cursor = new Date(cursor.getTime() + direction * DAY_MS)
+  } while (cursor.getUTCDay() === WEEKDAY.saturday || cursor.getUTCDay() === WEEKDAY.sunday)
+  return iso(cursor)
+}
+
 function isForcedPresentialAroundVacation(absences: ScheduleAbsence[], personId: string, date: string) {
-  const current = atUtcDate(date)
-  const previous = iso(new Date(current.getTime() - DAY_MS))
-  const next = iso(new Date(current.getTime() + DAY_MS))
+  const previous = adjacentBusinessDay(date, -1)
+  const next = adjacentBusinessDay(date, 1)
   const previousVacation = absences.find(
     (absence) =>
       absence.person_id === personId &&
