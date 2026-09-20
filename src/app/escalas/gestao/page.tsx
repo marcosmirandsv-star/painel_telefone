@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { scheduleSupabase as supabase } from '@/lib/schedule-supabase'
+import { approveAndRecalculateScheduleRequest } from '@/lib/schedule-request-recalculator'
 
 type Profile = { id: string; full_name: string | null; role: string | null }
 type Team = { id: string; name: string; code: string }
 type Recipient = { id: string; team_id: string | null; profile_id: string; receive_all: boolean; active: boolean }
 type RequestItem = {
   id: string
+  requester_person_id: string | null
   requester_name: string
   requester_email: string | null
   team_id: string
@@ -72,16 +74,36 @@ export default function ScheduleManagementPage() {
 
   async function reviewRequest(item:RequestItem,status:'approved'|'rejected'){
     const note=window.prompt(status==='approved'?'Observação da aprovação (opcional):':'Motivo da recusa (opcional):','') ?? null
-    const {data:auth}=await supabase.auth.getUser()
-    const {error}=await supabase.from('schedule_requests').update({
-      status,
-      reviewed_by:auth.user?.id??null,
-      reviewed_at:new Date().toISOString(),
-      review_notes:note||null,
-    }).eq('id',item.id)
-    if(error) return setMessage(error.message)
-    setMessage(status==='approved'?'Solicitação aprovada.':'Solicitação recusada.')
-    await load()
+
+    if(status==='rejected'){
+      const {data:auth}=await supabase.auth.getUser()
+      const {error}=await supabase.from('schedule_requests').update({
+        status,
+        reviewed_by:auth.user?.id??null,
+        reviewed_at:new Date().toISOString(),
+        review_notes:note||null,
+        recalculation_status:'not_applicable',
+      }).eq('id',item.id)
+      if(error) return setMessage(error.message)
+      setMessage('Solicitação recusada.')
+      await load()
+      return
+    }
+
+    try {
+      setMessage('Aprovando solicitação e recalculando o impacto na escala...')
+      const result=await approveAndRecalculateScheduleRequest(supabase,item,note)
+      if(result.status==='applied'){
+        setMessage(`${result.summary} Foram registradas ${result.changes.length} alteração(ões).`)
+      }else if(result.status==='needs_review'){
+        setMessage(`${result.summary} Revise os alertas antes de encerrar o ajuste.`)
+      }else{
+        setMessage(result.summary)
+      }
+      await load()
+    } catch(error){
+      setMessage(error instanceof Error?error.message:'Não foi possível aplicar a solicitação.')
+    }
   }
 
   async function createPublicLink(){
@@ -166,7 +188,7 @@ export default function ScheduleManagementPage() {
 
       <section className="mt-5 rounded-2xl border border-white/10 bg-slate-900/60 p-5">
         <h2 className="text-xl font-bold">Solicitações</h2>
-        <div className="mt-4 overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="text-left text-slate-400"><th className="pb-3">Pessoa</th><th>Time</th><th>Data</th><th>Pedido</th><th>Motivo</th><th>Status</th><th>Ação</th></tr></thead><tbody>{requests.map((r)=><tr key={r.id} className="border-t border-white/10"><td className="py-3 font-semibold">{r.requester_name}</td><td>{teamName(r.team_id)}</td><td>{r.target_date}</td><td>{r.request_type}</td><td className="max-w-xs">{r.reason??'—'}</td><td>{r.status}</td><td className="flex gap-2 py-2">{r.status==='pending'&&<><button className="small-button" onClick={()=>reviewRequest(r,'approved')}>Aprovar</button><button className="danger-button" onClick={()=>reviewRequest(r,'rejected')}>Recusar</button></>}</td></tr>)}</tbody></table></div>
+        <div className="mt-4 overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="text-left text-slate-400"><th className="pb-3">Pessoa</th><th>Time</th><th>Data</th><th>Pedido</th><th>Motivo</th><th>Status</th><th>Ação</th></tr></thead><tbody>{requests.map((r)=><tr key={r.id} className="border-t border-white/10"><td className="py-3 font-semibold">{r.requester_name}</td><td>{teamName(r.team_id)}</td><td>{r.target_date}</td><td>{r.request_type}{r.requested_value? <span className="block text-xs text-slate-500">{r.requested_value}</span>:null}</td><td className="max-w-xs">{r.reason??'—'}</td><td>{r.status}</td><td className="flex gap-2 py-2">{r.status==='pending'&&<><button className="small-button" onClick={()=>reviewRequest(r,'approved')}>Aprovar e recalcular</button><button className="danger-button" onClick={()=>reviewRequest(r,'rejected')}>Recusar</button></>}</td></tr>)}</tbody></table></div>
       </section>
     </section>
   </main>
