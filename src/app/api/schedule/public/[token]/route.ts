@@ -49,7 +49,7 @@ export async function GET(
   const monthStart = `${prefix}-01`
   const monthEnd = new Date(Date.UTC(link.year, link.month, 0, 12)).toISOString().slice(0, 10)
 
-  const [{ data: entries, error: entriesError }, { data: memberships }, { data: people }] = await Promise.all([
+  const [{ data: entries, error: entriesError }, { data: memberships }, { data: people }, { data: changes }] = await Promise.all([
     admin
       .from('schedule_entries')
       .select('person_id,team_id,date,entry_type,value,source,locked')
@@ -63,6 +63,15 @@ export async function GET(
       .eq('team_id', link.team_id)
       .lte('start_date', monthEnd),
     admin.from('schedule_people').select('id,name,active').order('name'),
+    admin
+      .from('schedule_change_events')
+      .select('id,target_date,affected_dates,summary,details,created_at')
+      .eq('team_id', link.team_id)
+      .eq('visible_to_team', true)
+      .gte('target_date', monthStart)
+      .lte('target_date', monthEnd)
+      .order('created_at', { ascending: false })
+      .limit(20),
   ])
 
   if (entriesError) return NextResponse.json({ error: entriesError.message }, { status: 500 })
@@ -74,6 +83,7 @@ export async function GET(
     people: people ?? [],
     memberships: (memberships ?? []).filter((item) => !item.end_date || item.end_date >= monthStart),
     entries: entries ?? [],
+    changes: changes ?? [],
   }, {
     headers: {
       'Cache-Control': 'private, no-store',
