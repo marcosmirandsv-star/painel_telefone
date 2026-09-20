@@ -52,7 +52,7 @@ export async function GET(
   const [{ data: entries, error: entriesError }, { data: memberships }, { data: people }, { data: changes }] = await Promise.all([
     admin
       .from('schedule_entries')
-      .select('person_id,team_id,date,entry_type,value,source,locked')
+      .select('person_id,team_id,date,entry_type,value,source,locked,metadata')
       .eq('team_id', link.team_id)
       .gte('date', monthStart)
       .lte('date', monthEnd)
