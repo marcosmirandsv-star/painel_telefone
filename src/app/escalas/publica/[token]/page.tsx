@@ -246,7 +246,7 @@ export default function PublicSchedulePage() {
   return (
     <main className="schedule-shell p-4 sm:p-7">
       {changePopup && (
-        <div className="fixed right-4 top-4 z-50 w-[min(460px,calc(100vw-2rem))] rounded-2xl border border-amber-400/50 bg-slate-900 p-5 shadow-2xl">
+        <div className="schedule-toast fixed right-4 top-4 z-50 w-[min(460px,calc(100vw-2rem))] border-amber-400/40 p-5">
           <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-300">⚠️ Escala atualizada</p>
           <h2 className="mt-2 text-lg font-bold">Confira novamente sua escala</h2>
           <p className="mt-2 text-sm text-slate-300">{changePopup.summary}</p>
