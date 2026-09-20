@@ -732,11 +732,27 @@ export function generateMonthlySchedule(input: ScheduleGenerationInput): Schedul
 
     const clickDay = isClickDay(input, date)
     if (clickDay || input.preserveExistingLunchSnack) {
-      const previousDaily = (input.existingEntries ?? []).filter(
-        (entry) =>
-          entry.date === date &&
-          (entry.entry_type === 'lunch' || entry.entry_type === 'snack'),
+      const teamRules = rulesForDate(input.rules, input.team.id, null, date)
+      const normalShiftEndByLunch = ruleValue<Record<string, string>>(
+        teamRules,
+        'shift_end_by_lunch',
+        {},
       )
+      const previousDaily = (input.existingEntries ?? [])
+        .filter(
+          (entry) =>
+            entry.date === date &&
+            (entry.entry_type === 'lunch' || entry.entry_type === 'snack'),
+        )
+        .map((entry) => {
+          if (!clickDay || entry.entry_type !== 'lunch') return entry
+          const metadata = { ...(entry.metadata ?? {}) }
+          delete metadata.extended_shift
+          if (normalShiftEndByLunch[entry.value]) {
+            metadata.shift_end = normalShiftEndByLunch[entry.value]
+          }
+          return { ...entry, metadata }
+        })
       const previousKeys = new Set(previousDaily.map(entryKey))
 
       const generatedLunch = distributeLunch(
