@@ -169,6 +169,23 @@ function scheduleCellTone(value?: string) {
   return 'schedule-status-default'
 }
 
+function scheduleCellLabel(value?: string) {
+  if (!value) return '—'
+  const labels: Record<string, string> = {
+    P: 'Presencial',
+    HO: 'Home Office',
+    FOLGA: 'Folga',
+    DAY_OFF: 'Day Off',
+    PREMIACAO: 'Premiação',
+    BANCO_HORAS: 'Banco de horas',
+    FERIAS: 'Férias',
+    CLICK_DAY: 'Click Day',
+    FERIADO: 'Feriado',
+    SENAC: 'Senac',
+  }
+  return labels[value] ?? value
+}
+
 function membershipAllowsTab(
   membership: ScheduleMembership,
   entryType: 'hybrid' | 'lunch' | 'snack' | 'extended',
@@ -952,7 +969,7 @@ export default function EscalasPage() {
                     <th className="schedule-person-cell px-4 py-3 text-left">Colaborador</th>
                     {monthDays.filter((day) => day.business).map((day) => (
                       <th key={day.value} className="schedule-day-head">
-                        <span>{String(day.day).padStart(2, '0')}</span>
+                        <span className="schedule-day-number">{String(day.day).padStart(2, '0')}</span>
                         <span className="weekday">{WEEKDAY_LABEL[day.dow]}</span>
                       </th>
                     ))}
@@ -976,7 +993,7 @@ export default function EscalasPage() {
                               onClick={() => cycleCell(person.id, day.value)}
                               title={manual ? 'Ajuste manual protegido' : 'Clique para alterar'}
                             >
-                              {entry?.value ?? '—'}
+                              {entryType === 'hybrid' ? scheduleCellLabel(entry?.value) : entry?.value ?? '—'}
                             </button>
                           </td>
                         )
