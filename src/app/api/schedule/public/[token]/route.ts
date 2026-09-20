@@ -6,13 +6,13 @@ export async function GET(
   context: { params: Promise<{ token: string }> },
 ) {
   const { token } = await context.params
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!supabaseUrl || !serviceRoleKey) {
-    return NextResponse.json({ error: 'Ambiente não configurado.' }, { status: 500 })
+  const supabaseUrl = process.env.NEXT_PUBLIC_SCHEDULE_SUPABASE_URL
+  const publishableKey = process.env.NEXT_PUBLIC_SCHEDULE_SUPABASE_PUBLISHABLE_KEY
+  if (!supabaseUrl || !publishableKey) {
+    return NextResponse.json({ error: 'Ambiente de homologação não configurado.' }, { status: 500 })
   }
 
-  const admin = createClient(supabaseUrl, serviceRoleKey, {
+  const admin = createClient(supabaseUrl, publishableKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
 
