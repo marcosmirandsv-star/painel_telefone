@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { scheduleSupabase as supabase } from '@/lib/schedule-supabase'
 import { approveAndRecalculateScheduleRequest } from '@/lib/schedule-request-recalculator'
+import { ScheduleModal } from '@/components/schedule-modal'
 
 type Profile = { id: string; full_name: string | null; role: string | null }
 type Team = { id: string; name: string; code: string }
@@ -36,6 +37,8 @@ export default function ScheduleManagementPage() {
   const [year,setYear]=useState(new Date().getFullYear())
   const [month,setMonth]=useState(new Date().getMonth()+1)
   const [message,setMessage]=useState('')
+  const [reviewDialog,setReviewDialog]=useState<{item:RequestItem;status:'approved'|'rejected'}|null>(null)
+  const [reviewNote,setReviewNote]=useState('')
 
   async function load(){
     const [p,t,r,q,l]=await Promise.all([
@@ -72,8 +75,15 @@ export default function ScheduleManagementPage() {
     await load()
   }
 
-  async function reviewRequest(item:RequestItem,status:'approved'|'rejected'){
-    const note=window.prompt(status==='approved'?'Observação da aprovação (opcional):':'Motivo da recusa (opcional):','') ?? null
+  function openReview(item:RequestItem,status:'approved'|'rejected'){
+    setReviewNote('')
+    setReviewDialog({item,status})
+  }
+
+  async function confirmReview(){
+    if(!reviewDialog) return
+    const {item,status}=reviewDialog
+    const note=reviewNote.trim() || null
 
     if(status==='rejected'){
       const {data:auth}=await supabase.auth.getUser()
@@ -81,11 +91,12 @@ export default function ScheduleManagementPage() {
         status,
         reviewed_by:auth.user?.id??null,
         reviewed_at:new Date().toISOString(),
-        review_notes:note||null,
+        review_notes:note,
         recalculation_status:'not_applicable',
       }).eq('id',item.id)
       if(error) return setMessage(error.message)
       setMessage('Solicitação recusada.')
+      setReviewDialog(null)
       await load()
       return
     }
@@ -100,6 +111,7 @@ export default function ScheduleManagementPage() {
       }else{
         setMessage(result.summary)
       }
+      setReviewDialog(null)
       await load()
     } catch(error){
       setMessage(error instanceof Error?error.message:'Não foi possível aplicar a solicitação.')
@@ -141,6 +153,41 @@ export default function ScheduleManagementPage() {
   function teamName(id:string|null){return id?teams.find((t)=>t.id===id)?.name??'Time':'Todos os times'}
 
   return <main className="schedule-shell p-4 sm:p-7">
+    {reviewDialog && (
+      <ScheduleModal
+        title={reviewDialog.status === 'approved' ? 'Aprovar solicitação' : 'Recusar solicitação'}
+        description={
+          reviewDialog.status === 'approved'
+            ? 'Ao confirmar, o sistema aplica a solicitação e recalcula somente o impacto necessário na escala.'
+            : 'A solicitação será encerrada sem alterar a escala.'
+        }
+        tone={reviewDialog.status === 'rejected' ? 'danger' : 'default'}
+        onClose={() => setReviewDialog(null)}
+        footer={
+          <>
+            <button className="secondary-button" onClick={() => setReviewDialog(null)}>Cancelar</button>
+            <button className={reviewDialog.status === 'approved' ? 'primary-button' : 'danger-button'} onClick={confirmReview}>
+              {reviewDialog.status === 'approved' ? 'Aprovar e recalcular' : 'Confirmar recusa'}
+            </button>
+          </>
+        }
+      >
+        <div className="schedule-inline-note">
+          <strong>{reviewDialog.item.requester_name}</strong> · {teamName(reviewDialog.item.team_id)} · {new Date(`${reviewDialog.item.target_date}T12:00:00`).toLocaleDateString('pt-BR')}
+          <br />
+          {reviewDialog.item.request_type}{reviewDialog.item.requested_value ? ` · ${reviewDialog.item.requested_value}` : ''}
+        </div>
+        <label className="schedule-field">
+          {reviewDialog.status === 'approved' ? 'Observação da aprovação (opcional)' : 'Motivo da recusa (opcional)'}
+          <textarea
+            className="min-h-28 px-3 py-2"
+            value={reviewNote}
+            onChange={(event) => setReviewNote(event.target.value)}
+            placeholder="Registre um contexto para o histórico, se necessário."
+          />
+        </label>
+      </ScheduleModal>
+    )}
     <section className="mx-auto max-w-7xl">
       <div className="schedule-banner-homologation mb-4 px-4 py-3 text-sm"><strong>Ambiente de homologação</strong> · configurações e solicitações</div>
       <header className="schedule-topbar flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -188,7 +235,7 @@ export default function ScheduleManagementPage() {
 
       <section className="mt-5 schedule-card p-5">
         <h2 className="text-xl font-bold">Solicitações</h2>
-        <div className="mt-4 overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="text-left text-slate-400"><th className="pb-3">Pessoa</th><th>Time</th><th>Data</th><th>Pedido</th><th>Motivo</th><th>Status</th><th>Ação</th></tr></thead><tbody>{requests.map((r)=><tr key={r.id} className="border-t border-white/10"><td className="py-3 font-semibold">{r.requester_name}</td><td>{teamName(r.team_id)}</td><td>{r.target_date}</td><td>{r.request_type}{r.requested_value? <span className="block text-xs text-slate-500">{r.requested_value}</span>:null}</td><td className="max-w-xs">{r.reason??'—'}</td><td>{r.status}</td><td className="flex gap-2 py-2">{r.status==='pending'&&<><button className="small-button" onClick={()=>reviewRequest(r,'approved')}>Aprovar e recalcular</button><button className="danger-button" onClick={()=>reviewRequest(r,'rejected')}>Recusar</button></>}</td></tr>)}</tbody></table></div>
+        <div className="mt-4 overflow-x-auto"><table className="min-w-full text-sm"><thead><tr className="text-left text-slate-400"><th className="pb-3">Pessoa</th><th>Time</th><th>Data</th><th>Pedido</th><th>Motivo</th><th>Status</th><th>Ação</th></tr></thead><tbody>{requests.map((r)=><tr key={r.id} className="border-t border-white/10"><td className="py-3 font-semibold">{r.requester_name}</td><td>{teamName(r.team_id)}</td><td>{r.target_date}</td><td>{r.request_type}{r.requested_value? <span className="block text-xs text-slate-500">{r.requested_value}</span>:null}</td><td className="max-w-xs">{r.reason??'—'}</td><td>{r.status}</td><td className="flex gap-2 py-2">{r.status==='pending'&&<><button className="small-button" onClick={()=>openReview(r,'approved')}>Aprovar e recalcular</button><button className="danger-button" onClick={()=>openReview(r,'rejected')}>Recusar</button></>}</td></tr>)}</tbody></table></div>
       </section>
     </section>
   </main>
