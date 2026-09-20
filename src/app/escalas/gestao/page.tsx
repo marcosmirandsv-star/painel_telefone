@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
+import { scheduleSupabase as supabase } from '@/lib/schedule-supabase'
 
 type Profile = { id: string; full_name: string | null; role: string | null }
 type Team = { id: string; name: string; code: string }
