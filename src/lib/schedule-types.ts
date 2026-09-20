@@ -35,7 +35,7 @@ export type ScheduleMembership = {
 export type ScheduleAbsence = {
   id?: string
   person_id: string
-  kind: 'FERIAS' | 'DAY_OFF' | 'FOLGA' | 'PREMIACAO' | 'SENAC' | 'OUTRA'
+  kind: 'FERIAS' | 'DAY_OFF' | 'FOLGA' | 'PREMIACAO' | 'BANCO_HORAS' | 'SENAC' | 'OUTRA'
   start_date: string
   end_date: string
   notes?: string | null
