@@ -1455,8 +1455,8 @@ export default function Home() {
       )}
       <section className="mx-auto max-w-7xl">
         <div className="homologation-banner" role="status">
-          <strong>Homologação visual</strong>
-          <span>UI/UX em validação. Cálculos, fórmulas, dados e nomes permanecem preservados.</span>
+          <strong>Ambiente de homologação</strong>
+          <span>Versão de testes do Sistema de Performance. Alterações aqui não são produção.</span>
         </div>
         <header className="app-header flex flex-col gap-5 border-b border-white/10 pb-6 lg:flex-row lg:items-start lg:justify-between">
           <div>
