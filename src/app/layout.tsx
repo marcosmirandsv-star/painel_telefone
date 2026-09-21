@@ -12,9 +12,13 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const isPreview = process.env.VERCEL_ENV === 'preview'
+
 export const metadata: Metadata = {
-  title: "[HML] Central de Performance",
-  description: "Ambiente de homologação do Sistema de Performance de Atendimento",
+  title: isPreview ? "[HML] Central de Performance" : "Central de Performance",
+  description: isPreview
+    ? "Ambiente de homologação do Sistema de Performance de Atendimento"
+    : "Sistema de Performance de Atendimento",
 };
 
 export default function RootLayout({
