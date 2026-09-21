@@ -1,13 +1,20 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message) }
 }
 export function adminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!url || !key) throw new ApiError(503, 'Serviço não configurado.')
+  const { url, serviceRoleKey: key, environment } = getServerSupabaseConfig()
+  if (!url || !key) {
+    throw new ApiError(
+      503,
+      environment === 'homologacao'
+        ? 'Serviço de homologação ainda não configurado.'
+        : 'Serviço não configurado.',
+    )
+  }
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
 }
 export function json(data: unknown, status = 200) {
