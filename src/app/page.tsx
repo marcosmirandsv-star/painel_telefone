@@ -1885,7 +1885,7 @@ function ChatModuleDashboard({
     primary: Number(item.metric.csat),
     secondary: Number(item.metric.review_percentage),
     volume: Number(item.metric.total_tickets),
-    status: item.eligible ? 'Elegível' : item.reasons.join(', '),
+    status: item.eligible ? 'Elegível' : formatStatusText(item.reasons.join(', ')),
   }))
   const chatVisualPoints = calculatedChatRanking.map((item) => ({
     label: getChatAnalystName(item.metric),
@@ -1896,7 +1896,9 @@ function ChatModuleDashboard({
   }))
   const chatTopHighlight = calculatedChatRanking.find((item) => item.eligible)?.metric ?? calculatedChatRanking[0]?.metric ?? null
   const chatAttentionHighlight = chatOpportunities[0]?.metric ?? null
-  const chatAttentionText = chatOpportunities[0]?.reasons.join(', ') ?? 'Sem alerta crítico no período.'
+  const chatAttentionText = chatOpportunities[0]?.reasons.length
+    ? formatStatusText(chatOpportunities[0].reasons.join(', '))
+    : 'Sem alerta crítico no período.'
   const chatClosureReading =
     !calculationMetrics.length
       ? 'Ainda não há base suficiente para leitura executiva.'
@@ -3203,7 +3205,7 @@ function ChatModuleDashboard({
                         )}
                       </td>
                       <td className="py-3 pr-4 text-slate-300">
-                        {item.eligible ? 'Cumpriu todos os critérios.' : item.reasons.join(', ')}
+                        {item.eligible ? 'Cumpriu todos os critérios.' : formatStatusText(item.reasons.join(', '))}
                       </td>
                       <td className="py-3">
                         <button className="small-button" type="button" onClick={() => handleToggleChatPodiumExclusion(item.metric)}>
@@ -3267,7 +3269,7 @@ function ChatModuleDashboard({
                       <p className="font-semibold">{getChatAnalystName(item.metric)}</p>
                       <span className="text-sm text-amber-200">{item.metric.status}</span>
                     </div>
-                    <p className="mt-2 text-sm text-slate-400">{item.reasons.length ? item.reasons.join(', ') : 'Acompanhar estabilidade dos indicadores.'}</p>
+                    <p className="mt-2 text-sm text-slate-400">{item.reasons.length ? formatStatusText(item.reasons.join(', ')) : 'Acompanhar estabilidade dos indicadores.'}</p>
                     <p className="mt-2 text-sm text-slate-300">
                       CSAT {formatDelta(item.csatDelta, ' p.p.')}, avaliações {formatDelta(item.reviewDelta, ' p.p.')} e envio {formatDelta(item.sendingDelta, ' p.p.')}.
                     </p>
@@ -4174,7 +4176,7 @@ function DashboardView({
   const analystFocusText = analystResult
     ? analystResult.eligible
       ? 'Manter CSAT, volume e percentual de avaliações ate o fechamento.'
-      : analystResult.reasons.join(', ')
+      : formatStatusText(analystResult.reasons.join(', '))
     : 'Selecione outro período ou aguarde o lançamento semanal.'
   const analystActionText = analystResult
     ? buildDevelopmentFocus(analystResult, csatDelta)
@@ -4195,7 +4197,7 @@ function DashboardView({
       ? 'Fora do pódio por critério pendente'
       : analystRankingPosition > 0 && analystRankingPosition <= 3
         ? 'No pódio agora'
-        : 'Elegivel, fora do top 3 agora'
+        : 'Elegível, fora do top 3 agora'
     : 'Sem posição calculada'
   const analystPodiumProjectionText = analystResult
     ? !analystResult.eligible
@@ -5235,7 +5237,7 @@ function ReportsView({
     ? analystResult.eligible
       ? selectedRankingPosition > 0 && selectedRankingPosition <= 3
         ? 'Caso de reconhecimento e preservação'
-        : 'Caso elegivel para desenvolvimento competitivo'
+        : 'Caso elegível para desenvolvimento competitivo'
       : 'Caso de acompanhamento ativo'
     : 'Sem leitura disponível'
   const supervisorDecisionText = analystResult
@@ -5317,7 +5319,7 @@ function ReportsView({
     : ''
   const feedbackSummary = analystResult
     ? analystResult.eligible
-      ? `${selectedAnalyst?.name ?? 'Analista'} esta elegivel ao pódio no período. O foco recomendado e preservar consistencia, volume de avaliações e acompanhamento semanal.`
+      ? `${selectedAnalyst?.name ?? 'Analista'} está elegível ao pódio no período. O foco recomendado e preservar consistencia, volume de avaliações e acompanhamento semanal.`
       : `${selectedAnalyst?.name ?? 'Analista'} ainda nao sustenta elegibilidade ao pódio neste período. O foco recomendado e atuar sobre: ${analystResult.reasons.join(', ')}.`
     : ''
   const phoneFeedbackSuggestion = selectedAnalyst && analystResult
@@ -5411,7 +5413,7 @@ function ReportsView({
             reviews: analystResult.totalReviews,
             csatGoal: analystResult.individualGoal,
             reviewGoal,
-            status: analystResult.eligible ? 'Elegivel ao pódio' : 'Em acompanhamento',
+            status: analystResult.eligible ? 'Elegível ao pódio' : 'Em acompanhamento',
             teamPerformance,
             teamAnsweredCalls,
             teamTotalCalls,
@@ -5999,7 +6001,7 @@ function ReportsView({
                   {riskResults.map((item) => (
                     <div key={item.analystId} className="rounded-md bg-slate-950 p-3">
                       <p className="font-semibold">{item.analystName}</p>
-                      <p className="mt-1 text-sm text-slate-400">{item.reasons.join(', ')}</p>
+                      <p className="mt-1 text-sm text-slate-400">{formatStatusText(item.reasons.join(', '))}</p>
                     </div>
                   ))}
                 </div>
