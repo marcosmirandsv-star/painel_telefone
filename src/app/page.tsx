@@ -4221,7 +4221,7 @@ function DashboardView({
       label: 'CSAT mínimo',
       value: analystResult
         ? analystCsatGap > 0
-          ? `faltam ${analystCsatGap} p.p. para ${podiumCsatGoal}%`
+          ? `faltam ${formatDelta(analystCsatGap, ' p.p.').replace('+', '')} para ${podiumCsatGoal}%`
           : `cumprido: ${formatPercent(analystResult.averageCsat)}`
         : 'sem dados',
       ok: Boolean(analystResult && analystCsatGap === 0),
@@ -4230,7 +4230,7 @@ function DashboardView({
       label: 'Avaliações',
       value: analystResult
         ? analystReviewGap > 0
-          ? `faltam ${analystReviewGap} p.p. para ${reviewGoal}%`
+          ? `faltam ${formatDelta(analystReviewGap, ' p.p.').replace('+', '')} para ${reviewGoal}%`
           : `cumprido: ${formatPercent(analystResult.reviewPercentage)}`
         : 'sem dados',
       ok: Boolean(analystResult && analystReviewGap === 0),
@@ -4256,7 +4256,7 @@ function DashboardView({
     ? [
         {
           label: '1. Qualidade percebida',
-          title: analystCsatGap > 0 ? `Recuperar ${analystCsatGap} p.p. de CSAT` : 'Proteger o CSAT atual',
+          title: analystCsatGap > 0 ? `Recuperar ${formatDelta(analystCsatGap, ' p.p.').replace('+', '')} de CSAT` : 'Proteger o CSAT atual',
           text:
             analystCsatGap > 0
               ? 'Nos próximos atendimentos, confirme o problema antes de orientar, valide se a solucao ficou clara e encerre perguntando se ainda ficou alguma duvida. A meta e reduzir motivos de avaliação negativa antes do próximo fechamento.'
@@ -4264,7 +4264,7 @@ function DashboardView({
         },
         {
           label: '2. Avaliações respondidas',
-          title: analystReviewGap > 0 ? `Buscar mais ${analystReviewGap} p.p. em avaliações` : 'Manter boa amostra de avaliações',
+          title: analystReviewGap > 0 ? `Buscar mais ${formatDelta(analystReviewGap, ' p.p.').replace('+', '')} em avaliações` : 'Manter boa amostra de avaliações',
           text:
             analystReviewGap > 0
               ? 'Ao perceber que o cliente teve o problema resolvido, faca um fechamento simples e objetivo pedindo a avaliação. O foco nao e forcar resposta, e aumentar a amostra para o resultado representar melhor sua entrega.'
@@ -4538,7 +4538,7 @@ function DashboardView({
               <div className="mt-5 grid gap-4 md:grid-cols-3">
                 <MetricCard label="CSAT N1 comparável" value={formatPercent(n1ComparisonCsat)} />
                 <MetricCard label="CSAT geral" value={formatPercent(overallPhoneCsat)} />
-                <MetricCard label="Diferença geral x N1" value={`${overallCsatGap && overallCsatGap > 0 ? '+' : ''}${overallCsatGap ?? 0} p.p.`} tone={overallCsatGap !== null && overallCsatGap < 0 ? 'danger' : 'success'} />
+                <MetricCard label="Diferença geral x N1" value={formatDelta(overallCsatGap ?? 0, ' p.p.')} tone={overallCsatGap !== null && overallCsatGap < 0 ? 'danger' : 'success'} />
               </div>
 
               <div className="mt-5 grid gap-4 lg:grid-cols-2">
@@ -4546,9 +4546,9 @@ function DashboardView({
                   <h3 className="font-semibold text-slate-100">Onde está a diferença?</h3>
                   <p className="mt-2 text-sm leading-6 text-slate-300">
                     {overallCsatGap !== null && overallCsatGap < -0.01
-                      ? `O resultado geral está ${Math.abs(overallCsatGap)} p.p. abaixo do N1. Como o geral inclui o N2, esta diferença indica que o conjunto externo ao N1 reduziu o consolidado. Sem as avaliações individuais do N2, não é possível atribuir o efeito a uma pessoa específica.`
+                      ? `O resultado geral está ${formatDelta(Math.abs(overallCsatGap), ' p.p.').replace('+', '')} abaixo do N1. Como o geral inclui o N2, esta diferença indica que o conjunto externo ao N1 reduziu o consolidado. Sem as avaliações individuais do N2, não é possível atribuir o efeito a uma pessoa específica.`
                       : overallCsatGap !== null && overallCsatGap > 0.01
-                        ? `O resultado geral está ${overallCsatGap} p.p. acima do N1. Neste recorte, o conjunto externo ao N1 melhora o consolidado da operação.`
+                        ? `O resultado geral está ${formatDelta(overallCsatGap, ' p.p.').replace('+', '')} acima do N1. Neste recorte, o conjunto externo ao N1 melhora o consolidado da operação.`
                         : 'N1 e resultado geral estão praticamente alinhados neste período.'}
                   </p>
                   {!hasCompleteOverallCoverage && (
@@ -8732,9 +8732,9 @@ function buildPhoneFeedbackText({
   const reviewGap = round(analystResult.reviewPercentage - reviewGoal)
   const priority =
     podiumGap < 0
-      ? `compreender o que influenciou o CSAT, que ficou ${Math.abs(podiumGap)} p.p. abaixo da referência`
+      ? `compreender o que influenciou o CSAT, que ficou ${formatDelta(Math.abs(podiumGap), ' p.p.').replace('+', '')} abaixo da referência`
       : reviewGap < 0
-        ? `ampliar a participação nas avaliações, que ficou ${Math.abs(reviewGap)} p.p. abaixo da meta`
+        ? `ampliar a participação nas avaliações, que ficou ${formatDelta(Math.abs(reviewGap), ' p.p.').replace('+', '')} abaixo da meta`
         : volumeDifference < 0
           ? `entender o contexto do volume, que ficou ${Math.abs(volumeDifference)} atendimentos abaixo da média do time`
           : 'identificar as práticas reais que ajudaram a equilibrar os indicadores e decidir como mantê-las'
