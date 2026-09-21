@@ -36,6 +36,9 @@ export function getServerSupabaseConfig() {
     url: homologation
       ? HOMOLOGATION_SUPABASE_URL
       : process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',
+    publishableKey: homologation
+      ? HOMOLOGATION_SUPABASE_PUBLISHABLE_KEY
+      : process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? '',
     serviceRoleKey: homologation
       ? process.env.HOMOLOGATION_SUPABASE_SERVICE_ROLE_KEY ?? ''
       : process.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
