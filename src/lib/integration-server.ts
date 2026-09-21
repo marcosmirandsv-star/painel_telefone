@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { getServerSupabaseConfig } from '@/lib/runtime-environment'
+import { getServerSupabaseConfig } from './runtime-environment'
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message) }
