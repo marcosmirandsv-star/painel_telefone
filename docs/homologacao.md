@@ -142,5 +142,8 @@ Depois de chegar à produção, qualquer regressão deve ser tratada por revert 
 - estrutura de Telefone e Chat: criada na homologação.
 - base operacional para conferência: copiada sem segredos e sem evidências.
 - workflow de CI: ajustado para a branch `homologacao`.
-- UI corporativa: permanece em branch de trabalho e deve ser validada dentro da homologação.
-- vínculo completo Vercel -> Supabase de homologação: pendente de autorização do escopo da Vercel.
+- UI corporativa: incorporada à branch `homologacao`; ainda não foi promovida para produção.
+- consistência dos dados de cálculo entre produção e homologação: validada por contagem e assinatura dos registros para Telefone e Chat.
+- chaves de integração e histórico de rate limit na homologação: vazios.
+- usuários do Supabase Auth de homologação: ainda não criados.
+- vínculo completo Vercel -> Supabase de homologação: pendente de autorização do escopo da Vercel. Enquanto isso, o Preview não deve ser usado para lançamentos ou qualquer escrita de Telefone/Chat.
