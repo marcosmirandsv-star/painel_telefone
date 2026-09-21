@@ -1319,3 +1319,208 @@ button:disabled {
     min-height: 0;
   }
 }
+
+
+.schedule-transport-neutral {
+  border-color: rgb(148 163 184 / 0.24);
+}
+
+.schedule-transport-success {
+  border-color: rgb(74 222 128 / 0.34);
+  background: linear-gradient(180deg, rgb(20 83 45 / 0.18), rgb(10 21 37 / 0.92));
+}
+
+.schedule-transport-warning {
+  border-color: rgb(250 204 21 / 0.34);
+  background: linear-gradient(180deg, rgb(113 63 18 / 0.18), rgb(10 21 37 / 0.92));
+}
+
+.schedule-transport-danger {
+  border-color: rgb(248 113 113 / 0.38);
+  background: linear-gradient(180deg, rgb(127 29 29 / 0.18), rgb(10 21 37 / 0.92));
+}
+
+.schedule-transport-sent {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgb(74 222 128 / 0.28);
+  border-radius: 999px;
+  background: rgb(22 101 52 / 0.16);
+  padding: 6px 10px;
+  color: #bbf7d0;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.schedule-transport-table {
+  width: 100%;
+  min-width: 820px;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.schedule-transport-table th {
+  border-bottom: 1px solid var(--schedule-border-strong);
+  padding: 10px 12px;
+  color: #71839b;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.schedule-transport-table td {
+  border-bottom: 1px solid var(--schedule-border);
+  padding: 12px;
+  color: #cbd5e1;
+}
+
+.schedule-transport-table tbody tr:hover td {
+  background: rgb(30 41 59 / 0.22);
+}
+
+.schedule-transport-days {
+  display: inline-grid;
+  min-width: 38px;
+  place-items: center;
+  border: 1px solid rgb(56 189 248 / 0.24);
+  border-radius: 9px;
+  background: rgb(14 165 233 / 0.08);
+  padding: 5px 8px;
+  color: #e0f2fe;
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.schedule-transport-ready,
+.schedule-transport-pending {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 5px 8px;
+  font-size: 0.67rem;
+  font-weight: 800;
+}
+
+.schedule-transport-ready {
+  border: 1px solid rgb(74 222 128 / 0.24);
+  background: rgb(22 101 52 / 0.12);
+  color: #bbf7d0;
+}
+
+.schedule-transport-pending {
+  border: 1px solid rgb(250 204 21 / 0.24);
+  background: rgb(113 63 18 / 0.12);
+  color: #fde68a;
+}
+
+.schedule-transport-benefit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.schedule-transport-person {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  min-height: 66px;
+  border: 1px solid var(--schedule-border);
+  border-radius: 11px;
+  background: #091523;
+  padding: 10px 12px;
+  color: #cbd5e1;
+  text-align: left;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
+}
+
+.schedule-transport-person:hover {
+  border-color: rgb(148 163 184 / 0.28);
+  background: #0d1a2b;
+}
+
+.schedule-transport-person.is-active {
+  border-color: rgb(74 222 128 / 0.34);
+  background: rgb(22 101 52 / 0.10);
+}
+
+.schedule-transport-person strong,
+.schedule-transport-person small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-transport-person strong {
+  color: #f1f5f9;
+  font-size: 0.78rem;
+}
+
+.schedule-transport-person small {
+  margin-top: 3px;
+  color: #71839b;
+  font-size: 0.66rem;
+}
+
+.schedule-transport-person-status {
+  color: #71839b;
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+
+.schedule-transport-person.is-active .schedule-transport-person-status {
+  color: #86efac;
+}
+
+.schedule-transport-toggle {
+  position: relative;
+  display: inline-flex;
+  width: 34px;
+  height: 19px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #334155;
+  transition: background 120ms ease;
+}
+
+.schedule-transport-toggle > span {
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  background: white;
+  transition: transform 120ms ease;
+}
+
+.schedule-transport-person.is-active .schedule-transport-toggle {
+  background: #16a34a;
+}
+
+.schedule-transport-person.is-active .schedule-transport-toggle > span {
+  transform: translateX(15px);
+}
+
+@media (max-width: 1100px) {
+  .schedule-transport-benefit-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .schedule-transport-benefit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-transport-person {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .schedule-transport-person-status {
+    grid-column: 2;
+  }
+}
