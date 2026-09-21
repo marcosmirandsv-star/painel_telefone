@@ -1335,6 +1335,8 @@ export default function EscalasPage() {
             entries={entries}
             teams={teams}
             profileId={profile?.id ?? null}
+            onMonthChange={setMonth}
+            onYearChange={setYear}
           />
         )}
 
