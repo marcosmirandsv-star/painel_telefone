@@ -1422,7 +1422,7 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 px-5 py-6 text-white sm:px-8">
+    <main className="app-shell min-h-screen px-5 py-6 sm:px-8">
       {schedulePopup && (
         <div className="fixed right-4 top-4 z-50 w-[min(430px,calc(100vw-2rem))] rounded-2xl border border-cyan-400/50 bg-slate-900 p-5 shadow-2xl shadow-cyan-950/50">
           <div className="flex items-start gap-3">
@@ -1454,7 +1454,11 @@ export default function Home() {
         </div>
       )}
       <section className="mx-auto max-w-7xl">
-        <header className="flex flex-col gap-5 border-b border-white/10 pb-6 lg:flex-row lg:items-start lg:justify-between">
+        <div className="homologation-banner" role="status">
+          <strong>Homologação visual</strong>
+          <span>UI/UX em validação. Cálculos, fórmulas, dados e nomes permanecem preservados.</span>
+        </div>
+        <header className="app-header flex flex-col gap-5 border-b border-white/10 pb-6 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-300">
               Central de Performance
@@ -4710,59 +4714,110 @@ function DashboardView({
       </section>
 
       {!isAnalystDashboard && (
-        <nav className="panel" aria-label="Visão do dashboard">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Organização da análise</p>
-          <div className="mt-3 flex flex-wrap gap-2">
+        <nav className="panel workspace-switcher" aria-label="Visão do dashboard">
+          <div>
+            <p className="workspace-eyebrow">Visão da gestão</p>
+            <h2 className="section-title mt-2">
+              {managementSection === 'area' ? 'Operação' : 'Pessoas'}
+            </h2>
+            <p className="section-subtitle">
+              {managementSection === 'area'
+                ? 'Resultado consolidado, tendências, riscos e decisões da operação.'
+                : 'Desempenho individual, elegibilidade, volume, ranking e acompanhamento do time.'}
+            </p>
+          </div>
+          <div className="workspace-switcher-row" role="group" aria-label="Alternar entre operação e pessoas">
             <button
-              className={managementSection === 'area' ? 'tab-button-active' : 'tab-button'}
+              className={managementSection === 'area' ? 'workspace-switcher-button workspace-switcher-button-active' : 'workspace-switcher-button'}
               type="button"
               aria-pressed={managementSection === 'area'}
               onClick={() => setManagementSection('area')}
             >
-              Diagnóstico da área
+              Operação
             </button>
             <button
-              className={managementSection === 'people' ? 'tab-button-active' : 'tab-button'}
+              className={managementSection === 'people' ? 'workspace-switcher-button workspace-switcher-button-active' : 'workspace-switcher-button'}
               type="button"
               aria-pressed={managementSection === 'people'}
               onClick={() => setManagementSection('people')}
             >
-              Pessoas e produtividade
+              Pessoas
             </button>
           </div>
-          <p className="mt-3 text-sm text-slate-400">
-            {managementSection === 'area'
-              ? 'Indicadores gerais, tendências, riscos e plano de ação da operação.'
-              : 'Ranking, elegibilidade, volume e comparação entre os analistas.'}
-          </p>
         </nav>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        {isAnalystDashboard ? (
-          <>
-            <AnalystIdentityCard analyst={analystProfile} />
-            <MetricCard label="Atendimentos no período" value={totalTickets} tone={podiumAverageTickets && totalTickets >= podiumAverageTickets ? 'success' : podiumAverageTickets ? 'warning' : undefined} />
-            <MetricCard label="Meu CSAT" value={formatPercent(analystResult?.averageCsat ?? 0)} tone={analystResult && analystResult.averageCsat >= analystResult.individualGoal ? 'success' : analystResult ? 'warning' : undefined} />
-            <MetricCard label="CSAT equipe N1" value={formatPercent(n1TeamAverageCsat || 0)} tone={n1TeamAverageCsat >= podiumCsatGoal ? 'success' : n1TeamAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
-            <MetricCard label="CSAT geral N1 + N2 · média do período" value={overallPhoneCsat === null ? 'Não informado' : formatPercent(overallPhoneCsat)} tone={overallPhoneCsat === null ? undefined : overallPhoneCsat >= podiumCsatGoal ? 'success' : overallPhoneCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
-            <MetricCard label="Avaliações" value={`${formatChatCount(totalReviews)} (${formatPercent(reviewCoverage)})`} tone={reviewCoverage >= reviewGoal ? 'success' : reviewCoverage >= 20 ? 'warning' : 'danger'} />
-          </>
-        ) : (
-          <>
-            <MetricCard label="Status" value="Supabase conectado" tone="success" />
-            <MetricCard label="Analistas ativos" value={loading ? '...' : analystsCount} />
-            <MetricCard label="CSAT equipe N1" value={formatPercent(n1TeamAverageCsat || 0)} tone={n1TeamAverageCsat >= podiumCsatGoal ? 'success' : n1TeamAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
-            <MetricCard label="CSAT geral N1 + N2 · média do período" value={overallPhoneCsat === null ? 'Não informado' : formatPercent(overallPhoneCsat)} tone={overallPhoneCsat === null ? undefined : overallPhoneCsat >= podiumCsatGoal ? 'success' : overallPhoneCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
-            <MetricCard label="Performance equipe" value={formatPercent(periodTeamPerformance || 0)} tone={periodTeamPerformance >= teamPerformanceGoal ? 'success' : periodTeamPerformance >= teamPerformanceGoal - 3 ? 'warning' : 'danger'} />
-          </>
-        )}
-      </div>
+      {isAnalystDashboard ? (
+        <>
+          <section className="metric-zone">
+            <div className="metric-zone-heading">
+              <div>
+                <p className="workspace-eyebrow">Minha performance</p>
+                <h2 className="section-title mt-2">Meu resultado no período</h2>
+                <p className="section-subtitle">Indicadores individuais, posição e critérios que dependem diretamente do seu resultado.</p>
+              </div>
+            </div>
+            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+              <AnalystIdentityCard analyst={analystProfile} />
+              <MetricCard label="Meu CSAT" value={formatPercent(analystResult?.averageCsat ?? 0)} tone={analystResult && analystResult.averageCsat >= analystResult.individualGoal ? 'success' : analystResult ? 'warning' : undefined} />
+              <MetricCard label="Minhas avaliações" value={`${formatChatCount(totalReviews)} (${formatPercent(reviewCoverage)})`} tone={reviewCoverage >= reviewGoal ? 'success' : reviewCoverage >= 20 ? 'warning' : 'danger'} />
+              <MetricCard label="Meus atendimentos" value={formatChatCount(totalTickets)} tone={podiumAverageTickets && totalTickets >= podiumAverageTickets ? 'success' : podiumAverageTickets ? 'warning' : undefined} />
+              <MetricCard label="Minha posição" value={analystDataLoading ? '...' : analystRankingPosition ? `${analystRankingPosition}º` : '-'} tone={analystResult?.eligible ? 'success' : analystResult ? 'warning' : undefined} />
+            </div>
+          </section>
 
-      {isAnalystDashboard && (
-        <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-3 text-sm leading-6 text-slate-300">
-          O CSAT da equipe N1 reúne os oito analistas do telefone. O CSAT geral inclui também os atendimentos de transbordo do N2 e serve como contexto da operação; ele não altera seu pódio individual.
-        </div>
+          <section className="metric-zone context-zone">
+            <div className="metric-zone-heading">
+              <div>
+                <p className="workspace-eyebrow">Nosso resultado</p>
+                <h2 className="section-title mt-2">Contexto da equipe</h2>
+                <p className="section-subtitle">A performance é coletiva e permanece visível para mostrar o resultado que o time está construindo junto.</p>
+              </div>
+            </div>
+            <div className="mt-5 grid gap-4 md:grid-cols-3">
+              <MetricCard label="Performance da equipe" value={formatPercent(periodTeamPerformance || 0)} tone={periodTeamPerformance >= teamPerformanceGoal ? 'success' : periodTeamPerformance >= teamPerformanceGoal - 3 ? 'warning' : 'danger'} />
+              <MetricCard label="CSAT equipe N1" value={formatPercent(n1TeamAverageCsat || 0)} tone={n1TeamAverageCsat >= podiumCsatGoal ? 'success' : n1TeamAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
+              <MetricCard label="CSAT geral N1 + N2" value={overallPhoneCsat === null ? 'Não informado' : formatPercent(overallPhoneCsat)} tone={overallPhoneCsat === null ? undefined : overallPhoneCsat >= podiumCsatGoal ? 'success' : overallPhoneCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
+            </div>
+            <p className="context-note">
+              O CSAT da equipe N1 reúne os analistas do telefone. O CSAT geral inclui também os atendimentos de transbordo do N2 e serve como contexto da operação; ele não altera seu pódio individual.
+            </p>
+          </section>
+        </>
+      ) : managementSection === 'area' ? (
+        <section className="metric-zone">
+          <div className="metric-zone-heading">
+            <div>
+              <p className="workspace-eyebrow">Operação</p>
+              <h2 className="section-title mt-2">Visão executiva do período</h2>
+              <p className="section-subtitle">Somente indicadores consolidados da operação, sem misturar leitura individual de pessoas.</p>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <MetricCard label="Performance da equipe" value={formatPercent(periodTeamPerformance || 0)} tone={periodTeamPerformance >= teamPerformanceGoal ? 'success' : periodTeamPerformance >= teamPerformanceGoal - 3 ? 'warning' : 'danger'} />
+            <MetricCard label="CSAT equipe N1" value={formatPercent(n1TeamAverageCsat || 0)} tone={n1TeamAverageCsat >= podiumCsatGoal ? 'success' : n1TeamAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
+            <MetricCard label="CSAT geral N1 + N2" value={overallPhoneCsat === null ? 'Não informado' : formatPercent(overallPhoneCsat)} tone={overallPhoneCsat === null ? undefined : overallPhoneCsat >= podiumCsatGoal ? 'success' : overallPhoneCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
+            <MetricCard label="Cobertura de avaliações" value={formatPercent(reviewCoverage)} tone={reviewCoverage >= reviewGoal ? 'success' : reviewCoverage >= 20 ? 'warning' : 'danger'} />
+            <MetricCard label="Atendimentos N1" value={formatChatCount(totalTickets)} />
+          </div>
+        </section>
+      ) : (
+        <section className="metric-zone">
+          <div className="metric-zone-heading">
+            <div>
+              <p className="workspace-eyebrow">Pessoas</p>
+              <h2 className="section-title mt-2">Saúde do time no período</h2>
+              <p className="section-subtitle">Aqui entram pessoas, comparação individual, elegibilidade e contexto de produtividade.</p>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <MetricCard label="Analistas ativos" value={loading ? '...' : analystsCount} />
+            <MetricCard label="Elegíveis" value={eligibleCount} tone={eligibleCount > 0 ? 'success' : 'warning'} />
+            <MetricCard label="Em atenção" value={attentionCount} tone={attentionCount > 0 ? 'warning' : 'success'} />
+            <MetricCard label="Média de atendimentos" value={formatChatCount(podiumAverageTickets || 0)} />
+            <MetricCard label="Cobertura de avaliações" value={formatPercent(reviewCoverage)} tone={reviewCoverage >= reviewGoal ? 'success' : reviewCoverage >= 20 ? 'warning' : 'danger'} />
+          </div>
+        </section>
       )}
 
       {isManagementView && managementSection === 'area' && (
