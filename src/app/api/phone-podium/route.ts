@@ -32,19 +32,7 @@ function round(value: number, decimals = 2) {
 }
 
 export async function GET(request: NextRequest) {
-  const { url: supabaseUrl, serviceRoleKey, environment } = getServerSupabaseConfig()
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    return NextResponse.json(
-      {
-        error:
-          environment === 'homologacao'
-            ? 'Ranking seguro da homologação ainda não configurado.'
-            : 'Ranking seguro não configurado.',
-      },
-      { status: 500 },
-    )
-  }
+  const { url: supabaseUrl, publishableKey, serviceRoleKey, environment } = getServerSupabaseConfig()
 
   const token = request.headers.get('authorization')?.replace('Bearer ', '').trim()
   if (!token) return NextResponse.json({ error: 'Sessão não encontrada.' }, { status: 401 })
@@ -52,6 +40,36 @@ export async function GET(request: NextRequest) {
   const start = request.nextUrl.searchParams.get('start')
   const end = request.nextUrl.searchParams.get('end')
   if (!start || !end) return NextResponse.json({ error: 'Periodo obrigatorio.' }, { status: 400 })
+
+  if (environment === 'homologacao') {
+    if (!supabaseUrl || !publishableKey) {
+      return NextResponse.json({ error: 'Ranking seguro da homologação não configurado.' }, { status: 500 })
+    }
+
+    const edgeResponse = await fetch(
+      `${supabaseUrl}/functions/v1/phone-podium-ranking?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: publishableKey,
+        },
+        cache: 'no-store',
+      },
+    )
+
+    const payload = await edgeResponse.text()
+    return new NextResponse(payload, {
+      status: edgeResponse.status,
+      headers: {
+        'content-type': edgeResponse.headers.get('content-type') ?? 'application/json',
+        'cache-control': 'no-store',
+      },
+    })
+  }
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return NextResponse.json({ error: 'Ranking seguro não configurado.' }, { status: 500 })
+  }
 
   const admin = createClient(supabaseUrl, serviceRoleKey, {
     auth: {
