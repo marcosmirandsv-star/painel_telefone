@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx'
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { scheduleSupabase } from '@/lib/schedule-supabase'
+import { isHomologationBrowserRuntime } from '@/lib/runtime-environment'
 import { calculateAverageCsat, calculateChatAverage, calculateTeamPerformance } from '@/lib/indicators'
 
 type Goal = {
@@ -387,6 +388,7 @@ async function uploadAnalystPhoto(file: File, scope: 'phone' | 'chat', analystId
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null)
+  const [isHomologationView, setIsHomologationView] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -422,6 +424,8 @@ export default function Home() {
   const scheduleNotificationIds = useRef(new Set<string>())
 
   useEffect(() => {
+    setIsHomologationView(isHomologationBrowserRuntime())
+
     const recoveryFromHash = new URLSearchParams(window.location.hash.replace('#', ''))
     const recoveryFromSearch = new URLSearchParams(window.location.search)
     const cameFromRecoveryLink =
@@ -758,7 +762,7 @@ export default function Home() {
   }
 
   async function handleHomologationSignup() {
-    if (process.env.NEXT_PUBLIC_VERCEL_ENV !== 'preview') return
+    if (!isHomologationView) return
 
     const trimmedEmail = email.trim().toLowerCase()
 
@@ -1393,7 +1397,7 @@ export default function Home() {
           <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-300">
             Central de Performance
           </p>
-          {process.env.NEXT_PUBLIC_VERCEL_ENV === 'preview' && (
+          {isHomologationView && (
             <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs font-semibold text-amber-200">
               Ambiente de homologação · dados e acessos separados da produção
             </div>
@@ -1454,7 +1458,7 @@ export default function Home() {
                 {saving ? 'Enviando link...' : 'Esqueci minha senha'}
               </button>
 
-              {process.env.NEXT_PUBLIC_VERCEL_ENV === 'preview' && (
+              {isHomologationView && (
                 <button
                   className="w-full rounded-lg border border-white/10 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-cyan-400/40 hover:text-cyan-200 disabled:text-slate-500"
                   disabled={saving}
@@ -1506,10 +1510,12 @@ export default function Home() {
         </div>
       )}
       <section className="mx-auto max-w-7xl">
-        <div className="homologation-banner" role="status">
-          <strong>Ambiente de homologação</strong>
-          <span>Versão de testes do Sistema de Performance. Alterações aqui não são produção.</span>
-        </div>
+        {isHomologationView && (
+          <div className="homologation-banner" role="status">
+            <strong>Ambiente de homologação</strong>
+            <span>Versão de testes do Sistema de Performance. Alterações aqui não são produção.</span>
+          </div>
+        )}
         <header className="app-header flex flex-col gap-5 border-b border-white/10 pb-6 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-300">
