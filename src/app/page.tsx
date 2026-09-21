@@ -1422,7 +1422,7 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 px-5 py-6 text-white sm:px-8">
+    <main className="app-shell min-h-screen px-5 py-6 sm:px-8">
       {schedulePopup && (
         <div className="fixed right-4 top-4 z-50 w-[min(430px,calc(100vw-2rem))] rounded-2xl border border-cyan-400/50 bg-slate-900 p-5 shadow-2xl shadow-cyan-950/50">
           <div className="flex items-start gap-3">
@@ -1454,7 +1454,11 @@ export default function Home() {
         </div>
       )}
       <section className="mx-auto max-w-7xl">
-        <header className="flex flex-col gap-5 border-b border-white/10 pb-6 lg:flex-row lg:items-start lg:justify-between">
+        <div className="homologation-banner" role="status">
+          <strong>Ambiente de homologação</strong>
+          <span>Versão de testes do Sistema de Performance. Alterações aqui não são produção.</span>
+        </div>
+        <header className="app-header flex flex-col gap-5 border-b border-white/10 pb-6 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-300">
               Central de Performance
@@ -2801,11 +2805,11 @@ function ChatModuleDashboard({
 
   return (
     <div className="mt-8 space-y-7">
-      <section className="panel">
+      <section className="panel workspace-hero">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Módulo chat</p>
-            <h2 className="mt-3 text-3xl font-bold">Performance mensal do chat</h2>
+            <p className="workspace-eyebrow">Módulo chat</p>
+            <h2 className="workspace-title">Performance mensal do chat</h2>
             <p className="section-subtitle">
               Leitura consolidada dos dados históricos e das importações mensais do Zendesk.
             </p>
@@ -2835,19 +2839,19 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <nav className="chat-navigation" aria-label="Áreas do módulo Chat">
+      <nav className="chat-navigation workspace-navigation" aria-label="Áreas do módulo Chat">
         <div className="tab-row">
           <TabButton active={chatActiveTab === 'overview'} onClick={() => setChatActiveTab('overview')}>
-            Visão da operação
+            Operação
           </TabButton>
           <TabButton active={chatActiveTab === 'analysis'} onClick={() => setChatActiveTab('analysis')}>
-            Equipe e produtividade
+            Pessoas
           </TabButton>
           <TabButton active={chatActiveTab === 'podium'} onClick={() => setChatActiveTab('podium')}>
-            Gestão e ações
+            Ações de gestão
           </TabButton>
           <TabButton active={chatActiveTab === 'reports'} onClick={() => setChatActiveTab('reports')}>
-            Fechamento mensal
+            Fechamento
           </TabButton>
         </div>
         <div className="chat-tools-menu">
@@ -2899,32 +2903,32 @@ function ChatModuleDashboard({
       </nav>
 
       {chatActiveTab === 'overview' && (
-        <section className="panel">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Visão da operação</p>
+        <section className="panel workspace-section-intro">
+          <p className="workspace-eyebrow">Operação</p>
           <h2 className="mt-2 text-2xl font-bold">O que aconteceu no período?</h2>
           <p className="section-subtitle">Resultado consolidado, comparação com o mês anterior e evolução dos principais indicadores.</p>
         </section>
       )}
 
       {chatActiveTab === 'analysis' && (
-        <section className="panel">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Equipe e produtividade</p>
+        <section className="panel workspace-section-intro">
+          <p className="workspace-eyebrow">Pessoas</p>
           <h2 className="mt-2 text-2xl font-bold">Como os resultados estão distribuídos?</h2>
           <p className="section-subtitle">Comparação entre analistas, volume, qualidade, participação nas avaliações e conferência da base importada.</p>
         </section>
       )}
 
       {chatActiveTab === 'podium' && (
-        <section className="panel">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Gestão e ações</p>
+        <section className="panel workspace-section-intro">
+          <p className="workspace-eyebrow">Ações de gestão</p>
           <h2 className="mt-2 text-2xl font-bold">Onde agir e o que acompanhar?</h2>
           <p className="section-subtitle">Diagnóstico gerencial, prioridades, causas a validar e ações recomendadas para o próximo ciclo.</p>
         </section>
       )}
 
       {chatActiveTab === 'reports' && (
-        <section className="panel">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Fechamento mensal</p>
+        <section className="panel workspace-section-intro">
+          <p className="workspace-eyebrow">Fechamento mensal</p>
           <h2 className="mt-2 text-2xl font-bold">Consolidar, reconhecer e comunicar</h2>
           <p className="section-subtitle">Ranking final, ajustes operacionais do pódio e geração dos relatórios individuais.</p>
         </section>
@@ -3069,7 +3073,7 @@ function ChatModuleDashboard({
           </div>
         </div>
       </section>
-      <div className={chatActiveTab === 'overview' ? 'grid gap-4 md:grid-cols-4' : 'hidden'}>
+      <div className={chatActiveTab === 'overview' ? 'metric-zone grid gap-4 md:grid-cols-4' : 'hidden'}>
         <MetricCard label="Equipe" value={selectedTeamName} />
         <MetricCard label="CSAT médio" value={loading ? '...' : formatChatPercent(averageCsat)} tone={averageCsat >= 90 ? 'success' : averageCsat >= 85 ? 'warning' : 'danger'} />
         <MetricCard label="% avaliações" value={formatChatPercent(averageReviews)} tone={averageReviews >= 25 ? 'success' : averageReviews >= 20 ? 'warning' : 'danger'} />
@@ -4710,59 +4714,110 @@ function DashboardView({
       </section>
 
       {!isAnalystDashboard && (
-        <nav className="panel" aria-label="Visão do dashboard">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Organização da análise</p>
-          <div className="mt-3 flex flex-wrap gap-2">
+        <nav className="panel workspace-switcher" aria-label="Visão do dashboard">
+          <div>
+            <p className="workspace-eyebrow">Visão da gestão</p>
+            <h2 className="section-title mt-2">
+              {managementSection === 'area' ? 'Operação' : 'Pessoas'}
+            </h2>
+            <p className="section-subtitle">
+              {managementSection === 'area'
+                ? 'Resultado consolidado, tendências, riscos e decisões da operação.'
+                : 'Desempenho individual, elegibilidade, volume, ranking e acompanhamento do time.'}
+            </p>
+          </div>
+          <div className="workspace-switcher-row" role="group" aria-label="Alternar entre operação e pessoas">
             <button
-              className={managementSection === 'area' ? 'tab-button-active' : 'tab-button'}
+              className={managementSection === 'area' ? 'workspace-switcher-button workspace-switcher-button-active' : 'workspace-switcher-button'}
               type="button"
               aria-pressed={managementSection === 'area'}
               onClick={() => setManagementSection('area')}
             >
-              Diagnóstico da área
+              Operação
             </button>
             <button
-              className={managementSection === 'people' ? 'tab-button-active' : 'tab-button'}
+              className={managementSection === 'people' ? 'workspace-switcher-button workspace-switcher-button-active' : 'workspace-switcher-button'}
               type="button"
               aria-pressed={managementSection === 'people'}
               onClick={() => setManagementSection('people')}
             >
-              Pessoas e produtividade
+              Pessoas
             </button>
           </div>
-          <p className="mt-3 text-sm text-slate-400">
-            {managementSection === 'area'
-              ? 'Indicadores gerais, tendências, riscos e plano de ação da operação.'
-              : 'Ranking, elegibilidade, volume e comparação entre os analistas.'}
-          </p>
         </nav>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        {isAnalystDashboard ? (
-          <>
-            <AnalystIdentityCard analyst={analystProfile} />
-            <MetricCard label="Atendimentos no período" value={totalTickets} tone={podiumAverageTickets && totalTickets >= podiumAverageTickets ? 'success' : podiumAverageTickets ? 'warning' : undefined} />
-            <MetricCard label="Meu CSAT" value={formatPercent(analystResult?.averageCsat ?? 0)} tone={analystResult && analystResult.averageCsat >= analystResult.individualGoal ? 'success' : analystResult ? 'warning' : undefined} />
-            <MetricCard label="CSAT equipe N1" value={formatPercent(n1TeamAverageCsat || 0)} tone={n1TeamAverageCsat >= podiumCsatGoal ? 'success' : n1TeamAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
-            <MetricCard label="CSAT geral N1 + N2 · média do período" value={overallPhoneCsat === null ? 'Não informado' : formatPercent(overallPhoneCsat)} tone={overallPhoneCsat === null ? undefined : overallPhoneCsat >= podiumCsatGoal ? 'success' : overallPhoneCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
-            <MetricCard label="Avaliações" value={`${formatChatCount(totalReviews)} (${formatPercent(reviewCoverage)})`} tone={reviewCoverage >= reviewGoal ? 'success' : reviewCoverage >= 20 ? 'warning' : 'danger'} />
-          </>
-        ) : (
-          <>
-            <MetricCard label="Status" value="Supabase conectado" tone="success" />
-            <MetricCard label="Analistas ativos" value={loading ? '...' : analystsCount} />
-            <MetricCard label="CSAT equipe N1" value={formatPercent(n1TeamAverageCsat || 0)} tone={n1TeamAverageCsat >= podiumCsatGoal ? 'success' : n1TeamAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
-            <MetricCard label="CSAT geral N1 + N2 · média do período" value={overallPhoneCsat === null ? 'Não informado' : formatPercent(overallPhoneCsat)} tone={overallPhoneCsat === null ? undefined : overallPhoneCsat >= podiumCsatGoal ? 'success' : overallPhoneCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
-            <MetricCard label="Performance equipe" value={formatPercent(periodTeamPerformance || 0)} tone={periodTeamPerformance >= teamPerformanceGoal ? 'success' : periodTeamPerformance >= teamPerformanceGoal - 3 ? 'warning' : 'danger'} />
-          </>
-        )}
-      </div>
+      {isAnalystDashboard ? (
+        <>
+          <section className="metric-zone">
+            <div className="metric-zone-heading">
+              <div>
+                <p className="workspace-eyebrow">Minha performance</p>
+                <h2 className="section-title mt-2">Meu resultado no período</h2>
+                <p className="section-subtitle">Indicadores individuais, posição e critérios que dependem diretamente do seu resultado.</p>
+              </div>
+            </div>
+            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+              <AnalystIdentityCard analyst={analystProfile} />
+              <MetricCard label="Meu CSAT" value={formatPercent(analystResult?.averageCsat ?? 0)} tone={analystResult && analystResult.averageCsat >= analystResult.individualGoal ? 'success' : analystResult ? 'warning' : undefined} />
+              <MetricCard label="Minhas avaliações" value={`${formatChatCount(totalReviews)} (${formatPercent(reviewCoverage)})`} tone={reviewCoverage >= reviewGoal ? 'success' : reviewCoverage >= 20 ? 'warning' : 'danger'} />
+              <MetricCard label="Meus atendimentos" value={formatChatCount(totalTickets)} tone={podiumAverageTickets && totalTickets >= podiumAverageTickets ? 'success' : podiumAverageTickets ? 'warning' : undefined} />
+              <MetricCard label="Minha posição" value={analystDataLoading ? '...' : analystRankingPosition ? `${analystRankingPosition}º` : '-'} tone={analystResult?.eligible ? 'success' : analystResult ? 'warning' : undefined} />
+            </div>
+          </section>
 
-      {isAnalystDashboard && (
-        <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-4 py-3 text-sm leading-6 text-slate-300">
-          O CSAT da equipe N1 reúne os oito analistas do telefone. O CSAT geral inclui também os atendimentos de transbordo do N2 e serve como contexto da operação; ele não altera seu pódio individual.
-        </div>
+          <section className="metric-zone context-zone">
+            <div className="metric-zone-heading">
+              <div>
+                <p className="workspace-eyebrow">Nosso resultado</p>
+                <h2 className="section-title mt-2">Contexto da equipe</h2>
+                <p className="section-subtitle">A performance é coletiva e permanece visível para mostrar o resultado que o time está construindo junto.</p>
+              </div>
+            </div>
+            <div className="mt-5 grid gap-4 md:grid-cols-3">
+              <MetricCard label="Performance da equipe" value={formatPercent(periodTeamPerformance || 0)} tone={periodTeamPerformance >= teamPerformanceGoal ? 'success' : periodTeamPerformance >= teamPerformanceGoal - 3 ? 'warning' : 'danger'} />
+              <MetricCard label="CSAT equipe N1" value={formatPercent(n1TeamAverageCsat || 0)} tone={n1TeamAverageCsat >= podiumCsatGoal ? 'success' : n1TeamAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
+              <MetricCard label="CSAT geral N1 + N2" value={overallPhoneCsat === null ? 'Não informado' : formatPercent(overallPhoneCsat)} tone={overallPhoneCsat === null ? undefined : overallPhoneCsat >= podiumCsatGoal ? 'success' : overallPhoneCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
+            </div>
+            <p className="context-note">
+              O CSAT da equipe N1 reúne os analistas do telefone. O CSAT geral inclui também os atendimentos de transbordo do N2 e serve como contexto da operação; ele não altera seu pódio individual.
+            </p>
+          </section>
+        </>
+      ) : managementSection === 'area' ? (
+        <section className="metric-zone">
+          <div className="metric-zone-heading">
+            <div>
+              <p className="workspace-eyebrow">Operação</p>
+              <h2 className="section-title mt-2">Visão executiva do período</h2>
+              <p className="section-subtitle">Somente indicadores consolidados da operação, sem misturar leitura individual de pessoas.</p>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <MetricCard label="Performance da equipe" value={formatPercent(periodTeamPerformance || 0)} tone={periodTeamPerformance >= teamPerformanceGoal ? 'success' : periodTeamPerformance >= teamPerformanceGoal - 3 ? 'warning' : 'danger'} />
+            <MetricCard label="CSAT equipe N1" value={formatPercent(n1TeamAverageCsat || 0)} tone={n1TeamAverageCsat >= podiumCsatGoal ? 'success' : n1TeamAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
+            <MetricCard label="CSAT geral N1 + N2" value={overallPhoneCsat === null ? 'Não informado' : formatPercent(overallPhoneCsat)} tone={overallPhoneCsat === null ? undefined : overallPhoneCsat >= podiumCsatGoal ? 'success' : overallPhoneCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
+            <MetricCard label="Cobertura de avaliações" value={formatPercent(reviewCoverage)} tone={reviewCoverage >= reviewGoal ? 'success' : reviewCoverage >= 20 ? 'warning' : 'danger'} />
+            <MetricCard label="Atendimentos N1" value={formatChatCount(totalTickets)} />
+          </div>
+        </section>
+      ) : (
+        <section className="metric-zone">
+          <div className="metric-zone-heading">
+            <div>
+              <p className="workspace-eyebrow">Pessoas</p>
+              <h2 className="section-title mt-2">Saúde do time no período</h2>
+              <p className="section-subtitle">Aqui entram pessoas, comparação individual, elegibilidade e contexto de produtividade.</p>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <MetricCard label="Analistas ativos" value={loading ? '...' : analystsCount} />
+            <MetricCard label="Elegíveis" value={eligibleCount} tone={eligibleCount > 0 ? 'success' : 'warning'} />
+            <MetricCard label="Em atenção" value={attentionCount} tone={attentionCount > 0 ? 'warning' : 'success'} />
+            <MetricCard label="Média de atendimentos" value={formatChatCount(podiumAverageTickets || 0)} />
+            <MetricCard label="Cobertura de avaliações" value={formatPercent(reviewCoverage)} tone={reviewCoverage >= reviewGoal ? 'success' : reviewCoverage >= 20 ? 'warning' : 'danger'} />
+          </div>
+        </section>
       )}
 
       {isManagementView && managementSection === 'area' && (
@@ -4804,21 +4859,6 @@ function DashboardView({
                   <p className="mt-3 text-xs leading-5 text-slate-400">Em filtros com várias semanas, o CSAT geral representa a média dos fechamentos semanais informados.</p>
                 </div>
 
-                <div className="rounded-lg bg-slate-900 p-4">
-                  <h3 className="font-semibold text-slate-100">Impacto matemático dentro do N1</h3>
-                  <p className="mt-2 text-xs leading-5 text-slate-400">A leitura considera CSAT e quantidade de avaliações. Ela indica impacto no número consolidado, não culpa ou causa operacional.</p>
-                  <div className="mt-3 space-y-2">
-                    {n1ImpactRanking.filter((item) => item.downwardImpact > 0).slice(0, 3).map((item) => (
-                      <div key={item.analystName} className="flex flex-col gap-1 rounded-md bg-slate-950 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
-                        <span className="font-semibold">{item.analystName}</span>
-                        <span className="text-slate-300">{formatPercent(item.averageCsat)} CSAT · {formatChatCount(item.reviews)} avaliações · impacto de {formatDelta(item.downwardImpact, ' p.p.')}</span>
-                      </div>
-                    ))}
-                    {!n1ImpactRanking.some((item) => item.downwardImpact > 0) && (
-                      <p className="text-sm text-slate-300">Nenhum impacto negativo individual relevante foi identificado no N1 neste recorte.</p>
-                    )}
-                  </div>
-                </div>
               </div>
             </>
           )}
@@ -5039,6 +5079,28 @@ function DashboardView({
             Compare elegibilidade, qualidade e volume para localizar rapidamente onde a equipe ganha ou perde força.
           </p>
 
+          <div className="mt-5 people-insight">
+            <p className="workspace-eyebrow">Leitura de pessoas</p>
+            <h3 className="mt-2 text-lg font-bold">Impacto individual no consolidado N1</h3>
+            <p className="mt-1 text-sm leading-6 text-slate-400">Esta leitura fica em Pessoas porque apresenta nomes e impacto individual. Ela não muda o cálculo do CSAT.</p>
+                <div className="rounded-lg bg-slate-900 p-4">
+                  <h3 className="font-semibold text-slate-100">Impacto matemático dentro do N1</h3>
+                  <p className="mt-2 text-xs leading-5 text-slate-400">A leitura considera CSAT e quantidade de avaliações. Ela indica impacto no número consolidado, não culpa ou causa operacional.</p>
+                  <div className="mt-3 space-y-2">
+                    {n1ImpactRanking.filter((item) => item.downwardImpact > 0).slice(0, 3).map((item) => (
+                      <div key={item.analystName} className="flex flex-col gap-1 rounded-md bg-slate-950 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+                        <span className="font-semibold">{item.analystName}</span>
+                        <span className="text-slate-300">{formatPercent(item.averageCsat)} CSAT · {formatChatCount(item.reviews)} avaliações · impacto de {formatDelta(item.downwardImpact, ' p.p.')}</span>
+                      </div>
+                    ))}
+                    {!n1ImpactRanking.some((item) => item.downwardImpact > 0) && (
+                      <p className="text-sm text-slate-300">Nenhum impacto negativo individual relevante foi identificado no N1 neste recorte.</p>
+                    )}
+                  </div>
+                </div>
+
+          </div>
+
           <div className="mt-6 grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
             <EligibilityFunnel
               title="Funil de elegibilidade do telefone"
@@ -5066,58 +5128,115 @@ function DashboardView({
         </section>
       )}
 
-      {(isAnalystDashboard || managementSection === 'area') && <section className="panel">
-        <h2 className="section-title">
-          {isAnalystDashboard ? 'Minha evolução recente' : 'Variações recentes'}
-        </h2>
-        <p className="section-subtitle">
-          {isAnalystDashboard
-            ? `Seu comportamento dentro de ${periodLabel}.`
-            : `Evolucao calculada dentro de ${periodLabel}.`}
-        </p>
+      {isAnalystDashboard && (
+        <>
+          <section className="panel">
+            <p className="workspace-eyebrow">Minha evolução</p>
+            <h2 className="section-title mt-2">Minha evolução recente</h2>
+            <p className="section-subtitle">Somente indicadores individuais dentro de ${periodLabel}.</p>
 
-        <div className="mt-6 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          <TrendLineChart
-            label={isAnalystDashboard ? 'Meu CSAT semanal' : 'CSAT médio semanal'}
-            points={weeklyIndividualTrend.map((item) => ({
-              label: item.label,
-              value: item.csat,
-            }))}
-            suffix="%"
-          />
-          <BarTrend
-            label={isAnalystDashboard ? 'Minhas avaliações por semana' : 'Avaliações por semana'}
-            points={weeklyIndividualTrend.map((item) => ({
-              label: item.label,
-              value: item.totalReviews,
-            }))}
-          />
-          <BarTrend
-            label={isAnalystDashboard ? 'Meus atendimentos por semana' : 'Atendimentos por semana'}
-            points={weeklyIndividualTrend.map((item) => ({
-              label: item.label,
-              value: item.totalTickets,
-            }))}
-          />
-          <TrendLineChart
-            label="Performance da equipe"
-            points={teamPerformanceTrend}
-            suffix="%"
-          />
-          <TrendLineChart
-            label="CSAT geral N1 + N2 por semana"
-            points={overallCsatTrend}
-            suffix="%"
-          />
-          <TrendLineChart
-            label={isAnalystDashboard ? 'Meu percentual de avaliações por semana' : 'Cobertura de avaliações por semana'}
-            points={weeklyReviewCoverageTrend}
-            suffix="%"
-            goal={reviewGoal}
-            goalLabel="Meta do pódio"
-          />
-        </div>
-      </section>}
+            <div className="mt-6 grid gap-6 md:grid-cols-2">
+              <TrendLineChart
+                label="Meu CSAT semanal"
+                points={weeklyIndividualTrend.map((item) => ({
+                  label: item.label,
+                  value: item.csat,
+                }))}
+                suffix="%"
+              />
+              <BarTrend
+                label="Minhas avaliações por semana"
+                points={weeklyIndividualTrend.map((item) => ({
+                  label: item.label,
+                  value: item.totalReviews,
+                }))}
+              />
+              <BarTrend
+                label="Meus atendimentos por semana"
+                points={weeklyIndividualTrend.map((item) => ({
+                  label: item.label,
+                  value: item.totalTickets,
+                }))}
+              />
+              <TrendLineChart
+                label="Meu percentual de avaliações por semana"
+                points={weeklyReviewCoverageTrend}
+                suffix="%"
+                goal={reviewGoal}
+                goalLabel="Meta do pódio"
+              />
+            </div>
+          </section>
+
+          <section className="panel context-zone">
+            <p className="workspace-eyebrow">Nosso resultado</p>
+            <h2 className="section-title mt-2">Evolução da equipe</h2>
+            <p className="section-subtitle">Contexto coletivo mantido na visão do analista para acompanhar o equilíbrio da operação.</p>
+            <div className="mt-6 grid gap-6 md:grid-cols-2">
+              <TrendLineChart
+                label="Performance da equipe"
+                points={teamPerformanceTrend}
+                suffix="%"
+              />
+              <TrendLineChart
+                label="CSAT geral N1 + N2 por semana"
+                points={overallCsatTrend}
+                suffix="%"
+              />
+            </div>
+          </section>
+        </>
+      )}
+
+      {!isAnalystDashboard && managementSection === 'area' && (
+        <section className="panel">
+          <p className="workspace-eyebrow">Operação</p>
+          <h2 className="section-title mt-2">Variações recentes</h2>
+          <p className="section-subtitle">Evolução calculada dentro de ${periodLabel}.</p>
+
+          <div className="mt-6 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            <TrendLineChart
+              label="CSAT médio semanal"
+              points={weeklyIndividualTrend.map((item) => ({
+                label: item.label,
+                value: item.csat,
+              }))}
+              suffix="%"
+            />
+            <BarTrend
+              label="Avaliações por semana"
+              points={weeklyIndividualTrend.map((item) => ({
+                label: item.label,
+                value: item.totalReviews,
+              }))}
+            />
+            <BarTrend
+              label="Atendimentos por semana"
+              points={weeklyIndividualTrend.map((item) => ({
+                label: item.label,
+                value: item.totalTickets,
+              }))}
+            />
+            <TrendLineChart
+              label="Performance da equipe"
+              points={teamPerformanceTrend}
+              suffix="%"
+            />
+            <TrendLineChart
+              label="CSAT geral N1 + N2 por semana"
+              points={overallCsatTrend}
+              suffix="%"
+            />
+            <TrendLineChart
+              label="Cobertura de avaliações por semana"
+              points={weeklyReviewCoverageTrend}
+              suffix="%"
+              goal={reviewGoal}
+              goalLabel="Meta do pódio"
+            />
+          </div>
+        </section>
+      )}
 
       {(isAnalystDashboard || managementSection === 'people') && <section className="panel">
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -7828,7 +7947,7 @@ function MetricCard({
           : ''
 
   return (
-    <div className={`rounded-lg border p-5 ${toneClass}`}>
+    <div className={`metric-card border p-5 ${toneClass}`}>
       <p className="text-sm text-slate-400">{label}</p>
       <p className={`mt-2 text-xl font-semibold leading-tight tabular-nums sm:text-2xl ${valueClass}`}>
         {value}
@@ -7839,11 +7958,11 @@ function MetricCard({
 
 function AnalystIdentityCard({ analyst }: { analyst: Pick<Analyst, 'name' | 'photo_url'> | null }) {
   return (
-    <div className="rounded-lg border border-emerald-400/30 bg-emerald-400/10 p-5">
+    <div className="metric-card border border-cyan-400/25 bg-cyan-400/5 p-5">
       <p className="text-sm text-slate-400">Analista</p>
       <div className="mt-3 flex items-center gap-3">
         <AnalystAvatar name={analyst?.name ?? 'Analista'} photoUrl={analyst?.photo_url} size="md" />
-        <p className="text-xl font-semibold leading-tight text-emerald-300 sm:text-2xl">{analyst?.name ?? 'Não vinculado'}</p>
+        <p className="text-xl font-semibold leading-tight text-cyan-200 sm:text-2xl">{analyst?.name ?? 'Não vinculado'}</p>
       </div>
     </div>
   )
