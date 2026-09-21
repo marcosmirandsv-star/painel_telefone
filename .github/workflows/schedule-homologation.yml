@@ -1,16 +1,17 @@
-name: Homologacao Escalas
+name: Homologacao Sistema
 
 on:
   push:
     branches:
-      - homologacao-escala
+      - homologacao
   pull_request:
     branches:
+      - homologacao
       - main
 
 jobs:
-  schedule-tests:
-    if: github.head_ref == 'homologacao-escala' || github.ref == 'refs/heads/homologacao-escala'
+  homologation-tests:
+    if: github.ref == 'refs/heads/homologacao' || github.base_ref == 'homologacao' || github.head_ref == 'homologacao'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
