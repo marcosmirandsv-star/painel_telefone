@@ -83,7 +83,9 @@ NEXT_PUBLIC_SCHEDULE_SUPABASE_URL=https://vvtorcvchnqhcredhorv.supabase.co
 NEXT_PUBLIC_SCHEDULE_SUPABASE_PUBLISHABLE_KEY=<publishable key da homologação>
 ```
 
-A conexão atual do ChatGPT com a Vercel não possui autorização para alterar esse escopo. Até a troca das variáveis ser confirmada, nenhum deployment deve ser tratado como homologação completa de escrita.
+A aplicação já diferencia Preview de Produção no código: previews da Vercel usam o Supabase de homologação no cliente. As rotas administrativas usam uma service role exclusiva (`HOMOLOGATION_SUPABASE_SERVICE_ROLE_KEY`) e falham de forma fechada caso ela não esteja configurada, evitando reutilizar a chave de produção.
+
+A conexão atual do ChatGPT com a Vercel não possui autorização para alterar as variáveis do escopo `project-gestao`. Por isso, a service role de homologação ainda precisa ser cadastrada no ambiente Preview da Vercel para liberar operações administrativas e criação de usuários na homologação.
 
 ## Critério de promoção para produção
 
@@ -146,4 +148,7 @@ Depois de chegar à produção, qualquer regressão deve ser tratada por revert 
 - consistência dos dados de cálculo entre produção e homologação: validada por contagem e assinatura dos registros para Telefone e Chat.
 - chaves de integração e histórico de rate limit na homologação: vazios.
 - usuários do Supabase Auth de homologação: ainda não criados.
-- vínculo completo Vercel -> Supabase de homologação: pendente de autorização do escopo da Vercel. Enquanto isso, o Preview não deve ser usado para lançamentos ou qualquer escrita de Telefone/Chat.
+- roteamento do cliente Preview -> Supabase de homologação: implementado no código.
+- proteção de rotas administrativas: implementada; sem a service role de homologação elas falham fechadas em vez de reutilizar a produção.
+- vínculo da service role de homologação na Vercel: pendente de autorização do escopo da Vercel.
+- até existir um usuário Auth de homologação, o ambiente não está liberado para login operacional de Telefone/Chat.
