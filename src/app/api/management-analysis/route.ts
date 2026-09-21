@@ -166,24 +166,21 @@ async function generateWithGemini(prompt: string) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { url: supabaseUrl, serviceRoleKey, environment } = getServerSupabaseConfig()
-    if (!supabaseUrl || !serviceRoleKey) {
-      return NextResponse.json(
-        {
-          error:
-            environment === 'homologacao'
-              ? 'Validação de acesso da homologação ainda não configurada.'
-              : 'Validação de acesso não configurada.',
-        },
-        { status: 500 },
-      )
-    }
+    const { url: supabaseUrl, publishableKey, serviceRoleKey, environment } = getServerSupabaseConfig()
 
     const token = request.headers.get('authorization')?.replace('Bearer ', '').trim()
     if (!token) return NextResponse.json({ error: 'Sessão não encontrada.' }, { status: 401 })
 
-    const admin = createClient(supabaseUrl, serviceRoleKey, {
+    const accessKey = environment === 'homologacao' ? publishableKey : serviceRoleKey
+    if (!supabaseUrl || !accessKey) {
+      return NextResponse.json({ error: 'Validação de acesso não configurada.' }, { status: 500 })
+    }
+
+    const admin = createClient(supabaseUrl, accessKey, {
       auth: { autoRefreshToken: false, persistSession: false },
+      ...(environment === 'homologacao'
+        ? { global: { headers: { Authorization: `Bearer ${token}` } } }
+        : {}),
     })
     const { data: { user }, error: userError } = await admin.auth.getUser(token)
     if (userError || !user) return NextResponse.json({ error: 'Sessão inválida.' }, { status: 401 })
