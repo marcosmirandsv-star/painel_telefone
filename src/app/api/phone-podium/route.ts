@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 import { createClient } from '@supabase/supabase-js'
 
 type ProfileRole = 'master' | 'coordenadora' | 'analista'
@@ -31,11 +32,18 @@ function round(value: number, decimals = 2) {
 }
 
 export async function GET(request: NextRequest) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const { url: supabaseUrl, serviceRoleKey, environment } = getServerSupabaseConfig()
 
   if (!supabaseUrl || !serviceRoleKey) {
-    return NextResponse.json({ error: 'Ranking seguro não configurado.' }, { status: 500 })
+    return NextResponse.json(
+      {
+        error:
+          environment === 'homologacao'
+            ? 'Ranking seguro da homologação ainda não configurado.'
+            : 'Ranking seguro não configurado.',
+      },
+      { status: 500 },
+    )
   }
 
   const token = request.headers.get('authorization')?.replace('Bearer ', '').trim()
