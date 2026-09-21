@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 import { NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
@@ -165,10 +166,17 @@ async function generateWithGemini(prompt: string) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const { url: supabaseUrl, serviceRoleKey, environment } = getServerSupabaseConfig()
     if (!supabaseUrl || !serviceRoleKey) {
-      return NextResponse.json({ error: 'Validação de acesso não configurada.' }, { status: 500 })
+      return NextResponse.json(
+        {
+          error:
+            environment === 'homologacao'
+              ? 'Validação de acesso da homologação ainda não configurada.'
+              : 'Validação de acesso não configurada.',
+        },
+        { status: 500 },
+      )
     }
 
     const token = request.headers.get('authorization')?.replace('Bearer ', '').trim()
