@@ -2805,11 +2805,11 @@ function ChatModuleDashboard({
 
   return (
     <div className="mt-8 space-y-7">
-      <section className="panel">
+      <section className="panel workspace-hero">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Módulo chat</p>
-            <h2 className="mt-3 text-3xl font-bold">Performance mensal do chat</h2>
+            <p className="workspace-eyebrow">Módulo chat</p>
+            <h2 className="workspace-title">Performance mensal do chat</h2>
             <p className="section-subtitle">
               Leitura consolidada dos dados históricos e das importações mensais do Zendesk.
             </p>
@@ -2839,19 +2839,19 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <nav className="chat-navigation" aria-label="Áreas do módulo Chat">
+      <nav className="chat-navigation workspace-navigation" aria-label="Áreas do módulo Chat">
         <div className="tab-row">
           <TabButton active={chatActiveTab === 'overview'} onClick={() => setChatActiveTab('overview')}>
-            Visão da operação
+            Operação
           </TabButton>
           <TabButton active={chatActiveTab === 'analysis'} onClick={() => setChatActiveTab('analysis')}>
-            Equipe e produtividade
+            Pessoas
           </TabButton>
           <TabButton active={chatActiveTab === 'podium'} onClick={() => setChatActiveTab('podium')}>
-            Gestão e ações
+            Ações de gestão
           </TabButton>
           <TabButton active={chatActiveTab === 'reports'} onClick={() => setChatActiveTab('reports')}>
-            Fechamento mensal
+            Fechamento
           </TabButton>
         </div>
         <div className="chat-tools-menu">
@@ -2903,32 +2903,32 @@ function ChatModuleDashboard({
       </nav>
 
       {chatActiveTab === 'overview' && (
-        <section className="panel">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Visão da operação</p>
+        <section className="panel workspace-section-intro">
+          <p className="workspace-eyebrow">Operação</p>
           <h2 className="mt-2 text-2xl font-bold">O que aconteceu no período?</h2>
           <p className="section-subtitle">Resultado consolidado, comparação com o mês anterior e evolução dos principais indicadores.</p>
         </section>
       )}
 
       {chatActiveTab === 'analysis' && (
-        <section className="panel">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Equipe e produtividade</p>
+        <section className="panel workspace-section-intro">
+          <p className="workspace-eyebrow">Pessoas</p>
           <h2 className="mt-2 text-2xl font-bold">Como os resultados estão distribuídos?</h2>
           <p className="section-subtitle">Comparação entre analistas, volume, qualidade, participação nas avaliações e conferência da base importada.</p>
         </section>
       )}
 
       {chatActiveTab === 'podium' && (
-        <section className="panel">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Gestão e ações</p>
+        <section className="panel workspace-section-intro">
+          <p className="workspace-eyebrow">Ações de gestão</p>
           <h2 className="mt-2 text-2xl font-bold">Onde agir e o que acompanhar?</h2>
           <p className="section-subtitle">Diagnóstico gerencial, prioridades, causas a validar e ações recomendadas para o próximo ciclo.</p>
         </section>
       )}
 
       {chatActiveTab === 'reports' && (
-        <section className="panel">
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Fechamento mensal</p>
+        <section className="panel workspace-section-intro">
+          <p className="workspace-eyebrow">Fechamento mensal</p>
           <h2 className="mt-2 text-2xl font-bold">Consolidar, reconhecer e comunicar</h2>
           <p className="section-subtitle">Ranking final, ajustes operacionais do pódio e geração dos relatórios individuais.</p>
         </section>
@@ -3073,7 +3073,7 @@ function ChatModuleDashboard({
           </div>
         </div>
       </section>
-      <div className={chatActiveTab === 'overview' ? 'grid gap-4 md:grid-cols-4' : 'hidden'}>
+      <div className={chatActiveTab === 'overview' ? 'metric-zone grid gap-4 md:grid-cols-4' : 'hidden'}>
         <MetricCard label="Equipe" value={selectedTeamName} />
         <MetricCard label="CSAT médio" value={loading ? '...' : formatChatPercent(averageCsat)} tone={averageCsat >= 90 ? 'success' : averageCsat >= 85 ? 'warning' : 'danger'} />
         <MetricCard label="% avaliações" value={formatChatPercent(averageReviews)} tone={averageReviews >= 25 ? 'success' : averageReviews >= 20 ? 'warning' : 'danger'} />
