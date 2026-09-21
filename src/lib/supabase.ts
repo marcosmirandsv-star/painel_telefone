@@ -1,6 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
+import { getBrowserSupabaseConfig } from '@/lib/runtime-environment'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabasePublishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
+const { url, publishableKey } = getBrowserSupabaseConfig()
 
-export const supabase = createClient(supabaseUrl, supabasePublishableKey)
+if (!url || !publishableKey) {
+  throw new Error('Supabase não configurado para este ambiente.')
+}
+
+export const supabase = createClient(url, publishableKey)
