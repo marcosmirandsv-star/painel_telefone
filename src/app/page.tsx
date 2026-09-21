@@ -1797,8 +1797,9 @@ function ChatModuleDashboard({
   const [chatFeedbackDraft, setChatFeedbackDraft] = useState('')
   const [chatAiSaving, setChatAiSaving] = useState(false)
   const [selectedChatReportMetricId, setSelectedChatReportMetricId] = useState('')
-  const [chatActiveTab, setChatActiveTab] = useState<'overview' | 'podium' | 'analysis' | 'reports' | 'import' | 'settings'>('overview')
+  const [chatActiveTab, setChatActiveTab] = useState<'overview' | 'prototype' | 'podium' | 'analysis' | 'reports' | 'import' | 'settings'>('overview')
   const [chatToolsOpen, setChatToolsOpen] = useState(false)
+  const [chat2AnalystId, setChat2AnalystId] = useState('')
   const [manualPodiumDraft, setManualPodiumDraft] = useState<Record<number, string>>({})
   const [chatPodiumMessage, setChatPodiumMessage] = useState('')
   const [chatAnalystForm, setChatAnalystForm] = useState({ teamId: '', name: '', csatGoal: '86', photoFile: null as File | null })
@@ -2861,6 +2862,37 @@ function ChatModuleDashboard({
     }
   }
 
+  const chat2SelectedMetric =
+    visibleMetrics.find((metric) => metric.analyst_id === chat2AnalystId) ?? visibleMetrics[0] ?? null
+  const chat2TeamMetrics = chat2SelectedMetric
+    ? visibleMetrics.filter((metric) => metric.team_id === chat2SelectedMetric.team_id)
+    : []
+  const chat2TeamAverageCsat = calculateChatAverage(chat2TeamMetrics, 'csat')
+  const chat2TeamAverageReviews = calculateChatAverage(chat2TeamMetrics, 'review_percentage')
+  const chat2TeamTickets = chat2TeamMetrics.reduce((sum, metric) => sum + Number(metric.total_tickets), 0)
+  const chat2TeamAverageTickets = chat2TeamMetrics.length ? round(chat2TeamTickets / chat2TeamMetrics.length) : 0
+  const chat2Ranking = buildChatRanking(chat2TeamMetrics, chat2TeamAverageTickets, new Set<string>())
+  const chat2RankingPosition = chat2SelectedMetric
+    ? chat2Ranking.findIndex((item) => item.metric.analyst_id === chat2SelectedMetric.analyst_id) + 1
+    : 0
+  const chat2AnalystTrend = chat2SelectedMetric
+    ? metrics
+        .filter(
+          (metric) =>
+            metric.analyst_id === chat2SelectedMetric.analyst_id &&
+            metric.period_start <= chat2SelectedMetric.period_start,
+        )
+        .sort((a, b) => a.period_start.localeCompare(b.period_start))
+        .slice(-6)
+    : []
+  const chat2PositiveShare =
+    chat2SelectedMetric && Number(chat2SelectedMetric.reviews) > 0
+      ? round((Number(chat2SelectedMetric.positive_reviews) / Number(chat2SelectedMetric.reviews)) * 100)
+      : 0
+  const chat2NegativeShare =
+    chat2SelectedMetric && Number(chat2SelectedMetric.reviews) > 0
+      ? round((Number(chat2SelectedMetric.negative_reviews) / Number(chat2SelectedMetric.reviews)) * 100)
+      : 0
   return (
     <div className="mt-8 space-y-7">
       <section className="panel workspace-hero">
@@ -2901,6 +2933,9 @@ function ChatModuleDashboard({
         <div className="tab-row">
           <TabButton active={chatActiveTab === 'overview'} onClick={() => setChatActiveTab('overview')}>
             Operação
+          </TabButton>
+          <TabButton active={chatActiveTab === 'prototype'} onClick={() => setChatActiveTab('prototype')}>
+            Chat 2.0 · Protótipo
           </TabButton>
           <TabButton active={chatActiveTab === 'analysis'} onClick={() => setChatActiveTab('analysis')}>
             Pessoas
@@ -2968,6 +3003,23 @@ function ChatModuleDashboard({
         </section>
       )}
 
+      {chatActiveTab === 'prototype' && (
+        <section className="panel workspace-section-intro">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="workspace-eyebrow">Chat 2.0 · protótipo</p>
+              <h2 className="mt-2 text-2xl font-bold">Visão individual contínua de performance</h2>
+              <p className="section-subtitle">
+                Protótipo de homologação usando somente a base atual. Não há dados inventados de sentimento, IA ou ClickDesk.
+              </p>
+            </div>
+            <span className="rounded-md border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-sm font-semibold text-amber-100">
+              Base atual · Zendesk
+            </span>
+          </div>
+        </section>
+      )}
+
       {chatActiveTab === 'analysis' && (
         <section className="panel workspace-section-intro">
           <p className="workspace-eyebrow">Pessoas</p>
@@ -2990,6 +3042,255 @@ function ChatModuleDashboard({
           <h2 className="mt-2 text-2xl font-bold">Consolidar, reconhecer e comunicar</h2>
           <p className="section-subtitle">Ranking final, ajustes operacionais do pódio e geração dos relatórios individuais.</p>
         </section>
+      )}
+
+      {chatActiveTab === 'prototype' && (
+        <div className="space-y-6">
+          <section className="panel">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Simulação da visão do analista</p>
+                <h3 className="mt-2 text-2xl font-bold">Meu resultado</h3>
+                <p className="section-subtitle">
+                  Esta tela usa os números reais já existentes no módulo atual para validar a experiência que será entregue ao usuário no Chat 2.0.
+                </p>
+              </div>
+              <div className="min-w-[260px]">
+                <Field label="Visualizar como">
+                  <select
+                    className="form-input"
+                    value={chat2SelectedMetric?.analyst_id ?? ''}
+                    onChange={(event) => setChat2AnalystId(event.target.value)}
+                  >
+                    {visibleMetrics.map((metric) => (
+                      <option key={metric.id} value={metric.analyst_id}>
+                        {getChatAnalystName(metric)} · {getChatTeamName(metric)}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+            </div>
+
+            {chat2SelectedMetric ? (
+              <>
+                <div className="mt-6 flex flex-col gap-4 rounded-xl border border-white/10 bg-slate-950/35 p-5 md:flex-row md:items-center md:justify-between">
+                  <div className="flex items-center gap-4">
+                    <AnalystAvatar
+                      name={getChatAnalystName(chat2SelectedMetric)}
+                      photoUrl={getChatAnalystPhoto(chat2SelectedMetric)}
+                      size="lg"
+                    />
+                    <div>
+                      <p className="text-sm text-slate-400">{getChatTeamName(chat2SelectedMetric)}</p>
+                      <h3 className="text-2xl font-bold">{getChatAnalystName(chat2SelectedMetric)}</h3>
+                      <p className="mt-1 text-sm text-slate-400">{selectedPeriod?.label ?? 'Período selecionado'}</p>
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-slate-900 px-4 py-3 text-sm">
+                    <p className="text-slate-400">Posição no ranking do time</p>
+                    <strong className="mt-1 block text-xl tabular-nums">
+                      {chat2RankingPosition > 0 ? chat2RankingPosition + 'º de ' + chat2Ranking.length : '—'}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                  <MetricCard
+                    label="Meu CSAT"
+                    value={formatChatPercent(chat2SelectedMetric.csat)}
+                    tone={Number(chat2SelectedMetric.csat) >= Number(chat2SelectedMetric.csat_goal) ? 'success' : 'warning'}
+                  />
+                  <MetricCard label="Atendimentos" value={formatChatCount(chat2SelectedMetric.total_tickets)} />
+                  <MetricCard label="Avaliações positivas" value={formatChatCount(chat2SelectedMetric.positive_reviews)} tone="success" />
+                  <MetricCard label="Avaliações negativas" value={formatChatCount(chat2SelectedMetric.negative_reviews)} tone={Number(chat2SelectedMetric.negative_reviews) > 0 ? 'warning' : 'success'} />
+                  <MetricCard
+                    label="% de avaliações"
+                    value={formatChatPercent(chat2SelectedMetric.review_percentage)}
+                    tone={Number(chat2SelectedMetric.review_percentage) >= Number(chat2SelectedMetric.general_review_goal) ? 'success' : 'warning'}
+                  />
+                </div>
+
+                <div className="mt-5 grid gap-4 lg:grid-cols-3">
+                  <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+                    <p className="text-sm font-semibold uppercase tracking-[0.14em] text-cyan-300">Qualidade</p>
+                    <div className="mt-4 space-y-3 text-sm">
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-slate-400">Meta de CSAT</span>
+                        <strong className="tabular-nums">{formatChatPercent(chat2SelectedMetric.csat_goal)}</strong>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-slate-400">Distância da meta</span>
+                        <strong className={Number(chat2SelectedMetric.csat) >= Number(chat2SelectedMetric.csat_goal) ? 'text-emerald-300' : 'text-amber-200'}>
+                          {formatDelta(round(Number(chat2SelectedMetric.csat) - Number(chat2SelectedMetric.csat_goal)), ' p.p.')}
+                        </strong>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-slate-400">Positivas entre avaliadas</span>
+                        <strong className="tabular-nums">{formatChatPercent(chat2PositiveShare)}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+                    <p className="text-sm font-semibold uppercase tracking-[0.14em] text-cyan-300">Participação</p>
+                    <div className="mt-4 space-y-3 text-sm">
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-slate-400">Avaliações recebidas</span>
+                        <strong className="tabular-nums">{formatChatCount(chat2SelectedMetric.reviews)}</strong>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-slate-400">Meta de avaliações</span>
+                        <strong className="tabular-nums">{formatChatPercent(chat2SelectedMetric.general_review_goal)}</strong>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-slate-400">Negativas entre avaliadas</span>
+                        <strong className="tabular-nums">{formatChatPercent(chat2NegativeShare)}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+                    <p className="text-sm font-semibold uppercase tracking-[0.14em] text-cyan-300">Contexto do time</p>
+                    <div className="mt-4 space-y-3 text-sm">
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-slate-400">CSAT do time</span>
+                        <strong className="tabular-nums">{formatChatPercent(chat2TeamAverageCsat)}</strong>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-slate-400">Avaliações do time</span>
+                        <strong className="tabular-nums">{formatChatPercent(chat2TeamAverageReviews)}</strong>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-slate-400">Média de atendimentos</span>
+                        <strong className="tabular-nums">{formatChatCount(chat2TeamAverageTickets)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <EmptyState text="Nenhum dado disponível no período selecionado." />
+            )}
+          </section>
+
+          <section className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
+            <div className="panel">
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Minha evolução</p>
+              <h3 className="mt-2 text-2xl font-bold">Histórico recente</h3>
+              <p className="section-subtitle">Leitura dos últimos meses disponíveis para o analista selecionado.</p>
+
+              <div className="mt-5 grid gap-3">
+                {chat2AnalystTrend.map((metric) => (
+                  <div key={metric.id} className="grid gap-3 rounded-lg border border-white/10 bg-slate-950/35 p-4 sm:grid-cols-[1.2fr_1fr_1fr_1fr] sm:items-center">
+                    <div>
+                      <strong>{metric.month_label}</strong>
+                      <p className="mt-1 text-xs text-slate-500">{getChatTeamName(metric)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">CSAT</p>
+                      <strong className="tabular-nums">{formatChatPercent(metric.csat)}</strong>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Avaliações</p>
+                      <strong className="tabular-nums">{formatChatPercent(metric.review_percentage)}</strong>
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-500">Atendimentos</p>
+                      <strong className="tabular-nums">{formatChatCount(metric.total_tickets)}</strong>
+                    </div>
+                  </div>
+                ))}
+                {!chat2AnalystTrend.length && <EmptyState text="Ainda não há histórico suficiente para este analista." />}
+              </div>
+            </div>
+
+            <div className="panel">
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Nosso resultado</p>
+              <h3 className="mt-2 text-2xl font-bold">{chat2SelectedMetric ? getChatTeamName(chat2SelectedMetric) : 'Meu time'}</h3>
+              <p className="section-subtitle">Contexto coletivo sem expor o resultado individual dos colegas.</p>
+
+              <div className="mt-5 grid gap-3">
+                <div className="rounded-lg bg-slate-900 p-4">
+                  <p className="text-sm text-slate-400">CSAT do time</p>
+                  <strong className="mt-2 block text-2xl tabular-nums">{formatChatPercent(chat2TeamAverageCsat)}</strong>
+                </div>
+                <div className="rounded-lg bg-slate-900 p-4">
+                  <p className="text-sm text-slate-400">% de avaliações do time</p>
+                  <strong className="mt-2 block text-2xl tabular-nums">{formatChatPercent(chat2TeamAverageReviews)}</strong>
+                </div>
+                <div className="rounded-lg bg-slate-900 p-4">
+                  <p className="text-sm text-slate-400">Atendimentos do time</p>
+                  <strong className="mt-2 block text-2xl tabular-nums">{formatChatCount(chat2TeamTickets)}</strong>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="panel">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Inteligência de experiência</p>
+                <h3 className="mt-2 text-2xl font-bold">Da nota para a causa</h3>
+                <p className="section-subtitle">
+                  Esta área antecipa o diferencial do Chat 2.0, mas não atribui sentimento ou causa enquanto a base atual não fornecer a conversa completa.
+                </p>
+              </div>
+              <span className="rounded-md border border-cyan-400/20 bg-cyan-400/5 px-3 py-2 text-sm font-semibold text-cyan-200">
+                Preparado para ClickDesk
+              </span>
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-3">
+              <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+                <p className="text-sm font-semibold">O que sabemos hoje</p>
+                <p className="mt-3 text-sm leading-6 text-slate-300">
+                  {chat2SelectedMetric
+                    ? formatChatCount(chat2SelectedMetric.positive_reviews) + ' avaliações positivas e ' + formatChatCount(chat2SelectedMetric.negative_reviews) + ' negativas no período.'
+                    : 'Sem avaliações no período.'}
+                </p>
+                <p className="mt-3 text-xs leading-5 text-slate-500">
+                  Isto é satisfação registrada pelo cliente, não análise de sentimento da conversa.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-dashed border-white/15 bg-slate-950/30 p-5">
+                <p className="text-sm font-semibold">Com o ClickDesk</p>
+                <p className="mt-3 text-sm leading-6 text-slate-300">
+                  A IA analisará a interação para identificar sentimento inicial e final, causa provável da nota, influência do atendimento humano, controlabilidade e evidências para feedback.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-dashed border-white/15 bg-slate-950/30 p-5">
+                <p className="text-sm font-semibold">Jornada IA → humano</p>
+                <p className="mt-3 text-sm leading-6 text-slate-300">
+                  A futura integração separará conversas resolvidas pela IA das transferidas para humano e permitirá avaliar se o analista recuperou, manteve ou piorou a experiência.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className="panel">
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Modelo de atualização</p>
+            <h3 className="mt-2 text-2xl font-bold">Sincronização D-1</h3>
+            <p className="section-subtitle">
+              No ClickDesk, o plano é consolidar diariamente o dia anterior, revalidar dias recentes para capturar avaliações tardias e só então disponibilizar os indicadores e análises de IA.
+            </p>
+            <div className="mt-5 grid gap-3 md:grid-cols-4">
+              {[
+                ['D-1', 'Buscar conversas e avaliações do dia anterior'],
+                ['Revisão', 'Reconsultar dias recentes para avaliações tardias'],
+                ['IA', 'Analisar sentimento, causa e contribuição do atendimento humano'],
+                ['Painel', 'Publicar a visão consolidada para gestão e analista'],
+              ].map(([label, detail]) => (
+                <div key={label} className="rounded-lg bg-slate-900 p-4">
+                  <strong className="text-cyan-200">{label}</strong>
+                  <p className="mt-2 text-sm leading-6 text-slate-300">{detail}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
       )}
 
       <section className={chatActiveTab === 'import' ? 'panel' : 'hidden'}>
