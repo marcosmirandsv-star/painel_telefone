@@ -6,6 +6,7 @@ import { scheduleSupabase as supabase } from '@/lib/schedule-supabase'
 import { generateMonthlySchedule, validateSchedule } from '@/lib/schedule-engine'
 import { ScheduleDateList } from '@/components/schedule-date-list'
 import { ScheduleModal } from '@/components/schedule-modal'
+import { ScheduleTransportPanel } from '@/components/schedule-transport-panel'
 import type {
   ScheduleAbsence,
   ScheduleEntry,
@@ -376,7 +377,7 @@ export default function EscalasPage() {
   const [context, setContext] = useState<ScheduleMonthContext>({ year, month, holidays: [], optional_days: [], click_days: [] })
   const [monthContexts, setMonthContexts] = useState<ScheduleMonthContext[]>([])
   const [selectedTeamId, setSelectedTeamId] = useState('')
-  const [section, setSection] = useState<'scale'|'people'|'rules'|'requests'>('scale')
+  const [section, setSection] = useState<'scale'|'people'|'rules'|'transport'|'requests'>('scale')
   const [entryType, setEntryType] = useState<'hybrid'|'lunch'|'snack'|'extended'>('hybrid')
   const [validations, setValidations] = useState<ScheduleValidation[]>([])
   const [message, setMessage] = useState('')
@@ -956,6 +957,7 @@ export default function EscalasPage() {
             <button className={section === 'scale' ? 'is-active' : ''} onClick={() => setSection('scale')}>Escalas</button>
             {isManagement && <button className={section === 'people' ? 'is-active' : ''} onClick={() => setSection('people')}>Pessoas e times</button>}
             {isManagement && <button className={section === 'rules' ? 'is-active' : ''} onClick={() => setSection('rules')}>Regras</button>}
+            {isManagement && <button className={section === 'transport' ? 'is-active' : ''} onClick={() => setSection('transport')}>Vale-transporte</button>}
             <button className={section === 'requests' ? 'is-active' : ''} onClick={() => setSection('requests')}>Solicitações</button>
           </div>
         </div>
@@ -1323,6 +1325,18 @@ export default function EscalasPage() {
             </div>
           )
         })()}
+
+        {section === 'transport' && isManagement && (
+          <ScheduleTransportPanel
+            year={year}
+            month={month}
+            people={people}
+            memberships={memberships}
+            entries={entries}
+            teams={teams}
+            profileId={profile?.id ?? null}
+          />
+        )}
 
         {section === 'requests' && (
           <div className="mt-6 grid gap-5 lg:grid-cols-[420px_1fr]">
