@@ -38,6 +38,8 @@ type Props = {
   entries: ScheduleEntry[]
   teams: ScheduleTeam[]
   profileId: string | null
+  onMonthChange: (month: number) => void
+  onYearChange: (year: number) => void
 }
 
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
@@ -76,6 +78,8 @@ export function ScheduleTransportPanel({
   entries,
   teams,
   profileId,
+  onMonthChange,
+  onYearChange,
 }: Props) {
   const [benefits, setBenefits] = useState<TransportBenefit[]>([])
   const [submission, setSubmission] = useState<TransportSubmission | null>(null)
@@ -115,11 +119,6 @@ export function ScheduleTransportPanel({
     }
   }, [month, year])
 
-  const activePeople = useMemo(
-    () => people.filter((person) => person.active),
-    [people],
-  )
-
   function benefitForMonth(personId: string) {
     return benefits.find(
       (benefit) =>
@@ -128,6 +127,22 @@ export function ScheduleTransportPanel({
         (!benefit.end_date || benefit.end_date >= monthStart),
     )
   }
+
+  const peopleForPeriod = useMemo(
+    () =>
+      people
+        .filter((person) =>
+          memberships.some(
+            (membership) =>
+              membership.person_id === person.id &&
+              membership.participates_in_schedule &&
+              membership.start_date <= monthEnd &&
+              (!membership.end_date || membership.end_date >= monthStart),
+          ),
+        )
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [memberships, monthEnd, monthStart, people],
+  )
 
   function teamNamesForMonth(personId: string) {
     const names = memberships
@@ -145,29 +160,37 @@ export function ScheduleTransportPanel({
   }
 
   function presenceDays(personId: string) {
-    return entries.filter(
-      (entry) =>
-        entry.person_id === personId &&
-        entry.entry_type === 'hybrid' &&
-        entry.date >= monthStart &&
-        entry.date <= monthEnd &&
-        (entry.value === 'P' || entry.value === 'CLICK_DAY'),
-    ).length
+    return new Set(
+      entries
+        .filter(
+          (entry) =>
+            entry.person_id === personId &&
+            entry.entry_type === 'hybrid' &&
+            entry.date >= monthStart &&
+            entry.date <= monthEnd &&
+            (entry.value === 'P' || entry.value === 'CLICK_DAY'),
+        )
+        .map((entry) => entry.date),
+    ).size
   }
 
   function hybridRows(personId: string) {
-    return entries.filter(
-      (entry) =>
-        entry.person_id === personId &&
-        entry.entry_type === 'hybrid' &&
-        entry.date >= monthStart &&
-        entry.date <= monthEnd,
-    ).length
+    return new Set(
+      entries
+        .filter(
+          (entry) =>
+            entry.person_id === personId &&
+            entry.entry_type === 'hybrid' &&
+            entry.date >= monthStart &&
+            entry.date <= monthEnd,
+        )
+        .map((entry) => entry.date),
+    ).size
   }
 
   const beneficiaries = useMemo(
     () =>
-      activePeople
+      peopleForPeriod
         .filter((person) => Boolean(benefitForMonth(person.id)))
         .map((person) => ({
           person,
@@ -179,7 +202,7 @@ export function ScheduleTransportPanel({
         .sort((a, b) => a.person.name.localeCompare(b.person.name)),
     // benefits and entries intentionally drive the derived monthly report.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [activePeople, benefits, entries, memberships, monthEnd, monthStart, teams],
+    [peopleForPeriod, benefits, entries, memberships, monthEnd, monthStart, teams],
   )
 
   const totalPresenceDays = beneficiaries.reduce((sum, item) => sum + item.days, 0)
@@ -340,6 +363,18 @@ export function ScheduleTransportPanel({
               O sistema usa a escala híbrida do mês para contar quantos dias cada beneficiário estará presencialmente na empresa.
               Presencial e Click Day contam como dia de deslocamento.
             </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <label className="schedule-field min-w-44">
+                Mês de referência
+                <select className="px-3 py-2" value={month} onChange={(event) => onMonthChange(Number(event.target.value))}>
+                  {MONTHS.map((label, index) => <option key={label} value={index + 1}>{label}</option>)}
+                </select>
+              </label>
+              <label className="schedule-field w-32">
+                Ano
+                <input className="px-3 py-2" type="number" value={year} onChange={(event) => onYearChange(Number(event.target.value))} />
+              </label>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <button className="secondary-button" onClick={copyReport} disabled={!beneficiaries.length}>Copiar resumo</button>
@@ -428,7 +463,7 @@ export function ScheduleTransportPanel({
         </div>
 
         <div className="schedule-transport-benefit-grid mt-4">
-          {activePeople.map((person) => {
+          {peopleForPeriod.map((person) => {
             const current = benefitForMonth(person.id)
             return (
               <button
@@ -454,7 +489,8 @@ export function ScheduleTransportPanel({
       <div className="schedule-inline-note">
         <strong>Critério usado no cálculo:</strong> o relatório conta somente dias em que a escala híbrida estiver como
         <strong> Presencial</strong> ou <strong>Click Day</strong>. Home Office, feriados, férias, folgas, premiações e demais
-        ausências não entram na quantidade de dias de vale-transporte.
+        ausências não entram na quantidade de dias de vale-transporte. O rodízio de sábados não está incluído neste cálculo,
+        pois ainda não definimos se esses sábados geram vale-transporte.
       </div>
     </div>
   )
