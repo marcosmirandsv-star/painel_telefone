@@ -83,9 +83,13 @@ NEXT_PUBLIC_SCHEDULE_SUPABASE_URL=https://vvtorcvchnqhcredhorv.supabase.co
 NEXT_PUBLIC_SCHEDULE_SUPABASE_PUBLISHABLE_KEY=<publishable key da homologação>
 ```
 
-A aplicação já diferencia Preview de Produção no código: previews da Vercel usam o Supabase de homologação no cliente. As rotas administrativas usam uma service role exclusiva (`HOMOLOGATION_SUPABASE_SERVICE_ROLE_KEY`) e falham de forma fechada caso ela não esteja configurada, evitando reutilizar a chave de produção.
+A aplicação diferencia Preview de Produção no código e também pelo hostname do deployment. Qualquer Preview `.vercel.app` diferente do domínio oficial `painel-telefone.vercel.app` usa o Supabase de homologação no cliente.
 
-A conexão atual do ChatGPT com a Vercel não possui autorização para alterar as variáveis do escopo `project-gestao`. Por isso, a service role de homologação ainda precisa ser cadastrada no ambiente Preview da Vercel para liberar operações administrativas e criação de usuários na homologação.
+O ranking seguro do Telefone na homologação usa a Edge Function `phone-podium-ranking`, que replica a mesma regra já existente no servidor e valida o JWT do usuário. Assim, o ranking não depende da service role da Vercel e continua preservando a visão individual do analista.
+
+A validação de acesso da análise gerencial também usa a sessão do próprio usuário no Preview. Operações realmente administrativas — criação de usuários por gestor e integrações externas — continuam fechadas sem `HOMOLOGATION_SUPABASE_SERVICE_ROLE_KEY`, evitando que uma Preview reutilize a chave de produção.
+
+Para o primeiro acesso, a homologação possui uma allowlist de e-mails/perfis e um gatilho de criação de perfil. O usuário cria sua própria senha pelo botão “Primeiro acesso na homologação”; não são copiadas senhas nem hashes da produção.
 
 ## Critério de promoção para produção
 
@@ -147,8 +151,9 @@ Depois de chegar à produção, qualquer regressão deve ser tratada por revert 
 - UI corporativa: incorporada à branch `homologacao`; ainda não foi promovida para produção.
 - consistência dos dados de cálculo entre produção e homologação: validada por contagem e assinatura dos registros para Telefone e Chat.
 - chaves de integração e histórico de rate limit na homologação: vazios.
-- usuários do Supabase Auth de homologação: ainda não criados.
-- roteamento do cliente Preview -> Supabase de homologação: implementado no código.
+- usuários do Supabase Auth de homologação: começam vazios; o primeiro acesso é feito por auto cadastro controlado por allowlist.
+- allowlist inicial: 11 acessos correspondentes aos perfis atuais do sistema, sem copiar senha ou hash.
+- roteamento do cliente Preview -> Supabase de homologação: implementado por ambiente e hostname.
+- ranking do Telefone em Preview: isolado em Edge Function autenticada no Supabase de homologação.
 - proteção de rotas administrativas: implementada; sem a service role de homologação elas falham fechadas em vez de reutilizar a produção.
-- vínculo da service role de homologação na Vercel: pendente de autorização do escopo da Vercel.
-- até existir um usuário Auth de homologação, o ambiente não está liberado para login operacional de Telefone/Chat.
+- vínculo da service role de homologação na Vercel: opcional para a validação normal de dashboards; continua necessário somente para operações administrativas específicas e integrações externas.
