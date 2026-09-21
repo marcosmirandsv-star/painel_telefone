@@ -13,8 +13,18 @@ export function isHomologationRuntime() {
   )
 }
 
+export function isHomologationBrowserRuntime() {
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname.toLowerCase()
+    if (hostname === 'painel-telefone.vercel.app') return false
+    if (hostname.endsWith('.vercel.app')) return true
+  }
+
+  return process.env.NEXT_PUBLIC_VERCEL_ENV === 'preview'
+}
+
 export function getBrowserSupabaseConfig() {
-  if (process.env.NEXT_PUBLIC_VERCEL_ENV === 'preview') {
+  if (isHomologationBrowserRuntime()) {
     return {
       url: HOMOLOGATION_SUPABASE_URL,
       publishableKey: HOMOLOGATION_SUPABASE_PUBLISHABLE_KEY,
