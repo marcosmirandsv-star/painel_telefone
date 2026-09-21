@@ -757,6 +757,42 @@ export default function Home() {
     setMessage('')
   }
 
+  async function handleHomologationSignup() {
+    if (process.env.NEXT_PUBLIC_VERCEL_ENV !== 'preview') return
+
+    const trimmedEmail = email.trim().toLowerCase()
+
+    if (!trimmedEmail || password.length < 6) {
+      setMessage('Na homologação, informe seu e-mail corporativo e uma senha com pelo menos 6 caracteres.')
+      return
+    }
+
+    setSaving(true)
+    setMessage('Criando acesso de homologação...')
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: trimmedEmail,
+        password,
+      })
+
+      if (error) {
+        setMessage(error.message)
+        return
+      }
+
+      if (data.session && data.user) {
+        setUser(data.user)
+        setMessage('')
+        return
+      }
+
+      setMessage('Acesso criado. Se o Supabase solicitar confirmação, confira seu e-mail corporativo antes de entrar.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   async function handlePasswordReset() {
     const trimmedEmail = email.trim()
 
@@ -1357,6 +1393,11 @@ export default function Home() {
           <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-300">
             Central de Performance
           </p>
+          {process.env.NEXT_PUBLIC_VERCEL_ENV === 'preview' && (
+            <div className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs font-semibold text-amber-200">
+              Ambiente de homologação · dados e acessos separados da produção
+            </div>
+          )}
           <h1 className="mt-4 text-3xl font-bold">
             {isPasswordRecovery ? 'Criar nova senha' : 'Entrar no sistema'}
           </h1>
@@ -1412,6 +1453,17 @@ export default function Home() {
               >
                 {saving ? 'Enviando link...' : 'Esqueci minha senha'}
               </button>
+
+              {process.env.NEXT_PUBLIC_VERCEL_ENV === 'preview' && (
+                <button
+                  className="w-full rounded-lg border border-white/10 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-cyan-400/40 hover:text-cyan-200 disabled:text-slate-500"
+                  disabled={saving}
+                  type="button"
+                  onClick={handleHomologationSignup}
+                >
+                  {saving ? 'Preparando acesso...' : 'Primeiro acesso na homologação'}
+                </button>
+              )}
             </form>
           )}
 
