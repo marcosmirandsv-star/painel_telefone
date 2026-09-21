@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 import { createClient } from '@supabase/supabase-js'
 
 type ProfileRole = 'master' | 'coordenadora' | 'analista'
@@ -20,14 +21,15 @@ function isManagementRole(role: unknown) {
 }
 
 export async function POST(request: NextRequest) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const { url: supabaseUrl, serviceRoleKey, environment } = getServerSupabaseConfig()
 
   if (!supabaseUrl || !serviceRoleKey) {
     return NextResponse.json(
       {
         error:
-          'Criacao de usuários ainda não configurada. Adicione SUPABASE_SERVICE_ROLE_KEY nas variaveis de ambiente da Vercel.',
+          environment === 'homologacao'
+            ? 'Criação de usuários da homologação ainda não configurada.'
+            : 'Criacao de usuários ainda não configurada. Adicione SUPABASE_SERVICE_ROLE_KEY nas variaveis de ambiente da Vercel.',
       },
       { status: 500 },
     )
