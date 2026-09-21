@@ -1885,18 +1885,20 @@ function ChatModuleDashboard({
     primary: Number(item.metric.csat),
     secondary: Number(item.metric.review_percentage),
     volume: Number(item.metric.total_tickets),
-    status: item.eligible ? 'Elegível' : item.reasons.join(', '),
+    status: item.eligible ? 'Elegível' : formatStatusText(item.reasons.join(', ')),
   }))
   const chatVisualPoints = calculatedChatRanking.map((item) => ({
     label: getChatAnalystName(item.metric),
     x: Number(item.metric.total_tickets),
     y: Number(item.metric.csat),
     tone: item.eligible ? 'success' : Number(item.metric.csat) < 90 ? 'danger' : 'warning',
-    detail: `${item.metric.review_percentage}% avaliações`,
+    detail: `${formatChatPercent(item.metric.review_percentage)} avaliações`,
   }))
   const chatTopHighlight = calculatedChatRanking.find((item) => item.eligible)?.metric ?? calculatedChatRanking[0]?.metric ?? null
   const chatAttentionHighlight = chatOpportunities[0]?.metric ?? null
-  const chatAttentionText = chatOpportunities[0]?.reasons.join(', ') ?? 'Sem alerta crítico no período.'
+  const chatAttentionText = chatOpportunities[0]?.reasons.length
+    ? formatStatusText(chatOpportunities[0].reasons.join(', '))
+    : 'Sem alerta crítico no período.'
   const chatClosureReading =
     !calculationMetrics.length
       ? 'Ainda não há base suficiente para leitura executiva.'
@@ -3203,7 +3205,7 @@ function ChatModuleDashboard({
                         )}
                       </td>
                       <td className="py-3 pr-4 text-slate-300">
-                        {item.eligible ? 'Cumpriu todos os critérios.' : item.reasons.join(', ')}
+                        {item.eligible ? 'Cumpriu todos os critérios.' : formatStatusText(item.reasons.join(', '))}
                       </td>
                       <td className="py-3">
                         <button className="small-button" type="button" onClick={() => handleToggleChatPodiumExclusion(item.metric)}>
@@ -3244,10 +3246,10 @@ function ChatModuleDashboard({
                         <p className="text-sm text-cyan-300">{index + 1}o destaque</p>
                         <p className="mt-1 font-semibold">{getChatAnalystName(item.metric)}</p>
                       </div>
-                      <strong>{item.metric.csat}%</strong>
+                      <strong>{formatChatPercent(item.metric.csat)}</strong>
                     </div>
                     <p className="mt-2 text-sm text-slate-400">
-                      Avaliações {item.metric.review_percentage}%, atendimento {item.metric.total_tickets} e meta CSAT {item.metric.csat_goal}%.
+                      Avaliações {formatChatPercent(item.metric.review_percentage)}, atendimento {formatChatCount(item.metric.total_tickets)} e meta CSAT {item.metric.csat_goal}%.
                     </p>
                   </div>
                 ))
@@ -3267,7 +3269,7 @@ function ChatModuleDashboard({
                       <p className="font-semibold">{getChatAnalystName(item.metric)}</p>
                       <span className="text-sm text-amber-200">{item.metric.status}</span>
                     </div>
-                    <p className="mt-2 text-sm text-slate-400">{item.reasons.length ? item.reasons.join(', ') : 'Acompanhar estabilidade dos indicadores.'}</p>
+                    <p className="mt-2 text-sm text-slate-400">{item.reasons.length ? formatStatusText(item.reasons.join(', ')) : 'Acompanhar estabilidade dos indicadores.'}</p>
                     <p className="mt-2 text-sm text-slate-300">
                       CSAT {formatDelta(item.csatDelta, ' p.p.')}, avaliações {formatDelta(item.reviewDelta, ' p.p.')} e envio {formatDelta(item.sendingDelta, ' p.p.')}.
                     </p>
@@ -3366,8 +3368,8 @@ function ChatModuleDashboard({
 
         {selectedChatReportMetric ? (
           <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <MetricCard label="CSAT" value={`${selectedChatReportMetric.csat}%`} />
-            <MetricCard label="Avaliações" value={`${selectedChatReportMetric.review_percentage}%`} />
+            <MetricCard label="CSAT" value={formatChatPercent(selectedChatReportMetric.csat)} />
+            <MetricCard label="Avaliações" value={formatChatPercent(selectedChatReportMetric.review_percentage)} />
             <MetricCard label="Atendimentos" value={selectedChatReportMetric.total_tickets} />
             <MetricCard
               label="Volume vs média"
@@ -3929,10 +3931,10 @@ function DashboardView({
         item.averageCsat < item.individualGoal ? `meta individual ${item.individualGoal}%` : null,
         item.averageCsat < podiumCsatGoal ? `pódio ${podiumCsatGoal}%` : null,
       ].filter(Boolean).join(' e ')
-      criteria.push(`CSAT ${item.averageCsat}% (referência: ${csatReferences})`)
+      criteria.push(`CSAT ${formatPercent(item.averageCsat)} (referência: ${csatReferences})`)
     }
     if (item.reviewPercentage < reviewGoal) {
-      criteria.push(`avaliações ${item.reviewPercentage}% (meta ${reviewGoal}%)`)
+      criteria.push(`avaliações ${formatPercent(item.reviewPercentage)} (meta ${reviewGoal}%)`)
     }
     if (item.totalTickets < periodAverageTickets) {
       criteria.push(`volume ${item.totalTickets} (média do time ${periodAverageTickets})`)
@@ -3965,13 +3967,13 @@ function DashboardView({
   )
   const weeklyPaceFacts = [
     firstWeeklyResult && lastWeeklyResult
-      ? `CSAT N1: ${firstWeeklyResult.csat}% para ${lastWeeklyResult.csat}% (${formatDelta(weeklyCsatPace, ' p.p.')})`
+      ? `CSAT N1: ${formatPercent(firstWeeklyResult.csat)} para ${formatPercent(lastWeeklyResult.csat)} (${formatDelta(weeklyCsatPace, ' p.p.')})`
       : null,
     teamPerformanceTrend.length > 1 && firstWeeklyPerformance && lastWeeklyPerformance
-      ? `performance: ${firstWeeklyPerformance.value}% para ${lastWeeklyPerformance.value}% (${formatDelta(weeklyPerformancePace, ' p.p.')})`
+      ? `performance: ${formatPercent(firstWeeklyPerformance.value)} para ${formatPercent(lastWeeklyPerformance.value)} (${formatDelta(weeklyPerformancePace, ' p.p.')})`
       : null,
     overallCsatTrend.length > 1 && firstWeeklyOverallCsat && lastWeeklyOverallCsat
-      ? `CSAT geral N1 + N2: ${firstWeeklyOverallCsat.value}% para ${lastWeeklyOverallCsat.value}% (${formatDelta(weeklyOverallCsatPace, ' p.p.')})`
+      ? `CSAT geral N1 + N2: ${formatPercent(firstWeeklyOverallCsat.value)} para ${formatPercent(lastWeeklyOverallCsat.value)} (${formatDelta(weeklyOverallCsatPace, ' p.p.')})`
       : null,
     weeklyEligibilityTrend.length > 1 && firstWeeklyEligibility && lastWeeklyEligibility
       ? `elegíveis: ${firstWeeklyEligibility.eligible} de ${firstWeeklyEligibility.total} para ${lastWeeklyEligibility.eligible} de ${lastWeeklyEligibility.total}`
@@ -4060,11 +4062,11 @@ function DashboardView({
     !hasPeriodData
       ? 'Fechamento ainda nao liberado para leitura.'
       : periodTeamPerformance < teamPerformanceGoal
-        ? `Meta operacional em risco: performance atual de ${periodTeamPerformance}% para uma meta de ${teamPerformanceGoal}%. Revisar abandonos, escala e cobertura.`
+        ? `Meta operacional em risco: performance atual de ${formatPercent(periodTeamPerformance)} para uma meta de ${teamPerformanceGoal}%. Revisar abandonos, escala e cobertura.`
         : periodAverageCsat < podiumCsatGoal
-          ? `Qualidade em atenção: CSAT N1 de ${periodAverageCsat}% para a referência de ${podiumCsatGoal}%. Revisar os casos com impacto negativo.`
+          ? `Qualidade em atenção: CSAT N1 de ${formatPercent(periodAverageCsat)} para a referência de ${podiumCsatGoal}%. Revisar os casos com impacto negativo.`
           : attentionCount
-            ? `Pódio em atenção: ${attentionCount} analista(s) podem fechar fora dos critérios. A operação está em ${periodTeamPerformance}%, mas os casos individuais precisam de ação.`
+            ? `Pódio em atenção: ${attentionCount} analista(s) podem fechar fora dos critérios. A operação está em ${formatPercent(periodTeamPerformance)}, mas os casos individuais precisam de ação.`
             : 'Fechamento favorável: manter o acompanhamento até concluir o período.'
 
   function handlePeriodModeChange(mode: PeriodMode) {
@@ -4174,7 +4176,7 @@ function DashboardView({
   const analystFocusText = analystResult
     ? analystResult.eligible
       ? 'Manter CSAT, volume e percentual de avaliações ate o fechamento.'
-      : analystResult.reasons.join(', ')
+      : formatStatusText(analystResult.reasons.join(', '))
     : 'Selecione outro período ou aguarde o lançamento semanal.'
   const analystActionText = analystResult
     ? buildDevelopmentFocus(analystResult, csatDelta)
@@ -4195,7 +4197,7 @@ function DashboardView({
       ? 'Fora do pódio por critério pendente'
       : analystRankingPosition > 0 && analystRankingPosition <= 3
         ? 'No pódio agora'
-        : 'Elegivel, fora do top 3 agora'
+        : 'Elegível, fora do top 3 agora'
     : 'Sem posição calculada'
   const analystPodiumProjectionText = analystResult
     ? !analystResult.eligible
@@ -4221,8 +4223,8 @@ function DashboardView({
       label: 'CSAT mínimo',
       value: analystResult
         ? analystCsatGap > 0
-          ? `faltam ${analystCsatGap} p.p. para ${podiumCsatGoal}%`
-          : `cumprido: ${analystResult.averageCsat}%`
+          ? `faltam ${formatDelta(analystCsatGap, ' p.p.').replace('+', '')} para ${podiumCsatGoal}%`
+          : `cumprido: ${formatPercent(analystResult.averageCsat)}`
         : 'sem dados',
       ok: Boolean(analystResult && analystCsatGap === 0),
     },
@@ -4230,8 +4232,8 @@ function DashboardView({
       label: 'Avaliações',
       value: analystResult
         ? analystReviewGap > 0
-          ? `faltam ${analystReviewGap} p.p. para ${reviewGoal}%`
-          : `cumprido: ${analystResult.reviewPercentage}%`
+          ? `faltam ${formatDelta(analystReviewGap, ' p.p.').replace('+', '')} para ${reviewGoal}%`
+          : `cumprido: ${formatPercent(analystResult.reviewPercentage)}`
         : 'sem dados',
       ok: Boolean(analystResult && analystReviewGap === 0),
     },
@@ -4256,7 +4258,7 @@ function DashboardView({
     ? [
         {
           label: '1. Qualidade percebida',
-          title: analystCsatGap > 0 ? `Recuperar ${analystCsatGap} p.p. de CSAT` : 'Proteger o CSAT atual',
+          title: analystCsatGap > 0 ? `Recuperar ${formatDelta(analystCsatGap, ' p.p.').replace('+', '')} de CSAT` : 'Proteger o CSAT atual',
           text:
             analystCsatGap > 0
               ? 'Nos próximos atendimentos, confirme o problema antes de orientar, valide se a solucao ficou clara e encerre perguntando se ainda ficou alguma duvida. A meta e reduzir motivos de avaliação negativa antes do próximo fechamento.'
@@ -4264,7 +4266,7 @@ function DashboardView({
         },
         {
           label: '2. Avaliações respondidas',
-          title: analystReviewGap > 0 ? `Buscar mais ${analystReviewGap} p.p. em avaliações` : 'Manter boa amostra de avaliações',
+          title: analystReviewGap > 0 ? `Buscar mais ${formatDelta(analystReviewGap, ' p.p.').replace('+', '')} em avaliações` : 'Manter boa amostra de avaliações',
           text:
             analystReviewGap > 0
               ? 'Ao perceber que o cliente teve o problema resolvido, faca um fechamento simples e objetivo pedindo a avaliação. O foco nao e forcar resposta, e aumentar a amostra para o resultado representar melhor sua entrega.'
@@ -4320,14 +4322,14 @@ function DashboardView({
     primary: item.averageCsat,
     secondary: item.reviewPercentage,
     volume: item.totalTickets,
-    status: item.eligible ? 'Elegivel' : item.reasons.join(', '),
+    status: item.eligible ? 'Elegível' : formatStatusText(item.reasons.join(', ')),
   }))
   const phoneVisualPoints = periodPodium.map((item) => ({
     label: item.analystName,
     x: item.totalTickets,
     y: item.averageCsat,
     tone: item.eligible ? 'success' : item.averageCsat < podiumCsatGoal ? 'danger' : 'warning',
-    detail: `${item.reviewPercentage}% avaliações`,
+    detail: `${formatPercent(item.reviewPercentage)} avaliações`,
   }))
 
   async function handleSavePhoneManualPodium() {
@@ -4496,18 +4498,18 @@ function DashboardView({
           <>
             <AnalystIdentityCard analyst={analystProfile} />
             <MetricCard label="Atendimentos no período" value={totalTickets} tone={podiumAverageTickets && totalTickets >= podiumAverageTickets ? 'success' : podiumAverageTickets ? 'warning' : undefined} />
-            <MetricCard label="Meu CSAT" value={`${analystResult?.averageCsat ?? 0}%`} tone={analystResult && analystResult.averageCsat >= analystResult.individualGoal ? 'success' : analystResult ? 'warning' : undefined} />
-            <MetricCard label="CSAT equipe N1" value={`${n1TeamAverageCsat || 0}%`} tone={n1TeamAverageCsat >= podiumCsatGoal ? 'success' : n1TeamAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
-            <MetricCard label="CSAT geral N1 + N2 · média do período" value={overallPhoneCsat === null ? 'Não informado' : `${overallPhoneCsat}%`} tone={overallPhoneCsat === null ? undefined : overallPhoneCsat >= podiumCsatGoal ? 'success' : overallPhoneCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
-            <MetricCard label="Avaliações" value={`${totalReviews} (${reviewCoverage}%)`} tone={reviewCoverage >= reviewGoal ? 'success' : reviewCoverage >= 20 ? 'warning' : 'danger'} />
+            <MetricCard label="Meu CSAT" value={formatPercent(analystResult?.averageCsat ?? 0)} tone={analystResult && analystResult.averageCsat >= analystResult.individualGoal ? 'success' : analystResult ? 'warning' : undefined} />
+            <MetricCard label="CSAT equipe N1" value={formatPercent(n1TeamAverageCsat || 0)} tone={n1TeamAverageCsat >= podiumCsatGoal ? 'success' : n1TeamAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
+            <MetricCard label="CSAT geral N1 + N2 · média do período" value={overallPhoneCsat === null ? 'Não informado' : formatPercent(overallPhoneCsat)} tone={overallPhoneCsat === null ? undefined : overallPhoneCsat >= podiumCsatGoal ? 'success' : overallPhoneCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
+            <MetricCard label="Avaliações" value={`${formatChatCount(totalReviews)} (${formatPercent(reviewCoverage)})`} tone={reviewCoverage >= reviewGoal ? 'success' : reviewCoverage >= 20 ? 'warning' : 'danger'} />
           </>
         ) : (
           <>
             <MetricCard label="Status" value="Supabase conectado" tone="success" />
             <MetricCard label="Analistas ativos" value={loading ? '...' : analystsCount} />
-            <MetricCard label="CSAT equipe N1" value={`${n1TeamAverageCsat || 0}%`} tone={n1TeamAverageCsat >= podiumCsatGoal ? 'success' : n1TeamAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
-            <MetricCard label="CSAT geral N1 + N2 · média do período" value={overallPhoneCsat === null ? 'Não informado' : `${overallPhoneCsat}%`} tone={overallPhoneCsat === null ? undefined : overallPhoneCsat >= podiumCsatGoal ? 'success' : overallPhoneCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
-            <MetricCard label="Performance equipe" value={`${periodTeamPerformance || 0}%`} tone={periodTeamPerformance >= teamPerformanceGoal ? 'success' : periodTeamPerformance >= teamPerformanceGoal - 3 ? 'warning' : 'danger'} />
+            <MetricCard label="CSAT equipe N1" value={formatPercent(n1TeamAverageCsat || 0)} tone={n1TeamAverageCsat >= podiumCsatGoal ? 'success' : n1TeamAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
+            <MetricCard label="CSAT geral N1 + N2 · média do período" value={overallPhoneCsat === null ? 'Não informado' : formatPercent(overallPhoneCsat)} tone={overallPhoneCsat === null ? undefined : overallPhoneCsat >= podiumCsatGoal ? 'success' : overallPhoneCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
+            <MetricCard label="Performance equipe" value={formatPercent(periodTeamPerformance || 0)} tone={periodTeamPerformance >= teamPerformanceGoal ? 'success' : periodTeamPerformance >= teamPerformanceGoal - 3 ? 'warning' : 'danger'} />
           </>
         )}
       </div>
@@ -4536,9 +4538,9 @@ function DashboardView({
           ) : (
             <>
               <div className="mt-5 grid gap-4 md:grid-cols-3">
-                <MetricCard label="CSAT N1 comparável" value={`${n1ComparisonCsat}%`} />
-                <MetricCard label="CSAT geral" value={`${overallPhoneCsat}%`} />
-                <MetricCard label="Diferença geral x N1" value={`${overallCsatGap && overallCsatGap > 0 ? '+' : ''}${overallCsatGap ?? 0} p.p.`} tone={overallCsatGap !== null && overallCsatGap < 0 ? 'danger' : 'success'} />
+                <MetricCard label="CSAT N1 comparável" value={formatPercent(n1ComparisonCsat)} />
+                <MetricCard label="CSAT geral" value={formatPercent(overallPhoneCsat)} />
+                <MetricCard label="Diferença geral x N1" value={formatDelta(overallCsatGap ?? 0, ' p.p.')} tone={overallCsatGap !== null && overallCsatGap < 0 ? 'danger' : 'success'} />
               </div>
 
               <div className="mt-5 grid gap-4 lg:grid-cols-2">
@@ -4546,9 +4548,9 @@ function DashboardView({
                   <h3 className="font-semibold text-slate-100">Onde está a diferença?</h3>
                   <p className="mt-2 text-sm leading-6 text-slate-300">
                     {overallCsatGap !== null && overallCsatGap < -0.01
-                      ? `O resultado geral está ${Math.abs(overallCsatGap)} p.p. abaixo do N1. Como o geral inclui o N2, esta diferença indica que o conjunto externo ao N1 reduziu o consolidado. Sem as avaliações individuais do N2, não é possível atribuir o efeito a uma pessoa específica.`
+                      ? `O resultado geral está ${formatDelta(Math.abs(overallCsatGap), ' p.p.').replace('+', '')} abaixo do N1. Como o geral inclui o N2, esta diferença indica que o conjunto externo ao N1 reduziu o consolidado. Sem as avaliações individuais do N2, não é possível atribuir o efeito a uma pessoa específica.`
                       : overallCsatGap !== null && overallCsatGap > 0.01
-                        ? `O resultado geral está ${overallCsatGap} p.p. acima do N1. Neste recorte, o conjunto externo ao N1 melhora o consolidado da operação.`
+                        ? `O resultado geral está ${formatDelta(overallCsatGap, ' p.p.').replace('+', '')} acima do N1. Neste recorte, o conjunto externo ao N1 melhora o consolidado da operação.`
                         : 'N1 e resultado geral estão praticamente alinhados neste período.'}
                   </p>
                   {!hasCompleteOverallCoverage && (
@@ -4564,7 +4566,7 @@ function DashboardView({
                     {n1ImpactRanking.filter((item) => item.downwardImpact > 0).slice(0, 3).map((item) => (
                       <div key={item.analystName} className="flex flex-col gap-1 rounded-md bg-slate-950 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
                         <span className="font-semibold">{item.analystName}</span>
-                        <span className="text-slate-300">{item.averageCsat}% CSAT · {item.reviews} avaliações · impacto de {item.downwardImpact} p.p.</span>
+                        <span className="text-slate-300">{formatPercent(item.averageCsat)} CSAT · {formatChatCount(item.reviews)} avaliações · impacto de {formatDelta(item.downwardImpact, ' p.p.')}</span>
                       </div>
                     ))}
                     {!n1ImpactRanking.some((item) => item.downwardImpact > 0) && (
@@ -4606,7 +4608,7 @@ function DashboardView({
           />
           <PredictiveCard
             label="CSAT projetado"
-            value={`${projectedCsat}%`}
+            value={formatPercent(projectedCsat)}
             detail={hasPreviousIndividualData
               ? `Resultado esperado se a tendência continuar. ${formatDelta(csatDelta, ' p.p.')} vs período anterior.`
               : 'Resultado esperado com a base atual. Ainda não há período anterior equivalente para comparação.'}
@@ -4614,7 +4616,7 @@ function DashboardView({
           />
           <PredictiveCard
             label="Performance projetada"
-            value={`${projectedTeamPerformance}%`}
+            value={formatPercent(projectedTeamPerformance)}
             detail={hasPreviousTeamData
               ? `Valor esperado da operação se a tendência continuar. Meta: ${teamPerformanceGoal}%.`
               : `Valor esperado com a base atual. Meta: ${teamPerformanceGoal}%; ainda sem período anterior equivalente.`}
@@ -4669,19 +4671,19 @@ function DashboardView({
                   ? totalTickets
                   : hasPreviousIndividualData
                     ? formatDelta(csatDelta, ' p.p.')
-                    : `${periodAverageCsat || 0}%`}
+                    : formatPercent(periodAverageCsat || 0)}
               </strong>
               <span>
                 {isAnalystDashboard
                   ? `${totalReviews} avaliações registradas em ${launchedPeriodLabel}`
                   : hasPreviousIndividualData
-                    ? `Atual: ${periodAverageCsat || 0}%`
+                    ? `Atual: ${formatPercent(periodAverageCsat || 0)}`
                     : 'Sem período anterior equivalente para comparação'}
               </span>
             </div>
             <div className="executive-card">
               <p>Performance equipe</p>
-              <strong>{periodTeamPerformance || 0}%</strong>
+              <strong>{formatPercent(periodTeamPerformance || 0)}</strong>
               <span>
                 {hasPreviousTeamData
                   ? `${formatDelta(teamPerformanceDelta, ' p.p.')} vs anterior`
@@ -4690,7 +4692,7 @@ function DashboardView({
             </div>
             <div className="executive-card">
               <p>{isAnalystDashboard ? 'Minhas avaliações' : 'Cobertura de avaliações'}</p>
-              <strong>{reviewCoverage}%</strong>
+              <strong>{formatPercent(reviewCoverage)}</strong>
               <span>{totalReviews} avaliações respondidas de {totalTickets} atendimentos</span>
             </div>
           </div>
@@ -4906,10 +4908,10 @@ function DashboardView({
             <div className="rounded-lg bg-slate-900 p-5">
               <p className="text-sm text-slate-400">CSAT e avaliações</p>
               <p className="mt-2 text-3xl font-bold text-cyan-300">
-                {analystResult?.averageCsat ?? 0}%
+                {formatPercent(analystResult?.averageCsat ?? 0)}
               </p>
               <p className="mt-2 text-sm text-slate-400">
-                {analystResult?.reviewPercentage ?? 0}% avaliações | meta {reviewGoal}%
+                {formatPercent(analystResult?.reviewPercentage ?? 0)} avaliações | meta {reviewGoal}%
               </p>
             </div>
 
@@ -5008,7 +5010,7 @@ function DashboardView({
                       <option value="">Vaga não definida</option>
                       {periodPodium.map((item) => (
                         <option key={item.analystId} value={item.analystId}>
-                          {item.analystName} · CSAT {item.averageCsat}% · {item.totalTickets} atend.
+                          {item.analystName} · CSAT {formatPercent(item.averageCsat)} · {formatChatCount(item.totalTickets)} atend.
                         </option>
                       ))}
                     </select>
@@ -5062,9 +5064,9 @@ function DashboardView({
                           />
                           <h3 className="text-xl font-bold">{winner.analystName}</h3>
                         </div>
-                        <p className="mt-3 text-3xl font-bold text-cyan-300">{winner.averageCsat}%</p>
+                        <p className="mt-3 text-3xl font-bold text-cyan-300 tabular-nums">{formatPercent(winner.averageCsat)}</p>
                         <p className="mt-2 text-sm text-slate-400">
-                          {winner.reviewPercentage}% avaliações | {winner.totalTickets} atendimentos
+                          {formatPercent(winner.reviewPercentage)} avaliações | {formatChatCount(winner.totalTickets)} atendimentos
                         </p>
                       </>
                     ) : (
@@ -5095,18 +5097,18 @@ function DashboardView({
                     <tr key={item.analystId}>
                       <td className="py-3 pr-4 font-bold text-cyan-300">{periodPodium.findIndex((rankingItem) => rankingItem.analystId === item.analystId) + 1}o</td>
                       <td className="py-3 pr-4">{item.analystName}</td>
-                      <td className="py-3 pr-4">
-                        {item.averageCsat}% <span className="text-slate-500">/ meta {item.individualGoal}%</span>
+                      <td className="whitespace-nowrap py-3 pr-4 tabular-nums">
+                        {formatPercent(item.averageCsat)} <span className="text-slate-500">/ meta {item.individualGoal}%</span>
                       </td>
-                      <td className="py-3 pr-4">{item.reviewPercentage}%</td>
-                      <td className="py-3 pr-4">{item.totalTickets}</td>
+                      <td className="whitespace-nowrap py-3 pr-4 tabular-nums">{formatPercent(item.reviewPercentage)}</td>
+                      <td className="whitespace-nowrap py-3 pr-4 tabular-nums">{formatChatCount(item.totalTickets)}</td>
                       <td className="py-3">
                         {manualPosition ? (
                           <span className="font-semibold text-cyan-200">Pódio ajustado · {manualPosition}º lugar</span>
                         ) : item.eligible ? (
                           <span className="text-emerald-300">Elegível</span>
                         ) : (
-                          <span className="text-slate-400">{item.reasons.join(', ')}</span>
+                          <span className="text-slate-400">{formatStatusText(item.reasons.join(', '))}</span>
                         )}
                       </td>
                     </tr>
@@ -5235,7 +5237,7 @@ function ReportsView({
     ? analystResult.eligible
       ? selectedRankingPosition > 0 && selectedRankingPosition <= 3
         ? 'Caso de reconhecimento e preservação'
-        : 'Caso elegivel para desenvolvimento competitivo'
+        : 'Caso elegível para desenvolvimento competitivo'
       : 'Caso de acompanhamento ativo'
     : 'Sem leitura disponível'
   const supervisorDecisionText = analystResult
@@ -5251,7 +5253,7 @@ function ReportsView({
       : 'Use a conversa 1:1 para identificar causa raiz: qualidade do atendimento, encerramento sem pedido de avaliação, volume abaixo da média ou contexto operacional.'
     : 'Aguardando dados para sugerir roteiro de conversa.'
   const supervisorFollowUpText = analystResult
-    ? `No próximo ciclo, acompanhar CSAT ${analystResult.averageCsat}% (${formatDelta(supervisorCsatGap, ' p.p.')} vs pódio), avaliações ${analystResult.reviewPercentage}% (${formatDelta(supervisorReviewGap, ' p.p.')} vs meta) e volume ${analystResult.totalTickets} (${formatDelta(supervisorVolumeGap, '')} vs média ${formatChatCount(supervisorAverageTickets)}).`
+    ? `No próximo ciclo, acompanhar CSAT ${formatPercent(analystResult.averageCsat)} (${formatDelta(supervisorCsatGap, ' p.p.')} vs pódio), avaliações ${formatPercent(analystResult.reviewPercentage)} (${formatDelta(supervisorReviewGap, ' p.p.')} vs meta) e volume ${formatChatCount(analystResult.totalTickets)} (${formatDelta(supervisorVolumeGap, '')} vs média ${formatChatCount(supervisorAverageTickets)}).`
     : 'Sem acompanhamento definido.'
   const supervisorPeriodTypeText =
     periodFilter.mode === 'week'
@@ -5280,7 +5282,7 @@ function ReportsView({
       label: 'Diagnóstico',
       title: supervisorCaseStatus,
       text: analystResult
-        ? `Ranking atual: ${selectedRankingPosition || '-'}o. CSAT ${analystResult.averageCsat}%, avaliações ${analystResult.reviewPercentage}% e ${analystResult.totalTickets} atendimentos contra média ${formatChatCount(supervisorAverageTickets)}.`
+        ? `Ranking atual: ${selectedRankingPosition || '-'}o. CSAT ${formatPercent(analystResult.averageCsat)}, avaliações ${formatPercent(analystResult.reviewPercentage)} e ${formatChatCount(analystResult.totalTickets)} atendimentos contra média ${formatChatCount(supervisorAverageTickets)}.`
         : 'Selecione um analista e período com dados para calcular a leitura.',
     },
     {
@@ -5300,7 +5302,7 @@ function ReportsView({
     },
   ]
   const situationText = selectedAnalyst && analystResult
-    ? `${selectedAnalyst.name} fechou ${periodLabel} com CSAT de ${analystResult.averageCsat}%, ${analystResult.totalReviews} avaliações e ${analystResult.totalTickets} atendimentos registrados. A meta individual e ${analystResult.individualGoal}% e a referência para pódio e ${podiumCsatGoal}%. A variação contra o período anterior foi de ${formatDelta(csatDelta, ' p.p.')}.`
+    ? `${selectedAnalyst.name} fechou ${periodLabel} com CSAT de ${formatPercent(analystResult.averageCsat)}, ${formatChatCount(analystResult.totalReviews)} avaliações e ${formatChatCount(analystResult.totalTickets)} atendimentos registrados. A meta individual e ${analystResult.individualGoal}% e a referência para pódio e ${podiumCsatGoal}%. A variação contra o período anterior foi de ${formatDelta(csatDelta, ' p.p.')}.`
     : ''
   const actionText = analystResult
     ? analystResult.eligible
@@ -5317,7 +5319,7 @@ function ReportsView({
     : ''
   const feedbackSummary = analystResult
     ? analystResult.eligible
-      ? `${selectedAnalyst?.name ?? 'Analista'} esta elegivel ao pódio no período. O foco recomendado e preservar consistencia, volume de avaliações e acompanhamento semanal.`
+      ? `${selectedAnalyst?.name ?? 'Analista'} está elegível ao pódio no período. O foco recomendado e preservar consistencia, volume de avaliações e acompanhamento semanal.`
       : `${selectedAnalyst?.name ?? 'Analista'} ainda nao sustenta elegibilidade ao pódio neste período. O foco recomendado e atuar sobre: ${analystResult.reasons.join(', ')}.`
     : ''
   const phoneFeedbackSuggestion = selectedAnalyst && analystResult
@@ -5354,7 +5356,7 @@ function ReportsView({
       label: 'Desempenho da equipe',
       done: hasTeamLaunch,
       detail: hasTeamLaunch
-        ? `${teamPerformance}% de performance no período.`
+        ? `${formatPercent(teamPerformance)} de performance no período.`
         : 'Sem lançamento de equipe; o relatório sai, mas a leitura operacional fica incompleta.',
     },
   ]
@@ -5411,7 +5413,7 @@ function ReportsView({
             reviews: analystResult.totalReviews,
             csatGoal: analystResult.individualGoal,
             reviewGoal,
-            status: analystResult.eligible ? 'Elegivel ao pódio' : 'Em acompanhamento',
+            status: analystResult.eligible ? 'Elegível ao pódio' : 'Em acompanhamento',
             teamPerformance,
             teamAnsweredCalls,
             teamTotalCalls,
@@ -5640,9 +5642,9 @@ function ReportsView({
 
       <div className="grid gap-4 md:grid-cols-4">
         <MetricCard label="Analista" value={selectedAnalyst?.name ?? 'Sem analista'} />
-        <MetricCard label="CSAT do período" value={`${analystResult?.averageCsat ?? 0}%`} />
+        <MetricCard label="CSAT do período" value={`${formatPercent(analystResult?.averageCsat ?? 0)}`} />
         <MetricCard label="Variação vs período anterior" value={formatDelta(csatDelta, '%')} />
-        <MetricCard label="Performance equipe" value={`${teamPerformance}%`} />
+        <MetricCard label="Performance equipe" value={formatPercent(teamPerformance)} />
       </div>
 
       <section className="panel no-print">
@@ -5826,7 +5828,7 @@ function ReportsView({
             <div className="grid gap-3 md:grid-cols-4">
               <div className="report-summary-card">
                 <p>CSAT atual</p>
-                <strong>{analystResult.averageCsat}%</strong>
+                <strong>{formatPercent(analystResult.averageCsat)}</strong>
               </div>
               <div className="report-summary-card">
                 <p>Variação</p>
@@ -5865,7 +5867,7 @@ function ReportsView({
                           <div className={`report-evolution-bar ${barClass}`} style={{ width: `${width}%` }} />
                         </div>
                         <strong>
-                          {item.csat}% <span>{formatDelta(delta, ' p.p.')}</span>
+                          {formatPercent(item.csat)} <span>{formatDelta(delta, ' p.p.')}</span>
                         </strong>
                       </div>
                     )
@@ -5941,7 +5943,7 @@ function ReportsView({
               <div className="mt-4 space-y-3 text-sm text-slate-300">
                 <p>
                   <span className="text-slate-500">Reconhecer: </span>
-                  {strongestResult ? `${strongestResult.analystName}, com ${strongestResult.averageCsat}% de CSAT.` : 'aguardar dados do período.'}
+                  {strongestResult ? `${strongestResult.analystName}, com ${formatPercent(strongestResult.averageCsat)} de CSAT.` : 'aguardar dados do período.'}
                 </p>
                 <p>
                   <span className="text-slate-500">Acompanhar: </span>
@@ -5964,7 +5966,7 @@ function ReportsView({
             <div className="mt-4 space-y-3 text-sm text-slate-300">
               <p>
                 <span className="text-slate-500">Performance: </span>
-                {teamPerformance}% no período, meta {teamPerformanceGoal}%.
+                {formatPercent(teamPerformance)} no período, meta {teamPerformanceGoal}%.
               </p>
               <p>
                 <span className="text-slate-500">Previsao: </span>
@@ -5999,7 +6001,7 @@ function ReportsView({
                   {riskResults.map((item) => (
                     <div key={item.analystId} className="rounded-md bg-slate-950 p-3">
                       <p className="font-semibold">{item.analystName}</p>
-                      <p className="mt-1 text-sm text-slate-400">{item.reasons.join(', ')}</p>
+                      <p className="mt-1 text-sm text-slate-400">{formatStatusText(item.reasons.join(', '))}</p>
                     </div>
                   ))}
                 </div>
@@ -6386,9 +6388,9 @@ function EntriesView({
 
           <div className="rounded-md bg-slate-900 p-4 text-sm text-slate-300">
             <p>Total de avaliações: <strong>{totalReviews}</strong></p>
-            <p>Percentual de avaliações: <strong>{reviewPercentage}%</strong></p>
+            <p>Percentual de avaliações: <strong>{formatPercent(reviewPercentage)}</strong></p>
             <p>
-              CSAT informado: <strong>{toNumber(individualForm.csat)}%</strong>
+              CSAT informado: <strong>{formatPercent(toNumber(individualForm.csat))}</strong>
             </p>
           </div>
 
@@ -6503,7 +6505,7 @@ function EntriesView({
                 />
               </Field>
             </div>
-            <p className="mt-3 text-sm text-slate-300">Valor informado: <strong className="text-cyan-200">{overallCsat}%</strong></p>
+            <p className="mt-3 text-sm text-slate-300">Valor informado: <strong className="text-cyan-200">{formatPercent(overallCsat)}</strong></p>
           </div>
 
           <Field label="Observações">
@@ -6529,7 +6531,7 @@ function EntriesView({
           </Field>
 
           <div className="rounded-md bg-slate-900 p-4 text-sm text-slate-300">
-            <p>Performance calculada: <strong>{calculatedPerformance}%</strong></p>
+            <p>Performance calculada: <strong>{formatPercent(calculatedPerformance)}</strong></p>
             <p>Atendidas + abandonadas: <strong>{answeredCalls + abandonedCalls}</strong></p>
             <p>Total processado: <strong>{totalCalls}</strong></p>
           </div>
@@ -6744,7 +6746,7 @@ function EntriesHistory({
         </div>
         <div className="rounded-lg bg-slate-900 p-4">
           <p className="text-sm text-slate-400">CSAT médio filtrado</p>
-          <p className="mt-2 text-2xl font-bold">{averageHistoryCsat}%</p>
+          <p className="mt-2 text-2xl font-bold tabular-nums">{formatPercent(averageHistoryCsat)}</p>
         </div>
         <div className="rounded-lg bg-slate-900 p-4">
           <p className="text-sm text-slate-400">Avaliações / atendimentos</p>
@@ -6752,7 +6754,7 @@ function EntriesHistory({
         </div>
         <div className="rounded-lg bg-slate-900 p-4">
           <p className="text-sm text-slate-400">Performance equipe</p>
-          <p className="mt-2 text-2xl font-bold">{averageTeamPerformance}%</p>
+          <p className="mt-2 text-2xl font-bold tabular-nums">{formatPercent(averageTeamPerformance)}</p>
         </div>
       </div>
 
@@ -6774,7 +6776,7 @@ function EntriesHistory({
                 <div>
                   <p className="font-semibold">{formatWeek(period.start, period.end)}</p>
                   <p className="mt-1 text-sm text-slate-400">
-                    {period.individual.length} analista(s) · CSAT médio {periodCsat}% · Equipe {period.team ? 'registrada' : 'pendente'}
+                    {period.individual.length} analista(s) · CSAT médio {formatPercent(periodCsat)} · Equipe {period.team ? 'registrada' : 'pendente'}
                   </p>
                   {getInclusiveDayCount(period.start, period.end) < 5 && (
                     <p className="mt-1 text-xs text-cyan-200">
@@ -6810,7 +6812,7 @@ function EntriesHistory({
                     <tr key={metric.id}>
                       <td className="py-3 pr-4">{getAnalystName(metric.analysts)}</td>
                       <td className="py-3 pr-4">{formatWeek(metric.week_start, metric.week_end)}</td>
-                      <td className="py-3 pr-4">{metric.csat}%</td>
+                      <td className="whitespace-nowrap py-3 pr-4 tabular-nums">{formatPercent(metric.csat)}</td>
                       <td className="py-3 pr-4">{metric.total_reviews}</td>
                       <td className="py-3 pr-4">{metric.total_tickets}</td>
                       <td className="py-3 pr-4">
@@ -6858,7 +6860,7 @@ function EntriesHistory({
                   {period.team && (
                     <tr key={period.team.id}>
                       <td className="py-3 pr-4">{formatWeek(period.team.week_start, period.team.week_end)}</td>
-                      <td className="py-3 pr-4">{period.team.performance_percentage}%</td>
+                      <td className="whitespace-nowrap py-3 pr-4 tabular-nums">{formatPercent(period.team.performance_percentage)}</td>
                       <td className="py-3 pr-4">{period.team.answered_calls}</td>
                       <td className="py-3 pr-4">{period.team.total_calls}</td>
                       <td className="min-w-52 py-3 pr-4">
@@ -7727,8 +7729,7 @@ function TrendLineChart({
         <div>
           <p className="text-sm text-slate-400">{label}</p>
           <p className="mt-1 text-2xl font-semibold">
-            {latest}
-            {suffix}
+            {formatValueWithSuffix(latest, suffix)}
           </p>
           <p className="mt-2 text-xs leading-5 text-slate-400">
             {hasComparison
@@ -7740,14 +7741,14 @@ function TrendLineChart({
           <div className="rounded-md border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-right">
             <p className="text-xs text-slate-400">{activeIndex === null ? 'Última semana' : 'Semana destacada'}</p>
             <p className="mt-1 text-sm font-semibold text-cyan-200">
-              {highlightedPoint.label}: {highlightedPoint.value}{suffix}
+              {highlightedPoint.label}: {formatValueWithSuffix(highlightedPoint.value, suffix)}
             </p>
           </div>
         )}
         {goal !== undefined && (
           <div className="rounded-md border border-amber-300/20 bg-amber-300/5 px-3 py-2 text-right">
             <p className="text-xs text-slate-400">{goalLabel}</p>
-            <p className="mt-1 text-sm font-semibold text-amber-200">{goal}{suffix}</p>
+            <p className="mt-1 text-sm font-semibold text-amber-200">{formatValueWithSuffix(goal, suffix)}</p>
           </div>
         )}
       </div>
@@ -7801,7 +7802,7 @@ function TrendLineChart({
                   strokeWidth="2"
                 />
                 <text fill="rgb(226 232 240)" fontSize="10" fontWeight="600" textAnchor="middle" x={x} y={Math.max(y - 9, 10)}>
-                  {point.value}{suffix}
+                  {formatValueWithSuffix(point.value, suffix)}
                 </text>
                 <text fill="rgb(203 213 225)" fontSize="10" textAnchor="middle" x={x} y="126">
                   {point.label}
@@ -7833,7 +7834,7 @@ function BarTrend({
         <p className="text-sm text-slate-400">{label}</p>
         {points.length > 0 && (
           <p className="text-xs text-cyan-200">
-            {activeIndex === null ? 'Passe o mouse para destacar' : `${points[activeIndex].label}: ${points[activeIndex].value}`}
+            {activeIndex === null ? 'Passe o mouse para destacar' : `${points[activeIndex].label}: ${formatChatCount(points[activeIndex].value)}`}
           </p>
         )}
       </div>
@@ -7842,7 +7843,7 @@ function BarTrend({
           <div
             key={point.label}
             className={`grid grid-cols-[72px_1fr_42px] items-center gap-3 rounded-md px-2 py-2 text-sm transition-colors ${activeIndex === index ? 'bg-cyan-300/10' : ''}`}
-            title={`${point.label}: ${point.value}`}
+            title={`${point.label}: ${formatChatCount(point.value)}`}
             onMouseEnter={() => setActiveIndex(index)}
             onMouseLeave={() => setActiveIndex(null)}
           >
@@ -7853,7 +7854,7 @@ function BarTrend({
                 style={{ width: `${Math.max((point.value / maxValue) * 100, 4)}%` }}
               />
             </div>
-            <strong className="text-right">{point.value}</strong>
+            <strong className="text-right tabular-nums">{formatChatCount(point.value)}</strong>
           </div>
         ))}
         {!points.length && <EmptyState text="Sem dados suficientes para o grafico." />}
@@ -7890,7 +7891,7 @@ function GroupedPercentTrendChart({
                   <div className="h-3 rounded-full bg-slate-800">
                     <div className={`h-3 rounded-full ${item.color}`} style={{ width: `${Math.max(point[item.key], 3)}%` }} />
                   </div>
-                  <strong className="text-right text-xs">{point[item.key]}%</strong>
+                  <strong className="text-right text-xs">{formatPercent(point[item.key])}</strong>
                 </div>
               ))}
             </div>
@@ -7971,8 +7972,7 @@ function ProgressMetric({
         )}
       </div>
       <strong className="text-right">
-        {value}
-        {suffix}
+        {formatValueWithSuffix(value, suffix)}
       </strong>
     </div>
   )
@@ -8017,7 +8017,7 @@ function VolumeQualityMap({
               <span className={`block h-3.5 w-3.5 rounded-full shadow-lg ring-4 ring-slate-900 ${color}`} />
               <div className="pointer-events-none absolute left-4 top-[-14px] z-10 hidden min-w-44 rounded-md bg-slate-800 px-3 py-2 text-xs text-slate-100 shadow-xl group-hover:block">
                 <strong>{point.label}</strong>
-                <p>CSAT {point.y}% | Volume {point.x}</p>
+                <p>CSAT {formatPercent(point.y)} | Volume {formatChatCount(point.x)}</p>
                 {point.detail && <p>{point.detail}</p>}
               </div>
             </div>
@@ -8283,7 +8283,7 @@ async function exportChatIndividualReport({
   const reviewGap = round(Number(metric.review_percentage) - reviewGoal)
   const productivityGap = averageTickets ? round(((Number(metric.total_tickets) - averageTickets) / averageTickets) * 100) : 0
   const podiumText = podiumPosition > 0
-    ? `${podiumPosition}o Lugar - CSAT: ${metric.csat}% | ${metric.total_tickets} atendimentos | ${metric.review_percentage}% avaliações`
+    ? `${podiumPosition}o Lugar - CSAT: ${formatPercent(metric.csat)} | ${formatChatCount(metric.total_tickets)} atendimentos | ${formatPercent(metric.review_percentage)} avaliações`
     : 'Não elegível ao pódio neste período'
   const status = metric.status || (Number(metric.csat) >= csatGoal && Number(metric.review_percentage) >= reviewGoal ? 'Meta Superada' : 'Em acompanhamento')
   const statusColor = status === 'Meta Superada' ? '#059669' : status === 'Critico' ? '#dc2626' : '#d97706'
@@ -8377,12 +8377,12 @@ async function exportChatIndividualReport({
         <div class="kpi-grid">
           <div class="kpi-card">
             <span>Qualidade percebida</span>
-            <strong>${metric.csat}%</strong>
+            <strong>${formatPercent(metric.csat)}</strong>
             <em>Meta individual: ${csatGoal}% (${formatDelta(csatGap, ' p.p.')})</em>
           </div>
           <div class="kpi-card">
             <span>Participação em avaliações</span>
-            <strong>${metric.review_percentage}%</strong>
+            <strong>${formatPercent(metric.review_percentage)}</strong>
             <em>${metric.reviews} respostas sobre ${metric.valid_tickets} válidos</em>
           </div>
           <div class="kpi-card">
@@ -8394,14 +8394,14 @@ async function exportChatIndividualReport({
 
         <h2>Análise técnica de desempenho</h2>
         <h3>Qualidade e Satisfação do Cliente (CSAT)</h3>
-        <p>O(A) colaborador(a) registrou um indice de <strong>Satisfação (CSAT) de ${metric.csat}%</strong>.</p>
+        <p>O(A) colaborador(a) registrou um indice de <strong>Satisfação (CSAT) de ${formatPercent(metric.csat)}</strong>.</p>
         <ul>
           <li><strong>Comparativo com a meta:</strong> ${escapeHtml(csatText)}</li>
           <li><strong>Análise detalhada:</strong> Do volume total de feedbacks recebidos (${metric.reviews}), <strong>${metric.positive_reviews} foram positivos</strong>. Houve ${metric.negative_reviews} registros negativos.</li>
         </ul>
 
         <h3>Engajamento e Coleta de Feedback</h3>
-        <p>O(A) colaborador(a) alcancou uma <strong>taxa de avaliações de ${metric.review_percentage}%</strong>.</p>
+        <p>O(A) colaborador(a) alcancou uma <strong>taxa de avaliações de ${formatPercent(metric.review_percentage)}</strong>.</p>
         <ul>
           <li><strong>Comparativo com a meta:</strong> ${escapeHtml(reviewText)}</li>
           <li><strong>Calculo:</strong> A taxa foi calculada sobre ${metric.reviews} avaliações divididas por ${metric.valid_tickets} atendimentos válidos.</li>
@@ -8574,12 +8574,12 @@ function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
         <div class="strategy-card">
           <span>Leitura do historico</span>
           <strong>${escapeHtml(trendSignal)}</strong>
-          <em>Melhor CSAT: ${escapeHtml(bestCsat.month_label.replace(' 2026', ''))} (${bestCsat.csat}%).</em>
+          <em>Melhor CSAT: ${escapeHtml(bestCsat.month_label.replace(' 2026', ''))} (${formatPercent(bestCsat.csat)}).</em>
         </div>
         <div class="strategy-card">
           <span>Ponto de atenção</span>
           <strong>${escapeHtml(lowestCsat.month_label.replace(' 2026', ''))} teve o menor CSAT</strong>
-          <em>Maior amostra de avaliações: ${escapeHtml(bestReview.month_label.replace(' 2026', ''))} (${bestReview.review_percentage}%).</em>
+          <em>Maior amostra de avaliações: ${escapeHtml(bestReview.month_label.replace(' 2026', ''))} (${formatPercent(bestReview.review_percentage)}).</em>
         </div>
         <div class="strategy-card">
           <span>Foco recomendado</span>
@@ -8657,11 +8657,11 @@ function buildChatFeedbackText({
     ? `${podiumPosition}º lugar no pódio`
     : 'fora dos três primeiros lugares'
   const qualityFact = csatGap >= 0
-    ? `CSAT ${metric.csat}%, ${formatDelta(csatGap, ' p.p.')} acima da meta de ${csatGoal}%`
-    : `CSAT ${metric.csat}%, ${Math.abs(csatGap)} p.p. abaixo da meta de ${csatGoal}%`
+    ? `CSAT ${formatPercent(metric.csat)}, ${formatDelta(csatGap, ' p.p.')} acima da meta de ${csatGoal}%`
+    : `CSAT ${formatPercent(metric.csat)}, ${formatDelta(Math.abs(csatGap), ' p.p.')} abaixo da meta de ${csatGoal}%`
   const reviewFact = reviewGap >= 0
-    ? `avaliações ${metric.review_percentage}%, ${formatDelta(reviewGap, ' p.p.')} acima da referência de ${reviewGoal}%`
-    : `avaliações ${metric.review_percentage}%, ${Math.abs(reviewGap)} p.p. abaixo da referência de ${reviewGoal}%`
+    ? `avaliações ${formatPercent(metric.review_percentage)}, ${formatDelta(reviewGap, ' p.p.')} acima da referência de ${reviewGoal}%`
+    : `avaliações ${formatPercent(metric.review_percentage)}, ${formatDelta(Math.abs(reviewGap), ' p.p.')} abaixo da referência de ${reviewGoal}%`
   const volumeFact = averageTickets
     ? `${metric.total_tickets} atendimentos totais, ${Math.abs(ticketGap)} ${ticketGap >= 0 ? 'acima' : 'abaixo'} da média de ${formatChatCount(averageTickets)}`
     : `${metric.total_tickets} atendimentos totais`
@@ -8734,9 +8734,9 @@ function buildPhoneFeedbackText({
   const reviewGap = round(analystResult.reviewPercentage - reviewGoal)
   const priority =
     podiumGap < 0
-      ? `compreender o que influenciou o CSAT, que ficou ${Math.abs(podiumGap)} p.p. abaixo da referência`
+      ? `compreender o que influenciou o CSAT, que ficou ${formatDelta(Math.abs(podiumGap), ' p.p.').replace('+', '')} abaixo da referência`
       : reviewGap < 0
-        ? `ampliar a participação nas avaliações, que ficou ${Math.abs(reviewGap)} p.p. abaixo da meta`
+        ? `ampliar a participação nas avaliações, que ficou ${formatDelta(Math.abs(reviewGap), ' p.p.').replace('+', '')} abaixo da meta`
         : volumeDifference < 0
           ? `entender o contexto do volume, que ficou ${Math.abs(volumeDifference)} atendimentos abaixo da média do time`
           : 'identificar as práticas reais que ajudaram a equilibrar os indicadores e decidir como mantê-las'
@@ -8745,7 +8745,7 @@ function buildPhoneFeedbackText({
     : 'Os indicadores não comprovam comportamentos específicos. Use exemplos reais da operação ou observações do gestor antes de relacionar o resultado a uma conduta.'
 
   return [
-    `Base factual do ciclo: ${analystName}, em ${periodLabel}, registrou CSAT de ${analystResult.averageCsat}% (referência ${podiumCsatGoal}%), ${analystResult.totalReviews} avaliações, taxa de avaliações de ${analystResult.reviewPercentage}% (meta ${reviewGoal}%) e ${analystResult.totalTickets} atendimentos. A média do time foi ${averageTickets}. Posição: ${rankingText}. Performance da equipe: ${teamPerformance}% diante da referência de ${teamPerformanceGoal}%.`,
+    `Base factual do ciclo: ${analystName}, em ${periodLabel}, registrou CSAT de ${formatPercent(analystResult.averageCsat)} (referência ${podiumCsatGoal}%), ${formatChatCount(analystResult.totalReviews)} avaliações, taxa de avaliações de ${formatPercent(analystResult.reviewPercentage)} (meta ${reviewGoal}%) e ${formatChatCount(analystResult.totalTickets)} atendimentos. A média do time foi ${formatChatCount(averageTickets)}. Posição: ${rankingText}. Performance da equipe: ${formatPercent(teamPerformance)} diante da referência de ${teamPerformanceGoal}%.`,
     `Ponto prioritário: ${priority}.`,
     `Contexto a verificar: ${contextToVerify}`,
     managerNotes.trim() ? `Observação registrada pelo gestor: ${managerNotes.trim()}` : 'Observação do gestor: não informada.',
@@ -8838,7 +8838,7 @@ async function exportWordReport({
                 <div class="evolution-bar" style="width:${width}%; background:${color};"></div>
               </div>
               <div class="evolution-value">
-                <strong>${item.csat}%</strong>
+                <strong>${formatPercent(item.csat)}</strong>
                 <span class="${delta >= 0 ? 'positive' : 'negative'}">${index === 0 ? 'inicio' : formatDelta(delta, ' p.p.')}</span>
                 <em>${marker}</em>
               </div>
@@ -8922,8 +8922,8 @@ async function exportWordReport({
           </div>
           <div class="box">
             <h2>Atingido</h2>
-            <p>CSAT: ${achieved.csat}% (${goalGapText})</p>
-            <p>Avaliações: ${achieved.reviewPercentage}% (${achieved.reviewCount} respondidas, ${reviewGapText})</p>
+            <p>CSAT: ${formatPercent(achieved.csat)} (${goalGapText})</p>
+            <p>Avaliações: ${formatPercent(achieved.reviewPercentage)} (${achieved.reviewCount} respondidas, ${reviewGapText})</p>
             <p>Atendimentos: ${achieved.answeredTickets}</p>
             <p>Media por colaborador: ${achieved.averageTickets}</p>
             <p>Posição pódio: ${achieved.rankingPosition || '-'}</p>
@@ -8938,7 +8938,7 @@ async function exportWordReport({
         <div class="insight-grid">
           <div class="insight">
             <div class="insight-label">CSAT atual</div>
-            <div class="insight-value">${achieved.csat}%</div>
+            <div class="insight-value">${formatPercent(achieved.csat)}</div>
             <div class="insight-note">${goalGapText}</div>
           </div>
           <div class="insight">
@@ -8948,13 +8948,13 @@ async function exportWordReport({
           </div>
           <div class="insight">
             <div class="insight-label">Melhor semana</div>
-            <div class="insight-value">${bestEvolution ? `${bestEvolution.label} - ${bestEvolution.csat}%` : '-'}</div>
+            <div class="insight-value">${bestEvolution ? `${bestEvolution.label} - ${formatPercent(bestEvolution.csat)}` : '-'}</div>
             <div class="insight-note">ponto mais alto do período</div>
           </div>
           <div class="insight">
             <div class="insight-label">Avaliações respondidas</div>
             <div class="insight-value">${achieved.reviewCount}</div>
-            <div class="insight-note">${achieved.reviewPercentage}% dos atendimentos</div>
+            <div class="insight-note">${formatPercent(achieved.reviewPercentage)} dos atendimentos</div>
           </div>
         </div>
         <div class="trend-panel">
@@ -8962,7 +8962,7 @@ async function exportWordReport({
           <div class="goal-badge">Referência para o pódio: ${expected.csat}%</div>
           ${evolutionBars}
         </div>
-        <p class="muted">Menor ponto do período: ${worstEvolution ? `${worstEvolution.label} - ${worstEvolution.csat}%` : '-'}.</p>
+        <p class="muted">Menor ponto do período: ${worstEvolution ? `${worstEvolution.label} - ${formatPercent(worstEvolution.csat)}` : '-'}.</p>
         <h3>Volume semanal</h3>
         <p class="muted">Complemento da evolução: avaliações respondidas e atendimentos registrados em cada semana.</p>
         <table>
@@ -8976,7 +8976,7 @@ async function exportWordReport({
           <tbody>${volumeRows}</tbody>
         </table>
         <h2>Contexto operacional da equipe</h2>
-        <p>Performance da equipe no período: ${achieved.teamPerformance}%.</p>
+        <p>Performance da equipe no período: ${formatPercent(achieved.teamPerformance)}.</p>
         <p>Ligações atendidas pela equipe: ${achieved.teamAnsweredCalls}. Total processado: ${achieved.teamTotalCalls}.</p>
 
         <h2>Feedback</h2>
@@ -9693,9 +9693,14 @@ function getPreviousPeriod(period: PeriodFilter): PeriodFilter {
 }
 
 function formatDelta(value: number, suffix = '') {
-  if (!value) return `0${suffix}`
+  const numericValue = Number(value)
+  const absoluteValue = Math.abs(numericValue)
+  const isPercentLike = suffix.includes('%') || suffix.includes('p.p.')
+  const formattedValue = isPercentLike
+    ? formatPercentNumber(absoluteValue)
+    : chatCountFormatter.format(absoluteValue)
 
-  return `${value > 0 ? '+' : ''}${value}${suffix}`
+  return `${numericValue > 0 ? '+' : numericValue < 0 ? '-' : ''}${formattedValue}${suffix}`
 }
 
 function getTrendText(delta: number) {
@@ -9797,7 +9802,7 @@ const chatCountFormatter = new Intl.NumberFormat('pt-BR', {
 })
 
 const chatPercentFormatter = new Intl.NumberFormat('pt-BR', {
-  minimumFractionDigits: 0,
+  minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 })
 
@@ -9806,9 +9811,28 @@ function formatChatCount(value: number | string) {
   return Number.isFinite(numericValue) ? chatCountFormatter.format(numericValue) : '0'
 }
 
-function formatChatPercent(value: number | string) {
+function formatPercentNumber(value: number | string) {
   const numericValue = Number(value)
-  return `${Number.isFinite(numericValue) ? chatPercentFormatter.format(numericValue) : '0'}%`
+  return Number.isFinite(numericValue) ? chatPercentFormatter.format(numericValue) : '0,00'
+}
+
+function formatPercent(value: number | string) {
+  return `${formatPercentNumber(value)}%`
+}
+
+function formatValueWithSuffix(value: number | string, suffix = '') {
+  return suffix === '%' ? formatPercent(value) : `${formatChatCount(value)}${suffix}`
+}
+
+function formatStatusText(value: string) {
+  const normalizedValue = value.trim()
+  return normalizedValue
+    ? `${normalizedValue.charAt(0).toUpperCase()}${normalizedValue.slice(1)}`
+    : ''
+}
+
+function formatChatPercent(value: number | string) {
+  return formatPercent(value)
 }
 
 function upsertAnalyst(analysts: Analyst[], updatedAnalyst: Analyst) {
