@@ -1,13 +1,15 @@
 # Homologação — Módulo de Escalas
 
-Esta branch foi criada para desenvolver o novo módulo de escalas sem alterar a produção.
+O módulo de Escalas passa a ser uma funcionalidade experimental dentro do ambiente geral de homologação do Sistema de Performance.
 
 ## Regra principal
 
 - `main`: produção atual do Sistema de Performance.
-- `homologacao-escala`: desenvolvimento e validação do módulo de Escalas.
-- Não fazer merge para `main` antes da aprovação de Marcos, Polyana e Carine.
-- Não apontar esta branch para o Supabase de produção durante testes.
+- `homologacao`: ambiente oficial de homologação do sistema inteiro, incluindo Escalas.
+- `homologacao-escala`: branch histórica preservada como referência do desenvolvimento inicial do módulo.
+- Não promover alterações para `main` antes da validação na homologação.
+- Nunca apontar a homologação para o Supabase de produção durante testes.
+- A política geral de ambientes está em `docs/homologacao.md`.
 
 ## O que já foi implementado na homologação
 
@@ -73,7 +75,7 @@ A homologação deve usar:
 
 ## Observação
 
-O Supabase de homologação está separado da produção e a branch possui Preview Deployment próprio na Vercel. O código continua isolado até a aprovação formal para produção.
+O Supabase de homologação está separado da produção. O módulo de Escalas permanece isolado dentro do ambiente `homologacao` até a aprovação formal para produção. A configuração final da Vercel deve respeitar as variáveis descritas em `docs/homologacao.md`.
 
 
 ## Regras operacionais refinadas
