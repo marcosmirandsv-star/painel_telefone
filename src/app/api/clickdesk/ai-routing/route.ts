@@ -19,6 +19,8 @@ type AiSample = {
   transcript_available: boolean
   detail_area: string | null
   transcript_area: string | null
+  detail_keys: string[]
+  transcript_keys: string[]
   routing_values: SafeValue[]
   run_correlations: {
     value: string
@@ -205,7 +207,115 @@ function extractPagination(payload: unknown) {
   return out
 }
 
-function summarizeAgents(payload: unknown) {
+function topLevelKeys(payload: unknown) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return []
+  return Object.keys(payload as Record<string, unknown>).slice(0, 40)
+}
+
+function readDepartmentIds(value: unknown) {
+  const ids = new Set<string>()
+
+  const visit = (current: unknown, depth = 0) => {
+    if (!current || typeof current !== 'object' || depth > 6) return
+
+    if (Array.isArray(current)) {
+      current.slice(0, 100).forEach((item) => visit(item, depth + 1))
+      return
+    }
+
+    for (const [key, raw] of Object.entries(current as Record<string, unknown>)) {
+      if (/^department_?id$/i.test(key) || /^support_department_?id$/i.test(key)) {
+        const id = primitiveString(raw)
+        if (id) ids.add(id)
+      }
+      if (raw && typeof raw === 'object') visit(raw, depth + 1)
+    }
+  }
+
+  visit(value)
+  return [...ids]
+}
+
+function normalizeDepartments(payload: unknown) {
+  return extractCollection(payload)
+    .map((item, index) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return null
+      const source = item as Record<string, unknown>
+      const id =
+        primitiveString(source.id) ??
+        primitiveString(source.department_id) ??
+        primitiveString(source.uuid) ??
+        String(index + 1)
+      const name =
+        primitiveString(source.name) ??
+        primitiveString(source.title) ??
+        primitiveString(source.label) ??
+        `Departamento ${id}`
+      return { id, name }
+    })
+    .filter((item): item is { id: string; name: string } => Boolean(item))
+}
+
+function readFirstByKeys(value: unknown, keys: RegExp[], depth = 0): string | null {
+  if (!value || typeof value !== 'object' || depth > 5) return null
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = readFirstByKeys(item, keys, depth + 1)
+      if (found) return found
+    }
+    return null
+  }
+
+  const source = value as Record<string, unknown>
+  for (const [key, raw] of Object.entries(source)) {
+    if (keys.some((pattern) => pattern.test(key))) {
+      const found = primitiveString(raw)
+      if (found) return found
+    }
+  }
+
+  for (const raw of Object.values(source)) {
+    const found = readFirstByKeys(raw, keys, depth + 1)
+    if (found) return found
+  }
+
+  return null
+}
+
+function summarizeAgentRuns(payload: unknown) {
+  return extractCollection(payload)
+    .map((item, index) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return null
+      const source = item as Record<string, unknown>
+      const uid =
+        primitiveString(source.uid) ??
+        primitiveString(source.id) ??
+        primitiveString(source.uuid) ??
+        `run-${index + 1}`
+      const agentId = readFirstByKeys(source, [/^agent_?id$/i, /^ai_agent_?id$/i])
+      const conversationId = readFirstByKeys(source, [/^conversation_?id$/i, /^ticket_?id$/i])
+      const routingValues = extractRoutingValues(source)
+      return {
+        uid,
+        agent_id: agentId,
+        conversation_id: conversationId,
+        top_level_keys: Object.keys(source).slice(0, 40),
+        routing_values: routingValues.slice(0, 20),
+      }
+    })
+    .filter(
+      (item): item is {
+        uid: string
+        agent_id: string | null
+        conversation_id: string | null
+        top_level_keys: string[]
+        routing_values: SafeValue[]
+      } => Boolean(item),
+    )
+}
+
+function summarizeAgents(payload: unknown, departmentNames: Map<string, string>) {
   return extractCollection(payload)
     .map((item, index) => {
       if (!item || typeof item !== 'object' || Array.isArray(item)) return null
@@ -221,9 +331,33 @@ function summarizeAgents(payload: unknown) {
         primitiveString(source.label) ??
         id
       const routingValues = extractRoutingValues(source)
-      return { id, name, routing_values: routingValues.slice(0, 12) }
+      const handoffDepartmentIds = readDepartmentIds(source)
+      const handoffDepartments = handoffDepartmentIds.map((departmentId) => ({
+        id: departmentId,
+        name: departmentNames.get(departmentId) ?? null,
+        target: departmentNames.has(departmentId)
+          ? isTargetSupportName(departmentNames.get(departmentId) ?? '')
+          : false,
+      }))
+      return {
+        id,
+        name,
+        routing_values: routingValues.slice(0, 12),
+        handoff_departments: handoffDepartments,
+        target_handoff_departments: handoffDepartments.filter((item) => item.target),
+      }
     })
-    .filter((item): item is { id: string; name: string; routing_values: SafeValue[] } => Boolean(item))
+    .filter(
+      (
+        item,
+      ): item is {
+        id: string
+        name: string
+        routing_values: SafeValue[]
+        handoff_departments: { id: string; name: string | null; target: boolean }[]
+        target_handoff_departments: { id: string; name: string | null; target: boolean }[]
+      } => Boolean(item),
+    )
 }
 
 function collectRunValues(payload: unknown) {
@@ -373,14 +507,56 @@ export async function GET(request: NextRequest) {
 
     const sampleRows = listed.slice(0, 12)
 
-    const [agentsResult, runsResult] = await Promise.allSettled([
+    const [agentsResult, runsResult, departmentsResult] = await Promise.allSettled([
       fetchClickDesk('/ai/agents', apiKey, accountId),
       fetchClickDesk('/agent-runs', apiKey, accountId),
+      fetchClickDesk('/support-departments', apiKey, accountId),
     ])
 
     const agentsPayload = agentsResult.status === 'fulfilled' ? agentsResult.value : null
     const runsPayload = runsResult.status === 'fulfilled' ? runsResult.value : null
+    const departmentsPayload = departmentsResult.status === 'fulfilled' ? departmentsResult.value : null
+    const departments = departmentsPayload ? normalizeDepartments(departmentsPayload) : []
+    const targetDepartments = departments.filter((item) => isTargetSupportName(item.name))
+    const departmentNames = new Map(targetDepartments.map((item) => [item.id, item.name]))
+    const agentSummaries = agentsPayload ? summarizeAgents(agentsPayload, departmentNames) : []
+    const runSummaries = runsPayload ? summarizeAgentRuns(runsPayload) : []
     const runValues = runsPayload ? collectRunValues(runsPayload) : []
+
+    const runDetailResults = await Promise.allSettled(
+      runSummaries.slice(0, 5).map((run) =>
+        fetchClickDesk(`/agent-runs/${encodeURIComponent(run.uid)}`, apiKey, accountId),
+      ),
+    )
+    const runDetails = runDetailResults.map((result, index) => {
+      const run = runSummaries[index]
+      if (!run) return null
+      if (result.status === 'rejected') {
+        return {
+          uid: run.uid,
+          ok: false,
+          agent_id: run.agent_id,
+          conversation_id: run.conversation_id,
+          top_level_keys: run.top_level_keys,
+          routing_values: run.routing_values,
+          detail_keys: [],
+          detail_routing_values: [],
+          error: sanitizeMessage(
+            result.reason instanceof Error ? result.reason.message : String(result.reason),
+          ),
+        }
+      }
+      return {
+        uid: run.uid,
+        ok: true,
+        agent_id: run.agent_id,
+        conversation_id: run.conversation_id,
+        top_level_keys: run.top_level_keys,
+        routing_values: run.routing_values,
+        detail_keys: topLevelKeys(result.value),
+        detail_routing_values: extractRoutingValues(result.value).slice(0, 30),
+      }
+    }).filter((item): item is NonNullable<typeof item> => Boolean(item))
 
     const sampleResults = await Promise.all(
       sampleRows.map(async (row): Promise<AiSample> => {
@@ -408,6 +584,8 @@ export async function GET(request: NextRequest) {
           transcript_available: transcriptResult.status === 'fulfilled',
           detail_area: findTargetArea(detail),
           transcript_area: findTargetArea(transcript),
+          detail_keys: topLevelKeys(detail),
+          transcript_keys: topLevelKeys(transcript),
           routing_values: routingValues.slice(0, 30),
           run_correlations: correlateValues(routingValues, runValues),
           error:
@@ -457,10 +635,22 @@ export async function GET(request: NextRequest) {
       area_resolved: areaResolved.length,
       samples: sampleResults,
       repeated_signals: repeatedSignals,
+      departments: {
+        ok: departmentsResult.status === 'fulfilled',
+        targets: targetDepartments,
+        error:
+          departmentsResult.status === 'rejected'
+            ? sanitizeMessage(
+                departmentsResult.reason instanceof Error
+                  ? departmentsResult.reason.message
+                  : String(departmentsResult.reason),
+              )
+            : undefined,
+      },
       ai_agents: {
         ok: agentsResult.status === 'fulfilled',
-        count: agentsPayload ? extractCollection(agentsPayload).length : 0,
-        items: agentsPayload ? summarizeAgents(agentsPayload).slice(0, 20) : [],
+        count: agentSummaries.length,
+        items: agentSummaries.slice(0, 20),
         error:
           agentsResult.status === 'rejected'
             ? sanitizeMessage(agentsResult.reason instanceof Error ? agentsResult.reason.message : String(agentsResult.reason))
@@ -468,9 +658,11 @@ export async function GET(request: NextRequest) {
       },
       agent_runs: {
         ok: runsResult.status === 'fulfilled',
-        count: runsPayload ? extractCollection(runsPayload).length : 0,
+        count: runSummaries.length,
         pagination: runsPayload ? extractPagination(runsPayload) : {},
         correlation_count: sampleResults.reduce((sum, sample) => sum + sample.run_correlations.length, 0),
+        items: runSummaries.slice(0, 20),
+        detail_samples: runDetails,
         error:
           runsResult.status === 'rejected'
             ? sanitizeMessage(runsResult.reason instanceof Error ? runsResult.reason.message : String(runsResult.reason))
@@ -479,7 +671,9 @@ export async function GET(request: NextRequest) {
       conclusion:
         areaResolved.length > 0
           ? 'Encontramos ao menos uma conversa IA cuja área pode ser resolvida por metadados. O próximo passo é transformar o sinal estável em regra de classificação.'
-          : 'Ainda não encontramos ERP/Fiscal diretamente na amostra IA. Use os sinais recorrentes e correlações com agent-runs para identificar um vínculo estável antes de classificar em produção.',
+          : agentSummaries.some((agent) => agent.target_handoff_departments.length > 0)
+            ? 'A conversa ainda não expõe ERP/Fiscal diretamente, mas já conseguimos mapear agentes de IA que possuem handoff configurado para as áreas-alvo. Agora precisamos ligar cada conversa ao agente ou execução correspondente.'
+            : 'Ainda não encontramos ERP/Fiscal diretamente na amostra IA nem um handoff de agente mapeado para as áreas-alvo. O próximo diagnóstico deve usar a estrutura detalhada dos agent-runs.',
       tested_at: new Date().toISOString(),
     })
   } catch (error) {
