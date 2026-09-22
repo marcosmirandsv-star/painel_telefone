@@ -499,6 +499,339 @@ async function validateJourneySample(
   }
 }
 
+function normalizeSatisfactionLabel(value: string) {
+  return normalizeLabel(value).replace(/\s+/g, '_')
+}
+
+function inspectCsatConfig(payload: unknown) {
+  const values: { path: string; value: string }[] = []
+  const keys = new Set<string>()
+
+  const visit = (value: unknown, depth = 0, path = '
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 15000)
+  try {
+    const response = await fetch(`${CLICKDESK_BASE_URL}${path}`, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'X-Account-Id': accountId,
+        Accept: 'application/json',
+      },
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+
+    const text = await response.text()
+    let payload: unknown = null
+    try {
+      payload = text ? JSON.parse(text) : null
+    } catch {
+      payload = { message: text.slice(0, 500) }
+    }
+
+    if (!response.ok) {
+      const source = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {}
+      const message =
+        typeof source.message === 'string'
+          ? source.message
+          : typeof source.error === 'string'
+            ? source.error
+            : `HTTP ${response.status}`
+      throw new Error(`${path}: ${message}`)
+    }
+
+    return payload
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const { url: supabaseUrl, publishableKey, environment } = getServerSupabaseConfig()
+    if (environment !== 'homologacao') {
+      return NextResponse.json({ error: 'Recurso disponível somente na homologação.' }, { status: 404 })
+    }
+
+    const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '').trim()
+    if (!token) return NextResponse.json({ error: 'Sessão não encontrada.' }, { status: 401 })
+
+    const client = createClient(supabaseUrl, publishableKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    })
+    const { data: { user }, error: userError } = await client.auth.getUser(token)
+    if (userError || !user) return NextResponse.json({ error: 'Sessão inválida.' }, { status: 401 })
+
+    const { data: profile, error: profileError } = await client
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle()
+    if (profileError || !normalizeRole(profile?.role)) {
+      return NextResponse.json({ error: 'Recurso disponível apenas para a gestão.' }, { status: 403 })
+    }
+
+    const apiKey = process.env.CLICKDESK_API_KEY?.trim()
+    const accountId = process.env.CLICKDESK_ACCOUNT_ID?.trim()
+    if (!apiKey || !accountId) {
+      return NextResponse.json({ error: 'Credenciais ClickDesk não configuradas.' }, { status: 503 })
+    }
+
+    const now = new Date()
+    const requestedYear = Number(request.nextUrl.searchParams.get('year')) || now.getFullYear()
+    const requestedMonth = Number(request.nextUrl.searchParams.get('month')) || now.getMonth() + 1
+
+    const [aiResult, humanResult, queuesResult, csatConfigResult] = await Promise.allSettled([
+      fetchClickDesk('/tickets?inbox=conversations&attendance=ai', apiKey, accountId),
+      fetchClickDesk('/tickets?inbox=conversations&attendance=human', apiKey, accountId),
+      fetchClickDesk('/tickets/queues', apiKey, accountId),
+      fetchClickDesk('/csat-config', apiKey, accountId),
+    ])
+
+    const failure = [aiResult, humanResult].find((result) => result.status === 'rejected')
+    if (failure?.status === 'rejected') {
+      throw failure.reason
+    }
+
+    const aiPageScan = await fetchConversationPages({
+      mode: 'ai',
+      firstPayload: aiResult.status === 'fulfilled' ? aiResult.value : [],
+      apiKey,
+      accountId,
+      maxPages: 5,
+    })
+    const humanPageScan = await fetchConversationPages({
+      mode: 'human',
+      firstPayload: humanResult.status === 'fulfilled' ? humanResult.value : [],
+      apiKey,
+      accountId,
+      maxPages: 20,
+    })
+
+    const aiRows = dedupeRows(
+      aiPageScan.payloads.flatMap((payload) => summarizeRows(payload, 'ai')),
+    ).filter((row) => isInMonth(row.timestamp, requestedYear, requestedMonth))
+    const humanRows = dedupeRows(
+      humanPageScan.payloads.flatMap((payload) => summarizeRows(payload, 'human')),
+    ).filter((row) => isInMonth(row.timestamp, requestedYear, requestedMonth))
+
+    const allRows = [...aiRows, ...humanRows]
+    const rowsWithTargetArea = allRows.filter((row) => row.area && isTargetSupportName(row.area))
+    const targetAreaDetected = rowsWithTargetArea.length > 0
+
+    const filteredAi = aiRows.filter((row) => row.area && isTargetSupportName(row.area))
+    const filteredHuman = humanRows.filter((row) => row.area && isTargetSupportName(row.area))
+    const aiWithoutArea = aiRows.filter((row) => !row.area)
+    const humanWithoutArea = humanRows.filter((row) => !row.area)
+
+    const aiIds = new Set(filteredAi.map((row) => row.id))
+    const humanIds = new Set(filteredHuman.map((row) => row.id))
+    const overlapIds = [...aiIds].filter((id) => humanIds.has(id))
+
+    const assigneeCounts = new Map<string, number>()
+    const areaAssigneeCounts = new Map<
+      string,
+      { area: string; name: string; count: number; satisfaction_labels: Record<string, number> }
+    >()
+    const satisfactionTotals = new Map<string, number>()
+
+    filteredHuman.forEach((row) => {
+      const name = row.assignee?.trim()
+      if (!name) return
+      assigneeCounts.set(name, (assigneeCounts.get(name) ?? 0) + 1)
+
+      const area = row.area ?? 'Área não identificada'
+      const key = `${area}::${name}`
+      const current = areaAssigneeCounts.get(key) ?? {
+        area,
+        name,
+        count: 0,
+        satisfaction_labels: {},
+      }
+
+      const satisfactionLabel = row.satisfaction?.trim()
+      if (satisfactionLabel) {
+        current.satisfaction_labels[satisfactionLabel] =
+          (current.satisfaction_labels[satisfactionLabel] ?? 0) + 1
+        satisfactionTotals.set(
+          satisfactionLabel,
+          (satisfactionTotals.get(satisfactionLabel) ?? 0) + 1,
+        )
+      }
+
+      areaAssigneeCounts.set(key, {
+        ...current,
+        count: current.count + 1,
+      })
+    })
+
+    const normalizedSatisfactionTotals = new Map<string, number>()
+    satisfactionTotals.forEach((count, label) => {
+      const normalized = normalizeSatisfactionLabel(label)
+      normalizedSatisfactionTotals.set(
+        normalized,
+        (normalizedSatisfactionTotals.get(normalized) ?? 0) + count,
+      )
+    })
+
+    const positiveReviews = normalizedSatisfactionTotals.get('positive') ?? 0
+    const negativeReviews = normalizedSatisfactionTotals.get('negative') ?? 0
+    const evaluatedReviews = positiveReviews + negativeReviews
+    const otherSatisfactionLabels = [...normalizedSatisfactionTotals.entries()]
+      .filter(([label]) => label !== 'positive' && label !== 'negative')
+      .map(([label, count]) => ({ label, count }))
+
+    const satisfactionValidation = {
+      positive: positiveReviews,
+      negative: negativeReviews,
+      evaluated: evaluatedReviews,
+      human_attendances: filteredHuman.length,
+      candidate_csat:
+        evaluatedReviews > 0 ? (positiveReviews / evaluatedReviews) * 100 : null,
+      candidate_review_percentage:
+        filteredHuman.length > 0 ? (evaluatedReviews / filteredHuman.length) * 100 : null,
+      only_expected_binary_labels: otherSatisfactionLabels.length === 0,
+      other_labels: otherSatisfactionLabels,
+      csat_config:
+        csatConfigResult.status === 'fulfilled'
+          ? inspectCsatConfig(csatConfigResult.value)
+          : {
+              available: false,
+              keys: [],
+              values: [],
+              error: sanitizeMessage(
+                csatConfigResult.reason instanceof Error
+                  ? csatConfigResult.reason.message
+                  : String(csatConfigResult.reason),
+              ),
+            },
+      formula_status:
+        otherSatisfactionLabels.length === 0
+          ? 'candidate_matches_current_business_formula'
+          : 'needs_review_before_formula',
+    }
+
+    const journeySampleRows = [
+      ...filteredHuman.slice(0, 3),
+      ...filteredAi.slice(0, 1),
+      ...aiWithoutArea.slice(0, 1),
+    ].filter((row, index, rows) => rows.findIndex((candidate) => candidate.id === row.id) === index)
+    const journeyValidation = await Promise.all(
+      journeySampleRows.map((row) => validateJourneySample(row, apiKey, accountId)),
+    )
+
+    return NextResponse.json({
+      connected: true,
+      period: { year: requestedYear, month: requestedMonth },
+      scope: ['Suporte ERP', 'Suporte Fiscal'],
+      classification_rule:
+        'Neste diagnóstico, attendance=ai e attendance=human são classificações devolvidas pelo ClickDesk. Como toda conversa da operação começa na IA, a hipótese de que human representa transferência é validada separadamente pelo transcript antes de virar regra oficial.',
+      target_area_detected_in_payload: targetAreaDetected,
+      page_diagnostic_only: true,
+      counts: {
+        ai: filteredAi.length,
+        transferred_to_human: filteredHuman.length,
+        overlap: overlapIds.length,
+      },
+      raw_counts: {
+        ai: aiRows.length,
+        human: humanRows.length,
+      },
+      scan: {
+        ai: {
+          pages_scanned: aiPageScan.pagesScanned,
+          last_page: aiPageScan.lastPage,
+          complete: aiPageScan.complete,
+          errors: aiPageScan.errors,
+        },
+        human: {
+          pages_scanned: humanPageScan.pagesScanned,
+          last_page: humanPageScan.lastPage,
+          complete: humanPageScan.complete,
+          errors: humanPageScan.errors,
+        },
+      },
+      area_coverage: {
+        ai_with_target_area: filteredAi.length,
+        ai_without_area: aiWithoutArea.length,
+        human_with_target_area: filteredHuman.length,
+        human_without_area: humanWithoutArea.length,
+      },
+      pagination: {
+        ai: extractPaginationDiagnostic(aiResult.status === 'fulfilled' ? aiResult.value : null),
+        human: extractPaginationDiagnostic(humanResult.status === 'fulfilled' ? humanResult.value : null),
+      },
+      timestamps: {
+        ai: timestampDiagnostic(filteredAi),
+        human: timestampDiagnostic(filteredHuman),
+      },
+      journey_validation: journeyValidation,
+      human_by_assignee: [...assigneeCounts.entries()]
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count),
+      human_by_area_assignee: [...areaAssigneeCounts.values()].sort(
+        (a, b) => a.area.localeCompare(b.area, 'pt-BR') || b.count - a.count,
+      ),
+      human_satisfaction_labels: [...satisfactionTotals.entries()]
+        .map(([label, count]) => ({ label, count }))
+        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'pt-BR')),
+      satisfaction_validation: satisfactionValidation,
+      samples: {
+        ai: filteredAi.slice(0, 8),
+        human: filteredHuman.slice(0, 12),
+      },
+      queues_status:
+        queuesResult.status === 'fulfilled'
+          ? 'ok'
+          : sanitizeMessage(queuesResult.reason instanceof Error ? queuesResult.reason.message : String(queuesResult.reason)),
+      warning:
+        humanPageScan.complete
+          ? 'A leitura humana percorreu todas as páginas devolvidas pela API e depois aplicou período e área. A leitura de IA permanece amostral porque a API devolveu muitas páginas e os registros de IA não trazem a área de suporte na listagem. O transcript e o detalhe são usados somente para entender a estrutura da jornada sem expor o conteúdo das mensagens.'
+          : 'A leitura ainda é parcial. Os números com área confirmada consideram somente registros em que a própria resposta identifica Suporte ERP ou Suporte Fiscal.',
+      tested_at: new Date().toISOString(),
+    })
+  } catch (error) {
+    const message = error instanceof Error ? sanitizeMessage(error.message) : 'Erro inesperado.'
+    return NextResponse.json({ error: `Falha ao ler conversas do ClickDesk: ${message}` }, { status: 503 })
+  }
+}
+) => {
+    if (value === null || value === undefined || depth > 5) return
+
+    if (Array.isArray(value)) {
+      value.slice(0, 50).forEach((item, index) => visit(item, depth + 1, `${path}[${index}]`))
+      return
+    }
+
+    if (typeof value !== 'object') return
+
+    for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+      const currentPath = `${path}.${key}`
+      const interesting = /(csat|satisfaction|rating|score|sentiment|positive|negative|label|option|scale|type|enabled)/i.test(key)
+      if (interesting) keys.add(key)
+
+      if (
+        interesting &&
+        (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') &&
+        values.length < 40
+      ) {
+        values.push({ path: currentPath, value: String(raw).slice(0, 160) })
+      }
+
+      if (raw && typeof raw === 'object') visit(raw, depth + 1, currentPath)
+    }
+  }
+
+  visit(payload)
+
+  return {
+    available: payload !== null && payload !== undefined,
+    keys: [...keys].slice(0, 40),
+    values,
+  }
+}
+
 async function fetchClickDesk(path: string, apiKey: string, accountId: string) {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 15000)
