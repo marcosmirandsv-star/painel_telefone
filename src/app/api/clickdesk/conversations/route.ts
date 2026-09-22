@@ -769,9 +769,16 @@ export async function GET(request: NextRequest) {
       period: { year: requestedYear, month: requestedMonth },
       scope: ['Suporte ERP', 'Suporte Fiscal'],
       classification_rule:
-        'Neste diagnóstico, attendance=ai e attendance=human são classificações devolvidas pelo ClickDesk. Como toda conversa da operação começa na IA, a hipótese de que human representa transferência é validada separadamente pelo transcript antes de virar regra oficial.',
+        'Regra operacional de homologação: um registro attendance=human com área Suporte ERP/Fiscal e responsável humano identificado é tratado como jornada IA → humano confirmada. O transcript deixa de ser requisito para provar a transferência e passa a ser reservado à análise qualitativa posterior.',
+      operational_basis: {
+        source: 'attendance=human',
+        required_fields: ['área Suporte ERP/Fiscal', 'responsável humano'],
+        journey_status: 'confirmed_by_structural_classification',
+        transcript_required_for_transfer: false,
+        ai_listing_status: 'separate_exploratory_track',
+      },
       target_area_detected_in_payload: targetAreaDetected,
-      page_diagnostic_only: true,
+      page_diagnostic_only: false,
       counts: {
         ai: filteredAi.length,
         transferred_to_human: filteredHuman.length,
@@ -813,9 +820,30 @@ export async function GET(request: NextRequest) {
       human_by_assignee: [...assigneeCounts.entries()]
         .map(([name, count]) => ({ name, count }))
         .sort((a, b) => b.count - a.count),
-      human_by_area_assignee: [...areaAssigneeCounts.values()].sort(
-        (a, b) => a.area.localeCompare(b.area, 'pt-BR') || b.count - a.count,
-      ),
+      human_by_area_assignee: [...areaAssigneeCounts.values()]
+        .map((item) => {
+          const normalizedLabels = Object.entries(item.satisfaction_labels).reduce<Record<string, number>>(
+            (acc, [label, count]) => {
+              const normalized = normalizeSatisfactionLabel(label)
+              acc[normalized] = (acc[normalized] ?? 0) + count
+              return acc
+            },
+            {},
+          )
+          const positive = normalizedLabels.positive ?? 0
+          const negative = normalizedLabels.negative ?? 0
+          const reviews = positive + negative
+          return {
+            ...item,
+            journey_confirmed: item.count,
+            positive_reviews: positive,
+            negative_reviews: negative,
+            reviews,
+            candidate_csat: reviews > 0 ? (positive / reviews) * 100 : null,
+            candidate_review_percentage: item.count > 0 ? (reviews / item.count) * 100 : null,
+          }
+        })
+        .sort((a, b) => a.area.localeCompare(b.area, 'pt-BR') || b.count - a.count),
       human_satisfaction_labels: [...satisfactionTotals.entries()]
         .map(([label, count]) => ({ label, count }))
         .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'pt-BR')),
@@ -830,8 +858,8 @@ export async function GET(request: NextRequest) {
           : sanitizeMessage(queuesResult.reason instanceof Error ? queuesResult.reason.message : String(queuesResult.reason)),
       warning:
         humanPageScan.complete
-          ? 'A leitura humana percorreu todas as páginas devolvidas pela API e depois aplicou período e área. A leitura de IA permanece amostral porque a API devolveu muitas páginas e os registros de IA não trazem a área de suporte na listagem. O transcript e o detalhe são usados somente para entender a estrutura da jornada sem expor o conteúdo das mensagens.'
-          : 'A leitura ainda é parcial. Os números com área confirmada consideram somente registros em que a própria resposta identifica Suporte ERP ou Suporte Fiscal.',
+          ? 'A leitura humana percorreu todas as páginas devolvidas pela API, aplicou período e área e agora é a base mensurável da homologação. Registros attendance=human com área-alvo e responsável identificado compõem a jornada IA → humano. A leitura de IA permanece separada e amostral até existir necessidade e vínculo confiável para medir resolução exclusiva pela IA.'
+          : 'A leitura humana ainda é parcial. Enquanto não estiver completa, os indicadores por analista devem ser tratados como prévia.',
       tested_at: new Date().toISOString(),
     })
   } catch (error) {
