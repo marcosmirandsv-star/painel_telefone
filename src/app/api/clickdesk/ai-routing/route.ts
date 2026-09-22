@@ -287,34 +287,117 @@ function extractSafeScalars(value: unknown) {
   const values: SafeValue[] = []
   const seen = new Set<string>()
 
-  const visit = (current: unknown, depth = 0, path = '
+  const visit = (current: unknown, depth = 0, path = '$') => {
+    if (current === null || current === undefined || depth > 5) return
+
+    if (Array.isArray(current)) {
+      current.slice(0, 80).forEach((item, index) => visit(item, depth + 1, `${path}[${index}]`))
+      return
+    }
+
+    if (typeof current !== 'object') return
+
+    for (const [key, raw] of Object.entries(current as Record<string, unknown>)) {
+      const currentPath = `${path}.${key}`
+      const sensitive =
+        /(email|phone|telefone|name|nome|requester|customer|visitor|subject|content|body|message|text|comment|token|secret|password)/i.test(
+          key,
+        )
+
+      if (!sensitive && (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean')) {
+        const rawValue = String(raw).trim()
+        if (rawValue && rawValue.length <= 180) {
+          const signature = `${currentPath}::${rawValue}`
+          if (!seen.has(signature) && values.length < 120) {
+            seen.add(signature)
+            values.push({ path: currentPath, value: rawValue })
+          }
+        }
+      }
+
+      if (raw && typeof raw === 'object') visit(raw, depth + 1, currentPath)
+    }
+  }
+
+  visit(value)
+  return values
+}
+
+function chooseRunUid(source: Record<string, unknown>) {
+  const preferredKeys = [
+    'uid',
+    'run_uid',
+    'runUid',
+    'execution_uid',
+    'executionUid',
+    'run_id',
+    'runId',
+    'execution_id',
+    'executionId',
+    'uuid',
+    'id',
+  ]
+
+  for (const key of preferredKeys) {
+    const value = primitiveString(source[key])
+    if (value) return { value, source: key }
+  }
+
+  const nested = readFirstByKeys(source, [
+    /^run_?uid$/i,
+    /^execution_?uid$/i,
+    /^run_?id$/i,
+    /^execution_?id$/i,
+    /^uid$/i,
+  ])
+  if (nested) return { value: nested, source: 'nested' }
+
+  return null
+}
+
+function summarizeAgentRuns(payload: unknown) {
   return extractCollection(payload)
     .map((item, index) => {
       if (!item || typeof item !== 'object' || Array.isArray(item)) return null
       const source = item as Record<string, unknown>
-      const uid =
-        primitiveString(source.uid) ??
-        primitiveString(source.id) ??
-        primitiveString(source.uuid) ??
-        `run-${index + 1}`
+      const chosenUid = chooseRunUid(source)
+      const uid = chosenUid?.value ?? `run-${index + 1}`
       const agentId = readFirstByKeys(source, [/^agent_?id$/i, /^ai_agent_?id$/i])
-      const conversationId = readFirstByKeys(source, [/^conversation_?id$/i, /^ticket_?id$/i])
+      const conversationId = readFirstByKeys(source, [
+        /^conversation_?id$/i,
+        /^ticket_?id$/i,
+        /^conversation$/i,
+        /^ticket$/i,
+      ])
       const routingValues = extractRoutingValues(source)
+      const safeScalars = extractSafeScalars(source)
+      const identifierCandidates = safeScalars.filter((item) =>
+        /(uid|run|execution|conversation|ticket|agent|id)/i.test(item.path),
+      )
+
       return {
         uid,
+        uid_source: chosenUid?.source ?? null,
+        uid_is_fallback: !chosenUid,
         agent_id: agentId,
         conversation_id: conversationId,
-        top_level_keys: Object.keys(source).slice(0, 40),
-        routing_values: routingValues.slice(0, 20),
+        top_level_keys: Object.keys(source).slice(0, 60),
+        routing_values: routingValues.slice(0, 30),
+        safe_scalars: safeScalars.slice(0, 50),
+        identifier_candidates: identifierCandidates.slice(0, 30),
       }
     })
     .filter(
       (item): item is {
         uid: string
+        uid_source: string | null
+        uid_is_fallback: boolean
         agent_id: string | null
         conversation_id: string | null
         top_level_keys: string[]
         routing_values: SafeValue[]
+        safe_scalars: SafeValue[]
+        identifier_candidates: SafeValue[]
       } => Boolean(item),
     )
 }
