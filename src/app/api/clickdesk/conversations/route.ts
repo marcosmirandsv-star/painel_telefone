@@ -621,7 +621,12 @@ export async function GET(request: NextRequest) {
     const overlapIds = [...aiIds].filter((id) => humanIds.has(id))
 
     const assigneeCounts = new Map<string, number>()
-    const areaAssigneeCounts = new Map<string, { area: string; name: string; count: number }>()
+    const areaAssigneeCounts = new Map<
+      string,
+      { area: string; name: string; count: number; satisfaction_labels: Record<string, number> }
+    >()
+    const satisfactionTotals = new Map<string, number>()
+
     filteredHuman.forEach((row) => {
       const name = row.assignee?.trim()
       if (!name) return
@@ -629,11 +634,26 @@ export async function GET(request: NextRequest) {
 
       const area = row.area ?? 'Área não identificada'
       const key = `${area}::${name}`
-      const current = areaAssigneeCounts.get(key)
-      areaAssigneeCounts.set(key, {
+      const current = areaAssigneeCounts.get(key) ?? {
         area,
         name,
-        count: (current?.count ?? 0) + 1,
+        count: 0,
+        satisfaction_labels: {},
+      }
+
+      const satisfactionLabel = row.satisfaction?.trim()
+      if (satisfactionLabel) {
+        current.satisfaction_labels[satisfactionLabel] =
+          (current.satisfaction_labels[satisfactionLabel] ?? 0) + 1
+        satisfactionTotals.set(
+          satisfactionLabel,
+          (satisfactionTotals.get(satisfactionLabel) ?? 0) + 1,
+        )
+      }
+
+      areaAssigneeCounts.set(key, {
+        ...current,
+        count: current.count + 1,
       })
     })
 
@@ -698,6 +718,9 @@ export async function GET(request: NextRequest) {
       human_by_area_assignee: [...areaAssigneeCounts.values()].sort(
         (a, b) => a.area.localeCompare(b.area, 'pt-BR') || b.count - a.count,
       ),
+      human_satisfaction_labels: [...satisfactionTotals.entries()]
+        .map(([label, count]) => ({ label, count }))
+        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'pt-BR')),
       samples: {
         ai: filteredAi.slice(0, 8),
         human: filteredHuman.slice(0, 12),
