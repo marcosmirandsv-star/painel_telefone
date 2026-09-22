@@ -33,7 +33,7 @@ function extractCollection(payload: unknown): unknown[] {
   if (!payload || typeof payload !== 'object') return []
 
   const source = payload as Record<string, unknown>
-  for (const key of ['data', 'items', 'results', 'users', 'attendants', 'departments']) {
+  for (const key of ['data', 'items', 'results', 'users', 'attendants', 'departments', 'views', 'ticket_views', 'ticketViews']) {
     if (Array.isArray(source[key])) return source[key] as unknown[]
   }
 
@@ -55,7 +55,7 @@ function normalizeItems(payload: unknown): ClickDeskItem[] {
       if (!item || typeof item !== 'object') return null
       const source = item as Record<string, unknown>
       const id =
-        readString(source, ['id', 'uuid', 'uid', 'user_id', 'userId', 'attendant_id', 'department_id']) ||
+        readString(source, ['id', 'uuid', 'uid', 'user_id', 'userId', 'attendant_id', 'department_id', 'ticket_view_id', 'ticketViewId']) ||
         String(index + 1)
       const email = readString(source, ['email', 'email_address', 'emailAddress'])
       const name =
@@ -165,10 +165,11 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const [usersResult, attendantsResult, departmentsResult] = await Promise.allSettled([
+    const [usersResult, attendantsResult, departmentsResult, queuesResult] = await Promise.allSettled([
       fetchClickDesk('/users', apiKey, accountId),
       fetchClickDesk('/channel-attendants', apiKey, accountId),
       fetchClickDesk('/support-departments', apiKey, accountId),
+      fetchClickDesk('/ticket-views', apiKey, accountId),
     ])
 
     const getResult = (result: PromiseSettledResult<unknown>) =>
@@ -179,15 +180,24 @@ export async function GET(request: NextRequest) {
     const users = getResult(usersResult)
     const attendants = getResult(attendantsResult)
     const departments = getResult(departmentsResult)
+    const queues = getResult(queuesResult)
+
+    const wantedQueueNames = ['suporte erp', 'suporte fiscal']
+    const targetQueues = {
+      ...queues,
+      items: queues.items.filter((item) => wantedQueueNames.includes(item.name.trim().toLocaleLowerCase('pt-BR'))),
+    }
 
     return NextResponse.json({
       configured: true,
-      connected: users.ok || attendants.ok || departments.ok,
+      connected: users.ok || attendants.ok || departments.ok || queues.ok,
       tested_at: new Date().toISOString(),
       account_id: accountId,
+      scope: ['Suporte ERP', 'Suporte Fiscal'],
       users,
       attendants,
       departments,
+      queues: targetQueues,
     })
   } catch (error) {
     const message = error instanceof Error ? sanitizeMessage(error.message) : 'Erro inesperado.'
