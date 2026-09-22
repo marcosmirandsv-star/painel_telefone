@@ -228,6 +228,38 @@ type ClickDeskTestResult = {
   scope?: string[]
   error?: string
 }
+
+type ClickDeskConversationSample = {
+  id: string
+  mode: 'ai' | 'human'
+  area: string | null
+  assignee: string | null
+  timestamp: string | null
+  satisfaction: string | null
+}
+
+type ClickDeskConversationDiagnostic = {
+  connected?: boolean
+  period?: { year: number; month: number }
+  scope?: string[]
+  classification_rule?: string
+  target_area_detected_in_payload?: boolean
+  page_diagnostic_only?: boolean
+  counts?: {
+    ai: number
+    transferred_to_human: number
+    overlap: number
+  }
+  human_by_assignee?: { name: string; count: number }[]
+  samples?: {
+    ai: ClickDeskConversationSample[]
+    human: ClickDeskConversationSample[]
+  }
+  queues_status?: string
+  warning?: string
+  tested_at?: string
+  error?: string
+}
 type IndividualForm = {
   analystId: string
   weekStart: string
@@ -1829,6 +1861,8 @@ function ChatModuleDashboard({
   const [chat2PeriodKey, setChat2PeriodKey] = useState('')
   const [clickDeskTestLoading, setClickDeskTestLoading] = useState(false)
   const [clickDeskTestResult, setClickDeskTestResult] = useState<ClickDeskTestResult | null>(null)
+  const [clickDeskConversationLoading, setClickDeskConversationLoading] = useState(false)
+  const [clickDeskConversationDiagnostic, setClickDeskConversationDiagnostic] = useState<ClickDeskConversationDiagnostic | null>(null)
   const [manualPodiumDraft, setManualPodiumDraft] = useState<Record<number, string>>({})
   const [chatPodiumMessage, setChatPodiumMessage] = useState('')
   const [chatAnalystForm, setChatAnalystForm] = useState({ teamId: '', name: '', csatGoal: '86', photoFile: null as File | null })
@@ -1894,6 +1928,44 @@ function ChatModuleDashboard({
       })
     } finally {
       setClickDeskTestLoading(false)
+    }
+  }
+
+  async function handleLoadClickDeskConversations() {
+    setClickDeskConversationLoading(true)
+    setClickDeskConversationDiagnostic(null)
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        setClickDeskConversationDiagnostic({ error: 'Sua sessão de homologação não está ativa.' })
+        return
+      }
+
+      const params = new URLSearchParams({
+        year: String(chat2SelectedPeriod.year),
+        month: String(chat2SelectedPeriod.monthNumber),
+      })
+      const response = await fetch(`/api/clickdesk/conversations?${params.toString()}`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        cache: 'no-store',
+      })
+      const data = (await response.json()) as ClickDeskConversationDiagnostic
+
+      if (!response.ok && !data.error) {
+        data.error = 'Não foi possível ler as conversas do ClickDesk.'
+      }
+
+      setClickDeskConversationDiagnostic(data)
+    } catch (error) {
+      setClickDeskConversationDiagnostic({ error: getErrorMessage(error) })
+    } finally {
+      setClickDeskConversationLoading(false)
     }
   }
 
@@ -3154,14 +3226,24 @@ function ChatModuleDashboard({
                   A chave fica somente no servidor da homologação e nunca é enviada ao navegador.
                 </p>
               </div>
-              <button
-                className="btn-primary"
-                disabled={clickDeskTestLoading}
-                type="button"
-                onClick={() => void handleTestClickDeskConnection()}
-              >
-                {clickDeskTestLoading ? 'Testando conexão...' : 'Testar conexão ClickDesk'}
-              </button>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  className="secondary-button"
+                  disabled={clickDeskTestLoading}
+                  type="button"
+                  onClick={() => void handleTestClickDeskConnection()}
+                >
+                  {clickDeskTestLoading ? 'Testando conexão...' : 'Testar conexão'}
+                </button>
+                <button
+                  className="btn-primary"
+                  disabled={clickDeskConversationLoading}
+                  type="button"
+                  onClick={() => void handleLoadClickDeskConversations()}
+                >
+                  {clickDeskConversationLoading ? 'Lendo atendimentos...' : 'Ler atendimentos do período'}
+                </button>
+              </div>
             </div>
 
             {!clickDeskTestResult && (
@@ -3229,6 +3311,93 @@ function ChatModuleDashboard({
                       )
                     })}
                   </div>
+                )}
+              </div>
+            )}
+
+            {clickDeskConversationDiagnostic && (
+              <div className="mt-6 border-t border-white/10 pt-6">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Diagnóstico de atendimentos</p>
+                    <h4 className="mt-2 text-xl font-bold">
+                      {chat2SelectedPeriod.label} · IA e transferências para humano
+                    </h4>
+                    <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-300">
+                      Pela regra da operação, toda conversa começa na IA. Neste diagnóstico, registros que o ClickDesk classifica como
+                      atendimento humano são tratados como conversas que passaram por IA e foram transferidas para uma pessoa.
+                    </p>
+                  </div>
+                  <span className="rounded-md border border-white/10 bg-slate-900 px-3 py-2 text-sm text-slate-300">
+                    Suporte ERP + Suporte Fiscal
+                  </span>
+                </div>
+
+                {clickDeskConversationDiagnostic.error ? (
+                  <div className="mt-4 rounded-xl border border-amber-300/25 bg-amber-300/5 p-4 text-sm text-amber-100">
+                    {clickDeskConversationDiagnostic.error}
+                  </div>
+                ) : (
+                  <>
+                    <div className="mt-5 grid gap-4 md:grid-cols-3">
+                      <MetricCard
+                        label="Permaneceram na IA"
+                        value={formatChatCount(clickDeskConversationDiagnostic.counts?.ai ?? 0)}
+                      />
+                      <MetricCard
+                        label="Transferidos para humano"
+                        value={formatChatCount(clickDeskConversationDiagnostic.counts?.transferred_to_human ?? 0)}
+                      />
+                      <MetricCard
+                        label="Aparecem nos dois filtros"
+                        value={formatChatCount(clickDeskConversationDiagnostic.counts?.overlap ?? 0)}
+                      />
+                    </div>
+
+                    <div className="mt-5 grid gap-5 xl:grid-cols-2">
+                      <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+                        <h5 className="font-semibold">Atendimentos humanos identificados</h5>
+                        <p className="mt-1 text-sm text-slate-400">
+                          Primeira leitura do responsável devolvido pela API. Ainda não é o fechamento oficial do mês.
+                        </p>
+                        <div className="mt-4 space-y-2">
+                          {(clickDeskConversationDiagnostic.human_by_assignee ?? []).slice(0, 20).map((item) => (
+                            <div key={item.name} className="flex items-center justify-between gap-4 rounded-md bg-slate-950/55 px-3 py-2">
+                              <span className="text-sm font-semibold">{item.name}</span>
+                              <strong className="tabular-nums">{formatChatCount(item.count)}</strong>
+                            </div>
+                          ))}
+                          {!clickDeskConversationDiagnostic.human_by_assignee?.length && (
+                            <p className="text-sm text-slate-400">
+                              A API respondeu, mas ainda não conseguimos identificar o campo de responsável nos registros retornados.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+                        <h5 className="font-semibold">O que este teste já valida</h5>
+                        <div className="mt-4 space-y-3 text-sm leading-6 text-slate-300">
+                          <p>
+                            Área encontrada diretamente nos registros:{' '}
+                            <strong>{clickDeskConversationDiagnostic.target_area_detected_in_payload ? 'sim' : 'ainda não'}</strong>.
+                          </p>
+                          <p>
+                            Consulta de filas do atendimento: <strong>{clickDeskConversationDiagnostic.queues_status ?? 'não informado'}</strong>.
+                          </p>
+                          <p>
+                            Este resultado é diagnóstico da página retornada pela API. Paginação e regra de data ainda serão validadas antes de virar indicador oficial.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {clickDeskConversationDiagnostic.warning && (
+                      <p className="mt-4 rounded-lg bg-slate-950/55 px-4 py-3 text-xs leading-5 text-slate-400">
+                        {clickDeskConversationDiagnostic.warning}
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             )}
