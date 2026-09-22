@@ -283,6 +283,10 @@ function beep() {
   }
 }
 
+function notificationTargetSection(item: Notification): 'transport' | 'requests' {
+  return item.title.toLowerCase().includes('vale-transporte') ? 'transport' : 'requests'
+}
+
 function browserNotify(item: Notification) {
   if (typeof window === 'undefined' || !('Notification' in window)) return
   if (window.Notification.permission !== 'granted') return
@@ -477,6 +481,12 @@ export default function EscalasPage() {
   useEffect(() => {
     loadAll()
   }, [loadAll])
+
+  useEffect(() => {
+    const requestedSection = new URLSearchParams(window.location.search).get('section')
+    if (requestedSection === 'transport' && isManagement) setSection('transport')
+    else if (requestedSection === 'requests') setSection('requests')
+  }, [isManagement])
 
   useEffect(() => {
     if (!memberStart.startsWith(monthPrefix)) setMemberStart(monthStartDate)
@@ -913,11 +923,13 @@ export default function EscalasPage() {
           <div className="flex items-start gap-3">
             <div className="schedule-bell-attention text-2xl">🔔</div>
             <div className="flex-1">
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Nova solicitação</p>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">
+                {popup.title.toLowerCase().includes('vale-transporte') ? 'Alerta de vale-transporte' : 'Nova solicitação'}
+              </p>
               <h2 className="mt-1 text-lg font-bold">{popup.title}</h2>
               <p className="mt-2 text-sm text-slate-300">{popup.message}</p>
               <div className="mt-4 flex gap-2">
-                <button className="primary-button" onClick={() => { setSection('requests'); markSeen(popup) }}>Ver agora</button>
+                <button className="primary-button" onClick={() => { setSection(notificationTargetSection(popup)); markSeen(popup) }}>Ver agora</button>
                 <button className="secondary-button" onClick={() => markSeen(popup)}>Dispensar</button>
               </div>
             </div>
