@@ -49,6 +49,27 @@ function readString(source: Record<string, unknown>, keys: string[]) {
   return ''
 }
 
+
+function normalizeLabel(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function isTargetSupportName(name: string) {
+  const normalized = normalizeLabel(name)
+  return (
+    normalized.includes('suporte erp') ||
+    normalized.includes('suporte fiscal') ||
+    (normalized.includes('suporte') && normalized.includes('erp')) ||
+    (normalized.includes('suporte') && normalized.includes('fiscal'))
+  )
+}
+
 function normalizeItems(payload: unknown): ClickDeskItem[] {
   return extractCollection(payload)
     .map((item, index) => {
@@ -182,10 +203,13 @@ export async function GET(request: NextRequest) {
     const departments = getResult(departmentsResult)
     const queues = getResult(queuesResult)
 
-    const wantedQueueNames = ['suporte erp', 'suporte fiscal']
     const targetQueues = {
       ...queues,
-      items: queues.items.filter((item) => wantedQueueNames.includes(item.name.trim().toLocaleLowerCase('pt-BR'))),
+      items: queues.items.filter((item) => isTargetSupportName(item.name)),
+    }
+    const targetDepartments = {
+      ...departments,
+      items: departments.items.filter((item) => isTargetSupportName(item.name)),
     }
 
     return NextResponse.json({
@@ -197,6 +221,7 @@ export async function GET(request: NextRequest) {
       users,
       attendants,
       departments,
+      target_departments: targetDepartments,
       queues: targetQueues,
     })
   } catch (error) {
