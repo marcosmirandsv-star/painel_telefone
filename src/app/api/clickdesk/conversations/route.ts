@@ -228,6 +228,87 @@ function extractPaginationDiagnostic(payload: unknown) {
   return out
 }
 
+function readPaginationNumber(payload: unknown, wantedKey: string, depth = 0): number | null {
+  if (!payload || typeof payload !== 'object' || depth > 4) return null
+  if (Array.isArray(payload)) {
+    for (const item of payload) {
+      const found = readPaginationNumber(item, wantedKey, depth + 1)
+      if (found !== null) return found
+    }
+    return null
+  }
+
+  const source = payload as Record<string, unknown>
+  for (const [key, raw] of Object.entries(source)) {
+    if (key === wantedKey && typeof raw === 'number' && Number.isFinite(raw)) return raw
+  }
+
+  for (const raw of Object.values(source)) {
+    if (raw && typeof raw === 'object') {
+      const found = readPaginationNumber(raw, wantedKey, depth + 1)
+      if (found !== null) return found
+    }
+  }
+
+  return null
+}
+
+function dedupeRows(rows: ConversationSummary[]) {
+  const seen = new Set<string>()
+  return rows.filter((row) => {
+    if (seen.has(row.id)) return false
+    seen.add(row.id)
+    return true
+  })
+}
+
+async function fetchConversationPages({
+  mode,
+  firstPayload,
+  apiKey,
+  accountId,
+  maxPages,
+}: {
+  mode: Mode
+  firstPayload: unknown
+  apiKey: string
+  accountId: string
+  maxPages: number
+}) {
+  const lastPage = Math.max(1, readPaginationNumber(firstPayload, 'last_page') ?? 1)
+  const pagesToScan = Math.min(lastPage, maxPages)
+  const pageNumbers = Array.from({ length: Math.max(0, pagesToScan - 1) }, (_, index) => index + 2)
+
+  const extraResults = await Promise.allSettled(
+    pageNumbers.map((page) =>
+      fetchClickDesk(
+        `/tickets?inbox=conversations&attendance=${mode}&page=${page}`,
+        apiKey,
+        accountId,
+      ),
+    ),
+  )
+
+  const payloads = [
+    firstPayload,
+    ...extraResults
+      .filter((result): result is PromiseFulfilledResult<unknown> => result.status === 'fulfilled')
+      .map((result) => result.value),
+  ]
+
+  return {
+    payloads,
+    lastPage,
+    pagesScanned: payloads.length,
+    complete: pagesToScan >= lastPage && extraResults.every((result) => result.status === 'fulfilled'),
+    errors: extraResults
+      .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+      .map((result) =>
+        sanitizeMessage(result.reason instanceof Error ? result.reason.message : String(result.reason)),
+      ),
+  }
+}
+
 function timestampDiagnostic(rows: ConversationSummary[]) {
   const parsed = rows
     .map((row) => row.timestamp)
@@ -252,11 +333,13 @@ type JourneySignal = {
   payload_kind: 'null' | 'string' | 'array' | 'object' | 'other'
   top_level_keys: string[]
   candidate_paths: string[]
+  safe_values: { path: string; value: string }[]
 }
 
 function detectJourneySignals(payload: unknown): JourneySignal {
   const signalKeys = new Set<string>()
   const candidatePaths = new Set<string>()
+  const safeValues = new Map<string, string>()
   let aiMarker = false
   let humanMarker = false
   let transferMarker = false
@@ -315,6 +398,11 @@ function detectJourneySignals(payload: unknown): JourneySignal {
         if (/(^| )ai($| )|bot|assistant|assistente virtual/.test(normalizedValue)) aiMarker = true
         if (/human|humano|attendant|atendente|analista/.test(normalizedValue)) humanMarker = true
         if (/transfer|handoff|escalat|encaminh|transbord/.test(normalizedValue)) transferMarker = true
+
+        const sensitivePath = /(email|phone|telefone|name|nome|requester|customer|visitor|subject|content|body|message|text)/i.test(currentPath)
+        if (!sensitivePath && safeValues.size < 30) {
+          safeValues.set(currentPath, String(raw).slice(0, 120))
+        }
       }
 
       if (raw && typeof raw === 'object') visit(raw, depth + 1, currentPath)
@@ -331,6 +419,7 @@ function detectJourneySignals(payload: unknown): JourneySignal {
     payload_kind: payloadKind,
     top_level_keys: topLevelKeys,
     candidate_paths: [...candidatePaths].slice(0, 40),
+    safe_values: [...safeValues.entries()].map(([path, value]) => ({ path, value })),
   }
 }
 
@@ -392,6 +481,7 @@ async function validateJourneySample(
         payload_kind: 'null' as const,
         top_level_keys: [],
         candidate_paths: [],
+        safe_values: [],
       },
       detail: {
         ai_marker: false,
@@ -401,6 +491,7 @@ async function validateJourneySample(
         payload_kind: 'null' as const,
         top_level_keys: [],
         candidate_paths: [],
+        safe_values: [],
       },
       detail_area: null,
       error: sanitizeMessage(error instanceof Error ? error.message : String(error)),
@@ -494,10 +585,27 @@ export async function GET(request: NextRequest) {
       throw failure.reason
     }
 
-    const aiRows = summarizeRows(aiResult.status === 'fulfilled' ? aiResult.value : [], 'ai')
-      .filter((row) => isInMonth(row.timestamp, requestedYear, requestedMonth))
-    const humanRows = summarizeRows(humanResult.status === 'fulfilled' ? humanResult.value : [], 'human')
-      .filter((row) => isInMonth(row.timestamp, requestedYear, requestedMonth))
+    const aiPageScan = await fetchConversationPages({
+      mode: 'ai',
+      firstPayload: aiResult.status === 'fulfilled' ? aiResult.value : [],
+      apiKey,
+      accountId,
+      maxPages: 5,
+    })
+    const humanPageScan = await fetchConversationPages({
+      mode: 'human',
+      firstPayload: humanResult.status === 'fulfilled' ? humanResult.value : [],
+      apiKey,
+      accountId,
+      maxPages: 20,
+    })
+
+    const aiRows = dedupeRows(
+      aiPageScan.payloads.flatMap((payload) => summarizeRows(payload, 'ai')),
+    ).filter((row) => isInMonth(row.timestamp, requestedYear, requestedMonth))
+    const humanRows = dedupeRows(
+      humanPageScan.payloads.flatMap((payload) => summarizeRows(payload, 'human')),
+    ).filter((row) => isInMonth(row.timestamp, requestedYear, requestedMonth))
 
     const allRows = [...aiRows, ...humanRows]
     const rowsWithTargetArea = allRows.filter((row) => row.area && isTargetSupportName(row.area))
@@ -513,10 +621,20 @@ export async function GET(request: NextRequest) {
     const overlapIds = [...aiIds].filter((id) => humanIds.has(id))
 
     const assigneeCounts = new Map<string, number>()
+    const areaAssigneeCounts = new Map<string, { area: string; name: string; count: number }>()
     filteredHuman.forEach((row) => {
       const name = row.assignee?.trim()
       if (!name) return
       assigneeCounts.set(name, (assigneeCounts.get(name) ?? 0) + 1)
+
+      const area = row.area ?? 'Área não identificada'
+      const key = `${area}::${name}`
+      const current = areaAssigneeCounts.get(key)
+      areaAssigneeCounts.set(key, {
+        area,
+        name,
+        count: (current?.count ?? 0) + 1,
+      })
     })
 
     const journeySampleRows = [
@@ -545,6 +663,20 @@ export async function GET(request: NextRequest) {
         ai: aiRows.length,
         human: humanRows.length,
       },
+      scan: {
+        ai: {
+          pages_scanned: aiPageScan.pagesScanned,
+          last_page: aiPageScan.lastPage,
+          complete: aiPageScan.complete,
+          errors: aiPageScan.errors,
+        },
+        human: {
+          pages_scanned: humanPageScan.pagesScanned,
+          last_page: humanPageScan.lastPage,
+          complete: humanPageScan.complete,
+          errors: humanPageScan.errors,
+        },
+      },
       area_coverage: {
         ai_with_target_area: filteredAi.length,
         ai_without_area: aiWithoutArea.length,
@@ -563,6 +695,9 @@ export async function GET(request: NextRequest) {
       human_by_assignee: [...assigneeCounts.entries()]
         .map(([name, count]) => ({ name, count }))
         .sort((a, b) => b.count - a.count),
+      human_by_area_assignee: [...areaAssigneeCounts.values()].sort(
+        (a, b) => a.area.localeCompare(b.area, 'pt-BR') || b.count - a.count,
+      ),
       samples: {
         ai: filteredAi.slice(0, 8),
         human: filteredHuman.slice(0, 12),
@@ -572,7 +707,9 @@ export async function GET(request: NextRequest) {
           ? 'ok'
           : sanitizeMessage(queuesResult.reason instanceof Error ? queuesResult.reason.message : String(queuesResult.reason)),
       warning:
-        'Os números com área confirmada consideram somente registros em que a própria resposta identifica Suporte ERP ou Suporte Fiscal. Registros de IA sem área não são atribuídos ao suporte para evitar misturar outras operações. O transcript e o detalhe de uma pequena amostra são consultados apenas para entender a estrutura da jornada sem expor o conteúdo das mensagens.',
+        humanPageScan.complete
+          ? 'A leitura humana percorreu todas as páginas devolvidas pela API e depois aplicou período e área. A leitura de IA permanece amostral porque a API devolveu muitas páginas e os registros de IA não trazem a área de suporte na listagem. O transcript e o detalhe são usados somente para entender a estrutura da jornada sem expor o conteúdo das mensagens.'
+          : 'A leitura ainda é parcial. Os números com área confirmada consideram somente registros em que a própria resposta identifica Suporte ERP ou Suporte Fiscal.',
       tested_at: new Date().toISOString(),
     })
   } catch (error) {
