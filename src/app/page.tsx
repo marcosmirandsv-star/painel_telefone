@@ -3248,7 +3248,7 @@ function ChatModuleDashboard({
 
             {!clickDeskTestResult && (
               <div className="mt-5 rounded-xl border border-dashed border-white/15 bg-slate-950/30 p-5 text-sm leading-6 text-slate-300">
-                Aguardando as credenciais de homologação. Quando estiverem configuradas, este teste buscará os nomes reais das pessoas que já estão usando o ClickDesk.
+                Conexão ainda não testada nesta sessão. As credenciais ficam no servidor; use “Testar conexão” para conferir a API ou “Ler atendimentos do período” para consultar o recorte selecionado.
               </div>
             )}
 
@@ -3567,20 +3567,26 @@ function ChatModuleDashboard({
               <h3 className="mt-2 text-2xl font-bold">{chat2SelectedMetric ? getChatTeamName(chat2SelectedMetric) : 'Meu time'}</h3>
               <p className="section-subtitle">Contexto coletivo sem expor o resultado individual dos colegas.</p>
 
-              <div className="mt-5 grid gap-3">
-                <div className="rounded-lg bg-slate-900 p-4">
-                  <p className="text-sm text-slate-400">CSAT do time</p>
-                  <strong className="mt-2 block text-2xl tabular-nums">{formatChatPercent(chat2TeamAverageCsat)}</strong>
+              {chat2SelectedMetric ? (
+                <div className="mt-5 grid gap-3">
+                  <div className="rounded-lg bg-slate-900 p-4">
+                    <p className="text-sm text-slate-400">CSAT do time</p>
+                    <strong className="mt-2 block text-2xl tabular-nums">{formatChatPercent(chat2TeamAverageCsat)}</strong>
+                  </div>
+                  <div className="rounded-lg bg-slate-900 p-4">
+                    <p className="text-sm text-slate-400">% de avaliações do time</p>
+                    <strong className="mt-2 block text-2xl tabular-nums">{formatChatPercent(chat2TeamAverageReviews)}</strong>
+                  </div>
+                  <div className="rounded-lg bg-slate-900 p-4">
+                    <p className="text-sm text-slate-400">Atendimentos do time</p>
+                    <strong className="mt-2 block text-2xl tabular-nums">{formatChatCount(chat2TeamTickets)}</strong>
+                  </div>
                 </div>
-                <div className="rounded-lg bg-slate-900 p-4">
-                  <p className="text-sm text-slate-400">% de avaliações do time</p>
-                  <strong className="mt-2 block text-2xl tabular-nums">{formatChatPercent(chat2TeamAverageReviews)}</strong>
+              ) : (
+                <div className="mt-5">
+                  <EmptyState text="Ainda não há indicadores consolidados do time para este período do ClickDesk." />
                 </div>
-                <div className="rounded-lg bg-slate-900 p-4">
-                  <p className="text-sm text-slate-400">Atendimentos do time</p>
-                  <strong className="mt-2 block text-2xl tabular-nums">{formatChatCount(chat2TeamTickets)}</strong>
-                </div>
-              </div>
+              )}
             </div>
           </section>
 
