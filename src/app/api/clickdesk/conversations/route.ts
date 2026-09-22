@@ -200,6 +200,133 @@ function isInMonth(timestamp: string | null, year: number, month: number) {
   return date.getFullYear() === year && date.getMonth() + 1 === month
 }
 
+function extractPaginationDiagnostic(payload: unknown) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return {}
+  const source = payload as Record<string, unknown>
+  const out: Record<string, string | number | boolean | null> = {}
+
+  const collect = (obj: Record<string, unknown>, prefix = '') => {
+    for (const [key, raw] of Object.entries(obj)) {
+      const fullKey = prefix ? `${prefix}.${key}` : key
+      if (/(page|per_page|total|count|limit|offset|cursor|next|last)/i.test(key)) {
+        if (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean' || raw === null) {
+          out[fullKey] = raw
+        }
+      }
+      if (
+        raw &&
+        typeof raw === 'object' &&
+        !Array.isArray(raw) &&
+        /(meta|pagination|paging|links|page)/i.test(key)
+      ) {
+        collect(raw as Record<string, unknown>, fullKey)
+      }
+    }
+  }
+
+  collect(source)
+  return out
+}
+
+function timestampDiagnostic(rows: ConversationSummary[]) {
+  const parsed = rows
+    .map((row) => row.timestamp)
+    .filter((value): value is string => Boolean(value))
+    .map((value) => ({ value, time: new Date(value).getTime() }))
+    .filter((item) => !Number.isNaN(item.time))
+    .sort((a, b) => a.time - b.time)
+
+  return {
+    with_timestamp: parsed.length,
+    without_timestamp: rows.length - parsed.length,
+    earliest: parsed[0]?.value ?? null,
+    latest: parsed.at(-1)?.value ?? null,
+  }
+}
+
+type JourneySignal = {
+  ai_marker: boolean
+  human_marker: boolean
+  transfer_marker: boolean
+  signal_keys: string[]
+}
+
+function detectJourneySignals(payload: unknown): JourneySignal {
+  const signalKeys = new Set<string>()
+  let aiMarker = false
+  let humanMarker = false
+  let transferMarker = false
+
+  const visit = (value: unknown, depth = 0) => {
+    if (!value || typeof value !== 'object' || depth > 6) return
+    if (Array.isArray(value)) {
+      value.slice(0, 100).forEach((item) => visit(item, depth + 1))
+      return
+    }
+
+    const source = value as Record<string, unknown>
+    for (const [key, raw] of Object.entries(source)) {
+      const normalizedKey = normalizeLabel(key)
+      const interestingKey = /(role|type|author|sender|actor|attendance|event|action|transfer|handoff|escalat|agent|bot|human|ai)/i.test(key)
+      if (interestingKey) signalKeys.add(key)
+
+      if (/(^| )ai($| )|bot|assistant/.test(normalizedKey)) aiMarker = true
+      if (/human|humano|attendant|atendente/.test(normalizedKey)) humanMarker = true
+      if (/transfer|handoff|escalat/.test(normalizedKey)) transferMarker = true
+
+      if (interestingKey && (typeof raw === 'string' || typeof raw === 'number')) {
+        const normalizedValue = normalizeLabel(String(raw))
+        if (/(^| )ai($| )|bot|assistant/.test(normalizedValue)) aiMarker = true
+        if (/human|humano|attendant|atendente/.test(normalizedValue)) humanMarker = true
+        if (/transfer|handoff|escalat/.test(normalizedValue)) transferMarker = true
+      }
+
+      if (raw && typeof raw === 'object') visit(raw, depth + 1)
+    }
+  }
+
+  visit(payload)
+  return {
+    ai_marker: aiMarker,
+    human_marker: humanMarker,
+    transfer_marker: transferMarker,
+    signal_keys: [...signalKeys].slice(0, 30),
+  }
+}
+
+async function validateJourneySample(
+  row: ConversationSummary,
+  apiKey: string,
+  accountId: string,
+) {
+  try {
+    const transcript = await fetchClickDesk(
+      `/tickets/${encodeURIComponent(row.id)}/transcript`,
+      apiKey,
+      accountId,
+    )
+    return {
+      id: row.id,
+      classified_as: row.mode,
+      assignee: row.assignee,
+      transcript_available: true,
+      ...detectJourneySignals(transcript),
+    }
+  } catch (error) {
+    return {
+      id: row.id,
+      classified_as: row.mode,
+      assignee: row.assignee,
+      transcript_available: false,
+      ai_marker: false,
+      human_marker: false,
+      transfer_marker: false,
+      signal_keys: [],
+      error: sanitizeMessage(error instanceof Error ? error.message : String(error)),
+    }
+  }
+}
+
 async function fetchClickDesk(path: string, apiKey: string, accountId: string) {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 15000)
@@ -313,12 +440,17 @@ export async function GET(request: NextRequest) {
       assigneeCounts.set(name, (assigneeCounts.get(name) ?? 0) + 1)
     })
 
+    const journeySampleRows = [...filteredHuman.slice(0, 3), ...filteredAi.slice(0, 1)]
+    const journeyValidation = await Promise.all(
+      journeySampleRows.map((row) => validateJourneySample(row, apiKey, accountId)),
+    )
+
     return NextResponse.json({
       connected: true,
       period: { year: requestedYear, month: requestedMonth },
       scope: ['Suporte ERP', 'Suporte Fiscal'],
       classification_rule:
-        'Pela regra operacional informada, toda conversa começa na IA; registros classificados pelo ClickDesk como human são tratados neste diagnóstico como transferidos para humano.',
+        'Neste diagnóstico, attendance=ai e attendance=human são classificações devolvidas pelo ClickDesk. Como toda conversa da operação começa na IA, a hipótese de que human representa transferência é validada separadamente pelo transcript antes de virar regra oficial.',
       target_area_detected_in_payload: targetAreaDetected,
       page_diagnostic_only: true,
       counts: {
@@ -326,6 +458,15 @@ export async function GET(request: NextRequest) {
         transferred_to_human: filteredHuman.length,
         overlap: overlapIds.length,
       },
+      pagination: {
+        ai: extractPaginationDiagnostic(aiResult.status === 'fulfilled' ? aiResult.value : null),
+        human: extractPaginationDiagnostic(humanResult.status === 'fulfilled' ? humanResult.value : null),
+      },
+      timestamps: {
+        ai: timestampDiagnostic(filteredAi),
+        human: timestampDiagnostic(filteredHuman),
+      },
+      journey_validation: journeyValidation,
       human_by_assignee: [...assigneeCounts.entries()]
         .map(([name, count]) => ({ name, count }))
         .sort((a, b) => b.count - a.count),
@@ -338,7 +479,7 @@ export async function GET(request: NextRequest) {
           ? 'ok'
           : sanitizeMessage(queuesResult.reason instanceof Error ? queuesResult.reason.message : String(queuesResult.reason)),
       warning:
-        'Este é um diagnóstico da página retornada pela API, ainda não um total oficial do mês. Depois de confirmarmos paginação, campos de data e vínculo de área, a sincronização mensal/D-1 será consolidada.',
+        'Os números acima são da página retornada pela API e das classificações attendance=ai|human. Eles ainda não significam, por si só, resolvido pela IA ou transferido para humano. O transcript de uma pequena amostra é consultado apenas para validar sinais de jornada sem expor o conteúdo das mensagens.',
       tested_at: new Date().toISOString(),
     })
   } catch (error) {
