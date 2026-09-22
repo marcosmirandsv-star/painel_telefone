@@ -268,15 +268,28 @@ type ClickDeskAiRoutingDiagnostic = {
     transcript_available: boolean
     detail_area: string | null
     transcript_area: string | null
+    detail_keys: string[]
+    transcript_keys: string[]
     routing_values: { path: string; value: string }[]
     run_correlations: { value: string; ticket_path: string; run_path: string }[]
     error?: string
   }[]
   repeated_signals?: { path: string; value: string; count: number }[]
+  departments?: {
+    ok: boolean
+    targets: { id: string; name: string }[]
+    error?: string
+  }
   ai_agents?: {
     ok: boolean
     count: number
-    items: { id: string; name: string; routing_values: { path: string; value: string }[] }[]
+    items: {
+      id: string
+      name: string
+      routing_values: { path: string; value: string }[]
+      handoff_departments: { id: string; name: string | null; target: boolean }[]
+      target_handoff_departments: { id: string; name: string | null; target: boolean }[]
+    }[]
     error?: string
   }
   agent_runs?: {
@@ -284,6 +297,24 @@ type ClickDeskAiRoutingDiagnostic = {
     count: number
     pagination: Record<string, string | number | boolean | null>
     correlation_count: number
+    items?: {
+      uid: string
+      agent_id: string | null
+      conversation_id: string | null
+      top_level_keys: string[]
+      routing_values: { path: string; value: string }[]
+    }[]
+    detail_samples?: {
+      uid: string
+      ok: boolean
+      agent_id: string | null
+      conversation_id: string | null
+      top_level_keys: string[]
+      routing_values: { path: string; value: string }[]
+      detail_keys: string[]
+      detail_routing_values: { path: string; value: string }[]
+      error?: string
+    }[]
     error?: string
   }
   conclusion?: string
@@ -3715,11 +3746,34 @@ function ChatModuleDashboard({
                         {clickDeskAiRoutingDiagnostic.ai_agents?.error && <p className="text-amber-200">{clickDeskAiRoutingDiagnostic.ai_agents.error}</p>}
                         {clickDeskAiRoutingDiagnostic.agent_runs?.error && <p className="text-amber-200">{clickDeskAiRoutingDiagnostic.agent_runs.error}</p>}
                       </div>
+                      {(clickDeskAiRoutingDiagnostic.departments?.targets ?? []).length > 0 && (
+                        <div className="mt-4 rounded-lg border border-emerald-400/15 bg-emerald-400/5 p-3 text-xs text-emerald-100">
+                          Áreas-alvo mapeadas por ID:{' '}
+                          {(clickDeskAiRoutingDiagnostic.departments?.targets ?? [])
+                            .map((item) => `${item.name} = ${item.id}`)
+                            .join(' · ')}
+                        </div>
+                      )}
                       {(clickDeskAiRoutingDiagnostic.ai_agents?.items ?? []).length > 0 && (
                         <div className="mt-4 space-y-2">
                           {(clickDeskAiRoutingDiagnostic.ai_agents?.items ?? []).slice(0, 12).map((agent) => (
                             <div key={agent.id} className="rounded-md bg-slate-950/55 px-3 py-2">
-                              <p className="text-sm font-semibold">{agent.name}</p>
+                              <div className="flex items-start justify-between gap-3">
+                                <p className="text-sm font-semibold">{agent.name}</p>
+                                {agent.target_handoff_departments.length > 0 && (
+                                  <span className="rounded bg-emerald-400/10 px-2 py-1 text-[11px] text-emerald-200">
+                                    handoff alvo encontrado
+                                  </span>
+                                )}
+                              </div>
+                              {agent.handoff_departments.length > 0 && (
+                                <p className="mt-1 text-xs text-slate-400">
+                                  Handoff:{' '}
+                                  {agent.handoff_departments
+                                    .map((item) => item.name ? `${item.name} (${item.id})` : `ID ${item.id}`)
+                                    .join(' · ')}
+                                </p>
+                              )}
                               {agent.routing_values.length > 0 && (
                                 <p className="mt-1 text-xs text-slate-500">
                                   {agent.routing_values.slice(0, 4).map((item) => `${item.path}=${item.value}`).join(' · ')}
@@ -3731,6 +3785,41 @@ function ChatModuleDashboard({
                       )}
                     </div>
                   </div>
+
+                  {(clickDeskAiRoutingDiagnostic.agent_runs?.detail_samples ?? []).length > 0 && (
+                    <div className="mt-5 rounded-xl border border-white/10 bg-slate-900/70 p-5">
+                      <h4 className="font-semibold">Estrutura das execuções do agente</h4>
+                      <p className="mt-1 text-sm text-slate-400">
+                        Amostra de até 5 execuções. O objetivo é descobrir campos que liguem uma execução de IA à conversa e ao agente correspondente.
+                      </p>
+                      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                        {(clickDeskAiRoutingDiagnostic.agent_runs?.detail_samples ?? []).map((run) => (
+                          <div key={run.uid} className="rounded-lg bg-slate-950/55 p-4 text-xs">
+                            <p className="font-semibold">Execução {run.uid.slice(-10)}</p>
+                            <p className="mt-2 text-slate-300">
+                              Detalhe: <strong>{run.ok ? 'ok' : 'não disponível'}</strong>
+                              {' '}· Agente: <strong>{run.agent_id ?? 'não identificado'}</strong>
+                              {' '}· Conversa: <strong>{run.conversation_id ?? 'não identificada'}</strong>
+                            </p>
+                            {run.detail_keys.length > 0 && (
+                              <p className="mt-2 break-all text-slate-500">
+                                Chaves do detalhe: {run.detail_keys.slice(0, 12).join(' · ')}
+                              </p>
+                            )}
+                            {run.detail_routing_values.length > 0 && (
+                              <p className="mt-2 break-all text-cyan-200">
+                                Sinais do detalhe: {run.detail_routing_values
+                                  .slice(0, 8)
+                                  .map((item) => `${item.path}=${item.value}`)
+                                  .join(' · ')}
+                              </p>
+                            )}
+                            {run.error && <p className="mt-2 text-amber-200">{run.error}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="mt-5 rounded-xl border border-white/10 bg-slate-900/70 p-5">
                     <h4 className="font-semibold">Amostra de conversas IA enriquecidas</h4>
@@ -3754,9 +3843,14 @@ function ChatModuleDashboard({
                             <p className="mt-3 text-slate-300">
                               Detalhe: <strong>{sample.detail_available ? 'ok' : 'não'}</strong> · Transcript: <strong>{sample.transcript_available ? 'ok' : 'não'}</strong>
                             </p>
-                            {sample.routing_values.length > 0 && (
+                            {sample.routing_values.length > 0 ? (
                               <p className="mt-2 break-all text-slate-500">
                                 Sinais: {sample.routing_values.slice(0, 6).map((item) => `${item.path}=${item.value}`).join(' · ')}
+                              </p>
+                            ) : (
+                              <p className="mt-2 break-all text-slate-500">
+                                Sem valor de roteamento explícito. Chaves detalhe: {sample.detail_keys.slice(0, 8).join(' · ') || '—'}
+                                {' '}· Chaves transcript: {sample.transcript_keys.slice(0, 8).join(' · ') || '—'}
                               </p>
                             )}
                             {sample.run_correlations.length > 0 && (
