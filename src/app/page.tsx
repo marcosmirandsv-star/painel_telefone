@@ -1826,6 +1826,7 @@ function ChatModuleDashboard({
   const [chatActiveTab, setChatActiveTab] = useState<'overview' | 'prototype' | 'podium' | 'analysis' | 'reports' | 'import' | 'settings'>('overview')
   const [chatToolsOpen, setChatToolsOpen] = useState(false)
   const [chat2AnalystId, setChat2AnalystId] = useState('')
+  const [chat2PeriodKey, setChat2PeriodKey] = useState('')
   const [clickDeskTestLoading, setClickDeskTestLoading] = useState(false)
   const [clickDeskTestResult, setClickDeskTestResult] = useState<ClickDeskTestResult | null>(null)
   const [manualPodiumDraft, setManualPodiumDraft] = useState<Record<number, string>>({})
@@ -2044,6 +2045,11 @@ function ChatModuleDashboard({
       setSelectedPeriodKey(`${periods[0].year}-${periods[0].monthNumber}`)
     }
   }, [periods, selectedPeriodKey])
+  useEffect(() => {
+    if (chat2PeriodKey) return
+    const now = new Date()
+    setChat2PeriodKey(`${now.getFullYear()}-${now.getMonth() + 1}`)
+  }, [chat2PeriodKey])
   useEffect(() => {
     if (!chatAnalystForm.teamId && teams[0]) {
       setChatAnalystForm((current) => ({ ...current, teamId: teams[0].id }))
@@ -2927,10 +2933,27 @@ function ChatModuleDashboard({
     }
   }
 
+  const chat2Periods = Array.from({ length: 12 }, (_, index) => {
+    const date = new Date()
+    date.setDate(1)
+    date.setMonth(date.getMonth() - index)
+    const year = date.getFullYear()
+    const monthNumber = date.getMonth() + 1
+    const period = getChatMonthPeriod(year, monthNumber)
+    return { ...period, year, monthNumber, key: `${year}-${monthNumber}` }
+  })
+  const chat2SelectedPeriod =
+    chat2Periods.find((period) => period.key === chat2PeriodKey) ?? chat2Periods[0]
+  const chat2VisibleMetrics = metrics.filter((metric) => {
+    const matchesTeam = selectedTeamId === 'all' || metric.team_id === selectedTeamId
+    const matchesPeriod =
+      metric.year === chat2SelectedPeriod.year && metric.month_number === chat2SelectedPeriod.monthNumber
+    return matchesTeam && matchesPeriod
+  })
   const chat2SelectedMetric =
-    visibleMetrics.find((metric) => metric.analyst_id === chat2AnalystId) ?? visibleMetrics[0] ?? null
+    chat2VisibleMetrics.find((metric) => metric.analyst_id === chat2AnalystId) ?? chat2VisibleMetrics[0] ?? null
   const chat2TeamMetrics = chat2SelectedMetric
-    ? visibleMetrics.filter((metric) => metric.team_id === chat2SelectedMetric.team_id)
+    ? chat2VisibleMetrics.filter((metric) => metric.team_id === chat2SelectedMetric.team_id)
     : []
   const chat2TeamAverageCsat = calculateChatAverage(chat2TeamMetrics, 'csat')
   const chat2TeamAverageReviews = calculateChatAverage(chat2TeamMetrics, 'review_percentage')
@@ -2981,14 +3004,24 @@ function ChatModuleDashboard({
                 ))}
               </select>
             </Field>
-            <Field label="Período">
-              <select className="form-input" value={selectedPeriodKey} onChange={(event) => setSelectedPeriodKey(event.target.value)}>
-                {periods.map((period) => (
-                  <option key={`${period.year}-${period.monthNumber}`} value={`${period.year}-${period.monthNumber}`}>
-                    {period.label}
-                  </option>
-                ))}
-              </select>
+            <Field label={chatActiveTab === 'prototype' ? 'Período ClickDesk' : 'Período'}>
+              {chatActiveTab === 'prototype' ? (
+                <select className="form-input" value={chat2PeriodKey} onChange={(event) => setChat2PeriodKey(event.target.value)}>
+                  {chat2Periods.map((period) => (
+                    <option key={period.key} value={period.key}>
+                      {period.label}{period.key === chat2Periods[0]?.key ? ' · mês atual' : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <select className="form-input" value={selectedPeriodKey} onChange={(event) => setSelectedPeriodKey(event.target.value)}>
+                  {periods.map((period) => (
+                    <option key={`${period.year}-${period.monthNumber}`} value={`${period.year}-${period.monthNumber}`}>
+                      {period.label}
+                    </option>
+                  ))}
+                </select>
+              )}
             </Field>
           </div>
         </div>
@@ -3207,7 +3240,7 @@ function ChatModuleDashboard({
                 <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Simulação da visão do analista</p>
                 <h3 className="mt-2 text-2xl font-bold">Meu resultado</h3>
                 <p className="section-subtitle">
-                  Esta tela usa os números reais já existentes no módulo atual para validar a experiência que será entregue ao usuário no Chat 2.0.
+                  O Chat 2.0 trabalha com período próprio e abre no mês atual. Enquanto a leitura diária do ClickDesk não estiver ligada, os indicadores aparecem somente quando houver dados disponíveis para o período.
                 </p>
               </div>
               <div className="min-w-[260px]">
@@ -3217,7 +3250,7 @@ function ChatModuleDashboard({
                     value={chat2SelectedMetric?.analyst_id ?? ''}
                     onChange={(event) => setChat2AnalystId(event.target.value)}
                   >
-                    {visibleMetrics.map((metric) => (
+                    {chat2VisibleMetrics.map((metric) => (
                       <option key={metric.id} value={metric.analyst_id}>
                         {getChatAnalystName(metric)} · {getChatTeamName(metric)}
                       </option>
@@ -3239,7 +3272,7 @@ function ChatModuleDashboard({
                     <div>
                       <p className="text-sm text-slate-400">{getChatTeamName(chat2SelectedMetric)}</p>
                       <h3 className="text-2xl font-bold">{getChatAnalystName(chat2SelectedMetric)}</h3>
-                      <p className="mt-1 text-sm text-slate-400">{selectedPeriod?.label ?? 'Período selecionado'}</p>
+                      <p className="mt-1 text-sm text-slate-400">{chat2SelectedPeriod.label}</p>
                     </div>
                   </div>
                   <div className="rounded-lg bg-slate-900 px-4 py-3 text-sm">
@@ -3325,7 +3358,7 @@ function ChatModuleDashboard({
                 </div>
               </>
             ) : (
-              <EmptyState text="Nenhum dado disponível no período selecionado." />
+              <EmptyState text="Ainda não há dados consolidados do ClickDesk para este período. A conexão está ativa; a próxima etapa é ligar a leitura das conversas do mês atual." />
             )}
           </section>
 
