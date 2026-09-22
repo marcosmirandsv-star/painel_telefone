@@ -250,6 +250,25 @@ type ClickDeskConversationDiagnostic = {
     transferred_to_human: number
     overlap: number
   }
+  pagination?: {
+    ai?: Record<string, string | number | boolean | null>
+    human?: Record<string, string | number | boolean | null>
+  }
+  timestamps?: {
+    ai?: { with_timestamp: number; without_timestamp: number; earliest: string | null; latest: string | null }
+    human?: { with_timestamp: number; without_timestamp: number; earliest: string | null; latest: string | null }
+  }
+  journey_validation?: {
+    id: string
+    classified_as: 'ai' | 'human'
+    assignee: string | null
+    transcript_available: boolean
+    ai_marker: boolean
+    human_marker: boolean
+    transfer_marker: boolean
+    signal_keys: string[]
+    error?: string
+  }[]
   human_by_assignee?: { name: string; count: number }[]
   samples?: {
     ai: ClickDeskConversationSample[]
@@ -3321,11 +3340,11 @@ function ChatModuleDashboard({
                   <div>
                     <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Diagnóstico de atendimentos</p>
                     <h4 className="mt-2 text-xl font-bold">
-                      {chat2SelectedPeriod.label} · IA e transferências para humano
+                      {chat2SelectedPeriod.label} · classificação IA e humano
                     </h4>
                     <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-300">
-                      Pela regra da operação, toda conversa começa na IA. Neste diagnóstico, registros que o ClickDesk classifica como
-                      atendimento humano são tratados como conversas que passaram por IA e foram transferidas para uma pessoa.
+                      Toda conversa da operação começa na IA. Aqui mostramos primeiro a classificação devolvida pelo ClickDesk
+                      em attendance=ai e attendance=human. A transferência IA → humano só será considerada confirmada quando o transcript trouxer sinais compatíveis.
                     </p>
                   </div>
                   <span className="rounded-md border border-white/10 bg-slate-900 px-3 py-2 text-sm text-slate-300">
@@ -3341,17 +3360,50 @@ function ChatModuleDashboard({
                   <>
                     <div className="mt-5 grid gap-4 md:grid-cols-3">
                       <MetricCard
-                        label="Permaneceram na IA"
+                        label="Classificadas como IA"
                         value={formatChatCount(clickDeskConversationDiagnostic.counts?.ai ?? 0)}
                       />
                       <MetricCard
-                        label="Transferidos para humano"
+                        label="Classificadas como humano"
                         value={formatChatCount(clickDeskConversationDiagnostic.counts?.transferred_to_human ?? 0)}
                       />
                       <MetricCard
                         label="Aparecem nos dois filtros"
                         value={formatChatCount(clickDeskConversationDiagnostic.counts?.overlap ?? 0)}
                       />
+                    </div>
+
+                    <div className="mt-5 rounded-xl border border-white/10 bg-slate-900/70 p-5">
+                      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <h5 className="font-semibold">Validação da jornada IA → humano</h5>
+                          <p className="mt-1 text-sm text-slate-400">
+                            Amostra pequena lida pelo endpoint de transcript, sem exibir o conteúdo das mensagens.
+                          </p>
+                        </div>
+                        <span className="text-xs text-slate-400">
+                          {(clickDeskConversationDiagnostic.journey_validation ?? []).length} conversa(s) verificadas
+                        </span>
+                      </div>
+                      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        {(clickDeskConversationDiagnostic.journey_validation ?? []).map((item) => (
+                          <div key={item.id} className="rounded-lg bg-slate-950/55 p-4 text-sm">
+                            <p className="font-semibold">
+                              {item.classified_as === 'human' ? 'Classificada como humano' : 'Classificada como IA'}
+                            </p>
+                            {item.assignee && <p className="mt-1 text-xs text-slate-400">{item.assignee}</p>}
+                            <div className="mt-3 space-y-1 text-xs text-slate-300">
+                              <p>Transcript: <strong>{item.transcript_available ? 'acessível' : 'indisponível'}</strong></p>
+                              <p>Sinal de IA: <strong>{item.ai_marker ? 'sim' : 'não identificado'}</strong></p>
+                              <p>Sinal humano: <strong>{item.human_marker ? 'sim' : 'não identificado'}</strong></p>
+                              <p>Sinal de transferência: <strong>{item.transfer_marker ? 'sim' : 'não identificado'}</strong></p>
+                            </div>
+                          </div>
+                        ))}
+                        {!clickDeskConversationDiagnostic.journey_validation?.length && (
+                          <p className="text-sm text-slate-400">Nenhum transcript foi validado nesta leitura.</p>
+                        )}
+                      </div>
                     </div>
 
                     <div className="mt-5 grid gap-5 xl:grid-cols-2">
@@ -3386,7 +3438,14 @@ function ChatModuleDashboard({
                             Consulta de filas do atendimento: <strong>{clickDeskConversationDiagnostic.queues_status ?? 'não informado'}</strong>.
                           </p>
                           <p>
-                            Este resultado é diagnóstico da página retornada pela API. Paginação e regra de data ainda serão validadas antes de virar indicador oficial.
+                            Paginação detectada: <strong>{Object.keys(clickDeskConversationDiagnostic.pagination?.human ?? {}).length || Object.keys(clickDeskConversationDiagnostic.pagination?.ai ?? {}).length ? 'há metadados para analisar' : 'não apareceu metadado explícito nesta resposta'}</strong>.
+                          </p>
+                          <p>
+                            Registros com data no recorte humano: <strong>{formatChatCount(clickDeskConversationDiagnostic.timestamps?.human?.with_timestamp ?? 0)}</strong>.
+                            {' '}Sem data reconhecida: <strong>{formatChatCount(clickDeskConversationDiagnostic.timestamps?.human?.without_timestamp ?? 0)}</strong>.
+                          </p>
+                          <p>
+                            Este resultado ainda é diagnóstico. Só depois de confirmarmos paginação, campo de data e jornada pelo transcript ele vira indicador oficial.
                           </p>
                         </div>
                       </div>
