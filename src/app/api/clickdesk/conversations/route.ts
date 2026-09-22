@@ -507,7 +507,47 @@ function inspectCsatConfig(payload: unknown) {
   const values: { path: string; value: string }[] = []
   const keys = new Set<string>()
 
-  const visit = (value: unknown, depth = 0, path = '
+  const visit = (value: unknown, depth = 0, path = '$') => {
+    if (value === null || value === undefined || depth > 5) return
+
+    if (Array.isArray(value)) {
+      value.slice(0, 50).forEach((item, index) => visit(item, depth + 1, `${path}[${index}]`))
+      return
+    }
+
+    if (typeof value !== 'object') return
+
+    for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+      const currentPath = `${path}.${key}`
+      const interesting =
+        /(csat|satisfaction|rating|score|sentiment|positive|negative|label|option|scale|type|enabled)/i.test(
+          key,
+        )
+
+      if (interesting) keys.add(key)
+
+      if (
+        interesting &&
+        (typeof raw === 'string' || typeof raw === 'number' || typeof raw === 'boolean') &&
+        values.length < 40
+      ) {
+        values.push({ path: currentPath, value: String(raw).slice(0, 160) })
+      }
+
+      if (raw && typeof raw === 'object') visit(raw, depth + 1, currentPath)
+    }
+  }
+
+  visit(payload)
+
+  return {
+    available: payload !== null && payload !== undefined,
+    keys: [...keys].slice(0, 40),
+    values,
+  }
+}
+
+async function fetchClickDesk(path: string, apiKey: string, accountId: string) {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 15000)
   try {
@@ -530,7 +570,10 @@ function inspectCsatConfig(payload: unknown) {
     }
 
     if (!response.ok) {
-      const source = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {}
+      const source =
+        payload && typeof payload === 'object'
+          ? (payload as Record<string, unknown>)
+          : {}
       const message =
         typeof source.message === 'string'
           ? source.message
