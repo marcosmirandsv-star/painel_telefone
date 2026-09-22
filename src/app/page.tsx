@@ -1,10 +1,11 @@
 'use client'
 
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import * as XLSX from 'xlsx'
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { scheduleSupabase } from '@/lib/schedule-supabase'
 import { calculateAverageCsat, calculateChatAverage, calculateTeamPerformance } from '@/lib/indicators'
 
 type Goal = {
@@ -32,6 +33,16 @@ type UserProfile = {
   full_name?: string | null
   name?: string | null
   analyst_id?: string | null
+}
+
+type ScheduleNotification = {
+  id: string
+  profile_id: string
+  request_id: string | null
+  title: string
+  message: string
+  seen_at: string | null
+  created_at: string
 }
 
 type IndividualMetric = {
@@ -319,6 +330,48 @@ const initialAccessUserForm = {
   analystId: '',
 }
 
+function playScheduleAlertSound() {
+  try {
+    const AudioContextCtor =
+      window.AudioContext ||
+      (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AudioContextCtor) return
+    const context = new AudioContextCtor()
+    const oscillator = context.createOscillator()
+    const gain = context.createGain()
+    oscillator.frequency.value = 880
+    gain.gain.value = 0.05
+    oscillator.connect(gain)
+    gain.connect(context.destination)
+    oscillator.start()
+    oscillator.stop(context.currentTime + 0.14)
+  } catch {
+    // O alerta visual continua ativo caso o navegador bloqueie áudio automático.
+  }
+}
+
+function scheduleNotificationHref(item: ScheduleNotification) {
+  return item.title.toLowerCase().includes('vale-transporte')
+    ? '/escalas?section=transport'
+    : '/escalas/gestao'
+}
+
+function scheduleNotificationEyebrow(item: ScheduleNotification) {
+  return item.title.toLowerCase().includes('vale-transporte')
+    ? 'Alerta de vale-transporte'
+    : 'Nova solicitação de escala'
+}
+
+function showScheduleBrowserNotification(item: ScheduleNotification) {
+  if (typeof window === 'undefined' || !('Notification' in window)) return
+  if (window.Notification.permission !== 'granted') return
+  try {
+    new window.Notification(item.title, { body: item.message, tag: item.id })
+  } catch {
+    // O pop-up interno continua sendo o canal principal.
+  }
+}
+
 const ANALYST_PHOTO_BUCKET = 'analyst-photos'
 const MAX_ANALYST_PHOTO_SIZE = 5 * 1024 * 1024
 const ACCEPTED_ANALYST_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp']
@@ -375,6 +428,10 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  const [scheduleProfileId, setScheduleProfileId] = useState<string | null>(null)
+  const [scheduleNotifications, setScheduleNotifications] = useState<ScheduleNotification[]>([])
+  const [schedulePopup, setSchedulePopup] = useState<ScheduleNotification | null>(null)
+  const scheduleNotificationIds = useRef(new Set<string>())
 
   useEffect(() => {
     const recoveryFromHash = new URLSearchParams(window.location.hash.replace('#', ''))
@@ -557,6 +614,144 @@ export default function Home() {
     if (activeModule !== 'phone') setActiveModule('phone')
     if (activeTab !== 'dashboard') setActiveTab('dashboard')
   }, [activeModule, activeTab, isManagementUser])
+
+  useEffect(() => {
+    if (!isManagementUser || !profile?.full_name) {
+      setScheduleProfileId(null)
+      setScheduleNotifications([])
+      setSchedulePopup(null)
+      return
+    }
+
+    let cancelled = false
+    let channel: ReturnType<typeof scheduleSupabase.channel> | null = null
+
+    async function connectScheduleAlerts() {
+      const { data: scheduleProfile } = await scheduleSupabase
+        .from('profiles')
+        .select('id,full_name')
+        .eq('full_name', profile?.full_name ?? '')
+        .maybeSingle()
+
+      if (cancelled || !scheduleProfile?.id) return
+
+      const profileId = String(scheduleProfile.id)
+      setScheduleProfileId(profileId)
+
+      const { data: initial } = await scheduleSupabase
+        .from('schedule_notifications')
+        .select('*')
+        .eq('profile_id', profileId)
+        .order('created_at', { ascending: false })
+        .limit(30)
+
+      if (cancelled) return
+      const loaded = (initial ?? []) as ScheduleNotification[]
+      setScheduleNotifications(loaded)
+      scheduleNotificationIds.current = new Set(loaded.map((item) => item.id))
+
+      const latestUnseen = loaded.find((item) => !item.seen_at)
+      if (latestUnseen) setSchedulePopup(latestUnseen)
+
+      channel = scheduleSupabase
+        .channel(`performance-schedule-alerts-${profileId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'schedule_notifications',
+            filter: `profile_id=eq.${profileId}`,
+          },
+          (payload) => {
+            const item = payload.new as ScheduleNotification
+            if (scheduleNotificationIds.current.has(item.id)) return
+            scheduleNotificationIds.current.add(item.id)
+            setScheduleNotifications((current) => [item, ...current])
+            setSchedulePopup(item)
+            playScheduleAlertSound()
+            showScheduleBrowserNotification(item)
+            document.title = item.title.toLowerCase().includes('vale-transporte')
+              ? '🔔 Alerta de vale-transporte'
+              : '🔔 Nova solicitação de escala'
+          },
+        )
+        .subscribe()
+    }
+
+    connectScheduleAlerts()
+
+    return () => {
+      cancelled = true
+      if (channel) scheduleSupabase.removeChannel(channel)
+    }
+  }, [isManagementUser, profile?.full_name])
+
+  useEffect(() => {
+    if (!scheduleProfileId) return
+
+    const checkUnseen = async () => {
+      const { data } = await scheduleSupabase
+        .from('schedule_notifications')
+        .select('*')
+        .eq('profile_id', scheduleProfileId)
+        .is('seen_at', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+
+      const unseen = (data?.[0] ?? null) as ScheduleNotification | null
+      if (unseen) {
+        setSchedulePopup(unseen)
+        setScheduleNotifications((current) => {
+          if (current.some((item) => item.id === unseen.id)) return current
+          return [unseen, ...current]
+        })
+        playScheduleAlertSound()
+      }
+    }
+
+    const onFocus = () => checkUnseen()
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') checkUnseen()
+    }
+
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [scheduleProfileId])
+
+  async function markScheduleNotificationSeen(item: ScheduleNotification) {
+    await scheduleSupabase
+      .from('schedule_notifications')
+      .update({ seen_at: new Date().toISOString() })
+      .eq('id', item.id)
+
+    setScheduleNotifications((current) =>
+      current.map((notification) =>
+        notification.id === item.id
+          ? { ...notification, seen_at: new Date().toISOString() }
+          : notification,
+      ),
+    )
+    setSchedulePopup(null)
+    document.title = 'Central de Performance'
+  }
+
+  async function enableScheduleBrowserNotifications() {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      setMessage('Este navegador não oferece notificações do sistema.')
+      return
+    }
+    const permission = await window.Notification.requestPermission()
+    setMessage(
+      permission === 'granted'
+        ? 'Alertas de escala do navegador ativados.'
+        : 'O navegador não autorizou notificações. O pop-up, sino e som internos continuam ativos.',
+    )
+  }
 
   async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -1242,6 +1437,36 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-slate-950 px-5 py-6 text-white sm:px-8">
+      {schedulePopup && (
+        <div className="fixed right-4 top-4 z-50 w-[min(430px,calc(100vw-2rem))] rounded-2xl border border-cyan-400/50 bg-slate-900 p-5 shadow-2xl shadow-cyan-950/50">
+          <div className="flex items-start gap-3">
+            <div className="animate-bounce text-2xl">🔔</div>
+            <div className="flex-1">
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">
+                {scheduleNotificationEyebrow(schedulePopup)}
+              </p>
+              <h2 className="mt-1 text-lg font-bold">{schedulePopup.title}</h2>
+              <p className="mt-2 text-sm text-slate-300">{schedulePopup.message}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Link
+                  className="primary-button"
+                  href={scheduleNotificationHref(schedulePopup)}
+                  onClick={() => markScheduleNotificationSeen(schedulePopup)}
+                >
+                  Ver agora
+                </Link>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => markScheduleNotificationSeen(schedulePopup)}
+                >
+                  Marcar como vista
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <section className="mx-auto max-w-7xl">
         <header className="flex flex-col gap-5 border-b border-white/10 pb-6 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -1268,13 +1493,42 @@ export default function Home() {
             )}
           </div>
 
-          <button className="secondary-button self-start" onClick={handleLogout}>
-            Sair
-          </button>
+          <div className="flex flex-wrap items-center gap-2 self-start">
+            {isManagementUser && (
+              <>
+                <button
+                  className={`relative secondary-button ${scheduleNotifications.some((item) => !item.seen_at) ? 'animate-bounce' : ''}`}
+                  type="button"
+                  onClick={() => {
+                    const unseen = scheduleNotifications.find((item) => !item.seen_at)
+                    if (unseen) setSchedulePopup(unseen)
+                  }}
+                  title="Alertas de Escalas"
+                >
+                  🔔
+                  {scheduleNotifications.filter((item) => !item.seen_at).length > 0 && (
+                    <span className="ml-2 rounded-full bg-red-500 px-2 py-0.5 text-xs font-bold">
+                      {scheduleNotifications.filter((item) => !item.seen_at).length}
+                    </span>
+                  )}
+                </button>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={enableScheduleBrowserNotifications}
+                >
+                  Ativar alertas
+                </button>
+              </>
+            )}
+            <button className="secondary-button" onClick={handleLogout}>
+              Sair
+            </button>
+          </div>
         </header>
 
         {isManagementUser && (
-          <div className="mt-6 grid gap-3 md:grid-cols-2">
+          <div className="mt-6 grid gap-3 md:grid-cols-3">
             <button
               className={activeModule === 'phone' ? 'module-card-active' : 'module-card'}
               type="button"
@@ -1296,6 +1550,11 @@ export default function Home() {
               <strong>Performance de atendimento via chat</strong>
               <small>Dados do Zendesk, importação mensal, ranking, pódio e relatórios individuais.</small>
             </button>
+            <Link className="module-card" href="/escalas">
+              <span>Módulo escalas</span>
+              <strong>Escalas e solicitações</strong>
+              <small>Homologação: geração mensal, pessoas, sábados, publicação e alertas.</small>
+            </Link>
           </div>
         )}
         {activeModule === 'phone' && (
