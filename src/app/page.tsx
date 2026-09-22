@@ -202,6 +202,29 @@ type ChatImportHistory = {
   created_by_name: string | null
   created_at: string
 }
+
+type ClickDeskTestItem = {
+  id: string
+  name: string
+  email?: string
+}
+
+type ClickDeskTestGroup = {
+  ok: boolean
+  items: ClickDeskTestItem[]
+  error?: string
+}
+
+type ClickDeskTestResult = {
+  configured: boolean
+  connected?: boolean
+  tested_at?: string
+  account_id?: string
+  users?: ClickDeskTestGroup
+  attendants?: ClickDeskTestGroup
+  departments?: ClickDeskTestGroup
+  error?: string
+}
 type IndividualForm = {
   analystId: string
   weekStart: string
@@ -1800,6 +1823,8 @@ function ChatModuleDashboard({
   const [chatActiveTab, setChatActiveTab] = useState<'overview' | 'prototype' | 'podium' | 'analysis' | 'reports' | 'import' | 'settings'>('overview')
   const [chatToolsOpen, setChatToolsOpen] = useState(false)
   const [chat2AnalystId, setChat2AnalystId] = useState('')
+  const [clickDeskTestLoading, setClickDeskTestLoading] = useState(false)
+  const [clickDeskTestResult, setClickDeskTestResult] = useState<ClickDeskTestResult | null>(null)
   const [manualPodiumDraft, setManualPodiumDraft] = useState<Record<number, string>>({})
   const [chatPodiumMessage, setChatPodiumMessage] = useState('')
   const [chatAnalystForm, setChatAnalystForm] = useState({ teamId: '', name: '', csatGoal: '86', photoFile: null as File | null })
@@ -1830,6 +1855,43 @@ function ChatModuleDashboard({
     if (!isManagementUser) return
     void loadChatImportHistory()
   }, [isManagementUser])
+
+  async function handleTestClickDeskConnection() {
+    setClickDeskTestLoading(true)
+    setClickDeskTestResult(null)
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        setClickDeskTestResult({ configured: false, error: 'Sua sessão de homologação não está ativa.' })
+        return
+      }
+
+      const response = await fetch('/api/clickdesk/test', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        cache: 'no-store',
+      })
+      const data = (await response.json()) as ClickDeskTestResult
+
+      if (!response.ok && !data.error) {
+        data.error = 'Não foi possível testar a conexão com o ClickDesk.'
+      }
+
+      setClickDeskTestResult(data)
+    } catch (error) {
+      setClickDeskTestResult({
+        configured: false,
+        error: getErrorMessage(error),
+      })
+    } finally {
+      setClickDeskTestLoading(false)
+    }
+  }
 
   async function handleChatMonthlyImport(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -3046,6 +3108,89 @@ function ChatModuleDashboard({
 
       {chatActiveTab === 'prototype' && (
         <div className="space-y-6">
+          <section className="panel">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Conexão ClickDesk</p>
+                <h3 className="mt-2 text-2xl font-bold">Teste real de leitura da operação</h3>
+                <p className="section-subtitle">
+                  Primeiro passo da integração: conferir usuários, atendentes por canal e equipes diretamente na API do ClickDesk.
+                  A chave fica somente no servidor da homologação e nunca é enviada ao navegador.
+                </p>
+              </div>
+              <button
+                className="btn-primary"
+                disabled={clickDeskTestLoading}
+                type="button"
+                onClick={() => void handleTestClickDeskConnection()}
+              >
+                {clickDeskTestLoading ? 'Testando conexão...' : 'Testar conexão ClickDesk'}
+              </button>
+            </div>
+
+            {!clickDeskTestResult && (
+              <div className="mt-5 rounded-xl border border-dashed border-white/15 bg-slate-950/30 p-5 text-sm leading-6 text-slate-300">
+                Aguardando as credenciais de homologação. Quando estiverem configuradas, este teste buscará os nomes reais das pessoas que já estão usando o ClickDesk.
+              </div>
+            )}
+
+            {clickDeskTestResult && (
+              <div className="mt-5 space-y-4">
+                <div className={`rounded-xl border p-4 text-sm ${
+                  clickDeskTestResult.connected
+                    ? 'border-emerald-400/25 bg-emerald-400/5 text-emerald-100'
+                    : 'border-amber-300/25 bg-amber-300/5 text-amber-100'
+                }`}>
+                  <strong>
+                    {clickDeskTestResult.connected
+                      ? 'Conexão estabelecida com o ClickDesk.'
+                      : clickDeskTestResult.configured
+                        ? 'Credenciais encontradas, mas a leitura precisa de revisão.'
+                        : 'Integração ainda não configurada.'}
+                  </strong>
+                  {clickDeskTestResult.error && <p className="mt-2">{clickDeskTestResult.error}</p>}
+                  {clickDeskTestResult.tested_at && (
+                    <p className="mt-2 text-xs opacity-80">
+                      Teste executado em {new Date(clickDeskTestResult.tested_at).toLocaleString('pt-BR')}.
+                    </p>
+                  )}
+                </div>
+
+                {clickDeskTestResult.configured && (
+                  <div className="grid gap-4 xl:grid-cols-3">
+                    {[
+                      ['Usuários', clickDeskTestResult.users],
+                      ['Atendentes por canal', clickDeskTestResult.attendants],
+                      ['Equipes de atendimento', clickDeskTestResult.departments],
+                    ].map(([label, group]) => {
+                      const typedGroup = group as ClickDeskTestGroup | undefined
+                      return (
+                        <div key={String(label)} className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+                          <div className="flex items-center justify-between gap-3">
+                            <strong>{String(label)}</strong>
+                            <span className="tabular-nums text-cyan-200">{typedGroup?.items?.length ?? 0}</span>
+                          </div>
+                          {typedGroup?.error && <p className="mt-3 text-sm text-amber-200">{typedGroup.error}</p>}
+                          <div className="mt-4 space-y-2">
+                            {(typedGroup?.items ?? []).slice(0, 12).map((item) => (
+                              <div key={`${String(label)}-${item.id}`} className="rounded-md bg-slate-950/55 px-3 py-2">
+                                <p className="text-sm font-semibold">{item.name}</p>
+                                {item.email && <p className="mt-1 text-xs text-slate-500">{item.email}</p>}
+                              </div>
+                            ))}
+                            {typedGroup?.ok && !typedGroup.items.length && (
+                              <p className="text-sm text-slate-400">A API respondeu, mas não retornou registros nesta consulta.</p>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+
           <section className="panel">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div>
