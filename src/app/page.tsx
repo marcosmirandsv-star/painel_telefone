@@ -246,6 +246,7 @@ type ClickDeskJourneySignal = {
   payload_kind: 'null' | 'string' | 'array' | 'object' | 'other'
   top_level_keys: string[]
   candidate_paths: string[]
+  safe_values: { path: string; value: string }[]
 }
 
 type ClickDeskConversationDiagnostic = {
@@ -263,6 +264,10 @@ type ClickDeskConversationDiagnostic = {
   raw_counts?: {
     ai: number
     human: number
+  }
+  scan?: {
+    ai?: { pages_scanned: number; last_page: number; complete: boolean; errors: string[] }
+    human?: { pages_scanned: number; last_page: number; complete: boolean; errors: string[] }
   }
   area_coverage?: {
     ai_with_target_area: number
@@ -290,6 +295,7 @@ type ClickDeskConversationDiagnostic = {
     error?: string
   }[]
   human_by_assignee?: { name: string; count: number }[]
+  human_by_area_assignee?: { area: string; name: string; count: number }[]
   samples?: {
     ai: ClickDeskConversationSample[]
     human: ClickDeskConversationSample[]
@@ -3429,6 +3435,14 @@ function ChatModuleDashboard({
                                   Campos estruturais encontrados: {[...(item.transcript?.candidate_paths ?? []), ...(item.detail?.candidate_paths ?? [])].slice(0, 6).join(', ')}
                                 </p>
                               ) : null}
+                              {([...(item.transcript?.safe_values ?? []), ...(item.detail?.safe_values ?? [])].length > 0) ? (
+                                <p className="pt-2 text-slate-500">
+                                  Valores técnicos seguros: {[...(item.transcript?.safe_values ?? []), ...(item.detail?.safe_values ?? [])]
+                                    .slice(0, 6)
+                                    .map((entry) => `${entry.path}=${entry.value}`)
+                                    .join(' · ')}
+                                </p>
+                              ) : null}
                             </div>
                           </div>
                         ))}
@@ -3445,13 +3459,16 @@ function ChatModuleDashboard({
                           Primeira leitura do responsável devolvido pela API. Ainda não é o fechamento oficial do mês.
                         </p>
                         <div className="mt-4 space-y-2">
-                          {(clickDeskConversationDiagnostic.human_by_assignee ?? []).slice(0, 20).map((item) => (
-                            <div key={item.name} className="flex items-center justify-between gap-4 rounded-md bg-slate-950/55 px-3 py-2">
-                              <span className="text-sm font-semibold">{item.name}</span>
+                          {(clickDeskConversationDiagnostic.human_by_area_assignee ?? []).slice(0, 30).map((item) => (
+                            <div key={`${item.area}-${item.name}`} className="flex items-center justify-between gap-4 rounded-md bg-slate-950/55 px-3 py-2">
+                              <div>
+                                <span className="text-sm font-semibold">{item.name}</span>
+                                <p className="mt-1 text-xs text-slate-500">{item.area}</p>
+                              </div>
                               <strong className="tabular-nums">{formatChatCount(item.count)}</strong>
                             </div>
                           ))}
-                          {!clickDeskConversationDiagnostic.human_by_assignee?.length && (
+                          {!clickDeskConversationDiagnostic.human_by_area_assignee?.length && (
                             <p className="text-sm text-slate-400">
                               A API respondeu, mas ainda não conseguimos identificar o campo de responsável nos registros retornados.
                             </p>
@@ -3481,11 +3498,21 @@ function ChatModuleDashboard({
                             </div>
                           )}
                           <p>
+                            Leitura humana: <strong>{formatChatCount(clickDeskConversationDiagnostic.scan?.human?.pages_scanned ?? 0)}</strong> de{' '}
+                            <strong>{formatChatCount(clickDeskConversationDiagnostic.scan?.human?.last_page ?? 0)}</strong> página(s) ·{' '}
+                            <strong>{clickDeskConversationDiagnostic.scan?.human?.complete ? 'completa' : 'parcial'}</strong>.
+                          </p>
+                          <p>
+                            Leitura IA: <strong>{formatChatCount(clickDeskConversationDiagnostic.scan?.ai?.pages_scanned ?? 0)}</strong> de{' '}
+                            <strong>{formatChatCount(clickDeskConversationDiagnostic.scan?.ai?.last_page ?? 0)}</strong> página(s) ·{' '}
+                            <strong>{clickDeskConversationDiagnostic.scan?.ai?.complete ? 'completa' : 'amostral'}</strong>.
+                          </p>
+                          <p>
                             Registros com data no recorte humano: <strong>{formatChatCount(clickDeskConversationDiagnostic.timestamps?.human?.with_timestamp ?? 0)}</strong>.
                             {' '}Sem data reconhecida: <strong>{formatChatCount(clickDeskConversationDiagnostic.timestamps?.human?.without_timestamp ?? 0)}</strong>.
                           </p>
                           <p>
-                            Este resultado ainda é diagnóstico. Só depois de confirmarmos paginação, campo de data e jornada pelo transcript ele vira indicador oficial.
+                            O volume humano pode ser consolidado quando a leitura estiver completa; IA continua separada enquanto não houver um vínculo confiável com Suporte ERP/Fiscal.
                           </p>
                         </div>
                       </div>
