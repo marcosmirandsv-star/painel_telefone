@@ -223,6 +223,7 @@ type ClickDeskTestResult = {
   users?: ClickDeskTestGroup
   attendants?: ClickDeskTestGroup
   departments?: ClickDeskTestGroup
+  target_departments?: ClickDeskTestGroup
   queues?: ClickDeskTestGroup
   scope?: string[]
   error?: string
@@ -3166,6 +3167,7 @@ function ChatModuleDashboard({
                 {clickDeskTestResult.configured && (
                   <div className="grid gap-4 xl:grid-cols-3">
                     {[
+                      ['Áreas-alvo encontradas', clickDeskTestResult.target_departments],
                       ['Filas-alvo', clickDeskTestResult.queues],
                       ['Usuários', clickDeskTestResult.users],
                       ['Atendentes por canal', clickDeskTestResult.attendants],
