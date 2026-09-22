@@ -223,6 +223,8 @@ type ClickDeskTestResult = {
   users?: ClickDeskTestGroup
   attendants?: ClickDeskTestGroup
   departments?: ClickDeskTestGroup
+  queues?: ClickDeskTestGroup
+  scope?: string[]
   error?: string
 }
 type IndividualForm = {
@@ -3149,6 +3151,11 @@ function ChatModuleDashboard({
                         : 'Integração ainda não configurada.'}
                   </strong>
                   {clickDeskTestResult.error && <p className="mt-2">{clickDeskTestResult.error}</p>}
+                  {clickDeskTestResult.scope?.length ? (
+                    <p className="mt-2 text-xs opacity-80">
+                      Escopo do teste: {clickDeskTestResult.scope.join(' e ')}.
+                    </p>
+                  ) : null}
                   {clickDeskTestResult.tested_at && (
                     <p className="mt-2 text-xs opacity-80">
                       Teste executado em {new Date(clickDeskTestResult.tested_at).toLocaleString('pt-BR')}.
@@ -3159,6 +3166,7 @@ function ChatModuleDashboard({
                 {clickDeskTestResult.configured && (
                   <div className="grid gap-4 xl:grid-cols-3">
                     {[
+                      ['Filas-alvo', clickDeskTestResult.queues],
                       ['Usuários', clickDeskTestResult.users],
                       ['Atendentes por canal', clickDeskTestResult.attendants],
                       ['Equipes de atendimento', clickDeskTestResult.departments],
