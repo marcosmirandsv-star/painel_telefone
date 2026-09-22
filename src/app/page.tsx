@@ -238,6 +238,16 @@ type ClickDeskConversationSample = {
   satisfaction: string | null
 }
 
+type ClickDeskJourneySignal = {
+  ai_marker: boolean
+  human_marker: boolean
+  transfer_marker: boolean
+  signal_keys: string[]
+  payload_kind: 'null' | 'string' | 'array' | 'object' | 'other'
+  top_level_keys: string[]
+  candidate_paths: string[]
+}
+
 type ClickDeskConversationDiagnostic = {
   connected?: boolean
   period?: { year: number; month: number }
@@ -249,6 +259,16 @@ type ClickDeskConversationDiagnostic = {
     ai: number
     transferred_to_human: number
     overlap: number
+  }
+  raw_counts?: {
+    ai: number
+    human: number
+  }
+  area_coverage?: {
+    ai_with_target_area: number
+    ai_without_area: number
+    human_with_target_area: number
+    human_without_area: number
   }
   pagination?: {
     ai?: Record<string, string | number | boolean | null>
@@ -263,10 +283,10 @@ type ClickDeskConversationDiagnostic = {
     classified_as: 'ai' | 'human'
     assignee: string | null
     transcript_available: boolean
-    ai_marker: boolean
-    human_marker: boolean
-    transfer_marker: boolean
-    signal_keys: string[]
+    detail_available: boolean
+    transcript: ClickDeskJourneySignal
+    detail: ClickDeskJourneySignal
+    detail_area: string | null
     error?: string
   }[]
   human_by_assignee?: { name: string; count: number }[]
@@ -3360,17 +3380,23 @@ function ChatModuleDashboard({
                   <>
                     <div className="mt-5 grid gap-4 md:grid-cols-3">
                       <MetricCard
-                        label="Classificadas como IA"
+                        label="IA · área confirmada"
                         value={formatChatCount(clickDeskConversationDiagnostic.counts?.ai ?? 0)}
                       />
                       <MetricCard
-                        label="Classificadas como humano"
+                        label="Humano · área confirmada"
                         value={formatChatCount(clickDeskConversationDiagnostic.counts?.transferred_to_human ?? 0)}
                       />
                       <MetricCard
                         label="Aparecem nos dois filtros"
                         value={formatChatCount(clickDeskConversationDiagnostic.counts?.overlap ?? 0)}
                       />
+                    </div>
+                    <div className="mt-3 rounded-lg border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">
+                      Página recebida da API: <strong>{formatChatCount(clickDeskConversationDiagnostic.raw_counts?.ai ?? 0)}</strong> registro(s) em attendance=ai
+                      {' '}e <strong>{formatChatCount(clickDeskConversationDiagnostic.raw_counts?.human ?? 0)}</strong> em attendance=human.
+                      {' '}Sem área identificável na própria linha: IA <strong>{formatChatCount(clickDeskConversationDiagnostic.area_coverage?.ai_without_area ?? 0)}</strong>,
+                      {' '}humano <strong>{formatChatCount(clickDeskConversationDiagnostic.area_coverage?.human_without_area ?? 0)}</strong>.
                     </div>
 
                     <div className="mt-5 rounded-xl border border-white/10 bg-slate-900/70 p-5">
@@ -3393,10 +3419,16 @@ function ChatModuleDashboard({
                             </p>
                             {item.assignee && <p className="mt-1 text-xs text-slate-400">{item.assignee}</p>}
                             <div className="mt-3 space-y-1 text-xs text-slate-300">
-                              <p>Transcript: <strong>{item.transcript_available ? 'acessível' : 'indisponível'}</strong></p>
-                              <p>Sinal de IA: <strong>{item.ai_marker ? 'sim' : 'não identificado'}</strong></p>
-                              <p>Sinal humano: <strong>{item.human_marker ? 'sim' : 'não identificado'}</strong></p>
-                              <p>Sinal de transferência: <strong>{item.transfer_marker ? 'sim' : 'não identificado'}</strong></p>
+                              <p>Transcript: <strong>{item.transcript_available ? 'acessível' : 'indisponível'}</strong> · formato <strong>{item.transcript?.payload_kind ?? '—'}</strong></p>
+                              <p>Detalhe do chamado: <strong>{item.detail_available ? 'acessível' : 'indisponível'}</strong>{item.detail_area ? <> · área <strong>{item.detail_area}</strong></> : null}</p>
+                              <p>Sinal de IA: <strong>{item.transcript?.ai_marker || item.detail?.ai_marker ? 'sim' : 'não identificado'}</strong></p>
+                              <p>Sinal humano: <strong>{item.transcript?.human_marker || item.detail?.human_marker ? 'sim' : 'não identificado'}</strong></p>
+                              <p>Sinal de transferência: <strong>{item.transcript?.transfer_marker || item.detail?.transfer_marker ? 'sim' : 'não identificado'}</strong></p>
+                              {(item.transcript?.candidate_paths?.length || item.detail?.candidate_paths?.length) ? (
+                                <p className="pt-2 text-slate-500">
+                                  Campos estruturais encontrados: {[...(item.transcript?.candidate_paths ?? []), ...(item.detail?.candidate_paths ?? [])].slice(0, 6).join(', ')}
+                                </p>
+                              ) : null}
                             </div>
                           </div>
                         ))}
@@ -3440,6 +3472,14 @@ function ChatModuleDashboard({
                           <p>
                             Paginação detectada: <strong>{Object.keys(clickDeskConversationDiagnostic.pagination?.human ?? {}).length || Object.keys(clickDeskConversationDiagnostic.pagination?.ai ?? {}).length ? 'há metadados para analisar' : 'não apareceu metadado explícito nesta resposta'}</strong>.
                           </p>
+                          {(Object.keys(clickDeskConversationDiagnostic.pagination?.human ?? {}).length > 0 || Object.keys(clickDeskConversationDiagnostic.pagination?.ai ?? {}).length > 0) && (
+                            <div className="rounded-md bg-slate-950/45 px-3 py-2 text-xs text-slate-400">
+                              {[...Object.entries(clickDeskConversationDiagnostic.pagination?.human ?? {}).map(([key, value]) => `humano.${key}=${String(value)}`),
+                                ...Object.entries(clickDeskConversationDiagnostic.pagination?.ai ?? {}).map(([key, value]) => `ia.${key}=${String(value)}`)]
+                                .slice(0, 12)
+                                .join(' · ')}
+                            </div>
+                          )}
                           <p>
                             Registros com data no recorte humano: <strong>{formatChatCount(clickDeskConversationDiagnostic.timestamps?.human?.with_timestamp ?? 0)}</strong>.
                             {' '}Sem data reconhecida: <strong>{formatChatCount(clickDeskConversationDiagnostic.timestamps?.human?.without_timestamp ?? 0)}</strong>.
