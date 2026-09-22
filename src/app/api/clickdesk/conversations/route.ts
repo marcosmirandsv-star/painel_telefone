@@ -271,6 +271,7 @@ function detectJourneySignals(payload: unknown): JourneySignal {
           : typeof payload === 'object'
             ? 'object'
             : 'other'
+
   const topLevelKeys =
     payload && typeof payload === 'object' && !Array.isArray(payload)
       ? Object.keys(payload as Record<string, unknown>).slice(0, 30)
@@ -283,7 +284,9 @@ function detectJourneySignals(payload: unknown): JourneySignal {
     if (/transfer|handoff|escalat|encaminh|transbord/.test(normalized)) transferMarker = true
   }
 
-  const visit = (value: unknown, depth = 0, path = '    if (!value || typeof value !== 'object' || depth > 6) return
+  const visit = (value: unknown, depth = 0, path = '$') => {
+    if (!value || typeof value !== 'object' || depth > 6) return
+
     if (Array.isArray(value)) {
       value.slice(0, 100).forEach((item, index) => visit(item, depth + 1, `${path}[${index}]`))
       return
@@ -293,7 +296,11 @@ function detectJourneySignals(payload: unknown): JourneySignal {
     for (const [key, raw] of Object.entries(source)) {
       const currentPath = `${path}.${key}`
       const normalizedKey = normalizeLabel(key)
-      const interestingKey = /(role|type|author|sender|actor|attendance|event|action|transfer|handoff|escalat|agent|bot|human|ai|participant|source|origin|department|team|queue)/i.test(key)
+      const interestingKey =
+        /(role|type|author|sender|actor|attendance|event|action|transfer|handoff|escalat|agent|bot|human|ai|participant|source|origin|department|team|queue)/i.test(
+          key,
+        )
+
       if (interestingKey) {
         signalKeys.add(key)
         candidatePaths.add(currentPath)
@@ -315,6 +322,7 @@ function detectJourneySignals(payload: unknown): JourneySignal {
   }
 
   visit(payload)
+
   return {
     ai_marker: aiMarker,
     human_marker: humanMarker,
