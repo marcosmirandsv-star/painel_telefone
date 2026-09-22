@@ -157,3 +157,4 @@ Depois de chegar à produção, qualquer regressão deve ser tratada por revert 
 - ranking do Telefone em Preview: isolado em Edge Function autenticada no Supabase de homologação.
 - proteção de rotas administrativas: implementada; sem a service role de homologação elas falham fechadas em vez de reutilizar a produção.
 - vínculo da service role de homologação na Vercel: opcional para a validação normal de dashboards; continua necessário somente para operações administrativas específicas e integrações externas.
+- teste de conexão ClickDesk: preparado no Chat 2.0 da homologação; usa `CLICKDESK_API_KEY` e `CLICKDESK_ACCOUNT_ID` somente no ambiente Preview e exige novo deployment após alterações nessas variáveis.
