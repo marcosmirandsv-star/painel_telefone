@@ -295,7 +295,8 @@ type ClickDeskConversationDiagnostic = {
     error?: string
   }[]
   human_by_assignee?: { name: string; count: number }[]
-  human_by_area_assignee?: { area: string; name: string; count: number }[]
+  human_by_area_assignee?: { area: string; name: string; count: number; satisfaction_labels: Record<string, number> }[]
+  human_satisfaction_labels?: { label: string; count: number }[]
   samples?: {
     ai: ClickDeskConversationSample[]
     human: ClickDeskConversationSample[]
@@ -1903,6 +1904,7 @@ function ChatModuleDashboard({
   const [chatActiveTab, setChatActiveTab] = useState<'overview' | 'prototype' | 'podium' | 'analysis' | 'reports' | 'import' | 'settings'>('overview')
   const [chatToolsOpen, setChatToolsOpen] = useState(false)
   const [chat2AnalystId, setChat2AnalystId] = useState('')
+  const [chat2LiveAnalystKey, setChat2LiveAnalystKey] = useState('')
   const [chat2PeriodKey, setChat2PeriodKey] = useState('')
   const [clickDeskTestLoading, setClickDeskTestLoading] = useState(false)
   const [clickDeskTestResult, setClickDeskTestResult] = useState<ClickDeskTestResult | null>(null)
@@ -3067,6 +3069,11 @@ function ChatModuleDashboard({
       metric.year === chat2SelectedPeriod.year && metric.month_number === chat2SelectedPeriod.monthNumber
     return matchesTeam && matchesPeriod
   })
+  const chat2LiveHumanRows = clickDeskConversationDiagnostic?.human_by_area_assignee ?? []
+  const chat2SelectedLiveHuman =
+    chat2LiveHumanRows.find((item) => `${item.area}::${item.name}` === chat2LiveAnalystKey) ??
+    chat2LiveHumanRows[0] ??
+    null
   const chat2SelectedMetric =
     chat2VisibleMetrics.find((metric) => metric.analyst_id === chat2AnalystId) ?? chat2VisibleMetrics[0] ?? null
   const chat2TeamMetrics = chat2SelectedMetric
@@ -3540,22 +3547,98 @@ function ChatModuleDashboard({
               </div>
               <div className="min-w-[260px]">
                 <Field label="Visualizar como">
-                  <select
-                    className="form-input"
-                    value={chat2SelectedMetric?.analyst_id ?? ''}
-                    onChange={(event) => setChat2AnalystId(event.target.value)}
-                  >
-                    {chat2VisibleMetrics.map((metric) => (
-                      <option key={metric.id} value={metric.analyst_id}>
-                        {getChatAnalystName(metric)} · {getChatTeamName(metric)}
-                      </option>
-                    ))}
-                  </select>
+                  {chat2LiveHumanRows.length ? (
+                    <select
+                      className="form-input"
+                      value={chat2SelectedLiveHuman ? `${chat2SelectedLiveHuman.area}::${chat2SelectedLiveHuman.name}` : ''}
+                      onChange={(event) => setChat2LiveAnalystKey(event.target.value)}
+                    >
+                      {chat2LiveHumanRows.map((item) => (
+                        <option key={`${item.area}-${item.name}`} value={`${item.area}::${item.name}`}>
+                          {item.name} · {item.area}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <select
+                      className="form-input"
+                      value={chat2SelectedMetric?.analyst_id ?? ''}
+                      onChange={(event) => setChat2AnalystId(event.target.value)}
+                    >
+                      {chat2VisibleMetrics.map((metric) => (
+                        <option key={metric.id} value={metric.analyst_id}>
+                          {getChatAnalystName(metric)} · {getChatTeamName(metric)}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </Field>
               </div>
             </div>
 
-            {chat2SelectedMetric ? (
+            {chat2SelectedLiveHuman ? (
+              <>
+                <div className="mt-6 flex flex-col gap-4 rounded-xl border border-white/10 bg-slate-950/35 p-5 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-sm text-slate-400">{chat2SelectedLiveHuman.area}</p>
+                    <h3 className="text-2xl font-bold">{chat2SelectedLiveHuman.name}</h3>
+                    <p className="mt-1 text-sm text-slate-400">{chat2SelectedPeriod.label} · ClickDesk ao vivo da homologação</p>
+                  </div>
+                  <div className="rounded-lg bg-slate-900 px-4 py-3 text-sm">
+                    <p className="text-slate-400">Status da leitura humana</p>
+                    <strong className="mt-1 block text-base">
+                      {clickDeskConversationDiagnostic?.scan?.human?.complete ? 'Leitura completa da API' : 'Leitura parcial'}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                  <MetricCard label="Atendimentos humanos" value={formatChatCount(chat2SelectedLiveHuman.count)} />
+                  <MetricCard label="Meu CSAT" value="—" />
+                  <MetricCard label="Avaliações positivas" value="—" />
+                  <MetricCard label="Avaliações negativas" value="—" />
+                  <MetricCard label="% de avaliações" value="—" />
+                </div>
+
+                <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+                    <p className="text-sm font-semibold uppercase tracking-[0.14em] text-cyan-300">Dados reais disponíveis agora</p>
+                    <div className="mt-4 space-y-3 text-sm">
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-slate-400">Área ClickDesk</span>
+                        <strong>{chat2SelectedLiveHuman.area}</strong>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-slate-400">Atendimentos humanos no período</span>
+                        <strong className="tabular-nums">{formatChatCount(chat2SelectedLiveHuman.count)}</strong>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-slate-400">Leitura das páginas humanas</span>
+                        <strong>{clickDeskConversationDiagnostic?.scan?.human?.complete ? 'Completa' : 'Parcial'}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+                    <p className="text-sm font-semibold uppercase tracking-[0.14em] text-cyan-300">Satisfação bruta recebida</p>
+                    <p className="mt-2 text-sm text-slate-400">
+                      Mostramos apenas os rótulos devolvidos pelo ClickDesk. Ainda não estamos convertendo isso em CSAT oficial.
+                    </p>
+                    <div className="mt-4 space-y-2">
+                      {Object.entries(chat2SelectedLiveHuman.satisfaction_labels ?? {}).map(([label, count]) => (
+                        <div key={label} className="flex items-center justify-between gap-4 rounded-md bg-slate-950/55 px-3 py-2 text-sm">
+                          <span>{label}</span>
+                          <strong className="tabular-nums">{formatChatCount(count)}</strong>
+                        </div>
+                      ))}
+                      {!Object.keys(chat2SelectedLiveHuman.satisfaction_labels ?? {}).length && (
+                        <p className="text-sm text-slate-400">Nenhuma avaliação identificada nestes registros humanos.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : chat2SelectedMetric ? (
               <>
                 <div className="mt-6 flex flex-col gap-4 rounded-xl border border-white/10 bg-slate-950/35 p-5 md:flex-row md:items-center md:justify-between">
                   <div className="flex items-center gap-4">
