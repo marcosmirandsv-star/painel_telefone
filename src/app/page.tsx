@@ -350,6 +350,18 @@ function playScheduleAlertSound() {
   }
 }
 
+function scheduleNotificationHref(item: ScheduleNotification) {
+  return item.title.toLowerCase().includes('vale-transporte')
+    ? '/escalas?section=transport'
+    : '/escalas/gestao'
+}
+
+function scheduleNotificationEyebrow(item: ScheduleNotification) {
+  return item.title.toLowerCase().includes('vale-transporte')
+    ? 'Alerta de vale-transporte'
+    : 'Nova solicitação de escala'
+}
+
 function showScheduleBrowserNotification(item: ScheduleNotification) {
   if (typeof window === 'undefined' || !('Notification' in window)) return
   if (window.Notification.permission !== 'granted') return
@@ -659,7 +671,9 @@ export default function Home() {
             setSchedulePopup(item)
             playScheduleAlertSound()
             showScheduleBrowserNotification(item)
-            document.title = '🔔 Nova solicitação de escala'
+            document.title = item.title.toLowerCase().includes('vale-transporte')
+              ? '🔔 Alerta de vale-transporte'
+              : '🔔 Nova solicitação de escala'
           },
         )
         .subscribe()
@@ -1429,14 +1443,14 @@ export default function Home() {
             <div className="animate-bounce text-2xl">🔔</div>
             <div className="flex-1">
               <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">
-                Nova solicitação de escala
+                {scheduleNotificationEyebrow(schedulePopup)}
               </p>
               <h2 className="mt-1 text-lg font-bold">{schedulePopup.title}</h2>
               <p className="mt-2 text-sm text-slate-300">{schedulePopup.message}</p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Link
                   className="primary-button"
-                  href="/escalas/gestao"
+                  href={scheduleNotificationHref(schedulePopup)}
                   onClick={() => markScheduleNotificationSeen(schedulePopup)}
                 >
                   Ver agora
@@ -1489,7 +1503,7 @@ export default function Home() {
                     const unseen = scheduleNotifications.find((item) => !item.seen_at)
                     if (unseen) setSchedulePopup(unseen)
                   }}
-                  title="Solicitações de escala"
+                  title="Alertas de Escalas"
                 >
                   🔔
                   {scheduleNotifications.filter((item) => !item.seen_at).length > 0 && (
