@@ -207,6 +207,16 @@ export function ScheduleTransportPanel({
 
   const totalPresenceDays = beneficiaries.reduce((sum, item) => sum + item.days, 0)
 
+  async function registerActivity(activityType: string) {
+    const { error } = await supabase.rpc('touch_schedule_transport_submission', {
+      p_year: year,
+      p_month: month,
+      p_profile_id: profileId || null,
+      p_activity_type: activityType,
+    })
+    if (error) setMessage(error.message)
+  }
+
   async function toggleBenefit(person: SchedulePerson) {
     const current = benefitForMonth(person.id)
 
@@ -233,6 +243,7 @@ export function ScheduleTransportPanel({
         if (error) return setMessage(error.message)
         setBenefits((items) => items.map((item) => item.id === current.id ? data as TransportBenefit : item))
       }
+      await registerActivity('BENEFIT_CONFIG_CHANGED')
       setMessage(`${person.name} não será considerado(a) no vale-transporte de ${MONTHS[month - 1]}.`)
       return
     }
@@ -251,6 +262,7 @@ export function ScheduleTransportPanel({
 
     if (error) return setMessage(error.message)
     setBenefits((items) => [...items, data as TransportBenefit])
+    await registerActivity('BENEFIT_CONFIG_CHANGED')
     setMessage(`${person.name} incluído(a) no vale-transporte a partir de ${formatDate(monthStart)}.`)
   }
 
@@ -272,6 +284,9 @@ export function ScheduleTransportPanel({
       sent_at: new Date().toISOString(),
       sent_by: profileId || null,
       snapshot: reportSnapshot(),
+      last_activity_at: new Date().toISOString(),
+      last_activity_by: profileId || null,
+      last_activity_type: 'SENT_TO_DP',
       updated_at: new Date().toISOString(),
     }
 
@@ -307,6 +322,7 @@ export function ScheduleTransportPanel({
     link.download = `vale-transporte-${year}-${String(month).padStart(2, '0')}.csv`
     link.click()
     URL.revokeObjectURL(url)
+    void registerActivity('CSV_EXPORTED')
   }
 
   async function copyReport() {
@@ -317,6 +333,7 @@ export function ScheduleTransportPanel({
     ]
     try {
       await navigator.clipboard.writeText(lines.join('\n'))
+      await registerActivity('SUMMARY_COPIED')
       setMessage('Resumo copiado para a área de transferência.')
     } catch {
       setMessage('Não foi possível copiar automaticamente neste navegador.')
@@ -489,8 +506,8 @@ export function ScheduleTransportPanel({
       <div className="schedule-inline-note">
         <strong>Critério usado no cálculo:</strong> o relatório conta somente dias em que a escala híbrida estiver como
         <strong> Presencial</strong> ou <strong>Click Day</strong>. Home Office, feriados, férias, folgas, premiações e demais
-        ausências não entram na quantidade de dias de vale-transporte. O rodízio de sábados não está incluído neste cálculo,
-        pois ainda não definimos se esses sábados geram vale-transporte.
+        ausências não entram na quantidade de dias de vale-transporte. Os sábados também não entram: essa operação é 100% Home Office,
+        portanto não gera necessidade de vale-transporte.
       </div>
     </div>
   )
