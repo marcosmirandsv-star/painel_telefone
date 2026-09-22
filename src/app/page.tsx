@@ -249,6 +249,48 @@ type ClickDeskJourneySignal = {
   safe_values: { path: string; value: string }[]
 }
 
+type ClickDeskAiRoutingDiagnostic = {
+  connected?: boolean
+  period?: { year: number; month: number }
+  scope?: string[]
+  pages_scanned?: number
+  page_errors?: string[]
+  listed_in_period?: number
+  sampled?: number
+  detail_available?: number
+  transcript_available?: number
+  area_resolved?: number
+  samples?: {
+    ticket_id: string
+    list_timestamp: string | null
+    list_area: string | null
+    detail_available: boolean
+    transcript_available: boolean
+    detail_area: string | null
+    transcript_area: string | null
+    routing_values: { path: string; value: string }[]
+    run_correlations: { value: string; ticket_path: string; run_path: string }[]
+    error?: string
+  }[]
+  repeated_signals?: { path: string; value: string; count: number }[]
+  ai_agents?: {
+    ok: boolean
+    count: number
+    items: { id: string; name: string; routing_values: { path: string; value: string }[] }[]
+    error?: string
+  }
+  agent_runs?: {
+    ok: boolean
+    count: number
+    pagination: Record<string, string | number | boolean | null>
+    correlation_count: number
+    error?: string
+  }
+  conclusion?: string
+  tested_at?: string
+  error?: string
+}
+
 type ClickDeskConversationDiagnostic = {
   connected?: boolean
   period?: { year: number; month: number }
@@ -1927,6 +1969,8 @@ function ChatModuleDashboard({
   const [clickDeskTestResult, setClickDeskTestResult] = useState<ClickDeskTestResult | null>(null)
   const [clickDeskConversationLoading, setClickDeskConversationLoading] = useState(false)
   const [clickDeskConversationDiagnostic, setClickDeskConversationDiagnostic] = useState<ClickDeskConversationDiagnostic | null>(null)
+  const [clickDeskAiRoutingLoading, setClickDeskAiRoutingLoading] = useState(false)
+  const [clickDeskAiRoutingDiagnostic, setClickDeskAiRoutingDiagnostic] = useState<ClickDeskAiRoutingDiagnostic | null>(null)
   const [manualPodiumDraft, setManualPodiumDraft] = useState<Record<number, string>>({})
   const [chatPodiumMessage, setChatPodiumMessage] = useState('')
   const [chatAnalystForm, setChatAnalystForm] = useState({ teamId: '', name: '', csatGoal: '86', photoFile: null as File | null })
@@ -2030,6 +2074,44 @@ function ChatModuleDashboard({
       setClickDeskConversationDiagnostic({ error: getErrorMessage(error) })
     } finally {
       setClickDeskConversationLoading(false)
+    }
+  }
+
+  async function handleDiagnoseClickDeskAiRouting() {
+    setClickDeskAiRoutingLoading(true)
+    setClickDeskAiRoutingDiagnostic(null)
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        setClickDeskAiRoutingDiagnostic({ error: 'Sua sessão de homologação não está ativa.' })
+        return
+      }
+
+      const params = new URLSearchParams({
+        year: String(chat2SelectedPeriod.year),
+        month: String(chat2SelectedPeriod.monthNumber),
+      })
+      const response = await fetch(`/api/clickdesk/ai-routing?${params.toString()}`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        cache: 'no-store',
+      })
+      const data = (await response.json()) as ClickDeskAiRoutingDiagnostic
+
+      if (!response.ok && !data.error) {
+        data.error = 'Não foi possível diagnosticar o roteamento da IA.'
+      }
+
+      setClickDeskAiRoutingDiagnostic(data)
+    } catch (error) {
+      setClickDeskAiRoutingDiagnostic({ error: getErrorMessage(error) })
+    } finally {
+      setClickDeskAiRoutingLoading(false)
     }
   }
 
@@ -3326,6 +3408,14 @@ function ChatModuleDashboard({
                 >
                   {clickDeskConversationLoading ? 'Lendo atendimentos...' : 'Ler atendimentos do período'}
                 </button>
+                <button
+                  className="secondary-button"
+                  disabled={clickDeskAiRoutingLoading}
+                  type="button"
+                  onClick={() => void handleDiagnoseClickDeskAiRouting()}
+                >
+                  {clickDeskAiRoutingLoading ? 'Diagnosticando IA...' : 'Diagnosticar roteamento IA'}
+                </button>
               </div>
             </div>
 
@@ -3566,6 +3656,129 @@ function ChatModuleDashboard({
               </div>
             )}
           </section>
+
+          {clickDeskAiRoutingDiagnostic && (
+            <section className="panel">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Diagnóstico de roteamento da IA</p>
+                  <h3 className="mt-2 text-2xl font-bold">{chat2SelectedPeriod.label} · amostra técnica</h3>
+                  <p className="section-subtitle">
+                    Esta leitura procura sinais estáveis de ERP/Fiscal em detalhe do chamado, transcript, agentes de IA e execuções do agente.
+                    Nenhum conteúdo de mensagem é exibido.
+                  </p>
+                </div>
+                <span className="rounded-md border border-white/10 bg-slate-900 px-3 py-2 text-sm text-slate-300">
+                  Suporte ERP + Suporte Fiscal
+                </span>
+              </div>
+
+              {clickDeskAiRoutingDiagnostic.error ? (
+                <div className="mt-5 rounded-xl border border-amber-300/25 bg-amber-300/5 p-4 text-sm text-amber-100">
+                  {clickDeskAiRoutingDiagnostic.error}
+                </div>
+              ) : (
+                <>
+                  <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                    <MetricCard label="Páginas IA lidas" value={formatChatCount(clickDeskAiRoutingDiagnostic.pages_scanned ?? 0)} />
+                    <MetricCard label="IA no período" value={formatChatCount(clickDeskAiRoutingDiagnostic.listed_in_period ?? 0)} />
+                    <MetricCard label="Amostra enriquecida" value={formatChatCount(clickDeskAiRoutingDiagnostic.sampled ?? 0)} />
+                    <MetricCard label="Área resolvida" value={formatChatCount(clickDeskAiRoutingDiagnostic.area_resolved ?? 0)} />
+                    <MetricCard label="Correlação com execuções" value={formatChatCount(clickDeskAiRoutingDiagnostic.agent_runs?.correlation_count ?? 0)} />
+                  </div>
+
+                  <div className="mt-5 grid gap-5 xl:grid-cols-2">
+                    <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+                      <h4 className="font-semibold">Sinais recorrentes</h4>
+                      <p className="mt-1 text-sm text-slate-400">Campos técnicos que se repetem em pelo menos duas conversas da amostra.</p>
+                      <div className="mt-4 space-y-2">
+                        {(clickDeskAiRoutingDiagnostic.repeated_signals ?? []).slice(0, 20).map((item) => (
+                          <div key={`${item.path}-${item.value}`} className="rounded-md bg-slate-950/55 px-3 py-2 text-xs">
+                            <div className="flex items-center justify-between gap-4">
+                              <strong className="break-all">{item.path}</strong>
+                              <span className="tabular-nums text-cyan-200">{item.count}x</span>
+                            </div>
+                            <p className="mt-1 break-all text-slate-400">{item.value}</p>
+                          </div>
+                        ))}
+                        {!clickDeskAiRoutingDiagnostic.repeated_signals?.length && (
+                          <p className="text-sm text-slate-400">Ainda não apareceu um sinal técnico recorrente na amostra.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+                      <h4 className="font-semibold">Agentes e execuções da IA</h4>
+                      <div className="mt-4 space-y-3 text-sm text-slate-300">
+                        <p>Agentes de IA acessíveis: <strong>{clickDeskAiRoutingDiagnostic.ai_agents?.ok ? 'sim' : 'não'}</strong> · {formatChatCount(clickDeskAiRoutingDiagnostic.ai_agents?.count ?? 0)} item(ns).</p>
+                        <p>Execuções do agente acessíveis: <strong>{clickDeskAiRoutingDiagnostic.agent_runs?.ok ? 'sim' : 'não'}</strong> · {formatChatCount(clickDeskAiRoutingDiagnostic.agent_runs?.count ?? 0)} item(ns) nesta página.</p>
+                        {clickDeskAiRoutingDiagnostic.ai_agents?.error && <p className="text-amber-200">{clickDeskAiRoutingDiagnostic.ai_agents.error}</p>}
+                        {clickDeskAiRoutingDiagnostic.agent_runs?.error && <p className="text-amber-200">{clickDeskAiRoutingDiagnostic.agent_runs.error}</p>}
+                      </div>
+                      {(clickDeskAiRoutingDiagnostic.ai_agents?.items ?? []).length > 0 && (
+                        <div className="mt-4 space-y-2">
+                          {(clickDeskAiRoutingDiagnostic.ai_agents?.items ?? []).slice(0, 12).map((agent) => (
+                            <div key={agent.id} className="rounded-md bg-slate-950/55 px-3 py-2">
+                              <p className="text-sm font-semibold">{agent.name}</p>
+                              {agent.routing_values.length > 0 && (
+                                <p className="mt-1 text-xs text-slate-500">
+                                  {agent.routing_values.slice(0, 4).map((item) => `${item.path}=${item.value}`).join(' · ')}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-5 rounded-xl border border-white/10 bg-slate-900/70 p-5">
+                    <h4 className="font-semibold">Amostra de conversas IA enriquecidas</h4>
+                    <p className="mt-1 text-sm text-slate-400">
+                      O objetivo é descobrir um vínculo objetivo com ERP/Fiscal antes de criarmos qualquer regra automática.
+                    </p>
+                    <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                      {(clickDeskAiRoutingDiagnostic.samples ?? []).map((sample) => {
+                        const resolvedArea = sample.list_area ?? sample.detail_area ?? sample.transcript_area
+                        return (
+                          <div key={sample.ticket_id} className="rounded-lg bg-slate-950/55 p-4 text-xs">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="font-semibold">Conversa {sample.ticket_id.slice(-10)}</p>
+                                <p className="mt-1 text-slate-500">{sample.list_timestamp ?? 'Data não reconhecida'}</p>
+                              </div>
+                              <span className={resolvedArea ? 'text-emerald-300' : 'text-slate-400'}>
+                                {resolvedArea ?? 'Sem área'}
+                              </span>
+                            </div>
+                            <p className="mt-3 text-slate-300">
+                              Detalhe: <strong>{sample.detail_available ? 'ok' : 'não'}</strong> · Transcript: <strong>{sample.transcript_available ? 'ok' : 'não'}</strong>
+                            </p>
+                            {sample.routing_values.length > 0 && (
+                              <p className="mt-2 break-all text-slate-500">
+                                Sinais: {sample.routing_values.slice(0, 6).map((item) => `${item.path}=${item.value}`).join(' · ')}
+                              </p>
+                            )}
+                            {sample.run_correlations.length > 0 && (
+                              <p className="mt-2 break-all text-cyan-200">
+                                Correlação agent-run: {sample.run_correlations.slice(0, 4).map((item) => `${item.ticket_path} ↔ ${item.run_path}`).join(' · ')}
+                              </p>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {clickDeskAiRoutingDiagnostic.conclusion && (
+                    <p className="mt-5 rounded-lg bg-slate-950/55 px-4 py-3 text-sm leading-6 text-slate-300">
+                      {clickDeskAiRoutingDiagnostic.conclusion}
+                    </p>
+                  )}
+                </>
+              )}
+            </section>
+          )}
 
           <section className="panel">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
