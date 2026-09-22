@@ -386,8 +386,26 @@ type ClickDeskConversationDiagnostic = {
     detail_area: string | null
     error?: string
   }[]
+  operational_basis?: {
+    source: string
+    required_fields: string[]
+    journey_status: string
+    transcript_required_for_transfer: boolean
+    ai_listing_status: string
+  }
   human_by_assignee?: { name: string; count: number }[]
-  human_by_area_assignee?: { area: string; name: string; count: number; satisfaction_labels: Record<string, number> }[]
+  human_by_area_assignee?: {
+    area: string
+    name: string
+    count: number
+    journey_confirmed: number
+    satisfaction_labels: Record<string, number>
+    positive_reviews: number
+    negative_reviews: number
+    reviews: number
+    candidate_csat: number | null
+    candidate_review_percentage: number | null
+  }[]
   human_satisfaction_labels?: { label: string; count: number }[]
   satisfaction_validation?: {
     positive: number
@@ -3224,19 +3242,18 @@ function ChatModuleDashboard({
     chat2LiveHumanRows[0] ??
     null
   const chat2LiveSatisfactionEntries = Object.entries(chat2SelectedLiveHuman?.satisfaction_labels ?? {})
-  const chat2LivePositive = chat2LiveSatisfactionEntries
-    .filter(([label]) => label.trim().toLocaleLowerCase('pt-BR') === 'positive')
-    .reduce((sum, [, count]) => sum + Number(count), 0)
-  const chat2LiveNegative = chat2LiveSatisfactionEntries
-    .filter(([label]) => label.trim().toLocaleLowerCase('pt-BR') === 'negative')
-    .reduce((sum, [, count]) => sum + Number(count), 0)
-  const chat2LiveReviews = chat2LivePositive + chat2LiveNegative
+  const chat2LivePositive = chat2SelectedLiveHuman?.positive_reviews ?? 0
+  const chat2LiveNegative = chat2SelectedLiveHuman?.negative_reviews ?? 0
+  const chat2LiveReviews = chat2SelectedLiveHuman?.reviews ?? 0
   const chat2LiveCandidateCsat =
-    chat2LiveReviews > 0 ? round((chat2LivePositive / chat2LiveReviews) * 100) : null
+    chat2SelectedLiveHuman?.candidate_csat === null || chat2SelectedLiveHuman?.candidate_csat === undefined
+      ? null
+      : round(chat2SelectedLiveHuman.candidate_csat)
   const chat2LiveCandidateReviewPercentage =
-    chat2SelectedLiveHuman && chat2SelectedLiveHuman.count > 0
-      ? round((chat2LiveReviews / chat2SelectedLiveHuman.count) * 100)
-      : null
+    chat2SelectedLiveHuman?.candidate_review_percentage === null ||
+    chat2SelectedLiveHuman?.candidate_review_percentage === undefined
+      ? null
+      : round(chat2SelectedLiveHuman.candidate_review_percentage)
   const chat2SelectedMetric =
     chat2VisibleMetrics.find((metric) => metric.analyst_id === chat2AnalystId) ?? chat2VisibleMetrics[0] ?? null
   const chat2TeamMetrics = chat2SelectedMetric
@@ -3458,14 +3475,9 @@ function ChatModuleDashboard({
                 >
                   {clickDeskConversationLoading ? 'Lendo atendimentos...' : 'Ler atendimentos do período'}
                 </button>
-                <button
-                  className="secondary-button"
-                  disabled={clickDeskAiRoutingLoading}
-                  type="button"
-                  onClick={() => void handleDiagnoseClickDeskAiRouting()}
-                >
-                  {clickDeskAiRoutingLoading ? 'Diagnosticando IA...' : 'Diagnosticar roteamento IA'}
-                </button>
+                <span className="rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-xs text-slate-400">
+                  IA separada nesta etapa · foco na base humana mensurável
+                </span>
               </div>
             </div>
 
@@ -3965,10 +3977,10 @@ function ChatModuleDashboard({
           <section className="panel">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Simulação da visão do analista</p>
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Base mensurável · visão do analista</p>
                 <h3 className="mt-2 text-2xl font-bold">Meu resultado</h3>
                 <p className="section-subtitle">
-                  O Chat 2.0 trabalha com período próprio e abre no mês atual. Enquanto a leitura diária do ClickDesk não estiver ligada, os indicadores aparecem somente quando houver dados disponíveis para o período.
+                  Esta prévia já usa a leitura humana completa do ClickDesk para o período selecionado. Quando houver área Suporte ERP/Fiscal e responsável humano identificado, o atendimento entra na base operacional do analista.
                 </p>
               </div>
               <div className="min-w-[260px]">
@@ -4047,6 +4059,10 @@ function ChatModuleDashboard({
                       <div className="flex items-center justify-between gap-4">
                         <span className="text-slate-400">Atendimentos humanos no período</span>
                         <strong className="tabular-nums">{formatChatCount(chat2SelectedLiveHuman.count)}</strong>
+                      </div>
+                      <div className="flex items-center justify-between gap-4">
+                        <span className="text-slate-400">Jornadas IA → humano confirmadas</span>
+                        <strong className="tabular-nums">{formatChatCount(chat2SelectedLiveHuman.journey_confirmed)}</strong>
                       </div>
                       <div className="flex items-center justify-between gap-4">
                         <span className="text-slate-400">Leitura das páginas humanas</span>
@@ -4306,9 +4322,11 @@ function ChatModuleDashboard({
               <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
                 <p className="text-sm font-semibold">O que sabemos hoje</p>
                 <p className="mt-3 text-sm leading-6 text-slate-300">
-                  {chat2SelectedMetric
-                    ? formatChatCount(chat2SelectedMetric.positive_reviews) + ' avaliações positivas e ' + formatChatCount(chat2SelectedMetric.negative_reviews) + ' negativas no período.'
-                    : 'Sem avaliações no período.'}
+                  {chat2SelectedLiveHuman
+                    ? formatChatCount(chat2LivePositive) + ' avaliações positivas e ' + formatChatCount(chat2LiveNegative) + ' negativas em ' + formatChatCount(chat2SelectedLiveHuman.count) + ' atendimentos humanos no período.'
+                    : chat2SelectedMetric
+                      ? formatChatCount(chat2SelectedMetric.positive_reviews) + ' avaliações positivas e ' + formatChatCount(chat2SelectedMetric.negative_reviews) + ' negativas no período.'
+                      : 'Ainda não há leitura humana disponível para este recorte.'}
                 </p>
                 <p className="mt-3 text-xs leading-5 text-slate-500">
                   Isto é satisfação registrada pelo cliente, não análise de sentimento da conversa.
@@ -4325,7 +4343,7 @@ function ChatModuleDashboard({
               <div className="rounded-xl border border-dashed border-white/15 bg-slate-950/30 p-5">
                 <p className="text-sm font-semibold">Jornada IA → humano</p>
                 <p className="mt-3 text-sm leading-6 text-slate-300">
-                  A futura integração separará conversas resolvidas pela IA das transferidas para humano e permitirá avaliar se o analista recuperou, manteve ou piorou a experiência.
+                  Nesta homologação, os atendimentos classificados pelo ClickDesk como human, com área ERP/Fiscal e responsável identificado, já compõem a jornada IA → humano. O transcript fica reservado para a análise qualitativa posterior.
                 </p>
               </div>
             </div>
