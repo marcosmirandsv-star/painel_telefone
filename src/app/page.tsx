@@ -297,6 +297,23 @@ type ClickDeskConversationDiagnostic = {
   human_by_assignee?: { name: string; count: number }[]
   human_by_area_assignee?: { area: string; name: string; count: number; satisfaction_labels: Record<string, number> }[]
   human_satisfaction_labels?: { label: string; count: number }[]
+  satisfaction_validation?: {
+    positive: number
+    negative: number
+    evaluated: number
+    human_attendances: number
+    candidate_csat: number | null
+    candidate_review_percentage: number | null
+    only_expected_binary_labels: boolean
+    other_labels: { label: string; count: number }[]
+    csat_config: {
+      available: boolean
+      keys: string[]
+      values: { path: string; value: string }[]
+      error?: string
+    }
+    formula_status: 'candidate_matches_current_business_formula' | 'needs_review_before_formula'
+  }
   samples?: {
     ai: ClickDeskConversationSample[]
     human: ClickDeskConversationSample[]
@@ -3074,6 +3091,20 @@ function ChatModuleDashboard({
     chat2LiveHumanRows.find((item) => `${item.area}::${item.name}` === chat2LiveAnalystKey) ??
     chat2LiveHumanRows[0] ??
     null
+  const chat2LiveSatisfactionEntries = Object.entries(chat2SelectedLiveHuman?.satisfaction_labels ?? {})
+  const chat2LivePositive = chat2LiveSatisfactionEntries
+    .filter(([label]) => label.trim().toLocaleLowerCase('pt-BR') === 'positive')
+    .reduce((sum, [, count]) => sum + Number(count), 0)
+  const chat2LiveNegative = chat2LiveSatisfactionEntries
+    .filter(([label]) => label.trim().toLocaleLowerCase('pt-BR') === 'negative')
+    .reduce((sum, [, count]) => sum + Number(count), 0)
+  const chat2LiveReviews = chat2LivePositive + chat2LiveNegative
+  const chat2LiveCandidateCsat =
+    chat2LiveReviews > 0 ? round((chat2LivePositive / chat2LiveReviews) * 100) : null
+  const chat2LiveCandidateReviewPercentage =
+    chat2SelectedLiveHuman && chat2SelectedLiveHuman.count > 0
+      ? round((chat2LiveReviews / chat2SelectedLiveHuman.count) * 100)
+      : null
   const chat2SelectedMetric =
     chat2VisibleMetrics.find((metric) => metric.analyst_id === chat2AnalystId) ?? chat2VisibleMetrics[0] ?? null
   const chat2TeamMetrics = chat2SelectedMetric
@@ -3594,10 +3625,20 @@ function ChatModuleDashboard({
 
                 <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
                   <MetricCard label="Atendimentos humanos" value={formatChatCount(chat2SelectedLiveHuman.count)} />
-                  <MetricCard label="Meu CSAT" value="—" />
-                  <MetricCard label="Avaliações positivas" value="—" />
-                  <MetricCard label="Avaliações negativas" value="—" />
-                  <MetricCard label="% de avaliações" value="—" />
+                  <MetricCard
+                    label="CSAT · prévia"
+                    value={chat2LiveCandidateCsat === null ? '—' : formatChatPercent(chat2LiveCandidateCsat)}
+                  />
+                  <MetricCard label="Avaliações positivas" value={formatChatCount(chat2LivePositive)} tone="success" />
+                  <MetricCard
+                    label="Avaliações negativas"
+                    value={formatChatCount(chat2LiveNegative)}
+                    tone={chat2LiveNegative > 0 ? 'warning' : 'success'}
+                  />
+                  <MetricCard
+                    label="% avaliações · prévia"
+                    value={chat2LiveCandidateReviewPercentage === null ? '—' : formatChatPercent(chat2LiveCandidateReviewPercentage)}
+                  />
                 </div>
 
                 <div className="mt-5 grid gap-4 lg:grid-cols-2">
@@ -3636,6 +3677,59 @@ function ChatModuleDashboard({
                       )}
                     </div>
                   </div>
+                </div>
+
+                <div className="mt-5 rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-5">
+                  <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold uppercase tracking-[0.14em] text-cyan-300">Validação da satisfação</p>
+                      <h4 className="mt-2 text-lg font-bold">Prévia calculada sem alterar a fórmula oficial</h4>
+                      <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-300">
+                        O ClickDesk devolve os rótulos de satisfação <strong>positive</strong> e <strong>negative</strong>.
+                        Nesta homologação calculamos apenas uma prévia usando a mesma lógica atual: positivas ÷ avaliações e avaliações ÷ atendimentos humanos.
+                        Nada foi persistido como regra oficial.
+                      </p>
+                    </div>
+                    <span className="rounded-md border border-white/10 bg-slate-950/55 px-3 py-2 text-xs text-slate-300">
+                      {clickDeskConversationDiagnostic?.satisfaction_validation?.only_expected_binary_labels
+                        ? 'Rótulos observados: binários'
+                        : 'Há rótulos adicionais para revisar'}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-4">
+                    <div className="rounded-lg bg-slate-950/45 p-4">
+                      <p className="text-xs text-slate-400">Avaliações identificadas</p>
+                      <strong className="mt-1 block text-xl tabular-nums">{formatChatCount(chat2LiveReviews)}</strong>
+                    </div>
+                    <div className="rounded-lg bg-slate-950/45 p-4">
+                      <p className="text-xs text-slate-400">CSAT da prévia</p>
+                      <strong className="mt-1 block text-xl tabular-nums">
+                        {chat2LiveCandidateCsat === null ? '—' : formatChatPercent(chat2LiveCandidateCsat)}
+                      </strong>
+                    </div>
+                    <div className="rounded-lg bg-slate-950/45 p-4">
+                      <p className="text-xs text-slate-400">% avaliações da prévia</p>
+                      <strong className="mt-1 block text-xl tabular-nums">
+                        {chat2LiveCandidateReviewPercentage === null ? '—' : formatChatPercent(chat2LiveCandidateReviewPercentage)}
+                      </strong>
+                    </div>
+                    <div className="rounded-lg bg-slate-950/45 p-4">
+                      <p className="text-xs text-slate-400">Configuração CSAT da API</p>
+                      <strong className="mt-1 block text-sm">
+                        {clickDeskConversationDiagnostic?.satisfaction_validation?.csat_config?.available ? 'Acessível' : 'Não acessível'}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {(clickDeskConversationDiagnostic?.satisfaction_validation?.csat_config?.values?.length ?? 0) > 0 && (
+                    <div className="mt-4 rounded-lg bg-slate-950/45 px-4 py-3 text-xs leading-5 text-slate-400">
+                      Configuração observada: {clickDeskConversationDiagnostic?.satisfaction_validation?.csat_config?.values
+                        ?.slice(0, 10)
+                        .map((item) => `${item.path}=${item.value}`)
+                        .join(' · ')}
+                    </div>
+                  )}
                 </div>
               </>
             ) : chat2SelectedMetric ? (
