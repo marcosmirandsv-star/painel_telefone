@@ -3257,17 +3257,20 @@ function ChatModuleDashboard({
   const chat2SelectedLiveAnalyst = chat2SelectedLiveHuman
     ? analysts.find((analyst) => normalizeChatText(analyst.name) === normalizeChatText(chat2SelectedLiveHuman.name)) ?? null
     : null
-  const chat2LiveCsatGoal = Number(chat2SelectedLiveAnalyst?.csat_goal) || 86
+  const chat2LiveCsatGoal = chat2SelectedLiveAnalyst ? Number(chat2SelectedLiveAnalyst.csat_goal) : null
   const chat2LiveReviewGoal = 25
-  const chat2LiveCsatMet = chat2LiveCandidateCsat !== null && chat2LiveCandidateCsat >= chat2LiveCsatGoal
+  const chat2LiveCsatMet =
+    chat2LiveCsatGoal !== null && chat2LiveCandidateCsat !== null && chat2LiveCandidateCsat >= chat2LiveCsatGoal
   const chat2LiveReviewMet =
     chat2LiveCandidateReviewPercentage !== null && chat2LiveCandidateReviewPercentage >= chat2LiveReviewGoal
   const chat2LiveStatus =
-    chat2LiveCsatMet && chat2LiveReviewMet
-      ? 'Metas atendidas'
-      : chat2LiveCsatMet || chat2LiveReviewMet
-        ? 'Atenção'
-        : 'Acompanhar'
+    chat2LiveCsatGoal === null
+      ? 'Meta não vinculada'
+      : chat2LiveCsatMet && chat2LiveReviewMet
+        ? 'Metas atendidas'
+        : chat2LiveCsatMet || chat2LiveReviewMet
+          ? 'Atenção'
+          : 'Acompanhar'
   const chat2LiveTeamRows = chat2SelectedLiveHuman
     ? chat2LiveHumanRows.filter((item) => item.area === chat2SelectedLiveHuman.area)
     : []
@@ -4094,7 +4097,7 @@ function ChatModuleDashboard({
                     <div className="mt-4 space-y-3 text-sm">
                       <div className="flex items-center justify-between gap-4">
                         <span className="text-slate-400">Meta de CSAT</span>
-                        <strong className="tabular-nums">{formatChatPercent(chat2LiveCsatGoal)}</strong>
+                        <strong className="tabular-nums">{chat2LiveCsatGoal === null ? 'Não vinculada' : formatChatPercent(chat2LiveCsatGoal)}</strong>
                       </div>
                       <div className="flex items-center justify-between gap-4">
                         <span className="text-slate-400">Resultado atual</span>
@@ -4105,7 +4108,7 @@ function ChatModuleDashboard({
                       <div className="flex items-center justify-between gap-4">
                         <span className="text-slate-400">Distância da meta</span>
                         <strong className={chat2LiveCsatMet ? 'text-emerald-300' : 'text-amber-200'}>
-                          {chat2LiveCandidateCsat === null
+                          {chat2LiveCandidateCsat === null || chat2LiveCsatGoal === null
                             ? '—'
                             : formatDelta(round(chat2LiveCandidateCsat - chat2LiveCsatGoal), ' p.p.')}
                         </strong>
