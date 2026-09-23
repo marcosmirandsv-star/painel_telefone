@@ -482,6 +482,11 @@ type ClickDeskPersistedMetrics = {
     unmatched_rows: number
     finished_at: string | null
   } | null
+  date_basis?: {
+    sources: Record<string, number>
+    status: 'needs_validation' | 'validated'
+    note: string
+  }
   erro?: string
 }
 
@@ -4316,6 +4321,13 @@ function ChatModuleDashboard({
                         )
                       })}
                     </div>
+
+                    {clickDeskPersistedMetrics?.date_basis?.status === 'needs_validation' && (
+                      <div className="mt-4 rounded-lg border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-xs leading-5 text-amber-100">
+                        Régua em validação: a data disponível nesta leitura vem de <strong>updated_at</strong>.
+                        Ela mostra a distribuição técnica dos registros, mas ainda não será tratada como dia oficial do atendimento até validarmos um timestamp operacional melhor no ClickDesk.
+                      </div>
+                    )}
 
                     {chat2SelectedDayMetric ? (
                       <div className="mt-4 border-t border-white/10 pt-4">
