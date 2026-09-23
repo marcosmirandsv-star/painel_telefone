@@ -433,6 +433,72 @@ type ClickDeskConversationDiagnostic = {
   tested_at?: string
   error?: string
 }
+type ClickDeskPersistedAggregate = {
+  attendances: number
+  positive_reviews: number
+  negative_reviews: number
+  reviews: number
+  csat: number | null
+  review_percentage: number | null
+}
+
+type ClickDeskPersistedMetrics = {
+  source?: string
+  period?: {
+    start: string
+    end: string
+    business_time_zone: string
+  }
+  today?: ClickDeskPersistedAggregate & {
+    date: string
+    included_in_period: boolean
+  }
+  accumulated?: ClickDeskPersistedAggregate
+  daily?: Array<ClickDeskPersistedAggregate & { date: string }>
+  by_analyst?: Array<
+    ClickDeskPersistedAggregate & {
+      analyst_id: string | null
+      assignee_name: string
+      area: string
+      team_id: string | null
+      today: ClickDeskPersistedAggregate
+    }
+  >
+  data_quality?: {
+    grouped_rows: number
+    unmatched_grouped_rows: number
+    unmatched_attendances: number
+  }
+  latest_sync?: {
+    id: string
+    status: string
+    period_start: string
+    period_end: string
+    trigger_mode: string
+    pages_scanned: number
+    rows_upserted: number
+    matched_rows: number
+    unmatched_rows: number
+    finished_at: string | null
+  } | null
+  erro?: string
+}
+
+type ClickDeskSyncResult = {
+  synced?: boolean
+  run_id?: string
+  pages_scanned?: number
+  rows_received?: number
+  rows_in_period?: number
+  rows_persisted?: number
+  matched_rows?: number
+  unmatched_rows?: number
+  unmatched_assignees?: string[]
+  auto_links_created?: number
+  synced_at?: string
+  erro?: string
+}
+
 type IndividualForm = {
   analystId: string
   weekStart: string
@@ -2037,6 +2103,8 @@ function ChatModuleDashboard({
   const [clickDeskTestResult, setClickDeskTestResult] = useState<ClickDeskTestResult | null>(null)
   const [clickDeskConversationLoading, setClickDeskConversationLoading] = useState(false)
   const [clickDeskConversationDiagnostic, setClickDeskConversationDiagnostic] = useState<ClickDeskConversationDiagnostic | null>(null)
+  const [clickDeskPersistedMetrics, setClickDeskPersistedMetrics] = useState<ClickDeskPersistedMetrics | null>(null)
+  const [clickDeskSyncResult, setClickDeskSyncResult] = useState<ClickDeskSyncResult | null>(null)
   const [clickDeskAiRoutingLoading, setClickDeskAiRoutingLoading] = useState(false)
   const [clickDeskAiRoutingDiagnostic, setClickDeskAiRoutingDiagnostic] = useState<ClickDeskAiRoutingDiagnostic | null>(null)
   const [manualPodiumDraft, setManualPodiumDraft] = useState<Record<number, string>>({})
@@ -2110,6 +2178,8 @@ function ChatModuleDashboard({
   async function handleLoadClickDeskConversations() {
     setClickDeskConversationLoading(true)
     setClickDeskConversationDiagnostic(null)
+    setClickDeskPersistedMetrics(null)
+    setClickDeskSyncResult(null)
 
     try {
       const {
@@ -2121,23 +2191,67 @@ function ChatModuleDashboard({
         return
       }
 
-      const params = new URLSearchParams({
+      const headers = {
+        Authorization: `Bearer ${session.access_token}`,
+      }
+
+      const syncResponse = await fetch('/api/clickdesk/sync', {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          start: chat2SelectedPeriod.start,
+          end: chat2SelectedPeriod.end,
+          trigger_mode: 'manual',
+        }),
+        cache: 'no-store',
+      })
+      const syncData = (await syncResponse.json()) as ClickDeskSyncResult
+      setClickDeskSyncResult(syncData)
+
+      if (!syncResponse.ok) {
+        setClickDeskConversationDiagnostic({
+          error: syncData.erro || 'Não foi possível sincronizar a base persistida do ClickDesk.',
+        })
+        return
+      }
+
+      const persistedParams = new URLSearchParams({
+        start: chat2SelectedPeriod.start,
+        end: chat2SelectedPeriod.end,
+      })
+      const diagnosticParams = new URLSearchParams({
         year: String(chat2SelectedPeriod.year),
         month: String(chat2SelectedPeriod.monthNumber),
       })
-      const response = await fetch(`/api/clickdesk/conversations?${params.toString()}`, {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        cache: 'no-store',
-      })
-      const data = (await response.json()) as ClickDeskConversationDiagnostic
 
-      if (!response.ok && !data.error) {
-        data.error = 'Não foi possível ler as conversas do ClickDesk.'
+      const [metricsResponse, diagnosticResponse] = await Promise.all([
+        fetch(`/api/clickdesk/metrics?${persistedParams.toString()}`, {
+          headers,
+          cache: 'no-store',
+        }),
+        fetch(`/api/clickdesk/conversations?${diagnosticParams.toString()}`, {
+          headers,
+          cache: 'no-store',
+        }),
+      ])
+
+      const [metricsData, diagnosticData] = await Promise.all([
+        metricsResponse.json() as Promise<ClickDeskPersistedMetrics>,
+        diagnosticResponse.json() as Promise<ClickDeskConversationDiagnostic>,
+      ])
+
+      if (!metricsResponse.ok) {
+        metricsData.erro = metricsData.erro || 'Não foi possível ler a base persistida do ClickDesk.'
+      }
+      if (!diagnosticResponse.ok && !diagnosticData.error) {
+        diagnosticData.error = 'Não foi possível ler o diagnóstico do ClickDesk.'
       }
 
-      setClickDeskConversationDiagnostic(data)
+      setClickDeskPersistedMetrics(metricsData)
+      setClickDeskConversationDiagnostic(diagnosticData)
     } catch (error) {
       setClickDeskConversationDiagnostic({ error: getErrorMessage(error) })
     } finally {
@@ -3241,19 +3355,37 @@ function ChatModuleDashboard({
     chat2LiveHumanRows.find((item) => `${item.area}::${item.name}` === chat2LiveAnalystKey) ??
     chat2LiveHumanRows[0] ??
     null
-  const chat2LiveSatisfactionEntries = Object.entries(chat2SelectedLiveHuman?.satisfaction_labels ?? {})
-  const chat2LivePositive = chat2SelectedLiveHuman?.positive_reviews ?? 0
-  const chat2LiveNegative = chat2SelectedLiveHuman?.negative_reviews ?? 0
-  const chat2LiveReviews = chat2SelectedLiveHuman?.reviews ?? 0
+  const chat2PersistedAnalystRows = clickDeskPersistedMetrics?.by_analyst ?? []
+  const chat2SelectedPersistedAnalyst = chat2SelectedLiveHuman
+    ? chat2PersistedAnalystRows.find(
+        (item) =>
+          normalizeChatText(item.assignee_name) === normalizeChatText(chat2SelectedLiveHuman.name) &&
+          normalizeChatText(item.area) === normalizeChatText(chat2SelectedLiveHuman.area),
+      ) ?? null
+    : null
+  const chat2LivePositive =
+    chat2SelectedPersistedAnalyst?.positive_reviews ?? chat2SelectedLiveHuman?.positive_reviews ?? 0
+  const chat2LiveNegative =
+    chat2SelectedPersistedAnalyst?.negative_reviews ?? chat2SelectedLiveHuman?.negative_reviews ?? 0
+  const chat2LiveReviews =
+    chat2SelectedPersistedAnalyst?.reviews ?? chat2SelectedLiveHuman?.reviews ?? 0
+  const chat2LiveAttendances =
+    chat2SelectedPersistedAnalyst?.attendances ?? chat2SelectedLiveHuman?.count ?? 0
+  const chat2TodayAttendances = chat2SelectedPersistedAnalyst?.today.attendances ?? 0
   const chat2LiveCandidateCsat =
-    chat2SelectedLiveHuman?.candidate_csat === null || chat2SelectedLiveHuman?.candidate_csat === undefined
-      ? null
-      : round(chat2SelectedLiveHuman.candidate_csat)
+    chat2SelectedPersistedAnalyst?.csat !== null && chat2SelectedPersistedAnalyst?.csat !== undefined
+      ? round(chat2SelectedPersistedAnalyst.csat)
+      : chat2SelectedLiveHuman?.candidate_csat === null || chat2SelectedLiveHuman?.candidate_csat === undefined
+        ? null
+        : round(chat2SelectedLiveHuman.candidate_csat)
   const chat2LiveCandidateReviewPercentage =
-    chat2SelectedLiveHuman?.candidate_review_percentage === null ||
-    chat2SelectedLiveHuman?.candidate_review_percentage === undefined
-      ? null
-      : round(chat2SelectedLiveHuman.candidate_review_percentage)
+    chat2SelectedPersistedAnalyst?.review_percentage !== null &&
+    chat2SelectedPersistedAnalyst?.review_percentage !== undefined
+      ? round(chat2SelectedPersistedAnalyst.review_percentage)
+      : chat2SelectedLiveHuman?.candidate_review_percentage === null ||
+          chat2SelectedLiveHuman?.candidate_review_percentage === undefined
+        ? null
+        : round(chat2SelectedLiveHuman.candidate_review_percentage)
   const chat2SelectedLiveAnalyst = chat2SelectedLiveHuman
     ? analysts.find((analyst) => normalizeChatText(analyst.name) === normalizeChatText(chat2SelectedLiveHuman.name)) ?? null
     : null
@@ -3508,6 +3640,11 @@ function ChatModuleDashboard({
                 <span className="rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-xs text-slate-400">
                   IA separada nesta etapa · foco na base humana mensurável
                 </span>
+                {clickDeskSyncResult?.synced && (
+                  <span className="rounded-md border border-emerald-400/20 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-200">
+                    Base persistida · {formatChatCount(clickDeskSyncResult.rows_persisted ?? 0)} atendimento(s)
+                  </span>
+                )}
               </div>
             </div>
 
@@ -4073,8 +4210,9 @@ function ChatModuleDashboard({
                   </div>
                 </div>
 
-                <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                  <MetricCard label="Atendimentos humanos" value={formatChatCount(chat2SelectedLiveHuman.count)} />
+                <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+                  <MetricCard label="Atendimentos na competência" value={formatChatCount(chat2LiveAttendances)} />
+                  <MetricCard label="Atendimentos hoje" value={formatChatCount(chat2TodayAttendances)} />
                   <MetricCard
                     label="CSAT · prévia"
                     value={chat2LiveCandidateCsat === null ? '—' : formatChatPercent(chat2LiveCandidateCsat)}
@@ -4090,6 +4228,12 @@ function ChatModuleDashboard({
                     value={chat2LiveCandidateReviewPercentage === null ? '—' : formatChatPercent(chat2LiveCandidateReviewPercentage)}
                   />
                 </div>
+                {clickDeskPersistedMetrics?.period && (
+                  <p className="mt-3 text-xs text-slate-500">
+                    Acumulado persistido: {formatDate(clickDeskPersistedMetrics.period.start)} a {formatDate(clickDeskPersistedMetrics.period.end)}
+                    {' '}· Hoje: {clickDeskPersistedMetrics.today?.date ? formatDate(clickDeskPersistedMetrics.today.date) : '—'}.
+                  </p>
+                )}
 
                 <div className="mt-5 grid gap-4 lg:grid-cols-3">
                   <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
@@ -4161,7 +4305,7 @@ function ChatModuleDashboard({
                 </div>
 
                 <div className="mt-4 rounded-lg border border-cyan-400/15 bg-cyan-400/5 px-4 py-3 text-xs leading-5 text-slate-400">
-                  Base do período: {formatChatCount(chat2SelectedLiveHuman.journey_confirmed)} jornadas IA → humano confirmadas.
+                  Base do período: {formatChatCount(chat2LiveAttendances)} jornadas IA → humano confirmadas.
                   CSAT e % de avaliações seguem como prévia de homologação até o fechamento da regra oficial.
                 </div>
               </>
@@ -4292,7 +4436,7 @@ function ChatModuleDashboard({
                     </div>
                     <div>
                       <p className="text-xs text-slate-500">Atendimentos</p>
-                      <strong className="tabular-nums">{formatChatCount(chat2SelectedLiveHuman.count)}</strong>
+                      <strong className="tabular-nums">{formatChatCount(chat2LiveAttendances)}</strong>
                     </div>
                   </div>
                   <p className="mt-4 text-xs leading-5 text-slate-500">
