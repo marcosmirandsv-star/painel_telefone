@@ -219,6 +219,7 @@ function readSatisfaction(source: Record<string, unknown>) {
   return null
 }
 
+
 type TemporalCandidate = {
   path: string
   value: string
@@ -719,21 +720,19 @@ export async function POST(request: Request) {
   if (!value || typeof value !== 'object' || depth > 7 || out.length >= 60) return out
 
   if (Array.isArray(value)) {
-    value.slice(0, 100).forEach((item, index) =>
-      collectTemporalCandidates(item, `${path}[${index}]`, depth + 1, out),
-    )
+    value.slice(0, 100).forEach((item, index) => {
+      collectTemporalCandidates(item, path + '[' + index + ']', depth + 1, out)
+    })
     return out
   }
 
   const source = value as Record<string, unknown>
   for (const [key, raw] of Object.entries(source)) {
-    const currentPath = `${path}.${key}`
+    const currentPath = path + '.' + key
     const direct = primitiveString(raw)
     if (
       direct &&
-      /(created|updated|closed|ended|started|opened|assigned|claimed|transferred|resolved|finished|sent|occurred|timestamp|date|time).*$/i.test(
-        key,
-      ) &&
+      /(created|updated|closed|ended|started|opened|assigned|claimed|transferred|resolved|finished|sent|occurred|timestamp|date|time)/i.test(key) &&
       isTimestampValue(direct)
     ) {
       out.push({ path: currentPath, value: direct })
@@ -749,9 +748,7 @@ export async function POST(request: Request) {
   return out
 }
 
-function readMessageTimestamp(
-  source: Record<string, unknown>,
-): { value: string; source: string } | null {
+function readMessageTimestamp(source: Record<string, unknown>) {
   for (const key of [
     'created_at',
     'createdAt',
@@ -761,22 +758,20 @@ function readMessageTimestamp(
     'occurredAt',
     'timestamp',
     'date',
+    'updated_at',
+    'updatedAt',
   ]) {
     const value = primitiveString(source[key])
     if (value && isTimestampValue(value)) return { value, source: key }
   }
 
   const candidate = collectTemporalCandidates(source).find((item) =>
-    /created|sent|occurred|timestamp/i.test(item.path),
+    /created|sent|occurred|timestamp|updated/i.test(item.path),
   )
   return candidate ? { value: candidate.value, source: candidate.path } : null
 }
 
-function containsAssigneeIdentity(
-  value: unknown,
-  assigneeKey: string,
-  depth = 0,
-): boolean {
+function containsAssigneeIdentity(value: unknown, assigneeKey: string, depth = 0): boolean {
   if (!value || typeof value !== 'object' || depth > 5) return false
 
   if (Array.isArray(value)) {
@@ -792,7 +787,11 @@ function containsAssigneeIdentity(
     const direct = primitiveString(raw)
     if (direct && normalizeLabel(direct) === assigneeKey) return true
 
-    if (raw && typeof raw === 'object' && containsAssigneeIdentity(raw, assigneeKey, depth + 1)) {
+    if (
+      raw &&
+      typeof raw === 'object' &&
+      containsAssigneeIdentity(raw, assigneeKey, depth + 1)
+    ) {
       return true
     }
   }
@@ -800,15 +799,11 @@ function containsAssigneeIdentity(
   return false
 }
 
-function detectActorRole(value: unknown, depth = 0): 'human' | 'ai' | null {
-  if (!value || typeof value !== 'object' || depth > 5) return null
+function detectsHumanRole(value: unknown, depth = 0): boolean {
+  if (!value || typeof value !== 'object' || depth > 5) return false
 
   if (Array.isArray(value)) {
-    for (const item of value) {
-      const role = detectActorRole(item, depth + 1)
-      if (role) return role
-    }
-    return null
+    return value.some((item) => detectsHumanRole(item, depth + 1))
   }
 
   const source = value as Record<string, unknown>
@@ -819,30 +814,24 @@ function detectActorRole(value: unknown, depth = 0): 'human' | 'ai' | null {
     if (direct) {
       const normalized = normalizeLabel(direct)
       if (/(^| )(human|agent|attendant|atendente|analista|support)( |$)/.test(normalized)) {
-        return 'human'
-      }
-      if (/(^| )(ai|bot|assistant|assistente virtual)( |$)/.test(normalized)) {
-        return 'ai'
+        return true
       }
     }
 
-    if (raw && typeof raw === 'object') {
-      const nested = detectActorRole(raw, depth + 1)
-      if (nested) return nested
+    if (raw && typeof raw === 'object' && detectsHumanRole(raw, depth + 1)) {
+      return true
     }
   }
 
-  return null
+  return false
 }
 
-function earliestTimestamp(
-  candidates: Array<{ value: string; source: string }>,
-): { value: string; source: string } | null {
-  return (
-    candidates
-      .filter((item) => !Number.isNaN(Date.parse(item.value)))
-      .sort((a, b) => Date.parse(a.value) - Date.parse(b.value))[0] ?? null
-  )
+function earliestTimestamp(candidates: Array<{ value: string; source: string }>) {
+  const ordered = candidates
+    .filter((item) => !Number.isNaN(Date.parse(item.value)))
+    .sort((a, b) => Date.parse(a.value) - Date.parse(b.value))
+
+  return ordered[0] ?? null
 }
 
 async function buildTimestampAudit(
@@ -868,21 +857,22 @@ async function buildTimestampAudit(
 
   const samples = await Promise.all(
     selected.map(async (row, index) => {
+      const detailPath = '/tickets/' + encodeURIComponent(row.id)
+      const messagesPath = detailPath + '/messages'
       const [detailResult, messagesResult] = await Promise.allSettled([
-        fetchClickDesk(`/tickets/${encodeURIComponent(row.id)}`, apiKey, accountId),
-        fetchClickDesk(`/tickets/${encodeURIComponent(row.id)}/messages`, apiKey, accountId),
+        fetchClickDesk(detailPath, apiKey, accountId),
+        fetchClickDesk(messagesPath, apiKey, accountId),
       ])
 
-      const detail =
-        detailResult.status === 'fulfilled' ? detailResult.value : null
+      const detail = detailResult.status === 'fulfilled' ? detailResult.value : null
       const messagesPayload =
         messagesResult.status === 'fulfilled' ? messagesResult.value : null
       const messages = extractCollection(messagesPayload)
       const assigneeKey = normalizeLabel(row.assignee ?? '')
 
-      const assigneeMessageCandidates: Array<{ value: string; source: string }> = []
-      const humanRoleMessageCandidates: Array<{ value: string; source: string }> = []
-      const allMessageCandidates: Array<{ value: string; source: string }> = []
+      const anyMessageTimes: Array<{ value: string; source: string }> = []
+      const assigneeMessageTimes: Array<{ value: string; source: string }> = []
+      const humanRoleMessageTimes: Array<{ value: string; source: string }> = []
       const messageTimestampSources = new Map<string, number>()
 
       messages.forEach((message) => {
@@ -891,18 +881,18 @@ async function buildTimestampAudit(
         const timestamp = readMessageTimestamp(source)
         if (!timestamp) return
 
-        allMessageCandidates.push(timestamp)
+        anyMessageTimes.push(timestamp)
         messageTimestampSources.set(
           timestamp.source,
           (messageTimestampSources.get(timestamp.source) ?? 0) + 1,
         )
 
         if (assigneeKey && containsAssigneeIdentity(source, assigneeKey)) {
-          assigneeMessageCandidates.push(timestamp)
+          assigneeMessageTimes.push(timestamp)
         }
 
-        if (detectActorRole(source) === 'human') {
-          humanRoleMessageCandidates.push(timestamp)
+        if (detectsHumanRole(source)) {
+          humanRoleMessageTimes.push(timestamp)
         }
       })
 
@@ -915,9 +905,9 @@ async function buildTimestampAudit(
         message_count: messages.length,
         detail_timestamp_candidates: collectTemporalCandidates(detail).slice(0, 30),
         message_timestamp_sources: Object.fromEntries(messageTimestampSources),
-        first_message: earliestTimestamp(allMessageCandidates),
-        first_assignee_message: earliestTimestamp(assigneeMessageCandidates),
-        first_human_role_message: earliestTimestamp(humanRoleMessageCandidates),
+        first_message: earliestTimestamp(anyMessageTimes),
+        first_assignee_message: earliestTimestamp(assigneeMessageTimes),
+        first_human_role_message: earliestTimestamp(humanRoleMessageTimes),
         detail_error:
           detailResult.status === 'rejected'
             ? sanitizeMessage(
@@ -938,35 +928,32 @@ async function buildTimestampAudit(
     }),
   )
 
+  const sampleSize = samples.length
+  const threshold = sampleSize > 0 ? Math.ceil(sampleSize * 0.75) : 1
+  const assigneeCoverage = samples.filter((sample) => sample.first_assignee_message).length
+  const humanRoleCoverage = samples.filter((sample) => sample.first_human_role_message).length
+
   const detailPathCounts = new Map<string, number>()
   samples.forEach((sample) => {
     const uniquePaths = new Set(sample.detail_timestamp_candidates.map((item) => item.path))
-    uniquePaths.forEach((path) =>
-      detailPathCounts.set(path, (detailPathCounts.get(path) ?? 0) + 1),
-    )
+    uniquePaths.forEach((path) => {
+      detailPathCounts.set(path, (detailPathCounts.get(path) ?? 0) + 1)
+    })
   })
 
-  const sampleSize = samples.length
-  const assigneeMessageCount = samples.filter((sample) => sample.first_assignee_message).length
-  const humanRoleMessageCount = samples.filter((sample) => sample.first_human_role_message).length
-  const threshold = sampleSize > 0 ? Math.ceil(sampleSize * 0.75) : 1
+  const preferredDetailPath =
+    [...detailPathCounts.entries()]
+      .filter(
+        ([path, count]) =>
+          count >= threshold &&
+          /(claimed|assigned|transferred|handoff|human).*at/i.test(path),
+      )
+      .sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
 
-  const preferredDetail = [...detailPathCounts.entries()]
-    .filter(([path, count]) =>
-      count >= threshold &&
-      /(claimed|assigned|transferred|handoff|human).*at/i.test(path),
-    )
-    .sort((a, b) => b[1] - a[1])[0] ?? null
-
-  let recommendation:
-    | 'first_assignee_message'
-    | 'first_human_role_message'
-    | 'detail_handoff_timestamp'
-    | 'needs_review' = 'needs_review'
-
-  if (assigneeMessageCount >= threshold) recommendation = 'first_assignee_message'
-  else if (humanRoleMessageCount >= threshold) recommendation = 'first_human_role_message'
-  else if (preferredDetail) recommendation = 'detail_handoff_timestamp'
+  let recommendation = 'needs_review'
+  if (assigneeCoverage >= threshold) recommendation = 'first_assignee_message'
+  else if (humanRoleCoverage >= threshold) recommendation = 'first_human_role_message'
+  else if (preferredDetailPath) recommendation = 'detail_handoff_timestamp'
 
   return {
     version: 1,
@@ -974,9 +961,9 @@ async function buildTimestampAudit(
     sample_size: sampleSize,
     threshold,
     recommendation,
-    first_assignee_message_count: assigneeMessageCount,
-    first_human_role_message_count: humanRoleMessageCount,
-    preferred_detail_path: preferredDetail?.[0] ?? null,
+    first_assignee_message_count: assigneeCoverage,
+    first_human_role_message_count: humanRoleCoverage,
+    preferred_detail_path: preferredDetailPath,
     detail_path_counts: Object.fromEntries(
       [...detailPathCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30),
     ),
