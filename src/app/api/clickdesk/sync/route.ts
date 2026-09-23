@@ -352,6 +352,107 @@ function earliestTimestamp(candidates: Array<{ value: string; source: string }>)
   return ordered[0] ?? null
 }
 
+
+type OperationalTicketRow = TicketRow & {
+  operationalTimestamp: string | null
+  operationalTimestampSource: string
+  occurredDate: string | null
+}
+
+async function resolveOperationalHumanTimestamps(
+  rows: TicketRow[],
+  apiKey: string,
+  accountId: string,
+) {
+  const resolved: OperationalTicketRow[] = []
+  let assigneeResolved = 0
+  let humanRoleResolved = 0
+  let fallbackResolved = 0
+
+  for (let index = 0; index < rows.length; index += 8) {
+    const batch = rows.slice(index, index + 8)
+    const batchRows = await Promise.all(
+      batch.map(async (row): Promise<OperationalTicketRow> => {
+        const assigneeKey = normalizeLabel(row.assignee ?? '')
+        let operationalTimestamp: string | null = null
+        let operationalTimestampSource = 'unknown'
+
+        try {
+          const payload = await fetchClickDesk(
+            '/tickets/' + encodeURIComponent(row.id) + '/messages',
+            apiKey,
+            accountId,
+          )
+          const messages = extractCollection(payload)
+          const assigneeTimes: Array<{ value: string; source: string }> = []
+          const humanRoleTimes: Array<{ value: string; source: string }> = []
+
+          messages.forEach((message) => {
+            if (!message || typeof message !== 'object') return
+            const source = message as Record<string, unknown>
+            const timestamp = readMessageTimestamp(source)
+            if (!timestamp) return
+
+            if (assigneeKey && containsAssigneeIdentity(source, assigneeKey)) {
+              assigneeTimes.push(timestamp)
+            }
+            if (detectsHumanRole(source)) {
+              humanRoleTimes.push(timestamp)
+            }
+          })
+
+          const assigneeFirst = earliestTimestamp(assigneeTimes)
+          const humanFirst = earliestTimestamp(humanRoleTimes)
+
+          if (assigneeFirst) {
+            operationalTimestamp = assigneeFirst.value
+            operationalTimestampSource = 'first_assignee_message'
+            assigneeResolved += 1
+          } else if (humanFirst) {
+            operationalTimestamp = humanFirst.value
+            operationalTimestampSource = 'first_human_role_message'
+            humanRoleResolved += 1
+          }
+        } catch {
+          // A sincronização mantém o volume com fallback explícito;
+          // a origem permanece sinalizada para não ser tratada como data oficial.
+        }
+
+        if (!operationalTimestamp && row.timestamp) {
+          operationalTimestamp = row.timestamp
+          operationalTimestampSource = 'fallback_' + row.timestampSource
+          fallbackResolved += 1
+        }
+
+        return {
+          ...row,
+          operationalTimestamp,
+          operationalTimestampSource,
+          occurredDate: operationalTimestamp ? businessDate(operationalTimestamp) : null,
+        }
+      }),
+    )
+    resolved.push(...batchRows)
+  }
+
+  return {
+    rows: resolved,
+    summary: {
+      version: 2,
+      rule: 'first_assignee_message -> first_human_role_message -> explicit_fallback',
+      total_candidates: rows.length,
+      first_assignee_message: assigneeResolved,
+      first_human_role_message: humanRoleResolved,
+      fallback: fallbackResolved,
+      validated:
+        rows.length > 0 &&
+        fallbackResolved === 0 &&
+        assigneeResolved + humanRoleResolved === rows.length,
+      resolved_at: new Date().toISOString(),
+    },
+  }
+}
+
 async function buildTimestampAudit(
   rows: TicketRow[],
   apiKey: string,
@@ -764,33 +865,27 @@ export async function POST(request: Request) {
       })
 
       const linkByKey = new Map(links.map((link) => [link.assignee_key, link]))
-      const withDates = rows
-        .map((row) => ({
-          ...row,
-          occurredDate: row.timestamp ? businessDate(row.timestamp) : null,
-        }))
-        .filter(
-          (row): row is TicketRow & { occurredDate: string } =>
-            Boolean(row.timestamp && row.occurredDate),
-        )
-      const inPeriod = withDates.filter(
-        (row) => row.occurredDate >= start && row.occurredDate <= end,
-      )
-      const targetRows = inPeriod.filter(
+      const targetCandidates = rows.filter(
         (row) =>
           Boolean(row.area && isTargetSupportName(row.area)) &&
           Boolean(row.assignee?.trim()),
       )
-
-      const timestampAudit =
-        triggerMode === 'manual' && targetRows.length > 0
-          ? await buildTimestampAudit(targetRows, apiKey, accountId)
-          : {
-              version: 1,
-              audited_at: new Date().toISOString(),
-              sample_size: 0,
-              recommendation: 'not_run_for_automatic_sync',
-            }
+      const operationalResolution = await resolveOperationalHumanTimestamps(
+        targetCandidates,
+        apiKey,
+        accountId,
+      )
+      const targetRows = operationalResolution.rows.filter(
+        (row): row is OperationalTicketRow & { occurredDate: string } =>
+          Boolean(
+            row.operationalTimestamp &&
+              row.occurredDate &&
+              row.occurredDate >= start &&
+              row.occurredDate <= end,
+          ),
+      )
+      const inPeriod = targetRows
+      const timestampAudit = operationalResolution.summary
 
       const distinctAssignees = new Map<string, string>()
       targetRows.forEach((row) => {
@@ -839,7 +934,7 @@ export async function POST(request: Request) {
         return {
           clickdesk_ticket_id: row.id,
           attendance_mode: 'human',
-          occurred_at: row.timestamp,
+          occurred_at: row.operationalTimestamp,
           occurred_date: row.occurredDate,
           area: row.area,
           assignee_name: assigneeName,
@@ -847,7 +942,7 @@ export async function POST(request: Request) {
           analyst_id: analyst?.id ?? null,
           team_id: analyst?.team_id ?? null,
           satisfaction_label: row.satisfaction,
-          timestamp_source: row.timestampSource,
+          timestamp_source: row.operationalTimestampSource,
           journey_status: 'ai_to_human',
           last_seen_at: now,
           updated_at: now,
@@ -935,22 +1030,7 @@ export async function POST(request: Request) {
         unmatched_rows: unmatchedRows,
         unmatched_assignees: unmatchedNames,
         auto_links_created: autoLinks.length,
-        timestamp_audit: {
-          sample_size: timestampAudit.sample_size,
-          recommendation: timestampAudit.recommendation,
-          first_assignee_message_count:
-            'first_assignee_message_count' in timestampAudit
-              ? timestampAudit.first_assignee_message_count
-              : 0,
-          first_human_role_message_count:
-            'first_human_role_message_count' in timestampAudit
-              ? timestampAudit.first_human_role_message_count
-              : 0,
-          preferred_detail_path:
-            'preferred_detail_path' in timestampAudit
-              ? timestampAudit.preferred_detail_path
-              : null,
-        },
+        timestamp_audit: timestampAudit,
         daily: [...daily.values()].sort((a, b) => a.date.localeCompare(b.date)),
         synced_at: new Date().toISOString(),
       })
