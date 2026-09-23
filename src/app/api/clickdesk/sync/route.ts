@@ -1,4 +1,4 @@
-import { ApiError, authorizeManager, handle, json } from '@/lib/integration-server'
+import { ApiError, authorizeManagerSessionClient, handle, json } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 
 export const runtime = 'nodejs'
@@ -419,7 +419,7 @@ async function parsePeriod(request: Request) {
 }
 
 async function upsertInBatches(
-  admin: Awaited<ReturnType<typeof authorizeManager>>['admin'],
+  admin: Awaited<ReturnType<typeof authorizeManagerSessionClient>>['admin'],
   table: string,
   rows: Record<string, unknown>[],
   onConflict: string,
@@ -438,7 +438,7 @@ export async function POST(request: Request) {
       throw new ApiError(404, 'Sincronização ClickDesk disponível somente na homologação.')
     }
 
-    const { admin, userId } = await authorizeManager(request)
+    const { admin, userId } = await authorizeManagerSessionClient(request)
     const { start, end, triggerMode } = await parsePeriod(request)
 
     const apiKey = process.env.CLICKDESK_API_KEY?.trim()
