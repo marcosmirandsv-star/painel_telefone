@@ -254,9 +254,14 @@ export async function GET(request: Request) {
       acc[source] = (acc[source] ?? 0) + 1
       return acc
     }, {})
-    const dateBasisNeedsValidation = Object.keys(timestampSources).some(
-      (source) => source === 'updated_at' || source === 'unknown',
-    )
+    const dateBasisNeedsValidation =
+      Object.keys(timestampSources).length === 0 ||
+      Object.keys(timestampSources).some(
+        (source) =>
+          source === 'unknown' ||
+          source.startsWith('fallback_') ||
+          source === 'updated_at',
+      )
 
     return json({
       source: 'clickdesk_persisted',
@@ -284,8 +289,8 @@ export async function GET(request: Request) {
         sources: timestampSources,
         status: dateBasisNeedsValidation ? 'needs_validation' : 'validated',
         note: dateBasisNeedsValidation
-          ? 'A distribuição diária ainda usa updated_at/unknown em parte da base; não tratar como data oficial do atendimento até validar um timestamp operacional melhor.'
-          : 'A distribuição diária usa timestamp operacional validado.',
+          ? 'Parte da distribuição diária ainda depende de fallback temporal. Esses registros permanecem sinalizados até o ClickDesk permitir identificar o início humano.'
+          : 'Data operacional validada: primeira mensagem do analista responsável, com primeira mensagem humana como fallback estrutural.',
       },
     })
   })
