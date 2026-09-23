@@ -1,4 +1,4 @@
-import { ApiError, authorizeManager, handle, json } from '@/lib/integration-server'
+import { ApiError, authorizeManagerSessionClient, handle, json } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 
 export const runtime = 'nodejs'
@@ -93,7 +93,7 @@ function parseFilters(request: Request) {
 }
 
 async function loadRows(
-  admin: Awaited<ReturnType<typeof authorizeManager>>['admin'],
+  admin: Awaited<ReturnType<typeof authorizeManagerSessionClient>>['admin'],
   filters: ReturnType<typeof parseFilters>,
 ) {
   const result: DailyMetricRow[] = []
@@ -211,7 +211,7 @@ export async function GET(request: Request) {
       throw new ApiError(404, 'Métricas ClickDesk disponíveis somente na homologação.')
     }
 
-    const { admin } = await authorizeManager(request)
+    const { admin } = await authorizeManagerSessionClient(request)
     const filters = parseFilters(request)
     const rows = await loadRows(admin, filters)
 
