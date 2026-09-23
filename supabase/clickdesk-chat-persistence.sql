@@ -83,6 +83,9 @@ create table if not exists public.clickdesk_chat_sync_runs (
 create index if not exists clickdesk_chat_sync_runs_period_idx
   on public.clickdesk_chat_sync_runs (period_start desc, period_end desc);
 
+create index if not exists clickdesk_chat_sync_runs_triggered_by_idx
+  on public.clickdesk_chat_sync_runs (triggered_by);
+
 alter table public.clickdesk_chat_analyst_links enable row level security;
 alter table public.clickdesk_chat_attendances enable row level security;
 alter table public.clickdesk_chat_sync_runs enable row level security;
