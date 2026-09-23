@@ -76,6 +76,7 @@ create table if not exists public.clickdesk_chat_sync_runs (
   started_at timestamptz not null default now(),
   finished_at timestamptz,
   error_message text,
+  timestamp_audit jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   check (period_end >= period_start)
 );
