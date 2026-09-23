@@ -163,7 +163,7 @@ function groupDaily(rows: DailyMetricRow[]) {
     }))
 }
 
-function groupAnalysts(rows: DailyMetricRow[]) {
+function groupAnalysts(rows: DailyMetricRow[], today: string) {
   const grouped = new Map<
     string,
     {
@@ -195,6 +195,7 @@ function groupAnalysts(rows: DailyMetricRow[]) {
       area: item.area,
       team_id: item.team_id,
       ...aggregate(item.rows),
+      today: aggregate(item.rows.filter((row) => row.occurred_date === today)),
     }))
     .sort(
       (a, b) =>
@@ -248,7 +249,7 @@ export async function GET(request: Request) {
       },
       accumulated: aggregate(rows),
       daily: groupDaily(rows),
-      by_analyst: groupAnalysts(rows),
+      by_analyst: groupAnalysts(rows, filters.today),
       data_quality: {
         grouped_rows: rows.length,
         unmatched_grouped_rows: unmatchedRows.length,
