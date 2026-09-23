@@ -235,6 +235,29 @@ export async function GET(request: Request) {
     const todayRows = rows.filter((row) => row.occurred_date === filters.today)
     const unmatchedRows = rows.filter((row) => !row.analyst_id)
 
+    let sourceQuery = admin
+      .from('clickdesk_chat_attendances')
+      .select('timestamp_source')
+      .gte('occurred_date', filters.start)
+      .lte('occurred_date', filters.end)
+
+    if (filters.analystId) sourceQuery = sourceQuery.eq('analyst_id', filters.analystId)
+    if (filters.teamId) sourceQuery = sourceQuery.eq('team_id', filters.teamId)
+
+    const sourceResult = await sourceQuery
+    if (sourceResult.error) {
+      throw new ApiError(503, 'Não foi possível validar a origem temporal dos atendimentos.')
+    }
+
+    const timestampSources = (sourceResult.data ?? []).reduce<Record<string, number>>((acc, row) => {
+      const source = String(row.timestamp_source || 'unknown')
+      acc[source] = (acc[source] ?? 0) + 1
+      return acc
+    }, {})
+    const dateBasisNeedsValidation = Object.keys(timestampSources).some(
+      (source) => source === 'updated_at' || source === 'unknown',
+    )
+
     return json({
       source: 'clickdesk_persisted',
       period: {
@@ -257,6 +280,13 @@ export async function GET(request: Request) {
         unmatched_attendances: aggregate(unmatchedRows).attendances,
       },
       latest_sync: latestSync.data ?? null,
+      date_basis: {
+        sources: timestampSources,
+        status: dateBasisNeedsValidation ? 'needs_validation' : 'validated',
+        note: dateBasisNeedsValidation
+          ? 'A distribuição diária ainda usa updated_at/unknown em parte da base; não tratar como data oficial do atendimento até validar um timestamp operacional melhor.'
+          : 'A distribuição diária usa timestamp operacional validado.',
+      },
     })
   })
 }
