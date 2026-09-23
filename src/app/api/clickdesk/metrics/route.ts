@@ -196,6 +196,7 @@ function groupAnalysts(rows: DailyMetricRow[], today: string) {
       team_id: item.team_id,
       ...aggregate(item.rows),
       today: aggregate(item.rows.filter((row) => row.occurred_date === today)),
+      daily: groupDaily(item.rows),
     }))
     .sort(
       (a, b) =>
