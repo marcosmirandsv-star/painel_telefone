@@ -462,6 +462,7 @@ type ClickDeskPersistedMetrics = {
       area: string
       team_id: string | null
       today: ClickDeskPersistedAggregate
+      daily: Array<ClickDeskPersistedAggregate & { date: string }>
     }
   >
   data_quality?: {
@@ -2099,6 +2100,7 @@ function ChatModuleDashboard({
   const [chat2AnalystId, setChat2AnalystId] = useState('')
   const [chat2LiveAnalystKey, setChat2LiveAnalystKey] = useState('')
   const [chat2PeriodKey, setChat2PeriodKey] = useState('')
+  const [chat2DailyDateFilter, setChat2DailyDateFilter] = useState('all')
   const [clickDeskTestLoading, setClickDeskTestLoading] = useState(false)
   const [clickDeskTestResult, setClickDeskTestResult] = useState<ClickDeskTestResult | null>(null)
   const [clickDeskConversationLoading, setClickDeskConversationLoading] = useState(false)
@@ -2118,6 +2120,10 @@ function ChatModuleDashboard({
     () => new Set(metrics.map((metric) => metric.analyst_id)),
     [metrics],
   )
+
+  useEffect(() => {
+    setChat2DailyDateFilter('all')
+  }, [chat2LiveAnalystKey, chat2PeriodKey])
 
   async function loadChatImportHistory() {
     if (!isManagementUser) return
@@ -3363,6 +3369,33 @@ function ChatModuleDashboard({
           normalizeChatText(item.area) === normalizeChatText(chat2SelectedLiveHuman.area),
       ) ?? null
     : null
+  const chat2DailyMap = new Map(
+    (chat2SelectedPersistedAnalyst?.daily ?? []).map((item) => [item.date, item]),
+  )
+  const chat2DailyRuler: Array<ClickDeskPersistedAggregate & { date: string }> = []
+  if (clickDeskPersistedMetrics?.period?.start && clickDeskPersistedMetrics?.period?.end) {
+    const cursor = new Date(`${clickDeskPersistedMetrics.period.start}T00:00:00Z`)
+    const limit = new Date(`${clickDeskPersistedMetrics.period.end}T00:00:00Z`)
+    while (cursor <= limit) {
+      const date = cursor.toISOString().slice(0, 10)
+      chat2DailyRuler.push(
+        chat2DailyMap.get(date) ?? {
+          date,
+          attendances: 0,
+          positive_reviews: 0,
+          negative_reviews: 0,
+          reviews: 0,
+          csat: null,
+          review_percentage: null,
+        },
+      )
+      cursor.setUTCDate(cursor.getUTCDate() + 1)
+    }
+  }
+  const chat2SelectedDayMetric =
+    chat2DailyDateFilter === 'all'
+      ? null
+      : chat2DailyRuler.find((item) => item.date === chat2DailyDateFilter) ?? null
   const chat2LivePositive =
     chat2SelectedPersistedAnalyst?.positive_reviews ?? chat2SelectedLiveHuman?.positive_reviews ?? 0
   const chat2LiveNegative =
@@ -4233,6 +4266,103 @@ function ChatModuleDashboard({
                     Acumulado persistido: {formatDate(clickDeskPersistedMetrics.period.start)} a {formatDate(clickDeskPersistedMetrics.period.end)}
                     {' '}· Hoje: {clickDeskPersistedMetrics.today?.date ? formatDate(clickDeskPersistedMetrics.today.date) : '—'}.
                   </p>
+                )}
+
+                {chat2DailyRuler.length > 0 && (
+                  <div className="mt-5 rounded-xl border border-white/10 bg-slate-900/70 p-5">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold uppercase tracking-[0.14em] text-cyan-300">Régua diária</p>
+                        <h4 className="mt-1 text-lg font-bold">Atendimentos por dia</h4>
+                        <p className="mt-1 text-sm text-slate-400">
+                          Clique em um dia para detalhar o resultado sem perder o acumulado da competência.
+                        </p>
+                      </div>
+                      <label className="min-w-52 text-sm text-slate-400">
+                        Detalhar dia
+                        <select
+                          className="form-input mt-1"
+                          value={chat2DailyDateFilter}
+                          onChange={(event) => setChat2DailyDateFilter(event.target.value)}
+                        >
+                          <option value="all">Competência inteira</option>
+                          {chat2DailyRuler.map((item) => (
+                            <option key={item.date} value={item.date}>
+                              {formatDate(item.date)} · {formatChatCount(item.attendances)} atendimento(s)
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+
+                    <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
+                      {chat2DailyRuler.map((item) => {
+                        const selected = chat2DailyDateFilter === item.date
+                        return (
+                          <button
+                            key={item.date}
+                            type="button"
+                            onClick={() => setChat2DailyDateFilter(selected ? 'all' : item.date)}
+                            className={`min-w-16 rounded-lg border px-3 py-3 text-center transition ${
+                              selected
+                                ? 'border-cyan-300/60 bg-cyan-300/10 text-cyan-100'
+                                : 'border-white/10 bg-slate-950/45 text-slate-300 hover:border-white/25'
+                            }`}
+                            title={`${formatDate(item.date)} · ${formatChatCount(item.attendances)} atendimento(s)`}
+                          >
+                            <span className="block text-xs text-slate-500">{item.date.slice(8, 10)}</span>
+                            <strong className="mt-1 block text-lg tabular-nums">{formatChatCount(item.attendances)}</strong>
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    {chat2SelectedDayMetric ? (
+                      <div className="mt-4 border-t border-white/10 pt-4">
+                        <p className="mb-3 text-sm font-semibold">
+                          {formatDate(chat2SelectedDayMetric.date)} · detalhe do dia
+                        </p>
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                          <div className="rounded-lg bg-slate-950/45 p-3">
+                            <p className="text-xs text-slate-500">Atendimentos</p>
+                            <strong className="mt-1 block text-xl tabular-nums">
+                              {formatChatCount(chat2SelectedDayMetric.attendances)}
+                            </strong>
+                          </div>
+                          <div className="rounded-lg bg-slate-950/45 p-3">
+                            <p className="text-xs text-slate-500">CSAT</p>
+                            <strong className="mt-1 block text-xl tabular-nums">
+                              {chat2SelectedDayMetric.csat === null ? '—' : formatChatPercent(chat2SelectedDayMetric.csat)}
+                            </strong>
+                          </div>
+                          <div className="rounded-lg bg-slate-950/45 p-3">
+                            <p className="text-xs text-slate-500">Positivas</p>
+                            <strong className="mt-1 block text-xl tabular-nums">
+                              {formatChatCount(chat2SelectedDayMetric.positive_reviews)}
+                            </strong>
+                          </div>
+                          <div className="rounded-lg bg-slate-950/45 p-3">
+                            <p className="text-xs text-slate-500">Negativas</p>
+                            <strong className="mt-1 block text-xl tabular-nums">
+                              {formatChatCount(chat2SelectedDayMetric.negative_reviews)}
+                            </strong>
+                          </div>
+                          <div className="rounded-lg bg-slate-950/45 p-3">
+                            <p className="text-xs text-slate-500">% avaliações</p>
+                            <strong className="mt-1 block text-xl tabular-nums">
+                              {chat2SelectedDayMetric.review_percentage === null
+                                ? '—'
+                                : formatChatPercent(chat2SelectedDayMetric.review_percentage)}
+                            </strong>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-xs text-slate-500">
+                        Os números dentro da régua são os atendimentos daquele dia. Dias sem atendimento aparecem como 0.
+                      </p>
+                    )}
+                  </div>
                 )}
 
                 <div className="mt-5 grid gap-4 lg:grid-cols-3">
