@@ -32,6 +32,7 @@ create table if not exists public.clickdesk_chat_attendances (
   analyst_id uuid references public.chat_analysts(id) on delete set null,
   team_id uuid references public.chat_teams(id) on delete set null,
   satisfaction_label text,
+  timestamp_source text not null default 'unknown',
   journey_status text not null default 'ai_to_human'
     check (journey_status = 'ai_to_human'),
   first_seen_at timestamptz not null default now(),
@@ -39,6 +40,9 @@ create table if not exists public.clickdesk_chat_attendances (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.clickdesk_chat_attendances
+  add column if not exists timestamp_source text not null default 'unknown';
 
 create index if not exists clickdesk_chat_attendances_date_idx
   on public.clickdesk_chat_attendances (occurred_date desc);
