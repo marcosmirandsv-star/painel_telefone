@@ -95,8 +95,8 @@ revoke all on public.clickdesk_chat_attendances from anon, authenticated;
 revoke all on public.clickdesk_chat_sync_runs from anon, authenticated;
 
 grant select, insert, update, delete on public.clickdesk_chat_analyst_links to authenticated;
-grant select on public.clickdesk_chat_attendances to authenticated;
-grant select on public.clickdesk_chat_sync_runs to authenticated;
+grant select, insert, update on public.clickdesk_chat_attendances to authenticated;
+grant select, insert, update on public.clickdesk_chat_sync_runs to authenticated;
 
 drop policy if exists "clickdesk_chat_links_management" on public.clickdesk_chat_analyst_links;
 create policy "clickdesk_chat_links_management"
@@ -119,6 +119,36 @@ on public.clickdesk_chat_sync_runs
 for select
 to authenticated
 using ((select public.is_management_user()));
+
+drop policy if exists "clickdesk_chat_attendances_management_insert" on public.clickdesk_chat_attendances;
+create policy "clickdesk_chat_attendances_management_insert"
+on public.clickdesk_chat_attendances
+for insert
+to authenticated
+with check ((select public.is_management_user()));
+
+drop policy if exists "clickdesk_chat_attendances_management_update" on public.clickdesk_chat_attendances;
+create policy "clickdesk_chat_attendances_management_update"
+on public.clickdesk_chat_attendances
+for update
+to authenticated
+using ((select public.is_management_user()))
+with check ((select public.is_management_user()));
+
+drop policy if exists "clickdesk_chat_sync_runs_management_insert" on public.clickdesk_chat_sync_runs;
+create policy "clickdesk_chat_sync_runs_management_insert"
+on public.clickdesk_chat_sync_runs
+for insert
+to authenticated
+with check ((select public.is_management_user()));
+
+drop policy if exists "clickdesk_chat_sync_runs_management_update" on public.clickdesk_chat_sync_runs;
+create policy "clickdesk_chat_sync_runs_management_update"
+on public.clickdesk_chat_sync_runs
+for update
+to authenticated
+using ((select public.is_management_user()))
+with check ((select public.is_management_user()));
 
 create or replace view public.clickdesk_chat_daily_metrics
 with (security_invoker = true)
