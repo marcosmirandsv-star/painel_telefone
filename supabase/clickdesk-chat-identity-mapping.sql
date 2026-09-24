@@ -96,11 +96,13 @@ where area is not null;
 
 update public.clickdesk_chat_attendances a
 set identity_role = 'management'
-from public.clickdesk_chat_area_links al
-join public.chat_teams t on t.id = al.team_id
 where a.analyst_id is null
-  and lower(a.area) = lower(al.area_name)
-  and lower(a.assignee_name) = lower(t.manager_name);
+  and exists (
+    select 1
+    from public.chat_teams t
+    where t.manager_name is not null
+      and lower(t.manager_name) = lower(a.assignee_name)
+  );
 
 create index if not exists clickdesk_chat_attendances_identity_role_idx
   on public.clickdesk_chat_attendances (identity_role);
