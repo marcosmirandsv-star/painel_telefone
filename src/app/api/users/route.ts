@@ -21,24 +21,57 @@ function isManagementRole(role: unknown) {
 }
 
 export async function POST(request: NextRequest) {
-  const { url: supabaseUrl, serviceRoleKey, environment } = getServerSupabaseConfig()
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    return NextResponse.json(
-      {
-        error:
-          environment === 'homologacao'
-            ? 'Criação de usuários da homologação ainda não configurada.'
-            : 'Criacao de usuários ainda não configurada. Adicione SUPABASE_SERVICE_ROLE_KEY nas variaveis de ambiente da Vercel.',
-      },
-      { status: 500 },
-    )
-  }
+  const {
+    url: supabaseUrl,
+    publishableKey,
+    serviceRoleKey,
+    environment,
+  } = getServerSupabaseConfig()
 
   const token = request.headers.get('authorization')?.replace('Bearer ', '').trim()
 
   if (!token) {
     return NextResponse.json({ error: 'Sessão não encontrada. Entre novamente.' }, { status: 401 })
+  }
+
+  if (environment === 'homologacao') {
+    if (!supabaseUrl || !publishableKey) {
+      return NextResponse.json(
+        { error: 'Criação de usuários da homologação indisponível.' },
+        { status: 500 },
+      )
+    }
+
+    const payload = await request.text()
+    const response = await fetch(
+      `${supabaseUrl}/functions/v1/create-performance-user`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          apikey: publishableKey,
+          'Content-Type': 'application/json',
+        },
+        body: payload,
+        cache: 'no-store',
+      },
+    )
+
+    const data = await response.json().catch(() => ({
+      error: 'A criação do usuário retornou uma resposta inválida.',
+    }))
+
+    return NextResponse.json(data, { status: response.status })
+  }
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return NextResponse.json(
+      {
+        error:
+          'Criacao de usuários ainda não configurada. Adicione SUPABASE_SERVICE_ROLE_KEY nas variaveis de ambiente da Vercel.',
+      },
+      { status: 500 },
+    )
   }
 
   const admin = createClient(supabaseUrl, serviceRoleKey, {
