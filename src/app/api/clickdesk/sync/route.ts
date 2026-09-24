@@ -889,7 +889,6 @@ export async function POST(request: Request) {
       const analystById = new Map(analysts.map((analyst) => [analyst.id, analyst]))
       const analystCandidates = new Map<string, AnalystRow[]>()
       const areaLinkByKey = new Map(areaLinks.map((item) => [item.area_key, item]))
-      const teamById = new Map(teams.map((team) => [team.id, team]))
 
       analysts.forEach((analyst) => {
         const key = normalizeLabel(analyst.name)
