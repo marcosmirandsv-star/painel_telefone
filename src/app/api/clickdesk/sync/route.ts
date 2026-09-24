@@ -26,9 +26,25 @@ type AnalystRow = {
 type LinkRow = {
   assignee_key: string
   assignee_name: string
-  analyst_id: string
-  link_source: 'auto_name_match' | 'manual'
+  area_key: string
+  area_name: string
+  analyst_id: string | null
+  team_id: string | null
+  person_role: 'analyst' | 'management' | 'unmapped'
+  link_source: 'auto_name_match' | 'manual' | 'manager_match' | 'unmatched'
   confirmed: boolean
+}
+
+type AreaLinkRow = {
+  area_key: string
+  area_name: string
+  team_id: string
+  active: boolean
+}
+
+type TeamRow = {
+  id: string
+  manager_name: string | null
 }
 
 function sanitizeMessage(message: string) {
@@ -837,13 +853,21 @@ export async function POST(request: Request) {
     const runId = runInsert.data.id as string
 
     try {
-      const [{ rows, pagesScanned }, analystsResult, linksResult] = await Promise.all([
-        fetchAllHumanPages(apiKey, accountId),
-        admin.from('chat_analysts').select('id,team_id,name,active'),
-        admin
-          .from('clickdesk_chat_analyst_links')
-          .select('assignee_key,assignee_name,analyst_id,link_source,confirmed'),
-      ])
+      const [{ rows, pagesScanned }, analystsResult, linksResult, areaLinksResult, teamsResult] =
+        await Promise.all([
+          fetchAllHumanPages(apiKey, accountId),
+          admin.from('chat_analysts').select('id,team_id,name,active'),
+          admin
+            .from('clickdesk_chat_analyst_links')
+            .select(
+              'assignee_key,assignee_name,area_key,area_name,analyst_id,team_id,person_role,link_source,confirmed',
+            ),
+          admin
+            .from('clickdesk_chat_area_links')
+            .select('area_key,area_name,team_id,active')
+            .eq('active', true),
+          admin.from('chat_teams').select('id,manager_name'),
+        ])
 
       if (analystsResult.error) {
         throw new ApiError(503, 'Não foi possível carregar o cadastro de analistas.')
@@ -851,11 +875,21 @@ export async function POST(request: Request) {
       if (linksResult.error) {
         throw new ApiError(503, 'Não foi possível carregar os vínculos do ClickDesk.')
       }
+      if (areaLinksResult.error) {
+        throw new ApiError(503, 'Não foi possível carregar o mapa de áreas do ClickDesk.')
+      }
+      if (teamsResult.error) {
+        throw new ApiError(503, 'Não foi possível carregar os times do chat.')
+      }
 
       const analysts = (analystsResult.data ?? []) as AnalystRow[]
       const links = (linksResult.data ?? []) as LinkRow[]
+      const areaLinks = (areaLinksResult.data ?? []) as AreaLinkRow[]
+      const teams = (teamsResult.data ?? []) as TeamRow[]
       const analystById = new Map(analysts.map((analyst) => [analyst.id, analyst]))
       const analystCandidates = new Map<string, AnalystRow[]>()
+      const areaLinkByKey = new Map(areaLinks.map((item) => [item.area_key, item]))
+      const teamById = new Map(teams.map((team) => [team.id, team]))
 
       analysts.forEach((analyst) => {
         const key = normalizeLabel(analyst.name)
@@ -864,7 +898,11 @@ export async function POST(request: Request) {
         analystCandidates.set(key, current)
       })
 
-      const linkByKey = new Map(links.map((link) => [link.assignee_key, link]))
+      const identityKey = (assigneeKey: string, areaKey: string) =>
+        `${assigneeKey}::${areaKey}`
+      const linkByKey = new Map(
+        links.map((link) => [identityKey(link.assignee_key, link.area_key), link]),
+      )
       const targetCandidates = rows.filter(
         (row) =>
           Boolean(row.area && isTargetSupportName(row.area)) &&
@@ -887,28 +925,61 @@ export async function POST(request: Request) {
       const inPeriod = targetRows
       const timestampAudit = operationalResolution.summary
 
-      const distinctAssignees = new Map<string, string>()
+      const distinctIdentities = new Map<
+        string,
+        { assigneeName: string; assigneeKey: string; areaName: string; areaKey: string }
+      >()
+
       targetRows.forEach((row) => {
-        const name = row.assignee?.trim()
-        if (!name) return
-        distinctAssignees.set(normalizeLabel(name), name)
+        const assigneeName = row.assignee?.trim()
+        const areaName = row.area?.trim()
+        if (!assigneeName || !areaName) return
+        const assigneeKey = normalizeLabel(assigneeName)
+        const areaKey = normalizeLabel(areaName)
+        distinctIdentities.set(identityKey(assigneeKey, areaKey), {
+          assigneeName,
+          assigneeKey,
+          areaName,
+          areaKey,
+        })
       })
 
       const autoLinks: Record<string, unknown>[] = []
-      distinctAssignees.forEach((assigneeName, assigneeKey) => {
-        if (linkByKey.has(assigneeKey)) return
-        const candidates = analystCandidates.get(assigneeKey) ?? []
-        if (candidates.length !== 1) return
+      distinctIdentities.forEach((identity, compositeKey) => {
+        if (linkByKey.has(compositeKey)) return
 
-        const analyst = candidates[0]
+        const candidates = analystCandidates.get(identity.assigneeKey) ?? []
+        const areaLink = areaLinkByKey.get(identity.areaKey) ?? null
+        const team = areaLink ? teamById.get(areaLink.team_id) ?? null : null
+        const managerMatch =
+          team?.manager_name &&
+          normalizeLabel(team.manager_name) === identity.assigneeKey
+
+        const analyst = candidates.length === 1 ? candidates[0] : null
+        const personRole: LinkRow['person_role'] = analyst
+          ? 'analyst'
+          : managerMatch
+            ? 'management'
+            : 'unmapped'
+        const linkSource: LinkRow['link_source'] = analyst
+          ? 'auto_name_match'
+          : managerMatch
+            ? 'manager_match'
+            : 'unmatched'
+
         const link: LinkRow = {
-          assignee_key: assigneeKey,
-          assignee_name: assigneeName,
-          analyst_id: analyst.id,
-          link_source: 'auto_name_match',
+          assignee_key: identity.assigneeKey,
+          assignee_name: identity.assigneeName,
+          area_key: identity.areaKey,
+          area_name: identity.areaName,
+          analyst_id: analyst?.id ?? null,
+          team_id: areaLink?.team_id ?? null,
+          person_role: personRole,
+          link_source: linkSource,
           confirmed: false,
         }
-        linkByKey.set(assigneeKey, link)
+
+        linkByKey.set(compositeKey, link)
         autoLinks.push({
           ...link,
           updated_at: new Date().toISOString(),
@@ -920,27 +991,32 @@ export async function POST(request: Request) {
           admin,
           'clickdesk_chat_analyst_links',
           autoLinks,
-          'assignee_key',
+          'assignee_key,area_key',
         )
       }
 
       const now = new Date().toISOString()
       const attendanceRows = targetRows.map((row) => {
         const assigneeName = row.assignee?.trim() ?? ''
+        const areaName = row.area?.trim() ?? ''
         const assigneeKey = normalizeLabel(assigneeName)
-        const linked = linkByKey.get(assigneeKey)
-        const analyst = linked ? analystById.get(linked.analyst_id) ?? null : null
+        const areaKey = normalizeLabel(areaName)
+        const linked = linkByKey.get(identityKey(assigneeKey, areaKey)) ?? null
+        const analyst = linked?.analyst_id
+          ? analystById.get(linked.analyst_id) ?? null
+          : null
+        const areaLink = areaLinkByKey.get(areaKey) ?? null
 
         return {
           clickdesk_ticket_id: row.id,
           attendance_mode: 'human',
           occurred_at: row.operationalTimestamp,
           occurred_date: row.occurredDate,
-          area: row.area,
+          area: areaName,
           assignee_name: assigneeName,
           assignee_key: assigneeKey,
           analyst_id: analyst?.id ?? null,
-          team_id: analyst?.team_id ?? null,
+          team_id: areaLink?.team_id ?? linked?.team_id ?? analyst?.team_id ?? null,
           satisfaction_label: row.satisfaction,
           timestamp_source: row.operationalTimestampSource,
           journey_status: 'ai_to_human',
@@ -958,17 +1034,29 @@ export async function POST(request: Request) {
         )
       }
 
+      const roleForTargetRow = (row: OperationalTicketRow & { occurredDate: string }) => {
+        const assigneeKey = normalizeLabel(row.assignee?.trim() ?? '')
+        const areaKey = normalizeLabel(row.area?.trim() ?? '')
+        return linkByKey.get(identityKey(assigneeKey, areaKey))?.person_role ?? 'unmapped'
+      }
+
+      const analystRows = targetRows.filter((row) => roleForTargetRow(row) === 'analyst').length
+      const managementRows = targetRows.filter(
+        (row) => roleForTargetRow(row) === 'management',
+      ).length
+      const unmappedRows = targetRows.filter((row) => roleForTargetRow(row) === 'unmapped').length
+
       const unmatchedNames = [
         ...new Set(
-          attendanceRows
-            .filter((row) => !row.analyst_id)
-            .map((row) => row.assignee_name)
+          targetRows
+            .filter((row) => roleForTargetRow(row) === 'unmapped')
+            .map((row) => row.assignee?.trim() ?? '')
             .filter(Boolean),
         ),
       ].sort((a, b) => a.localeCompare(b, 'pt-BR'))
 
-      const matchedRows = attendanceRows.filter((row) => Boolean(row.analyst_id)).length
-      const unmatchedRows = attendanceRows.length - matchedRows
+      const matchedRows = analystRows + managementRows
+      const unmatchedRows = unmappedRows
 
       const updateRun = await admin
         .from('clickdesk_chat_sync_runs')
@@ -981,6 +1069,9 @@ export async function POST(request: Request) {
           rows_upserted: attendanceRows.length,
           matched_rows: matchedRows,
           unmatched_rows: unmatchedRows,
+          analyst_rows: analystRows,
+          management_rows: managementRows,
+          unmapped_rows: unmappedRows,
           unmatched_assignees: unmatchedNames,
           timestamp_audit: timestampAudit,
           finished_at: new Date().toISOString(),
@@ -1028,6 +1119,9 @@ export async function POST(request: Request) {
         rows_persisted: attendanceRows.length,
         matched_rows: matchedRows,
         unmatched_rows: unmatchedRows,
+        analyst_rows: analystRows,
+        management_rows: managementRows,
+        unmapped_rows: unmappedRows,
         unmatched_assignees: unmatchedNames,
         auto_links_created: autoLinks.length,
         timestamp_audit: timestampAudit,
