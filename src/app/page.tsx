@@ -8,6 +8,10 @@ import { supabase } from '@/lib/supabase'
 import { scheduleSupabase } from '@/lib/schedule-supabase'
 import { isHomologationBrowserRuntime } from '@/lib/runtime-environment'
 import { calculateAverageCsat, calculateChatAverage, calculateTeamPerformance } from '@/lib/indicators'
+import {
+  buildChatPerformanceDiagnostic,
+  type ChatPerformanceDiagnostic,
+} from '@/lib/chat-diagnostic'
 
 type Goal = {
   id: string
@@ -2220,6 +2224,83 @@ export default function Home() {
   )
 }
 
+function ChatPerformanceDiagnosticPanel({
+  diagnostic,
+}: {
+  diagnostic: ChatPerformanceDiagnostic
+}) {
+  const statusClass =
+    diagnostic.status === 'success'
+      ? 'border-emerald-400/25 bg-emerald-400/5 text-emerald-100'
+      : diagnostic.status === 'attention'
+        ? 'border-amber-300/25 bg-amber-300/5 text-amber-100'
+        : diagnostic.status === 'priority'
+          ? 'border-rose-400/25 bg-rose-400/5 text-rose-100'
+          : 'border-cyan-400/20 bg-cyan-400/5 text-cyan-100'
+
+  const goalsText =
+    diagnostic.goalsEvaluated === 2
+      ? `${diagnostic.goalsMet} de 2 metas atingidas`
+      : `${diagnostic.goalsEvaluated} de 2 metas avaliadas`
+
+  return (
+    <div className={`mt-5 rounded-xl border p-5 ${statusClass}`}>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] opacity-80">
+            Por que essa situação?
+          </p>
+          <h4 className="mt-2 text-xl font-bold">
+            {diagnostic.statusLabel} · {goalsText}
+          </h4>
+          <p className="mt-2 max-w-4xl text-sm leading-6 opacity-90">
+            {diagnostic.summary}
+          </p>
+        </div>
+        <span className="self-start rounded-md border border-current/20 px-3 py-2 text-xs font-semibold">
+          Regra objetiva
+        </span>
+      </div>
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-3">
+        <div className="rounded-lg border border-emerald-400/20 bg-slate-950/35 p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-300">
+            Ponto forte
+          </p>
+          <strong className="mt-2 block text-slate-100">{diagnostic.strength.title}</strong>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            {diagnostic.strength.detail}
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-amber-300/20 bg-slate-950/35 p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-200">
+            Ponto de atenção
+          </p>
+          <strong className="mt-2 block text-slate-100">{diagnostic.attention.title}</strong>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            {diagnostic.attention.detail}
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-cyan-400/20 bg-slate-950/35 p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-300">
+            Próxima leitura
+          </p>
+          <strong className="mt-2 block text-slate-100">{diagnostic.priority.title}</strong>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            {diagnostic.priority.detail}
+          </p>
+        </div>
+      </div>
+
+      <p className="mt-4 border-t border-current/10 pt-3 text-xs leading-5 opacity-70">
+        {diagnostic.methodNote}
+      </p>
+    </div>
+  )
+}
+
 function ChatAnalystPortal({
   analyst,
   team,
@@ -2356,15 +2437,18 @@ function ChatAnalystPortal({
   const reviewPercentage = accumulated?.review_percentage ?? null
   const csatGoal = Number(analyst.csat_goal)
   const reviewGoal = 25
-  const meetsCsat = csat !== null && csat >= csatGoal
-  const meetsReviews =
-    reviewPercentage !== null && reviewPercentage >= reviewGoal
-  const status =
-    meetsCsat && meetsReviews
-      ? 'Dentro das metas'
-      : meetsCsat || meetsReviews
-        ? 'Atenção'
-        : 'Prioridade'
+  const diagnostic = buildChatPerformanceDiagnostic({
+    csat,
+    csatGoal,
+    reviewPercentage,
+    reviewGoal,
+    positiveReviews: accumulated?.positive_reviews ?? 0,
+    negativeReviews: accumulated?.negative_reviews ?? 0,
+    attendances: accumulated?.attendances ?? 0,
+  })
+  const meetsCsat = diagnostic.csatMet === true
+  const meetsReviews = diagnostic.reviewMet === true
+  const status = diagnostic.statusLabel
   const historyPoints = history?.points ?? []
   const todayKey = new Date().toISOString().slice(0, 10)
   const visibleDayCount =
@@ -2408,6 +2492,11 @@ function ChatAnalystPortal({
           <div className="rounded-lg border border-cyan-400/20 bg-cyan-400/5 px-4 py-3 text-sm">
             <p className="text-slate-400">Situação atual</p>
             <strong className="mt-1 block text-cyan-100">{status}</strong>
+            <span className="mt-1 block text-xs text-slate-400">
+              {diagnostic.goalsEvaluated === 2
+                ? `${diagnostic.goalsMet} de 2 metas atingidas`
+                : `${diagnostic.goalsEvaluated} de 2 metas avaliadas`}
+            </span>
           </div>
         </div>
 
@@ -2462,6 +2551,8 @@ function ChatAnalystPortal({
                 }
               />
             </div>
+
+            <ChatPerformanceDiagnosticPanel diagnostic={diagnostic} />
 
             <div className="mt-5 grid gap-4 lg:grid-cols-2">
               <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
@@ -4256,18 +4347,18 @@ function ChatModuleDashboard({
     : null
   const chat2LiveCsatGoal = chat2SelectedLiveAnalyst ? Number(chat2SelectedLiveAnalyst.csat_goal) : null
   const chat2LiveReviewGoal = 25
-  const chat2LiveCsatMet =
-    chat2LiveCsatGoal !== null && chat2LiveCandidateCsat !== null && chat2LiveCandidateCsat >= chat2LiveCsatGoal
-  const chat2LiveReviewMet =
-    chat2LiveCandidateReviewPercentage !== null && chat2LiveCandidateReviewPercentage >= chat2LiveReviewGoal
-  const chat2LiveStatus =
-    chat2LiveCsatGoal === null
-      ? 'Meta não vinculada'
-      : chat2LiveCsatMet && chat2LiveReviewMet
-        ? 'Metas atendidas'
-        : chat2LiveCsatMet || chat2LiveReviewMet
-          ? 'Atenção'
-          : 'Acompanhar'
+  const chat2LiveDiagnostic = buildChatPerformanceDiagnostic({
+    csat: chat2LiveCandidateCsat,
+    csatGoal: chat2LiveCsatGoal,
+    reviewPercentage: chat2LiveCandidateReviewPercentage,
+    reviewGoal: chat2LiveReviewGoal,
+    positiveReviews: chat2LivePositive,
+    negativeReviews: chat2LiveNegative,
+    attendances: chat2LiveAttendances,
+  })
+  const chat2LiveCsatMet = chat2LiveDiagnostic.csatMet === true
+  const chat2LiveReviewMet = chat2LiveDiagnostic.reviewMet === true
+  const chat2LiveStatus = chat2LiveDiagnostic.statusLabel
   const chat2LiveTeamRows = chat2SelectedLiveHuman
     ? chat2PersistedAnalystRows.filter(
         (item) => normalizeChatText(item.area) === normalizeChatText(chat2SelectedLiveHuman.area),
@@ -5079,6 +5170,11 @@ function ChatModuleDashboard({
                     <div className="rounded-lg bg-slate-900 px-4 py-3">
                       <p className="text-slate-400">Situação do período</p>
                       <strong className="mt-1 block text-base">{chat2LiveStatus}</strong>
+                      <span className="mt-1 block text-xs text-slate-500">
+                        {chat2LiveDiagnostic.goalsEvaluated === 2
+                          ? `${chat2LiveDiagnostic.goalsMet} de 2 metas atingidas`
+                          : `${chat2LiveDiagnostic.goalsEvaluated} de 2 metas avaliadas`}
+                      </span>
                     </div>
                     <div className="rounded-lg bg-slate-900 px-4 py-3">
                       <p className="text-slate-400">Leitura ClickDesk</p>
@@ -5107,6 +5203,9 @@ function ChatModuleDashboard({
                     value={chat2LiveCandidateReviewPercentage === null ? '—' : formatChatPercent(chat2LiveCandidateReviewPercentage)}
                   />
                 </div>
+
+                <ChatPerformanceDiagnosticPanel diagnostic={chat2LiveDiagnostic} />
+
                 {clickDeskPersistedMetrics?.period && (
                   <p className="mt-3 text-xs text-slate-500">
                     Acumulado persistido: {formatDate(clickDeskPersistedMetrics.period.start)} a {formatDate(clickDeskPersistedMetrics.period.end)}
