@@ -2248,17 +2248,17 @@ function ChatPerformanceDiagnosticPanel({
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] opacity-80">
-            Por que essa situação?
+            O que está acontecendo
           </p>
           <h4 className="mt-2 text-xl font-bold">
-            {diagnostic.statusLabel} · {goalsText}
+            {goalsText}
           </h4>
           <p className="mt-2 max-w-4xl text-sm leading-6 opacity-90">
             {diagnostic.summary}
           </p>
         </div>
         <span className="self-start rounded-md border border-current/20 px-3 py-2 text-xs font-semibold">
-          Regra objetiva
+          Base: metas + avaliações
         </span>
       </div>
 
@@ -2285,7 +2285,7 @@ function ChatPerformanceDiagnosticPanel({
 
         <div className="rounded-lg border border-cyan-400/20 bg-slate-950/35 p-4">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-300">
-            Próxima leitura
+            O que olhar agora
           </p>
           <strong className="mt-2 block text-slate-100">{diagnostic.priority.title}</strong>
           <p className="mt-2 text-sm leading-6 text-slate-400">
@@ -2513,72 +2513,112 @@ function ChatAnalystPortal({
 
         {!loading && !metrics?.erro && (
           <>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-              <MetricCard
-                label="Atendimentos no mês"
-                value={formatChatCount(accumulated?.attendances ?? 0)}
-              />
-              <MetricCard
-                label="Atendimentos hoje"
-                value={formatChatCount(today?.attendances ?? 0)}
-              />
-              <MetricCard
-                label="CSAT"
-                value={csat === null ? '—' : formatChatPercent(csat)}
-                tone={meetsCsat ? 'success' : csat === null ? undefined : 'warning'}
-              />
-              <MetricCard
-                label="Avaliações positivas"
-                value={formatChatCount(accumulated?.positive_reviews ?? 0)}
-              />
-              <MetricCard
-                label="Avaliações negativas"
-                value={formatChatCount(accumulated?.negative_reviews ?? 0)}
-              />
-              <MetricCard
-                label="% de avaliações"
-                value={
+            <div className="mt-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                Resumo da competência
+              </p>
+              <div className="mt-3 grid gap-4 lg:grid-cols-3">
+                <div className="rounded-xl border border-white/10 bg-slate-950/40 p-5">
+                  <p className="text-sm text-slate-400">Atendimentos</p>
+                  <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
+                    {formatChatCount(accumulated?.attendances ?? 0)}
+                  </strong>
+                  <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-3 text-sm">
+                    <span className="text-slate-500">Hoje na base</span>
+                    <strong className="tabular-nums text-slate-200">
+                      {formatChatCount(today?.attendances ?? 0)}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className={`rounded-xl border p-5 ${
+                  csat === null
+                    ? 'border-white/10 bg-slate-950/40'
+                    : meetsCsat
+                      ? 'border-emerald-400/20 bg-emerald-400/5'
+                      : 'border-amber-300/20 bg-amber-300/5'
+                }`}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm text-slate-400">CSAT</p>
+                      <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
+                        {csat === null ? '—' : formatChatPercent(csat)}
+                      </strong>
+                    </div>
+                    <span className="rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300">
+                      Meta {formatChatPercent(csatGoal)}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-slate-400">
+                    {csat === null
+                      ? 'Ainda sem avaliações suficientes para calcular o indicador.'
+                      : diagnostic.csatDelta !== null && diagnostic.csatDelta >= 0
+                        ? `${formatDelta(diagnostic.csatDelta, ' p.p.')} acima da meta.`
+                        : `${formatDelta(diagnostic.csatDelta ?? 0, ' p.p.')} abaixo da meta.`}
+                  </p>
+                  <div className="mt-4 flex gap-4 border-t border-white/10 pt-3 text-sm">
+                    <span className="text-slate-500">
+                      Positivas <strong className="text-slate-200">{formatChatCount(accumulated?.positive_reviews ?? 0)}</strong>
+                    </span>
+                    <span className="text-slate-500">
+                      Negativas <strong className="text-slate-200">{formatChatCount(accumulated?.negative_reviews ?? 0)}</strong>
+                    </span>
+                  </div>
+                </div>
+
+                <div className={`rounded-xl border p-5 ${
                   reviewPercentage === null
-                    ? '—'
-                    : formatChatPercent(reviewPercentage)
-                }
-                tone={
-                  meetsReviews
-                    ? 'success'
-                    : reviewPercentage === null
-                      ? undefined
-                      : 'warning'
-                }
-              />
+                    ? 'border-white/10 bg-slate-950/40'
+                    : meetsReviews
+                      ? 'border-emerald-400/20 bg-emerald-400/5'
+                      : 'border-amber-300/20 bg-amber-300/5'
+                }`}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm text-slate-400">% de avaliações</p>
+                      <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
+                        {reviewPercentage === null ? '—' : formatChatPercent(reviewPercentage)}
+                      </strong>
+                    </div>
+                    <span className="rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300">
+                      Meta {formatChatPercent(reviewGoal)}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-slate-400">
+                    {reviewPercentage === null
+                      ? 'Ainda sem base para calcular participação nas avaliações.'
+                      : diagnostic.reviewDelta !== null && diagnostic.reviewDelta >= 0
+                        ? `${formatDelta(diagnostic.reviewDelta, ' p.p.')} acima da meta.`
+                        : `${formatDelta(diagnostic.reviewDelta ?? 0, ' p.p.')} abaixo da meta.`}
+                  </p>
+                  <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-3 text-sm">
+                    <span className="text-slate-500">Avaliações recebidas</span>
+                    <strong className="tabular-nums text-slate-200">
+                      {formatChatCount(accumulated?.reviews ?? 0)}
+                    </strong>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <ChatPerformanceDiagnosticPanel diagnostic={diagnostic} />
 
-            <div className="mt-5 grid gap-4 lg:grid-cols-2">
-              <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
-                <p className="text-sm text-slate-400">Meta de CSAT</p>
-                <p className="mt-2 text-2xl font-bold">
-                  {formatChatPercent(csatGoal)}
-                </p>
-                <p className="mt-2 text-sm text-slate-400">
-                  {csat === null
-                    ? 'Ainda sem avaliações suficientes para calcular o CSAT.'
-                    : `Distância atual: ${formatDelta(
-                        round(csat - csatGoal),
-                        ' p.p.',
-                      )}`}
-                </p>
-              </div>
-              <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
-                <p className="text-sm text-slate-400">Meta de avaliações</p>
-                <p className="mt-2 text-2xl font-bold">
-                  {formatChatPercent(reviewGoal)}
-                </p>
-                <p className="mt-2 text-sm text-slate-400">
-                  {reviewPercentage === null
-                    ? 'Ainda sem base para calcular participação nas avaliações.'
-                    : `Resultado atual: ${formatChatPercent(reviewPercentage)}`}
-                </p>
+            <div className="mt-5 rounded-xl border border-violet-400/15 bg-violet-400/5 p-5">
+              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-violet-200">
+                    Próxima camada · IA qualitativa
+                  </p>
+                  <strong className="mt-2 block text-slate-100">
+                    A causa ainda não está sendo atribuída
+                  </strong>
+                  <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-400">
+                    Quando a análise qualitativa for ativada, este espaço vai explicar os motivos das avaliações negativas, sentimento inicial e final, influência do atendimento humano e evidências da conversa. Até lá, o painel mostra somente fatos calculáveis.
+                  </p>
+                </div>
+                <span className="self-start rounded-md border border-violet-300/20 px-3 py-2 text-xs font-semibold text-violet-200">
+                  Preparado para IA
+                </span>
               </div>
             </div>
           </>
