@@ -4751,10 +4751,10 @@ function ChatModuleDashboard({
       <section className="panel workspace-hero">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="workspace-eyebrow">Módulo chat</p>
-            <h2 className="workspace-title">Performance mensal do chat</h2>
+            <p className="workspace-eyebrow">Módulo Chat</p>
+            <h2 className="workspace-title">Central de performance do Chat</h2>
             <p className="section-subtitle">
-              Leitura consolidada dos dados históricos e das importações mensais do Zendesk.
+              Operação, produtividade, gestão e fechamento em uma única experiência, com dados do ClickDesk e histórico oficial.
             </p>
           </div>
 
@@ -4795,26 +4795,23 @@ function ChatModuleDashboard({
       <nav className="chat-navigation workspace-navigation" aria-label="Áreas do módulo Chat">
         <div className="tab-row">
           <TabButton active={chatActiveTab === 'overview'} onClick={() => setChatActiveTab('overview')}>
-            Operação
+            Visão da operação
           </TabButton>
           <TabButton active={chatActiveTab === 'prototype'} onClick={() => setChatActiveTab('prototype')}>
-            Chat 2.0 · Protótipo
-          </TabButton>
-          <TabButton active={chatActiveTab === 'analysis'} onClick={() => setChatActiveTab('analysis')}>
-            Pessoas
+            Equipe e produtividade
           </TabButton>
           <TabButton active={chatActiveTab === 'podium'} onClick={() => setChatActiveTab('podium')}>
-            Ações de gestão
+            Gestão e ações
           </TabButton>
           <TabButton active={chatActiveTab === 'reports'} onClick={() => setChatActiveTab('reports')}>
-            Fechamento
+            Fechamento mensal
           </TabButton>
         </div>
         <div className="chat-tools-menu">
           <button
             aria-expanded={chatToolsOpen}
             aria-haspopup="menu"
-            className={chatActiveTab === 'import' || chatActiveTab === 'settings' ? 'chat-tools-trigger chat-tools-trigger-active' : 'chat-tools-trigger'}
+            className={chatActiveTab === 'analysis' || chatActiveTab === 'import' || chatActiveTab === 'settings' ? 'chat-tools-trigger chat-tools-trigger-active' : 'chat-tools-trigger'}
             onClick={() => setChatToolsOpen((open) => !open)}
             type="button"
           >
@@ -4823,6 +4820,18 @@ function ChatModuleDashboard({
           </button>
           {chatToolsOpen && (
             <div className="chat-tools-dropdown" role="menu">
+              <button
+                className={chatActiveTab === 'analysis' ? 'chat-tools-option chat-tools-option-active' : 'chat-tools-option'}
+                onClick={() => {
+                  setChatActiveTab('analysis')
+                  setChatToolsOpen(false)
+                }}
+                role="menuitem"
+                type="button"
+              >
+                <strong>Conferência da base</strong>
+                <span>Auditar comparação, volume, qualidade e dados importados</span>
+              </button>
               <button
                 className={chatActiveTab === 'import' ? 'chat-tools-option chat-tools-option-active' : 'chat-tools-option'}
                 onClick={() => {
@@ -4833,7 +4842,7 @@ function ChatModuleDashboard({
                 type="button"
               >
                 <strong>Importação</strong>
-                <span>Atualizar a base mensal do Zendesk</span>
+                <span>Atualizar a base mensal e o histórico operacional</span>
               </button>
               <button
                 className={chatActiveTab === 'settings' ? 'chat-tools-option chat-tools-option-active' : 'chat-tools-option'}
@@ -4870,14 +4879,14 @@ function ChatModuleDashboard({
         <section className="panel workspace-section-intro">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <p className="workspace-eyebrow">Chat 2.0 · protótipo</p>
-              <h2 className="mt-2 text-2xl font-bold">Visão individual contínua de performance</h2>
+              <p className="workspace-eyebrow">Equipe e produtividade</p>
+              <h2 className="mt-2 text-2xl font-bold">Desempenho do time e leitura individual</h2>
               <p className="section-subtitle">
-                Homologação da nova visão individual usando dados reais do ClickDesk. Sentimento e causa permanecem fora dos indicadores até a análise qualitativa ser validada.
+                Acompanhe volume, qualidade, avaliações, posição no ranking e evolução de cada analista com a base persistida do ClickDesk.
               </p>
             </div>
-            <span className="rounded-md border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-sm font-semibold text-amber-100">
-              ClickDesk · homologação
+            <span className="rounded-md border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-sm font-semibold text-cyan-100">
+              ClickDesk · base viva
             </span>
           </div>
         </section>
@@ -4885,17 +4894,17 @@ function ChatModuleDashboard({
 
       {chatActiveTab === 'analysis' && (
         <section className="panel workspace-section-intro">
-          <p className="workspace-eyebrow">Pessoas</p>
-          <h2 className="mt-2 text-2xl font-bold">Como os resultados estão distribuídos?</h2>
-          <p className="section-subtitle">Comparação entre analistas, volume, qualidade, participação nas avaliações e conferência da base importada.</p>
+          <p className="workspace-eyebrow">Ferramentas · conferência da base</p>
+          <h2 className="mt-2 text-2xl font-bold">Auditar os números antes da gestão</h2>
+          <p className="section-subtitle">Comparação detalhada entre analistas, volume, qualidade, participação nas avaliações e conferência dos dados importados.</p>
         </section>
       )}
 
       {chatActiveTab === 'podium' && (
         <section className="panel workspace-section-intro">
-          <p className="workspace-eyebrow">Ações de gestão</p>
+          <p className="workspace-eyebrow">Gestão e ações</p>
           <h2 className="mt-2 text-2xl font-bold">Onde agir e o que acompanhar?</h2>
-          <p className="section-subtitle">Diagnóstico gerencial, prioridades, causas a validar e ações recomendadas para o próximo ciclo.</p>
+          <p className="section-subtitle">Diagnóstico gerencial, prioridades, pontos de atenção e ações para o próximo ciclo. A camada qualitativa de IA será incorporada depois da reorganização visual.</p>
         </section>
       )}
 
@@ -4909,6 +4918,20 @@ function ChatModuleDashboard({
 
       {chatActiveTab === 'prototype' && (
         <div className="space-y-6">
+          <details className="rounded-xl border border-white/10 bg-slate-950/30 p-4">
+            <summary className="cursor-pointer list-none">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Área técnica</p>
+                  <strong className="mt-1 block text-sm text-slate-200">Diagnóstico da integração ClickDesk</strong>
+                  <span className="mt-1 block text-xs text-slate-500">
+                    Testes de conexão, sincronização, roteamento e validações técnicas ficam recolhidos para não disputar espaço com a gestão.
+                  </span>
+                </div>
+                <span className="text-xs font-semibold text-cyan-200">Abrir diagnóstico</span>
+              </div>
+            </summary>
+            <div className="mt-5 space-y-6">
           <section className="panel">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
@@ -5451,14 +5474,16 @@ function ChatModuleDashboard({
               )}
             </section>
           )}
+            </div>
+          </details>
 
           <section className="panel">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Base mensurável · visão do analista</p>
-                <h3 className="mt-2 text-2xl font-bold">Meu resultado</h3>
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Equipe e produtividade · visão individual</p>
+                <h3 className="mt-2 text-2xl font-bold">Resultado do analista</h3>
                 <p className="section-subtitle">
-                  Esta prévia usa a base persistida do ClickDesk e mostra somente responsáveis classificados como analistas. Atendimentos de gestão permanecem na operação, mas ficam fora da comparação individual e das metas.
+                  Selecione uma pessoa para acompanhar o resultado individual na mesma lógica da experiência do analista. Atendimentos de gestão permanecem na operação, mas ficam fora da comparação individual e das metas.
                 </p>
               </div>
               <div className="min-w-[260px]">
