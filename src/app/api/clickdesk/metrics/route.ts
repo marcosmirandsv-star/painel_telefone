@@ -234,6 +234,8 @@ export async function GET(request: Request) {
     }
 
     const todayRows = rows.filter((row) => row.occurred_date === filters.today)
+    const performanceRows = rows.filter((row) => row.identity_role === 'analyst')
+    const managementRows = rows.filter((row) => row.identity_role === 'management')
     const unmatchedRows = rows.filter((row) => row.identity_role === 'unmapped')
 
     let sourceQuery = admin
@@ -278,8 +280,11 @@ export async function GET(request: Request) {
         ...aggregate(todayRows),
       },
       accumulated: aggregate(rows),
+      performance_accumulated: aggregate(performanceRows),
+      management_support: aggregate(managementRows),
       daily: groupDaily(rows),
-      by_analyst: groupAnalysts(rows, filters.today),
+      performance_daily: groupDaily(performanceRows),
+      by_analyst: groupAnalysts(performanceRows, filters.today),
       data_quality: {
         grouped_rows: rows.length,
         unmatched_grouped_rows: unmatchedRows.length,
