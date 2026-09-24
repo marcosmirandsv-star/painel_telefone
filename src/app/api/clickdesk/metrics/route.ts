@@ -1,4 +1,4 @@
-import { ApiError, authorizeManagerSessionClient, handle, json } from '@/lib/integration-server'
+import { ApiError, authorizeClickDeskSessionClient, handle, json } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 
 export const runtime = 'nodejs'
@@ -94,7 +94,7 @@ function parseFilters(request: Request) {
 }
 
 async function loadRows(
-  admin: Awaited<ReturnType<typeof authorizeManagerSessionClient>>['admin'],
+  admin: Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],
   filters: ReturnType<typeof parseFilters>,
 ) {
   const result: DailyMetricRow[] = []
@@ -213,9 +213,27 @@ export async function GET(request: Request) {
       throw new ApiError(404, 'Métricas ClickDesk disponíveis somente na homologação.')
     }
 
-    const { admin } = await authorizeManagerSessionClient(request)
-    const filters = parseFilters(request)
-    const rows = await loadRows(admin, filters)
+    const access = await authorizeClickDeskSessionClient(request)
+    const requestedFilters = parseFilters(request)
+
+    if (
+      !access.isManagement &&
+      requestedFilters.analystId &&
+      requestedFilters.analystId !== access.chatAnalystId
+    ) {
+      throw new ApiError(403, 'O analista só pode consultar os próprios indicadores.')
+    }
+
+    const filters = access.isManagement
+      ? requestedFilters
+      : {
+          ...requestedFilters,
+          analystId: access.chatAnalystId,
+          teamId: null,
+        }
+
+    const rows = await loadRows(access.admin, filters)
+    const admin = access.admin
 
     const latestSync = await admin
       .from('clickdesk_chat_sync_runs')
@@ -290,7 +308,7 @@ export async function GET(request: Request) {
         unmatched_grouped_rows: unmatchedRows.length,
         unmatched_attendances: aggregate(unmatchedRows).attendances,
       },
-      latest_sync: latestSync.data ?? null,
+      latest_sync: access.isManagement ? latestSync.data ?? null : null,
       date_basis: {
         sources: timestampSources,
         status: dateBasisNeedsValidation ? 'needs_validation' : 'validated',
