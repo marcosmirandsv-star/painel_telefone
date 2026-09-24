@@ -6,6 +6,9 @@ begin;
 
 create extension if not exists pg_net with schema extensions;
 
+create index if not exists clickdesk_chat_area_links_team_idx
+  on public.clickdesk_chat_area_links (team_id);
+
 create or replace function public.bootstrap_clickdesk_cron_credentials(
   p_api_key text,
   p_account_id text
@@ -125,8 +128,10 @@ begin
 end;
 $$;
 
-revoke all on function public.bootstrap_clickdesk_cron_credentials(text, text) from public;
-grant execute on function public.bootstrap_clickdesk_cron_credentials(text, text) to authenticated;
+revoke execute on function public.bootstrap_clickdesk_cron_credentials(text, text)
+  from public, anon, authenticated, service_role;
+grant execute on function public.bootstrap_clickdesk_cron_credentials(text, text)
+  to authenticated;
 
 create or replace function public.get_clickdesk_cron_credentials(
   p_token text
@@ -170,7 +175,9 @@ begin
 end;
 $$;
 
-revoke all on function public.get_clickdesk_cron_credentials(text) from public;
-grant execute on function public.get_clickdesk_cron_credentials(text) to service_role;
+revoke execute on function public.get_clickdesk_cron_credentials(text)
+  from public, anon, authenticated, service_role;
+grant execute on function public.get_clickdesk_cron_credentials(text)
+  to service_role;
 
 commit;
