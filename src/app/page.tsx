@@ -4930,6 +4930,9 @@ function ChatModuleDashboard({
                         value: item.csat ?? 0,
                       }))}
                       suffix="%"
+                      singlePointLabel="Apenas uma competência disponível no histórico."
+                      latestPointLabel="Última competência"
+                      highlightedPointLabel="Competência destacada"
                     />
                     <TrendLineChart
                       label="% de avaliações mensal"
@@ -4940,6 +4943,9 @@ function ChatModuleDashboard({
                       suffix="%"
                       goal={25}
                       goalLabel="Meta"
+                      singlePointLabel="Apenas uma competência disponível no histórico."
+                      latestPointLabel="Última competência"
+                      highlightedPointLabel="Competência destacada"
                     />
                   </div>
 
@@ -10404,12 +10410,18 @@ function TrendLineChart({
   suffix = '',
   goal,
   goalLabel = 'Meta',
+  singlePointLabel = 'Apenas um fechamento disponível neste período.',
+  latestPointLabel = 'Última semana',
+  highlightedPointLabel = 'Semana destacada',
 }: {
   label: string
   points: ChartPoint[]
   suffix?: string
   goal?: number
   goalLabel?: string
+  singlePointLabel?: string
+  latestPointLabel?: string
+  highlightedPointLabel?: string
 }) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null)
   const comparisonValues = goal === undefined ? [] : [goal]
@@ -10431,12 +10443,12 @@ function TrendLineChart({
           <p className="mt-2 text-xs leading-5 text-slate-400">
             {hasComparison
               ? `De ${first}${suffix} para ${latest}${suffix} · ${delta > 0 ? '+' : ''}${delta}${suffix === '%' ? ' p.p.' : ''}`
-              : 'Apenas um fechamento disponível neste período.'}
+              : singlePointLabel}
           </p>
         </div>
         {highlightedPoint && (
           <div className="rounded-md border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-right">
-            <p className="text-xs text-slate-400">{activeIndex === null ? 'Última semana' : 'Semana destacada'}</p>
+            <p className="text-xs text-slate-400">{activeIndex === null ? latestPointLabel : highlightedPointLabel}</p>
             <p className="mt-1 text-sm font-semibold text-cyan-200">
               {highlightedPoint.label}: {formatValueWithSuffix(highlightedPoint.value, suffix)}
             </p>
