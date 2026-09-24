@@ -1017,6 +1017,7 @@ export async function POST(request: Request) {
           assignee_key: assigneeKey,
           analyst_id: analyst?.id ?? null,
           team_id: areaLink?.team_id ?? linked?.team_id ?? analyst?.team_id ?? null,
+          identity_role: linked?.person_role ?? 'unmapped',
           satisfaction_label: row.satisfaction,
           timestamp_source: row.operationalTimestampSource,
           journey_status: 'ai_to_human',
