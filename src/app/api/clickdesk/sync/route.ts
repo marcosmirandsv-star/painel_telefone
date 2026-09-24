@@ -834,6 +834,17 @@ export async function POST(request: Request) {
       throw new ApiError(503, 'Credenciais ClickDesk não configuradas.')
     }
 
+    const cronBootstrapResult = await admin.rpc('bootstrap_clickdesk_cron_credentials', {
+      p_api_key: apiKey,
+      p_account_id: accountId,
+    })
+    const cronBootstrap = cronBootstrapResult.error
+      ? {
+          ready: false,
+          error: sanitizeMessage(cronBootstrapResult.error.message),
+        }
+      : cronBootstrapResult.data
+
     const runInsert = await admin
       .from('clickdesk_chat_sync_runs')
       .insert({
@@ -1126,6 +1137,7 @@ export async function POST(request: Request) {
         unmatched_assignees: unmatchedNames,
         auto_links_created: autoLinks.length,
         timestamp_audit: timestampAudit,
+        cron_bootstrap: cronBootstrap,
         daily: [...daily.values()].sort((a, b) => a.date.localeCompare(b.date)),
         synced_at: new Date().toISOString(),
       })
