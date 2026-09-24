@@ -284,6 +284,23 @@ export async function GET(request: Request) {
           source === 'updated_at',
       )
 
+    let selfPodiumContext: Record<string, unknown> | null = null
+    if (!access.isManagement) {
+      const podiumResult = await admin.rpc('get_clickdesk_self_podium_context', {
+        p_start: filters.start,
+        p_end: filters.end,
+      })
+
+      if (podiumResult.error) {
+        throw new ApiError(503, 'Não foi possível calcular o contexto individual do pódio.')
+      }
+
+      selfPodiumContext =
+        podiumResult.data && typeof podiumResult.data === 'object'
+          ? (podiumResult.data as Record<string, unknown>)
+          : null
+    }
+
     return json({
       source: 'clickdesk_persisted',
       period: {
@@ -303,6 +320,7 @@ export async function GET(request: Request) {
       daily: groupDaily(rows),
       performance_daily: groupDaily(performanceRows),
       by_analyst: groupAnalysts(performanceRows, filters.today),
+      self_podium_context: selfPodiumContext,
       data_quality: {
         grouped_rows: rows.length,
         unmatched_grouped_rows: unmatchedRows.length,
