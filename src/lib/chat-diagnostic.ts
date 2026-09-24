@@ -169,7 +169,7 @@ export function buildChatPerformanceDiagnostic({
   if (csatMet === false) {
     const negativeDetail =
       negativeReviews > 0
-        ? `Há ${negativeReviews} avaliação${negativeReviews === 1 ? '' : 'ões'} negativa${negativeReviews === 1 ? '' : 's'} no recorte.`
+        ? `Há ${negativeReviews} ${negativeReviews === 1 ? 'avaliação negativa' : 'avaliações negativas'} no recorte.`
         : 'O recorte não possui contagem de avaliações negativas disponível.'
 
     priority = {
