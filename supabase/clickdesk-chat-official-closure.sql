@@ -22,7 +22,7 @@ for insert
 to authenticated
 with check (
   (select public.is_management_user())
-  and created_by = auth.uid()
+  and created_by = (select auth.uid())
 );
 
 commit;
