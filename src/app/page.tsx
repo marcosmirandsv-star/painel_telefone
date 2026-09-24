@@ -2245,7 +2245,9 @@ function ChatAnalystPortal({
     monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1)
 
   useEffect(() => {
-    if (!analyst?.id) {
+    const analystId = analyst?.id
+
+    if (!analystId) {
       setMetrics(null)
       setHistory(null)
       return
@@ -2273,10 +2275,10 @@ function ChatAnalystPortal({
         const metricParams = new URLSearchParams({
           start: monthStart,
           end: monthEnd,
-          analyst_id: analyst.id,
+          analyst_id: analystId,
         })
         const historyParams = new URLSearchParams({
-          analyst_id: analyst.id,
+          analyst_id: analystId,
         })
 
         const [metricResponse, historyResponse] = await Promise.all([
