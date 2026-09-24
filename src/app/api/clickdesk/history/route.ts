@@ -1,6 +1,6 @@
 import {
   ApiError,
-  authorizeManagerSessionClient,
+  authorizeClickDeskSessionClient,
   handle,
   json,
 } from '@/lib/integration-server'
@@ -130,25 +130,44 @@ export async function GET(request: Request) {
       throw new ApiError(404, 'Histórico ClickDesk disponível somente na homologação.')
     }
 
-    const { admin } = await authorizeManagerSessionClient(request)
+    const access = await authorizeClickDeskSessionClient(request)
+    const admin = access.admin
     const url = new URL(request.url)
-    const analystId = url.searchParams.get('analyst_id')?.trim()
+    const requestedAnalystId = url.searchParams.get('analyst_id')?.trim() || null
+
+    if (
+      !access.isManagement &&
+      requestedAnalystId &&
+      requestedAnalystId !== access.chatAnalystId
+    ) {
+      throw new ApiError(403, 'O analista só pode consultar o próprio histórico.')
+    }
+
+    const analystId = access.isManagement
+      ? requestedAnalystId
+      : access.chatAnalystId
 
     if (!analystId) {
       throw new ApiError(400, 'Informe analyst_id para consultar o histórico.')
     }
 
-    const [analystResult, closuresResult] = await Promise.all([
-      admin
-        .from('chat_analysts')
-        .select('id,name,team_id,csat_goal,active')
-        .eq('id', analystId)
-        .maybeSingle(),
-      admin
-        .from('integration_closures')
-        .select('id,month,team,created_at,payload')
-        .eq('channel', 'chat')
-        .order('month', { ascending: true }),
+    const analystPromise = admin
+      .from('chat_analysts')
+      .select('id,name,team_id,csat_goal,active')
+      .eq('id', analystId)
+      .maybeSingle()
+
+    const closedHistoryPromise = access.isManagement
+      ? admin
+          .from('integration_closures')
+          .select('id,month,team,created_at,payload')
+          .eq('channel', 'chat')
+          .order('month', { ascending: true })
+      : admin.rpc('get_clickdesk_self_closed_history')
+
+    const [analystResult, closedHistoryResult] = await Promise.all([
+      analystPromise,
+      closedHistoryPromise,
     ])
 
     if (analystResult.error) {
@@ -157,7 +176,7 @@ export async function GET(request: Request) {
     if (!analystResult.data) {
       throw new ApiError(404, 'Analista não encontrado.')
     }
-    if (closuresResult.error) {
+    if (closedHistoryResult.error) {
       throw new ApiError(503, 'Fechamentos oficiais indisponíveis.')
     }
 
@@ -169,47 +188,88 @@ export async function GET(request: Request) {
       }
     >()
 
-    for (const closure of closuresResult.data ?? []) {
-      const payload = closure.payload as ClosurePayload | null
-      if (
-        !payload ||
-        payload.fonte !== 'clickdesk_persisted' ||
-        payload.regras !== 'clickdesk-human-v1'
-      ) {
-        continue
+    if (access.isManagement) {
+      for (const closure of (closedHistoryResult.data ?? []) as Array<{
+        id: string
+        month: string
+        team: string
+        created_at: string
+        payload: ClosurePayload | null
+      }>) {
+        const payload = closure.payload
+        if (
+          !payload ||
+          payload.fonte !== 'clickdesk_persisted' ||
+          payload.regras !== 'clickdesk-human-v1'
+        ) {
+          continue
+        }
+
+        const analyst = (payload.analistas ?? []).find(
+          (item) => item.analyst_id === analystId,
+        )
+        if (!analyst) continue
+
+        const month = closure.month
+        const priority = closure.team === 'all' ? 2 : 1
+        const current = officialByMonth.get(month)
+        if (current && current.priority >= priority) continue
+
+        officialByMonth.set(month, {
+          priority,
+          point: {
+            month,
+            label: monthLabel(month),
+            source: 'official',
+            status: 'closed',
+            closure_id: closure.id,
+            closed_at: closure.created_at,
+            team_id: analyst.team_id ?? null,
+            team_name: analyst.team_name ?? null,
+            csat_goal: numericOrNull(analyst.csat_goal),
+            review_goal: numericOrNull(analyst.review_goal) ?? 25,
+            attendances: Number(analyst.attendances ?? 0),
+            positive_reviews: Number(analyst.positive_reviews ?? 0),
+            negative_reviews: Number(analyst.negative_reviews ?? 0),
+            reviews: Number(analyst.reviews ?? 0),
+            csat: numericOrNull(analyst.csat),
+            review_percentage: numericOrNull(analyst.review_percentage),
+          },
+        })
       }
-
-      const analyst = (payload.analistas ?? []).find(
-        (item) => item.analyst_id === analystId,
-      )
-      if (!analyst) continue
-
-      const month = closure.month
-      const priority = closure.team === 'all' ? 2 : 1
-      const current = officialByMonth.get(month)
-      if (current && current.priority >= priority) continue
-
-      officialByMonth.set(month, {
-        priority,
-        point: {
-          month,
-          label: monthLabel(month),
-          source: 'official',
-          status: 'closed',
-          closure_id: closure.id,
-          closed_at: closure.created_at,
-          team_id: analyst.team_id ?? null,
-          team_name: analyst.team_name ?? null,
-          csat_goal: numericOrNull(analyst.csat_goal),
-          review_goal: numericOrNull(analyst.review_goal) ?? 25,
-          attendances: Number(analyst.attendances ?? 0),
-          positive_reviews: Number(analyst.positive_reviews ?? 0),
-          negative_reviews: Number(analyst.negative_reviews ?? 0),
-          reviews: Number(analyst.reviews ?? 0),
-          csat: numericOrNull(analyst.csat),
-          review_percentage: numericOrNull(analyst.review_percentage),
-        },
-      })
+    } else {
+      for (const closed of (Array.isArray(closedHistoryResult.data)
+        ? closedHistoryResult.data
+        : []) as Array<{
+        month: string
+        closure_id: string
+        closed_at: string
+        analyst: ClosureAnalyst
+      }>) {
+        const analyst = closed.analyst
+        const month = closed.month
+        officialByMonth.set(month, {
+          priority: 2,
+          point: {
+            month,
+            label: monthLabel(month),
+            source: 'official',
+            status: 'closed',
+            closure_id: closed.closure_id,
+            closed_at: closed.closed_at,
+            team_id: analyst.team_id ?? null,
+            team_name: analyst.team_name ?? null,
+            csat_goal: numericOrNull(analyst.csat_goal),
+            review_goal: numericOrNull(analyst.review_goal) ?? 25,
+            attendances: Number(analyst.attendances ?? 0),
+            positive_reviews: Number(analyst.positive_reviews ?? 0),
+            negative_reviews: Number(analyst.negative_reviews ?? 0),
+            reviews: Number(analyst.reviews ?? 0),
+            csat: numericOrNull(analyst.csat),
+            review_percentage: numericOrNull(analyst.review_percentage),
+          },
+        })
+      }
     }
 
     const today = businessToday()
