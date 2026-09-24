@@ -125,6 +125,77 @@ export async function authorizeManagerSessionClient(request: Request) {
 
   return { admin: client, userId: data.user.id, role }
 }
+export async function authorizeClickDeskSessionClient(request: Request) {
+  const token = bearer(request, 'session')
+  const homologation = process.env.VERCEL_ENV === 'preview'
+  const url = homologation
+    ? process.env.NEXT_PUBLIC_HOMOLOGATION_SUPABASE_URL ?? 'https://vvtorcvchnqhcredhorv.supabase.co'
+    : process.env.NEXT_PUBLIC_SUPABASE_URL
+  const publishableKey = homologation
+    ? process.env.NEXT_PUBLIC_HOMOLOGATION_SUPABASE_PUBLISHABLE_KEY ?? 'sb_publishable_mqTX2u1bJ69dNKWD0lO-iw_p2Wa9B2t'
+    : process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+
+  if (!url || !publishableKey) {
+    throw new ApiError(
+      503,
+      homologation
+        ? 'Configuração pública da homologação indisponível.'
+        : 'Configuração pública do serviço indisponível.',
+    )
+  }
+
+  const client = createClient(url, publishableKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  })
+
+  const { data, error } = await client.auth.getUser(token)
+  if (error || !data.user) throw new ApiError(401, 'Sessão inválida.')
+
+  const profile = await client
+    .from('profiles')
+    .select('role,chat_analyst_id')
+    .eq('id', data.user.id)
+    .maybeSingle()
+
+  if (profile.error || !profile.data) {
+    throw new ApiError(403, 'Perfil de acesso não encontrado.')
+  }
+
+  const role = String(profile.data.role ?? '').toLowerCase()
+  const isManagement = ['master', 'coordenadora', 'coordinator'].includes(role)
+  const isAnalyst = ['analista', 'analyst'].includes(role)
+  const chatAnalystId =
+    typeof profile.data.chat_analyst_id === 'string'
+      ? profile.data.chat_analyst_id
+      : null
+
+  if (isManagement) {
+    return {
+      admin: client,
+      userId: data.user.id,
+      role,
+      isManagement: true,
+      chatAnalystId: null as string | null,
+    }
+  }
+
+  if (isAnalyst && chatAnalystId) {
+    return {
+      admin: client,
+      userId: data.user.id,
+      role: 'analista',
+      isManagement: false,
+      chatAnalystId,
+    }
+  }
+
+  throw new ApiError(
+    403,
+    'Perfil de analista sem vínculo com o cadastro do Chat.',
+  )
+}
+
 export async function authorizeKeyAdmin(request: Request) {
   const context = await authorizeManager(request)
   if (context.role !== 'master') throw new ApiError(403, 'Somente o perfil Master pode gerenciar chaves de integração.')
