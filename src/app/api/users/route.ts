@@ -77,6 +77,10 @@ export async function POST(request: NextRequest) {
   const password = typeof body?.password === 'string' ? body.password : ''
   const role = normalizeRole(body?.role)
   const analystId = typeof body?.analystId === 'string' && body.analystId ? body.analystId : null
+  const chatAnalystId =
+    typeof body?.chatAnalystId === 'string' && body.chatAnalystId
+      ? body.chatAnalystId
+      : null
 
   if (!fullName || !email || !password || !role || !allowedRoles.includes(role)) {
     return NextResponse.json({ error: 'Preencha nome, e-mail, senha e perfil.' }, { status: 400 })
@@ -89,11 +93,41 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  if (role === 'analista' && !analystId) {
+  if (role === 'analista' && !analystId && !chatAnalystId) {
     return NextResponse.json(
-      { error: 'Usuários analistas precisam ser vinculados a um cadastro de analista.' },
+      { error: 'Vincule o usuário analista ao Telefone, ao Chat ou aos dois módulos.' },
       { status: 400 },
     )
+  }
+
+  if (role === 'analista' && analystId) {
+    const phoneAnalyst = await admin
+      .from('analysts')
+      .select('id')
+      .eq('id', analystId)
+      .maybeSingle()
+
+    if (phoneAnalyst.error || !phoneAnalyst.data) {
+      return NextResponse.json(
+        { error: 'O vínculo de analista do Telefone não é válido.' },
+        { status: 400 },
+      )
+    }
+  }
+
+  if (role === 'analista' && chatAnalystId) {
+    const chatAnalyst = await admin
+      .from('chat_analysts')
+      .select('id')
+      .eq('id', chatAnalystId)
+      .maybeSingle()
+
+    if (chatAnalyst.error || !chatAnalyst.data) {
+      return NextResponse.json(
+        { error: 'O vínculo de analista do Chat não é válido.' },
+        { status: 400 },
+      )
+    }
   }
 
   const { data: created, error: createError } = await admin.auth.admin.createUser({
@@ -122,6 +156,7 @@ export async function POST(request: NextRequest) {
       role,
       full_name: fullName,
       analyst_id: role === 'analista' ? analystId : null,
+      chat_analyst_id: role === 'analista' ? chatAnalystId : null,
     },
     { onConflict: 'id' },
   )
