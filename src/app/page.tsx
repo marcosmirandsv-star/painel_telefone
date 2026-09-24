@@ -3533,12 +3533,19 @@ function ChatModuleDashboard({
       metric.year === chat2SelectedPeriod.year && metric.month_number === chat2SelectedPeriod.monthNumber
     return matchesTeam && matchesPeriod
   })
-  const chat2LiveHumanRows = clickDeskConversationDiagnostic?.human_by_area_assignee ?? []
+  const chat2PersistedAnalystRows = clickDeskPersistedMetrics?.by_analyst ?? []
+  const chat2LiveHumanRows = (clickDeskConversationDiagnostic?.human_by_area_assignee ?? []).filter(
+    (item) =>
+      chat2PersistedAnalystRows.some(
+        (persisted) =>
+          normalizeChatText(persisted.assignee_name) === normalizeChatText(item.name) &&
+          normalizeChatText(persisted.area) === normalizeChatText(item.area),
+      ),
+  )
   const chat2SelectedLiveHuman =
     chat2LiveHumanRows.find((item) => `${item.area}::${item.name}` === chat2LiveAnalystKey) ??
     chat2LiveHumanRows[0] ??
     null
-  const chat2PersistedAnalystRows = clickDeskPersistedMetrics?.by_analyst ?? []
   const chat2SelectedPersistedAnalyst = chat2SelectedLiveHuman
     ? chat2PersistedAnalystRows.find(
         (item) =>
@@ -3614,9 +3621,11 @@ function ChatModuleDashboard({
           ? 'Atenção'
           : 'Acompanhar'
   const chat2LiveTeamRows = chat2SelectedLiveHuman
-    ? chat2LiveHumanRows.filter((item) => item.area === chat2SelectedLiveHuman.area)
+    ? chat2PersistedAnalystRows.filter(
+        (item) => normalizeChatText(item.area) === normalizeChatText(chat2SelectedLiveHuman.area),
+      )
     : []
-  const chat2LiveTeamTickets = chat2LiveTeamRows.reduce((sum, item) => sum + Number(item.count), 0)
+  const chat2LiveTeamTickets = chat2LiveTeamRows.reduce((sum, item) => sum + Number(item.attendances), 0)
   const chat2LiveTeamPositive = chat2LiveTeamRows.reduce((sum, item) => sum + Number(item.positive_reviews ?? 0), 0)
   const chat2LiveTeamNegative = chat2LiveTeamRows.reduce((sum, item) => sum + Number(item.negative_reviews ?? 0), 0)
   const chat2LiveTeamReviews = chat2LiveTeamPositive + chat2LiveTeamNegative
@@ -4357,7 +4366,7 @@ function ChatModuleDashboard({
                 <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Base mensurável · visão do analista</p>
                 <h3 className="mt-2 text-2xl font-bold">Meu resultado</h3>
                 <p className="section-subtitle">
-                  Esta prévia já usa a leitura humana completa do ClickDesk para o período selecionado. Quando houver área Suporte ERP/Fiscal e responsável humano identificado, o atendimento entra na base operacional do analista.
+                  Esta prévia usa a base persistida do ClickDesk e mostra somente responsáveis classificados como analistas. Atendimentos de gestão permanecem na operação, mas ficam fora da comparação individual e das metas.
                 </p>
               </div>
               <div className="min-w-[260px]">
@@ -4596,7 +4605,7 @@ function ChatModuleDashboard({
 
                   <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
                     <p className="text-sm font-semibold uppercase tracking-[0.14em] text-cyan-300">Contexto do time</p>
-                    <p className="mt-2 text-xs text-slate-500">{chat2SelectedLiveHuman.area} · sem expor resultados individuais</p>
+                    <p className="mt-2 text-xs text-slate-500">{chat2SelectedLiveHuman.area} · somente analistas · sem expor resultados individuais</p>
                     <div className="mt-4 space-y-3 text-sm">
                       <div className="flex items-center justify-between gap-4">
                         <span className="text-slate-400">CSAT do time</span>
@@ -4765,7 +4774,7 @@ function ChatModuleDashboard({
             <div className="panel">
               <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Nosso resultado</p>
               <h3 className="mt-2 text-2xl font-bold">{chat2SelectedLiveHuman?.area ?? 'Meu time'}</h3>
-              <p className="section-subtitle">Contexto coletivo do período sem expor o resultado individual dos colegas.</p>
+              <p className="section-subtitle">Contexto coletivo de performance dos analistas no período, sem incluir apoio de gestão.</p>
 
               {chat2SelectedLiveHuman ? (
                 <div className="mt-5 grid gap-3">
