@@ -2253,6 +2253,7 @@ function ChatAnalystPortal({
       return
     }
 
+    const ownAnalystId: string = analystId
     let cancelled = false
 
     async function loadOwnChatData() {
@@ -2275,10 +2276,10 @@ function ChatAnalystPortal({
         const metricParams = new URLSearchParams({
           start: monthStart,
           end: monthEnd,
-          analyst_id: analystId,
+          analyst_id: ownAnalystId,
         })
         const historyParams = new URLSearchParams({
-          analyst_id: analystId,
+          analyst_id: ownAnalystId,
         })
 
         const [metricResponse, historyResponse] = await Promise.all([
