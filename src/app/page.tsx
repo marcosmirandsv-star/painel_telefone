@@ -2959,7 +2959,7 @@ function ChatAnalystPortal({
           </p>
         ) : historyPoints.length ? (
           <div className="mt-5 space-y-5">
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-4 lg:grid-cols-3">
               <TrendLineChart
                 label="CSAT mensal"
                 points={historyPoints.map((item) => ({
@@ -2980,6 +2980,16 @@ function ChatAnalystPortal({
                 suffix="%"
                 goal={25}
                 goalLabel="Meta"
+                singlePointLabel="Apenas uma competência disponível no histórico."
+                latestPointLabel="Última competência"
+                highlightedPointLabel="Competência destacada"
+              />
+              <TrendLineChart
+                label="Atendimentos mensais"
+                points={historyPoints.map((item) => ({
+                  label: item.label.replace(' de ', '/'),
+                  value: item.attendances,
+                }))}
                 singlePointLabel="Apenas uma competência disponível no histórico."
                 latestPointLabel="Última competência"
                 highlightedPointLabel="Competência destacada"
