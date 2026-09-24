@@ -2525,6 +2525,10 @@ function ChatAnalystPortal({
   const status = diagnostic.statusLabel
   const podiumContext = metrics?.self_podium_context ?? null
   const podiumCriteria = podiumContext?.criteria ?? null
+  const isOnPodium =
+    podiumContext?.eligible === true &&
+    podiumContext.position !== null &&
+    podiumContext.position <= 3
   const historyPoints = history?.points ?? []
   const todayKey = new Date().toISOString().slice(0, 10)
   const visibleDayCount =
@@ -2583,7 +2587,7 @@ function ChatAnalystPortal({
                         podiumContext.eligible ? 'text-emerald-300' : 'text-amber-200'
                       }`}
                     >
-                      {podiumContext.eligible ? 'Pódio do período' : 'Posição no ranking'}
+                      {isOnPodium ? 'Pódio do período' : 'Posição no ranking'}
                     </p>
                     <strong className="mt-2 block text-2xl text-slate-100">
                       {podiumContext.position
