@@ -124,14 +124,23 @@ for select
 to authenticated
 using ((select public.is_management_user()));
 
-drop policy if exists "clickdesk_chat_attendances_self_select" on public.clickdesk_chat_attendances;
-create policy "clickdesk_chat_attendances_self_select"
+drop policy if exists "clickdesk_chat_attendances_management_select"
+  on public.clickdesk_chat_attendances;
+drop policy if exists "clickdesk_chat_attendances_self_select"
+  on public.clickdesk_chat_attendances;
+drop policy if exists "clickdesk_chat_attendances_management_or_self_select"
+  on public.clickdesk_chat_attendances;
+
+create policy "clickdesk_chat_attendances_management_or_self_select"
 on public.clickdesk_chat_attendances
 for select
 to authenticated
 using (
-  analyst_id is not null
-  and analyst_id = (select public.current_user_chat_analyst_id())
+  (select public.is_management_user())
+  or (
+    analyst_id is not null
+    and analyst_id = (select public.current_user_chat_analyst_id())
+  )
 );
 
 create or replace function public.get_clickdesk_self_closed_history()
