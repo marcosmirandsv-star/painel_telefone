@@ -505,6 +505,52 @@ type ClickDeskSyncResult = {
   erro?: string
 }
 
+type ClickDeskClosureTotals = {
+  attendances: number
+  positive_reviews: number
+  negative_reviews: number
+  reviews: number
+  csat: number | null
+  review_percentage: number | null
+}
+
+type ClickDeskClosurePreview = {
+  versao?: string
+  fonte?: string
+  status?: string
+  mes?: string
+  equipe?: string
+  tem_dados?: boolean
+  operacao?: ClickDeskClosureTotals
+  performance?: ClickDeskClosureTotals
+  apoio_gestao?: ClickDeskClosureTotals
+  analistas?: Array<{
+    analyst_id: string
+    name: string
+    team_id: string | null
+    team_name: string | null
+    csat_goal: number | null
+    review_goal: number
+    attendances: number
+    csat: number | null
+    review_percentage: number | null
+  }>
+  qualidade_dados?: {
+    unmapped_attendances: number
+    fallback_timestamp_attendances: number
+    missing_team_attendances: number
+    analyst_metadata_issues: number
+  }
+  fechamento?: {
+    pronto: boolean
+    pendencias: string[]
+  }
+  conferencia?: string
+  fechamento_id?: string
+  fechado_em?: string
+  erro?: string
+}
+
 type IndividualForm = {
   analystId: string
   weekStart: string
@@ -2112,6 +2158,10 @@ function ChatModuleDashboard({
   const [clickDeskConversationDiagnostic, setClickDeskConversationDiagnostic] = useState<ClickDeskConversationDiagnostic | null>(null)
   const [clickDeskPersistedMetrics, setClickDeskPersistedMetrics] = useState<ClickDeskPersistedMetrics | null>(null)
   const [clickDeskSyncResult, setClickDeskSyncResult] = useState<ClickDeskSyncResult | null>(null)
+  const [clickDeskClosureLoading, setClickDeskClosureLoading] = useState(false)
+  const [clickDeskClosurePreview, setClickDeskClosurePreview] = useState<ClickDeskClosurePreview | null>(null)
+  const [clickDeskOfficialClosure, setClickDeskOfficialClosure] = useState<ClickDeskClosurePreview | null>(null)
+  const [clickDeskClosureMessage, setClickDeskClosureMessage] = useState('')
   const [clickDeskAiRoutingLoading, setClickDeskAiRoutingLoading] = useState(false)
   const [clickDeskAiRoutingDiagnostic, setClickDeskAiRoutingDiagnostic] = useState<ClickDeskAiRoutingDiagnostic | null>(null)
   const [manualPodiumDraft, setManualPodiumDraft] = useState<Record<number, string>>({})
@@ -2129,6 +2179,12 @@ function ChatModuleDashboard({
   useEffect(() => {
     setChat2DailyDateFilter('all')
   }, [chat2LiveAnalystKey, chat2PeriodKey])
+
+  useEffect(() => {
+    setClickDeskClosurePreview(null)
+    setClickDeskOfficialClosure(null)
+    setClickDeskClosureMessage('')
+  }, [selectedTeamId, chat2PeriodKey])
 
   async function loadChatImportHistory() {
     if (!isManagementUser) return
@@ -2267,6 +2323,122 @@ function ChatModuleDashboard({
       setClickDeskConversationDiagnostic({ error: getErrorMessage(error) })
     } finally {
       setClickDeskConversationLoading(false)
+    }
+  }
+
+  async function handleLoadClickDeskClosurePreview() {
+    setClickDeskClosureLoading(true)
+    setClickDeskClosureMessage('')
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        setClickDeskClosureMessage('Sua sessão de homologação não está ativa.')
+        return
+      }
+
+      const month = `${chat2SelectedPeriod.year}-${String(chat2SelectedPeriod.monthNumber).padStart(2, '0')}`
+      const params = new URLSearchParams({
+        mes: month,
+        canal: 'chat',
+        equipe: selectedTeamId,
+        fonte: 'atual',
+      })
+      const headers = { Authorization: `Bearer ${session.access_token}` }
+
+      const previewResponse = await fetch(
+        `/api/clickdesk/closures?${params.toString()}`,
+        { headers, cache: 'no-store' },
+      )
+      const previewData = (await previewResponse.json()) as ClickDeskClosurePreview
+
+      if (!previewResponse.ok) {
+        setClickDeskClosureMessage(
+          previewData.erro || 'Não foi possível gerar a prévia do fechamento ClickDesk.',
+        )
+        return
+      }
+
+      setClickDeskClosurePreview(previewData)
+
+      const officialParams = new URLSearchParams(params)
+      officialParams.set('fonte', 'oficial')
+      const officialResponse = await fetch(
+        `/api/clickdesk/closures?${officialParams.toString()}`,
+        { headers, cache: 'no-store' },
+      )
+
+      if (officialResponse.ok) {
+        const officialData = (await officialResponse.json()) as ClickDeskClosurePreview
+        setClickDeskOfficialClosure(officialData)
+      } else {
+        setClickDeskOfficialClosure(null)
+      }
+    } catch (error) {
+      setClickDeskClosureMessage(getErrorMessage(error))
+    } finally {
+      setClickDeskClosureLoading(false)
+    }
+  }
+
+  async function handleApproveClickDeskClosure() {
+    if (!clickDeskClosurePreview?.conferencia || !clickDeskClosurePreview.fechamento?.pronto) return
+
+    const confirmed = window.confirm(
+      'Confirmar o fechamento oficial desta competência? Depois de aprovado, o snapshot ficará imutável.',
+    )
+    if (!confirmed) return
+
+    setClickDeskClosureLoading(true)
+    setClickDeskClosureMessage('')
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        setClickDeskClosureMessage('Sua sessão de homologação não está ativa.')
+        return
+      }
+
+      const month = `${chat2SelectedPeriod.year}-${String(chat2SelectedPeriod.monthNumber).padStart(2, '0')}`
+      const params = new URLSearchParams({
+        mes: month,
+        canal: 'chat',
+        equipe: selectedTeamId,
+        fonte: 'atual',
+      })
+
+      const response = await fetch(
+        `/api/clickdesk/closures?${params.toString()}`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ conferencia: clickDeskClosurePreview.conferencia }),
+        },
+      )
+
+      const data = (await response.json()) as ClickDeskClosurePreview
+      if (!response.ok) {
+        setClickDeskClosureMessage(
+          data.erro || 'Não foi possível aprovar o fechamento oficial.',
+        )
+        return
+      }
+
+      setClickDeskOfficialClosure(data)
+      setClickDeskClosureMessage('Fechamento oficial preservado com sucesso.')
+    } catch (error) {
+      setClickDeskClosureMessage(getErrorMessage(error))
+    } finally {
+      setClickDeskClosureLoading(false)
     }
   }
 
@@ -4686,6 +4858,131 @@ function ChatModuleDashboard({
                 </div>
               ))}
             </div>
+          </section>
+
+          <section className="panel">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
+                  Fechamento oficial ClickDesk
+                </p>
+                <h3 className="mt-2 text-2xl font-bold">Fotografia imutável da competência</h3>
+                <p className="section-subtitle">
+                  A prévia usa a base persistida. Depois do encerramento do mês e da revalidação do último dia,
+                  a gestão pode preservar o resultado oficial sem depender de recálculo futuro.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={clickDeskClosureLoading}
+                  onClick={() => void handleLoadClickDeskClosurePreview()}
+                >
+                  {clickDeskClosureLoading ? 'Conferindo...' : 'Conferir prévia'}
+                </button>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={
+                    clickDeskClosureLoading ||
+                    !clickDeskClosurePreview?.fechamento?.pronto ||
+                    !clickDeskClosurePreview?.conferencia ||
+                    Boolean(clickDeskOfficialClosure?.fechamento_id)
+                  }
+                  onClick={() => void handleApproveClickDeskClosure()}
+                >
+                  {clickDeskOfficialClosure?.fechamento_id
+                    ? 'Competência fechada'
+                    : 'Aprovar fechamento oficial'}
+                </button>
+              </div>
+            </div>
+
+            {clickDeskClosureMessage && (
+              <div className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-sm text-amber-100">
+                {clickDeskClosureMessage}
+              </div>
+            )}
+
+            {!clickDeskClosurePreview && !clickDeskClosureMessage && (
+              <div className="mt-5 rounded-xl border border-dashed border-white/15 bg-slate-950/30 p-5 text-sm text-slate-300">
+                Use “Conferir prévia” para validar a competência selecionada e a equipe atual antes do fechamento.
+              </div>
+            )}
+
+            {clickDeskClosurePreview && (
+              <div className="mt-5 space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <MetricCard
+                    label="Operação humana"
+                    value={formatChatCount(clickDeskClosurePreview.operacao?.attendances ?? 0)}
+                  />
+                  <MetricCard
+                    label="Performance · analistas"
+                    value={formatChatCount(clickDeskClosurePreview.performance?.attendances ?? 0)}
+                  />
+                  <MetricCard
+                    label="CSAT · analistas"
+                    value={
+                      clickDeskClosurePreview.performance?.csat == null
+                        ? '—'
+                        : formatChatPercent(clickDeskClosurePreview.performance.csat)
+                    }
+                  />
+                  <MetricCard
+                    label="Apoio de gestão"
+                    value={formatChatCount(clickDeskClosurePreview.apoio_gestao?.attendances ?? 0)}
+                  />
+                </div>
+
+                <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+                    <p className="text-sm font-semibold">Qualidade da base</p>
+                    <div className="mt-3 grid gap-2 text-sm text-slate-300">
+                      <span>
+                        Sem identidade: <strong>{formatChatCount(clickDeskClosurePreview.qualidade_dados?.unmapped_attendances ?? 0)}</strong>
+                      </span>
+                      <span>
+                        Fallback temporal: <strong>{formatChatCount(clickDeskClosurePreview.qualidade_dados?.fallback_timestamp_attendances ?? 0)}</strong>
+                      </span>
+                      <span>
+                        Sem equipe: <strong>{formatChatCount(clickDeskClosurePreview.qualidade_dados?.missing_team_attendances ?? 0)}</strong>
+                      </span>
+                      <span>
+                        Cadastro/meta incompleto: <strong>{formatChatCount(clickDeskClosurePreview.qualidade_dados?.analyst_metadata_issues ?? 0)}</strong>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+                    <p className="text-sm font-semibold">Status do fechamento</p>
+                    {clickDeskOfficialClosure?.fechamento_id ? (
+                      <div className="mt-3 rounded-lg border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-100">
+                        Fechamento oficial preservado. ID {clickDeskOfficialClosure.fechamento_id.slice(0, 8)}…
+                      </div>
+                    ) : clickDeskClosurePreview.fechamento?.pronto ? (
+                      <div className="mt-3 rounded-lg border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-100">
+                        Competência pronta para aprovação oficial.
+                      </div>
+                    ) : (
+                      <div className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-sm text-amber-100">
+                        <strong>Ainda não pode fechar.</strong>
+                        <ul className="mt-2 list-disc space-y-1 pl-5">
+                          {(clickDeskClosurePreview.fechamento?.pendencias ?? []).map((item) => (
+                            <li key={item}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-500">
+                  Snapshot: {clickDeskClosurePreview.analistas?.length ?? 0} analista(s) com resultado congelável · meta de avaliações 25% · meta de CSAT preservada por analista.
+                </p>
+              </div>
+            )}
           </section>
         </div>
       )}
