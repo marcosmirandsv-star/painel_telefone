@@ -950,10 +950,11 @@ export async function POST(request: Request) {
 
         const candidates = analystCandidates.get(identity.assigneeKey) ?? []
         const areaLink = areaLinkByKey.get(identity.areaKey) ?? null
-        const team = areaLink ? teamById.get(areaLink.team_id) ?? null : null
-        const managerMatch =
-          team?.manager_name &&
-          normalizeLabel(team.manager_name) === identity.assigneeKey
+        const managerMatch = teams.some(
+          (team) =>
+            team.manager_name &&
+            normalizeLabel(team.manager_name) === identity.assigneeKey,
+        )
 
         const analyst = candidates.length === 1 ? candidates[0] : null
         const personRole: LinkRow['person_role'] = analyst
