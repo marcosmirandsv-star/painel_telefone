@@ -2697,10 +2697,10 @@ function ChatAnalystPortal({
                     <div className="rounded-lg border border-white/10 bg-slate-950/50 p-3 text-center">
                       <p className="text-xs text-slate-500">Posição</p>
                       <strong className="mt-1 block text-2xl text-slate-100">
-                        {podiumContext.position ? `${podiumContext.position}º` : '—'}
+                        {podiumContext.position ? `${podiumContext.position}º lugar` : '—'}
                       </strong>
                       <span className="text-xs text-slate-500">
-                        de {podiumContext.total_ranked} com dados
+                        entre {podiumContext.total_ranked} analista{podiumContext.total_ranked === 1 ? '' : 's'} com dados
                       </span>
                     </div>
                     <div className="rounded-lg border border-white/10 bg-slate-950/50 p-3 text-center">
@@ -2803,7 +2803,7 @@ function ChatAnalystPortal({
             </p>
           </div>
           <span className="self-start rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-xs text-slate-400">
-            {activeRoutineDays.length} dia(s) com atividade
+            {activeRoutineDays.length} {activeRoutineDays.length === 1 ? 'dia com atividade' : 'dias com atividade'}
           </span>
         </div>
 
@@ -2829,7 +2829,7 @@ function ChatAnalystPortal({
                     {formatChatCount(item.attendances)} atend.
                   </strong>
                   <span className="mt-1 block text-xs text-slate-500">
-                    {formatChatCount(item.reviews)} avaliação(ões)
+                    {formatChatCount(item.reviews)} {item.reviews === 1 ? 'avaliação' : 'avaliações'}
                   </span>
                 </button>
               )
