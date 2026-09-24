@@ -2569,17 +2569,36 @@ function ChatAnalystPortal({
             </div>
 
             {podiumContext && podiumCriteria && (
-              <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/5 px-4 py-3 sm:min-w-52">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-300">
-                  Pódio do período
-                </p>
-                <div className="mt-2 flex items-end justify-between gap-4">
+              <div
+                className={`rounded-xl border px-4 py-3 sm:min-w-60 ${
+                  podiumContext.eligible
+                    ? 'border-emerald-400/20 bg-emerald-400/5'
+                    : 'border-amber-300/20 bg-amber-300/5'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <strong className="block text-2xl text-slate-100">
-                      {podiumContext.position ? `${podiumContext.position}º lugar` : '—'}
+                    <p
+                      className={`text-xs font-semibold uppercase tracking-[0.12em] ${
+                        podiumContext.eligible ? 'text-emerald-300' : 'text-amber-200'
+                      }`}
+                    >
+                      {podiumContext.eligible ? 'Pódio do período' : 'Posição no ranking'}
+                    </p>
+                    <strong className="mt-2 block text-2xl text-slate-100">
+                      {podiumContext.position
+                        ? `${podiumContext.position}º de ${podiumContext.total_ranked}`
+                        : '—'}
                     </strong>
+                    <span
+                      className={`mt-1 block text-xs font-semibold ${
+                        podiumContext.eligible ? 'text-emerald-300' : 'text-amber-200'
+                      }`}
+                    >
+                      {podiumContext.eligible ? 'Elegível ao pódio' : 'Não elegível ao pódio'}
+                    </span>
                     <span className="mt-1 block text-xs text-slate-400">
-                      {podiumCriteria.completed} de 3 critérios
+                      {podiumCriteria.completed} de 3 critérios cumpridos
                     </span>
                   </div>
                   <div className="text-right">
@@ -2772,7 +2791,7 @@ function ChatAnalystPortal({
                 </div>
 
                 <p className="mt-3 text-xs leading-5 text-slate-500">
-                  A colocação aparece junto do seu perfil; aqui ficam apenas os critérios que explicam o caminho até o pódio.
+                  A posição no ranking aparece junto do seu perfil. O pódio só é reconhecido quando os três critérios são cumpridos.
                 </p>
               </div>
             )}
