@@ -2551,21 +2551,48 @@ function ChatAnalystPortal({
         <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
           Chat · acesso individual
         </p>
-        <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-4">
-            <AnalystAvatar
-              name={analyst.name}
-              photoUrl={analyst.photo_url ?? null}
-              size="lg"
-            />
-            <div>
-              <p className="text-sm text-slate-400">{team?.name ?? 'Equipe do Chat'}</p>
-              <h2 className="text-3xl font-bold">{analyst.name}</h2>
-              <p className="mt-1 text-sm text-slate-400">
-                {displayMonthLabel} · ClickDesk
-              </p>
+        <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div className="flex items-center gap-4">
+              <AnalystAvatar
+                name={analyst.name}
+                photoUrl={analyst.photo_url ?? null}
+                size="lg"
+              />
+              <div>
+                <p className="text-sm text-slate-400">{team?.name ?? 'Equipe do Chat'}</p>
+                <h2 className="text-3xl font-bold">{analyst.name}</h2>
+                <p className="mt-1 text-sm text-slate-400">
+                  {displayMonthLabel} · ClickDesk
+                </p>
+              </div>
             </div>
+
+            {podiumContext && podiumCriteria && (
+              <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/5 px-4 py-3 sm:min-w-52">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-300">
+                  Pódio do período
+                </p>
+                <div className="mt-2 flex items-end justify-between gap-4">
+                  <div>
+                    <strong className="block text-2xl text-slate-100">
+                      {podiumContext.position ? `${podiumContext.position}º lugar` : '—'}
+                    </strong>
+                    <span className="mt-1 block text-xs text-slate-400">
+                      {podiumCriteria.completed} de 3 critérios
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="block text-xs text-slate-500">Média do time</span>
+                    <strong className="text-sm text-slate-200">
+                      {formatChatCount(podiumContext.team_average_attendances)}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
+
           <div className="rounded-lg border border-cyan-400/20 bg-cyan-400/5 px-4 py-3 text-sm">
             <p className="text-slate-400">Situação atual</p>
             <strong className="mt-1 block text-cyan-100">{status}</strong>
@@ -2679,92 +2706,73 @@ function ChatAnalystPortal({
             <ChatPerformanceDiagnosticPanel diagnostic={diagnostic} />
 
             {podiumContext && podiumCriteria && (
-              <div className="mt-5 rounded-xl border border-cyan-400/15 bg-slate-950/35 p-5">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="mt-5 rounded-xl border border-cyan-400/15 bg-slate-950/35 p-4">
+                <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-300">
-                      Minha posição no período
+                      Caminho para o pódio
                     </p>
-                    <h4 className="mt-2 text-xl font-bold text-slate-100">
-                      {podiumCriteria.completed} de 3 critérios do pódio
+                    <h4 className="mt-1 text-lg font-bold text-slate-100">
+                      {podiumCriteria.completed} de 3 critérios cumpridos
                     </h4>
-                    <p className="mt-2 text-sm leading-6 text-slate-400">
-                      O pódio usa uma régua própria: CSAT mínimo de {formatChatPercent(podiumCriteria.csat_min)}, avaliações a partir de {formatChatPercent(podiumCriteria.review_min)} e volume igual ou acima da média do time.
-                    </p>
                   </div>
-
-                  <div className="grid min-w-52 grid-cols-2 gap-3">
-                    <div className="rounded-lg border border-white/10 bg-slate-950/50 p-3 text-center">
-                      <p className="text-xs text-slate-500">Posição</p>
-                      <strong className="mt-1 block text-2xl text-slate-100">
-                        {podiumContext.position ? `${podiumContext.position}º lugar` : '—'}
-                      </strong>
-                      <span className="text-xs text-slate-500">
-                        entre {podiumContext.total_ranked} analista{podiumContext.total_ranked === 1 ? '' : 's'} com dados
-                      </span>
-                    </div>
-                    <div className="rounded-lg border border-white/10 bg-slate-950/50 p-3 text-center">
-                      <p className="text-xs text-slate-500">Média do time</p>
-                      <strong className="mt-1 block text-2xl text-slate-100">
-                        {formatChatCount(podiumContext.team_average_attendances)}
-                      </strong>
-                      <span className="text-xs text-slate-500">atendimentos</span>
-                    </div>
-                  </div>
+                  <p className="text-xs text-slate-500">
+                    Média do time: {formatChatCount(podiumContext.team_average_attendances)} atendimentos
+                  </p>
                 </div>
 
-                <div className="mt-5 grid gap-3 md:grid-cols-3">
-                  <div className={`rounded-lg border p-4 ${
+                <div className="mt-4 grid gap-2 md:grid-cols-3">
+                  <div className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-3 ${
                     podiumCriteria.csat_met
                       ? 'border-emerald-400/25 bg-emerald-400/5'
                       : 'border-amber-300/25 bg-amber-300/5'
                   }`}>
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-                      CSAT de pódio
-                    </p>
-                    <strong className="mt-2 block text-slate-100">
-                      {csat === null ? '—' : formatChatPercent(csat)}
-                    </strong>
-                    <p className="mt-1 text-sm text-slate-400">
-                      Mínimo {formatChatPercent(podiumCriteria.csat_min)}
-                    </p>
+                    <div>
+                      <p className="text-xs text-slate-500">CSAT</p>
+                      <strong className="text-slate-100">
+                        {csat === null ? '—' : formatChatPercent(csat)}
+                      </strong>
+                    </div>
+                    <span className="text-xs text-slate-400">
+                      meta {formatChatPercent(podiumCriteria.csat_min)}
+                    </span>
                   </div>
 
-                  <div className={`rounded-lg border p-4 ${
+                  <div className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-3 ${
                     podiumCriteria.review_met
                       ? 'border-emerald-400/25 bg-emerald-400/5'
                       : 'border-amber-300/25 bg-amber-300/5'
                   }`}>
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-                      Avaliações
-                    </p>
-                    <strong className="mt-2 block text-slate-100">
-                      {reviewPercentage === null ? '—' : formatChatPercent(reviewPercentage)}
-                    </strong>
-                    <p className="mt-1 text-sm text-slate-400">
-                      Mínimo {formatChatPercent(podiumCriteria.review_min)}
-                    </p>
+                    <div>
+                      <p className="text-xs text-slate-500">Avaliações</p>
+                      <strong className="text-slate-100">
+                        {reviewPercentage === null ? '—' : formatChatPercent(reviewPercentage)}
+                      </strong>
+                    </div>
+                    <span className="text-xs text-slate-400">
+                      meta {formatChatPercent(podiumCriteria.review_min)}
+                    </span>
                   </div>
 
-                  <div className={`rounded-lg border p-4 ${
+                  <div className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-3 ${
                     podiumCriteria.volume_met
                       ? 'border-emerald-400/25 bg-emerald-400/5'
                       : 'border-amber-300/25 bg-amber-300/5'
                   }`}>
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
-                      Volume
-                    </p>
-                    <strong className="mt-2 block text-slate-100">
-                      {formatChatCount(accumulated?.attendances ?? 0)}
-                    </strong>
-                    <p className="mt-1 text-sm text-slate-400">
-                      Média do time {formatChatCount(podiumCriteria.volume_min)}
-                    </p>
+                    <div>
+                      <p className="text-xs text-slate-500">Volume</p>
+                      <strong className="text-slate-100">
+                        {formatChatCount(accumulated?.attendances ?? 0)}
+                      </strong>
+                    </div>
+                    <span className="text-xs text-slate-400">
+                      média {formatChatCount(podiumCriteria.volume_min)}
+                    </span>
                   </div>
                 </div>
 
-                <p className="mt-4 text-xs leading-5 text-slate-500">
-                  A posição compara somente os analistas do seu time com dados ClickDesk neste recorte. Os resultados individuais dos colegas não são exibidos.
+                <p className="mt-3 text-xs leading-5 text-slate-500">
+                  A colocação aparece junto do seu perfil; aqui ficam apenas os critérios que explicam o caminho até o pódio.
                 </p>
               </div>
             )}
