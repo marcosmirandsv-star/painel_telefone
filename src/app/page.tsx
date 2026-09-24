@@ -3800,6 +3800,7 @@ function ChatModuleDashboard({
     .slice(0, 5)
   const monthlyTrend = buildChatMonthlyTrend(trendMetrics).slice(-7)
   const monthlyUnifiedTrend = buildChatMonthlyUnifiedTrend(trendMetrics).slice(-7)
+  const monthlyVolumeTrend = buildChatMonthlyVolumeTrend(trendMetrics).slice(-7)
   const chatGoalsReachedCount = calculationMetrics.filter(
     (metric) => Number(metric.csat) >= Number(metric.csat_goal) && Number(metric.review_percentage) >= Number(metric.general_review_goal),
   ).length
@@ -6476,10 +6477,11 @@ function ChatModuleDashboard({
           </div>
         </div>
       </section>
-      <div className={chatActiveTab === 'overview' ? 'metric-zone grid gap-4 md:grid-cols-4' : 'hidden'}>
+      <div className={chatActiveTab === 'overview' ? 'metric-zone grid gap-4 sm:grid-cols-2 xl:grid-cols-5' : 'hidden'}>
         <MetricCard label="Equipe" value={selectedTeamName} />
+        <MetricCard label="Analistas no período" value={formatChatCount(calculationMetrics.length)} />
         <MetricCard label="CSAT médio" value={loading ? '...' : formatChatPercent(averageCsat)} tone={averageCsat >= 90 ? 'success' : averageCsat >= 85 ? 'warning' : 'danger'} />
-        <MetricCard label="% avaliações" value={formatChatPercent(averageReviews)} tone={averageReviews >= 25 ? 'success' : averageReviews >= 20 ? 'warning' : 'danger'} />
+        <MetricCard label="% de avaliações" value={formatChatPercent(averageReviews)} tone={averageReviews >= 25 ? 'success' : averageReviews >= 20 ? 'warning' : 'danger'} />
         <MetricCard label="Atendimentos" value={formatChatCount(totals.tickets)} />
       </div>
 
@@ -6494,16 +6496,32 @@ function ChatModuleDashboard({
       />
 
       <section className={chatActiveTab === 'overview' ? 'panel' : 'hidden'}>
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-stretch">
-          <div className="xl:w-2/5">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Resumo executivo</p>
+        <div className="grid gap-5 xl:grid-cols-[1.05fr_1.95fr]">
+          <div className="rounded-xl border border-white/10 bg-slate-950/35 p-5">
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Leitura da operação</p>
             <h2 className={`mt-3 text-3xl font-bold ${chatExecutiveTone}`}>{chatExecutiveStatus}</h2>
             <p className="mt-3 text-sm leading-6 text-slate-300">
-              {selectedPeriod?.label ?? 'Período'} - {selectedTeamName}. {chatMainAlert}
+              {selectedPeriod?.label ?? 'Período'} · {selectedTeamName}
             </p>
+            <p className="mt-3 text-sm leading-6 text-slate-400">{chatMainAlert}</p>
+
+            <div className="mt-5 grid grid-cols-3 gap-2 border-t border-white/10 pt-4 text-center">
+              <div>
+                <span className="block text-xs text-slate-500">Elegíveis</span>
+                <strong className="mt-1 block text-xl tabular-nums text-emerald-300">{chatEligibleCount}</strong>
+              </div>
+              <div>
+                <span className="block text-xs text-slate-500">Em atenção</span>
+                <strong className="mt-1 block text-xl tabular-nums text-amber-200">{attention.length}</strong>
+              </div>
+              <div>
+                <span className="block text-xs text-slate-500">Críticos</span>
+                <strong className="mt-1 block text-xl tabular-nums text-rose-300">{chatCriticalCount}</strong>
+              </div>
+            </div>
           </div>
 
-          <div className="grid flex-1 gap-4 md:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <div className="executive-card">
               <p>CSAT vs mês anterior</p>
               <strong>{formatDelta(chatCsatDelta, ' p.p.')}</strong>
@@ -6515,25 +6533,23 @@ function ChatModuleDashboard({
               <span>Atual: {formatChatPercent(averageReviews)}</span>
             </div>
             <div className="executive-card">
-              <p>% sem avaliação</p>
+              <p>Sem avaliação</p>
               <strong>{formatChatPercent(averageSending)}</strong>
               <span>{formatDelta(chatSendingDelta, ' p.p.')} vs anterior</span>
             </div>
-          </div>
-        </div>
-
-        <div className="mt-5 grid gap-4 lg:grid-cols-3">
-          <div className="rounded-lg bg-slate-900 p-4">
-            <p className="text-sm text-slate-400">Alerta principal</p>
-            <p className="mt-2 font-semibold">{chatMainAlert}</p>
-          </div>
-          <div className="rounded-lg bg-slate-900 p-4">
-            <p className="text-sm text-slate-400">Ação recomendada</p>
-            <p className="mt-2 font-semibold">{chatRecommendedAction}</p>
-          </div>
-          <div className="rounded-lg bg-slate-900 p-4">
-            <p className="text-sm text-slate-400">Critério legado</p>
-            <p className="mt-2 font-semibold">CSAT 90%, avaliações 25% e volume acima da média.</p>
+            <div className="rounded-lg border border-white/10 bg-slate-900 p-4 sm:col-span-2 xl:col-span-3">
+              <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-center">
+                <div>
+                  <p className="text-sm text-slate-400">Prioridade gerencial do período</p>
+                  <p className="mt-2 font-semibold text-slate-100">{chatRecommendedAction}</p>
+                </div>
+                <div className="rounded-lg bg-slate-950/45 px-4 py-3 text-right">
+                  <span className="block text-xs text-slate-500">Média de volume</span>
+                  <strong className="mt-1 block text-xl tabular-nums">{formatChatCount(averageTickets)}</strong>
+                  <span className="text-xs text-slate-500">atendimentos por analista</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -6671,32 +6687,52 @@ function ChatModuleDashboard({
       </section>
 
       <section className={chatActiveTab === 'overview' ? 'panel' : 'hidden'}>
-        <div className="grid gap-6 xl:grid-cols-3">
-          <div className="xl:col-span-2">
-            <h2 className="section-title">Evolução mensal</h2>
-            <p className="section-subtitle">CSAT médio consolidado por mês no filtro selecionado.</p>
-            <div className="mt-5">
-              <GroupedPercentTrendChart
-                points={monthlyUnifiedTrend}
-                series={[
-                  { key: 'csat', label: 'CSAT', color: 'bg-cyan-300' },
-                  { key: 'reviews', label: 'Avaliações', color: 'bg-emerald-300' },
-                  { key: 'sending', label: '% sem avaliação', color: 'bg-amber-300' },
-                ]}
-              />
-            </div>
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Evolução da operação</p>
+          <h2 className="mt-2 text-2xl font-bold">Qualidade, participação e volume</h2>
+          <p className="section-subtitle">
+            A leitura histórica combina os indicadores percentuais com o volume total para mostrar se a operação mudou de resultado junto com a carga de atendimento.
+          </p>
+        </div>
+
+        <div className="mt-5 grid gap-5 xl:grid-cols-2">
+          <div className="rounded-xl border border-white/10 bg-slate-950/25 p-4">
+            <p className="mb-3 text-sm font-semibold text-slate-200">Qualidade e avaliações</p>
+            <GroupedPercentTrendChart
+              points={monthlyUnifiedTrend}
+              series={[
+                { key: 'csat', label: 'CSAT', color: 'bg-cyan-300' },
+                { key: 'reviews', label: 'Avaliações', color: 'bg-emerald-300' },
+                { key: 'sending', label: '% sem avaliação', color: 'bg-amber-300' },
+              ]}
+            />
           </div>
-          <div className="rounded-lg bg-slate-900 p-5">
-            <h3 className="text-xl font-bold">Resumo operacional</h3>
-            <div className="mt-4 space-y-3 text-sm text-slate-300">
-              <p>Válidos: <strong className="tabular-nums">{formatChatCount(totals.validTickets)}</strong></p>
-              <p>Inativos: <strong className="tabular-nums">{formatChatCount(totals.inactive)}</strong></p>
-              <p>Avaliações: <strong className="tabular-nums">{formatChatCount(totals.reviews)}</strong></p>
-              <p>% sem avaliação médio: <strong className="tabular-nums">{formatChatPercent(averageSending)}</strong></p>
-              <p>Média por analista: <strong className="tabular-nums">{formatChatCount(averageTickets)}</strong></p>
-              <p>Metas superadas: <strong>{chatGoalsReachedCount}</strong></p>
-              <p>Críticos: <strong>{chatCriticalCount}</strong></p>
-            </div>
+
+          <TrendLineChart
+            label="Atendimentos mensais"
+            points={monthlyVolumeTrend}
+            singlePointLabel="Apenas uma competência disponível para comparação."
+            latestPointLabel="Última competência"
+            highlightedPointLabel="Competência destacada"
+          />
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-lg bg-slate-900 p-4">
+            <p className="text-sm text-slate-400">Atendimentos válidos</p>
+            <strong className="mt-2 block text-2xl tabular-nums">{formatChatCount(totals.validTickets)}</strong>
+          </div>
+          <div className="rounded-lg bg-slate-900 p-4">
+            <p className="text-sm text-slate-400">Inativos</p>
+            <strong className="mt-2 block text-2xl tabular-nums">{formatChatCount(totals.inactive)}</strong>
+          </div>
+          <div className="rounded-lg bg-slate-900 p-4">
+            <p className="text-sm text-slate-400">Avaliações recebidas</p>
+            <strong className="mt-2 block text-2xl tabular-nums">{formatChatCount(totals.reviews)}</strong>
+          </div>
+          <div className="rounded-lg bg-slate-900 p-4">
+            <p className="text-sm text-slate-400">Metas superadas</p>
+            <strong className="mt-2 block text-2xl tabular-nums">{chatGoalsReachedCount}</strong>
           </div>
         </div>
       </section>
@@ -13426,6 +13462,30 @@ function buildChatMonthlyUnifiedTrend(metrics: ChatMonthlyMetric[]) {
       csat: item.count ? round(item.csatSum / item.count) : 0,
       reviews: item.count ? round(item.reviewsSum / item.count) : 0,
       sending: item.count ? round(item.sendingSum / item.count) : 0,
+    }))
+}
+
+function buildChatMonthlyVolumeTrend(metrics: ChatMonthlyMetric[]) {
+  const grouped = new Map<string, { label: string; year: number; month: number; tickets: number }>()
+
+  metrics.forEach((metric) => {
+    const key = `${metric.year}-${metric.month_number}`
+    const current = grouped.get(key) ?? {
+      label: metric.month_label,
+      year: metric.year,
+      month: metric.month_number,
+      tickets: 0,
+    }
+
+    current.tickets += Number(metric.total_tickets)
+    grouped.set(key, current)
+  })
+
+  return [...grouped.values()]
+    .sort((a, b) => (a.year === b.year ? a.month - b.month : a.year - b.year))
+    .map((item) => ({
+      label: item.label.replace(' 2026', ''),
+      value: item.tickets,
     }))
 }
 
