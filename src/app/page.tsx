@@ -4033,7 +4033,7 @@ function ChatModuleDashboard({
               <div className="mt-5 rounded-xl border border-dashed border-white/15 bg-slate-950/30 p-5 text-sm leading-6 text-slate-300">
                 {clickDeskPersistedMetrics?.accumulated ? (
                   <>
-                    Base persistida carregada automaticamente. “Testar conexão” fica reservado ao diagnóstico da API e “Ler atendimentos do período” força uma sincronização manual quando necessário.
+                    Base persistida carregada automaticamente. “Testar conexão” fica reservado ao diagnóstico da API e “Sincronizar agora” força uma atualização manual quando necessário.
                   </>
                 ) : (
                   <>
