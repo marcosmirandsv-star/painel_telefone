@@ -493,6 +493,45 @@ type ClickDeskPersistedMetrics = {
   erro?: string
 }
 
+type ClickDeskHistoryPoint = {
+  month: string
+  label: string
+  source: 'official' | 'live'
+  status: 'closed' | 'open'
+  closure_id: string | null
+  closed_at: string | null
+  team_id: string | null
+  team_name: string | null
+  csat_goal: number | null
+  review_goal: number
+  attendances: number
+  positive_reviews: number
+  negative_reviews: number
+  reviews: number
+  csat: number | null
+  review_percentage: number | null
+  delta: {
+    csat_pp: number | null
+    review_percentage_pp: number | null
+    attendances: number | null
+  }
+}
+
+type ClickDeskAnalystHistory = {
+  source?: string
+  analyst?: {
+    id: string
+    name: string
+    current_team_id: string | null
+    active: boolean
+  }
+  current_month?: string
+  points?: ClickDeskHistoryPoint[]
+  official_months?: number
+  live_month_included?: boolean
+  erro?: string
+}
+
 type ClickDeskSyncResult = {
   synced?: boolean
   run_id?: string
@@ -2161,6 +2200,8 @@ function ChatModuleDashboard({
   const [clickDeskConversationDiagnostic, setClickDeskConversationDiagnostic] = useState<ClickDeskConversationDiagnostic | null>(null)
   const [clickDeskPersistedMetrics, setClickDeskPersistedMetrics] = useState<ClickDeskPersistedMetrics | null>(null)
   const [clickDeskSyncResult, setClickDeskSyncResult] = useState<ClickDeskSyncResult | null>(null)
+  const [clickDeskAnalystHistory, setClickDeskAnalystHistory] = useState<ClickDeskAnalystHistory | null>(null)
+  const [clickDeskHistoryLoading, setClickDeskHistoryLoading] = useState(false)
   const [clickDeskClosureLoading, setClickDeskClosureLoading] = useState(false)
   const [clickDeskClosurePreview, setClickDeskClosurePreview] = useState<ClickDeskClosurePreview | null>(null)
   const [clickDeskOfficialClosure, setClickDeskOfficialClosure] = useState<ClickDeskClosurePreview | null>(null)
@@ -2242,6 +2283,42 @@ function ChatModuleDashboard({
       })
     } finally {
       setClickDeskTestLoading(false)
+    }
+  }
+
+  async function loadClickDeskAnalystHistory(analystId: string) {
+    if (!analystId) {
+      setClickDeskAnalystHistory(null)
+      return
+    }
+
+    setClickDeskHistoryLoading(true)
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        setClickDeskAnalystHistory({ erro: 'Sua sessão de homologação não está ativa.' })
+        return
+      }
+
+      const params = new URLSearchParams({ analyst_id: analystId })
+      const response = await fetch(`/api/clickdesk/history?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: 'no-store',
+      })
+      const data = (await response.json()) as ClickDeskAnalystHistory
+
+      if (!response.ok) {
+        data.erro = data.erro || 'Não foi possível carregar o histórico ClickDesk.'
+      }
+
+      setClickDeskAnalystHistory(data)
+    } catch (error) {
+      setClickDeskAnalystHistory({ erro: getErrorMessage(error) })
+    } finally {
+      setClickDeskHistoryLoading(false)
     }
   }
 
@@ -3623,6 +3700,17 @@ function ChatModuleDashboard({
           normalizeChatText(item.area) === normalizeChatText(chat2SelectedLiveHuman.area),
       ) ?? null
     : null
+
+  useEffect(() => {
+    const analystId = chat2SelectedPersistedAnalyst?.analyst_id
+    if (analystId) {
+      void loadClickDeskAnalystHistory(analystId)
+    } else {
+      setClickDeskAnalystHistory(null)
+    }
+  }, [chat2SelectedPersistedAnalyst?.analyst_id])
+
+  const chat2HistoryPoints = clickDeskAnalystHistory?.points ?? []
   const chat2DailyMap = new Map(
     (chat2SelectedPersistedAnalyst?.daily ?? []).map((item) => [item.date, item]),
   )
@@ -4824,32 +4912,133 @@ function ChatModuleDashboard({
                 A nova série histórica será formada somente com dados ClickDesk, sem misturar os números antigos do Zendesk.
               </p>
 
-              {chat2SelectedLiveHuman ? (
-                <div className="mt-5 rounded-lg border border-white/10 bg-slate-950/35 p-4">
-                  <div className="grid gap-3 sm:grid-cols-[1.2fr_1fr_1fr_1fr] sm:items-center">
-                    <div>
-                      <strong>{chat2SelectedPeriod.label}</strong>
-                      <p className="mt-1 text-xs text-slate-500">Primeiro ponto disponível no ClickDesk</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-500">CSAT</p>
-                      <strong className="tabular-nums">{chat2LiveCandidateCsat === null ? '—' : formatChatPercent(chat2LiveCandidateCsat)}</strong>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-500">Avaliações</p>
-                      <strong className="tabular-nums">{chat2LiveCandidateReviewPercentage === null ? '—' : formatChatPercent(chat2LiveCandidateReviewPercentage)}</strong>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-500">Atendimentos</p>
-                      <strong className="tabular-nums">{formatChatCount(chat2LiveAttendances)}</strong>
-                    </div>
+              {clickDeskHistoryLoading ? (
+                <div className="mt-5 rounded-lg border border-white/10 bg-slate-950/35 p-5 text-sm text-slate-300">
+                  Carregando histórico oficial do analista...
+                </div>
+              ) : clickDeskAnalystHistory?.erro ? (
+                <div className="mt-5 rounded-lg border border-amber-300/20 bg-amber-300/5 p-4 text-sm text-amber-100">
+                  {clickDeskAnalystHistory.erro}
+                </div>
+              ) : chat2HistoryPoints.length > 0 ? (
+                <div className="mt-5 space-y-5">
+                  <div className="grid gap-4 lg:grid-cols-2">
+                    <TrendLineChart
+                      label="CSAT mensal"
+                      points={chat2HistoryPoints.map((item) => ({
+                        label: item.label.replace(' de ', '/'),
+                        value: item.csat ?? 0,
+                      }))}
+                      suffix="%"
+                    />
+                    <TrendLineChart
+                      label="% de avaliações mensal"
+                      points={chat2HistoryPoints.map((item) => ({
+                        label: item.label.replace(' de ', '/'),
+                        value: item.review_percentage ?? 0,
+                      }))}
+                      suffix="%"
+                      goal={25}
+                      goalLabel="Meta"
+                    />
                   </div>
-                  <p className="mt-4 text-xs leading-5 text-slate-500">
-                    Os próximos períodos serão acrescentados pela sincronização D-1 e pelas revalidações de avaliações tardias.
+
+                  <div className="space-y-3">
+                    {[...chat2HistoryPoints].reverse().map((item) => (
+                      <div
+                        key={item.month}
+                        className="rounded-lg border border-white/10 bg-slate-950/35 p-4"
+                      >
+                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <strong>{item.label}</strong>
+                              <span
+                                className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${
+                                  item.source === 'official'
+                                    ? 'border-emerald-400/20 bg-emerald-400/5 text-emerald-200'
+                                    : 'border-cyan-400/20 bg-cyan-400/5 text-cyan-200'
+                                }`}
+                              >
+                                {item.source === 'official' ? 'Oficial' : 'Em andamento'}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {item.source === 'official'
+                                ? 'Snapshot mensal preservado'
+                                : 'Base viva persistida do ClickDesk'}
+                              {item.team_name ? ` · ${item.team_name}` : ''}
+                            </p>
+                          </div>
+                          <div className="grid grid-cols-3 gap-4 text-right">
+                            <div>
+                              <p className="text-xs text-slate-500">CSAT</p>
+                              <strong className="tabular-nums">
+                                {item.csat === null ? '—' : formatChatPercent(item.csat)}
+                              </strong>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500">Avaliações</p>
+                              <strong className="tabular-nums">
+                                {item.review_percentage === null
+                                  ? '—'
+                                  : formatChatPercent(item.review_percentage)}
+                              </strong>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500">Atendimentos</p>
+                              <strong className="tabular-nums">{formatChatCount(item.attendances)}</strong>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 border-t border-white/10 pt-3 text-xs text-slate-400">
+                          <span>
+                            Meta CSAT:{' '}
+                            <strong className="text-slate-200">
+                              {item.csat_goal === null ? '—' : formatChatPercent(item.csat_goal)}
+                            </strong>
+                          </span>
+                          <span>
+                            Meta avaliações:{' '}
+                            <strong className="text-slate-200">{formatChatPercent(item.review_goal)}</strong>
+                          </span>
+                          {item.delta.csat_pp !== null && (
+                            <span>
+                              Δ CSAT:{' '}
+                              <strong className={item.delta.csat_pp >= 0 ? 'text-emerald-300' : 'text-amber-200'}>
+                                {formatDelta(item.delta.csat_pp, ' p.p.')}
+                              </strong>
+                            </span>
+                          )}
+                          {item.delta.review_percentage_pp !== null && (
+                            <span>
+                              Δ avaliações:{' '}
+                              <strong className={item.delta.review_percentage_pp >= 0 ? 'text-emerald-300' : 'text-amber-200'}>
+                                {formatDelta(item.delta.review_percentage_pp, ' p.p.')}
+                              </strong>
+                            </span>
+                          )}
+                          {item.delta.attendances !== null && (
+                            <span>
+                              Δ atendimentos:{' '}
+                              <strong className="text-slate-200">
+                                {item.delta.attendances > 0 ? '+' : ''}
+                                {formatChatCount(item.delta.attendances)}
+                              </strong>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <p className="text-xs leading-5 text-slate-500">
+                    Meses fechados usam exclusivamente o snapshot oficial. A competência atual usa a base viva persistida até o fechamento.
                   </p>
                 </div>
               ) : (
-                <EmptyState text="Leia os atendimentos do período para iniciar o histórico ClickDesk do analista." />
+                <EmptyState text="Ainda não existe histórico ClickDesk disponível para este analista." />
               )}
             </div>
 
