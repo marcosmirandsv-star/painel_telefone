@@ -454,7 +454,10 @@ type ClickDeskPersistedMetrics = {
     included_in_period: boolean
   }
   accumulated?: ClickDeskPersistedAggregate
+  performance_accumulated?: ClickDeskPersistedAggregate
+  management_support?: ClickDeskPersistedAggregate
   daily?: Array<ClickDeskPersistedAggregate & { date: string }>
+  performance_daily?: Array<ClickDeskPersistedAggregate & { date: string }>
   by_analyst?: Array<
     ClickDeskPersistedAggregate & {
       analyst_id: string | null
@@ -2242,6 +2245,41 @@ function ChatModuleDashboard({
     }
   }
 
+  async function loadClickDeskPersistedMetricsOnly(
+    period: { start: string; end: string },
+    teamId: string,
+  ) {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session?.access_token) return
+
+      const params = new URLSearchParams({
+        start: period.start,
+        end: period.end,
+      })
+      if (teamId !== 'all') params.set('team_id', teamId)
+
+      const response = await fetch(`/api/clickdesk/metrics?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: 'no-store',
+      })
+      const data = (await response.json()) as ClickDeskPersistedMetrics
+
+      if (!response.ok) {
+        data.erro = data.erro || 'Não foi possível carregar a base persistida do ClickDesk.'
+      }
+
+      setClickDeskPersistedMetrics(data)
+    } catch (error) {
+      setClickDeskPersistedMetrics({
+        erro: getErrorMessage(error),
+      })
+    }
+  }
+
   async function handleLoadClickDeskConversations() {
     setClickDeskConversationLoading(true)
     setClickDeskConversationDiagnostic(null)
@@ -2289,6 +2327,7 @@ function ChatModuleDashboard({
         start: chat2SelectedPeriod.start,
         end: chat2SelectedPeriod.end,
       })
+      if (selectedTeamId !== 'all') persistedParams.set('team_id', selectedTeamId)
       const diagnosticParams = new URLSearchParams({
         year: String(chat2SelectedPeriod.year),
         month: String(chat2SelectedPeriod.monthNumber),
@@ -3527,6 +3566,21 @@ function ChatModuleDashboard({
   })
   const chat2SelectedPeriod =
     chat2Periods.find((period) => period.key === chat2PeriodKey) ?? chat2Periods[0]
+
+  useEffect(() => {
+    void loadClickDeskPersistedMetricsOnly(
+      {
+        start: chat2SelectedPeriod.start,
+        end: chat2SelectedPeriod.end,
+      },
+      selectedTeamId,
+    )
+  }, [
+    chat2SelectedPeriod.start,
+    chat2SelectedPeriod.end,
+    selectedTeamId,
+    isManagementUser,
+  ])
   const chat2VisibleMetrics = metrics.filter((metric) => {
     const matchesTeam = selectedTeamId === 'all' || metric.team_id === selectedTeamId
     const matchesPeriod =
@@ -3534,7 +3588,7 @@ function ChatModuleDashboard({
     return matchesTeam && matchesPeriod
   })
   const chat2PersistedAnalystRows = clickDeskPersistedMetrics?.by_analyst ?? []
-  const chat2LiveHumanRows = (clickDeskConversationDiagnostic?.human_by_area_assignee ?? []).filter(
+  const chat2DiagnosticAnalystRows = (clickDeskConversationDiagnostic?.human_by_area_assignee ?? []).filter(
     (item) =>
       chat2PersistedAnalystRows.some(
         (persisted) =>
@@ -3542,6 +3596,22 @@ function ChatModuleDashboard({
           normalizeChatText(persisted.area) === normalizeChatText(item.area),
       ),
   )
+  const chat2PersistedHumanRows = chat2PersistedAnalystRows.map((item) => ({
+    area: item.area,
+    name: item.assignee_name,
+    count: item.attendances,
+    journey_confirmed: item.attendances,
+    satisfaction_labels: {} as Record<string, number>,
+    positive_reviews: item.positive_reviews,
+    negative_reviews: item.negative_reviews,
+    reviews: item.reviews,
+    candidate_csat: item.csat,
+    candidate_review_percentage: item.review_percentage,
+  }))
+  const chat2LiveHumanRows =
+    chat2DiagnosticAnalystRows.length > 0
+      ? chat2DiagnosticAnalystRows
+      : chat2PersistedHumanRows
   const chat2SelectedLiveHuman =
     chat2LiveHumanRows.find((item) => `${item.area}::${item.name}` === chat2LiveAnalystKey) ??
     chat2LiveHumanRows[0] ??
@@ -3854,14 +3924,18 @@ function ChatModuleDashboard({
                   type="button"
                   onClick={() => void handleLoadClickDeskConversations()}
                 >
-                  {clickDeskConversationLoading ? 'Lendo atendimentos...' : 'Ler atendimentos do período'}
+                  {clickDeskConversationLoading ? 'Sincronizando...' : 'Sincronizar agora'}
                 </button>
                 <span className="rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-xs text-slate-400">
                   IA separada nesta etapa · foco na base humana mensurável
                 </span>
-                {clickDeskSyncResult?.synced && (
+                {(clickDeskPersistedMetrics?.accumulated || clickDeskSyncResult?.synced) && (
                   <span className="rounded-md border border-emerald-400/20 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-200">
-                    Base persistida · {formatChatCount(clickDeskSyncResult.rows_persisted ?? 0)} atendimento(s)
+                    Base persistida · {formatChatCount(
+                      clickDeskPersistedMetrics?.accumulated?.attendances ??
+                        clickDeskSyncResult?.rows_persisted ??
+                        0,
+                    )} atendimento(s)
                   </span>
                 )}
               </div>
@@ -3869,7 +3943,15 @@ function ChatModuleDashboard({
 
             {!clickDeskTestResult && (
               <div className="mt-5 rounded-xl border border-dashed border-white/15 bg-slate-950/30 p-5 text-sm leading-6 text-slate-300">
-                Conexão ainda não testada nesta sessão. As credenciais ficam no servidor; use “Testar conexão” para conferir a API ou “Ler atendimentos do período” para consultar o recorte selecionado.
+                {clickDeskPersistedMetrics?.accumulated ? (
+                  <>
+                    Base persistida carregada automaticamente. “Testar conexão” fica reservado ao diagnóstico da API e “Ler atendimentos do período” força uma sincronização manual quando necessário.
+                  </>
+                ) : (
+                  <>
+                    Carregando a base persistida desta competência. O teste de conexão e a sincronização manual são ferramentas de diagnóstico e contingência.
+                  </>
+                )}
               </div>
             )}
 
