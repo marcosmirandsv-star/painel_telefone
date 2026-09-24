@@ -11,6 +11,7 @@ type DailyMetricRow = {
   analyst_id: string | null
   area: string
   assignee_name: string
+  identity_role: 'analyst' | 'management' | 'unmapped'
   attendances: number
   positive_reviews: number
   negative_reviews: number
@@ -102,7 +103,7 @@ async function loadRows(
     let query = admin
       .from('clickdesk_chat_daily_metrics')
       .select(
-        'occurred_date,team_id,analyst_id,area,assignee_name,attendances,positive_reviews,negative_reviews,reviews,csat,review_percentage',
+        'occurred_date,team_id,analyst_id,area,assignee_name,attendances,positive_reviews,negative_reviews,reviews,csat,review_percentage,identity_role',
       )
       .gte('occurred_date', filters.start)
       .lte('occurred_date', filters.end)
@@ -233,7 +234,7 @@ export async function GET(request: Request) {
     }
 
     const todayRows = rows.filter((row) => row.occurred_date === filters.today)
-    const unmatchedRows = rows.filter((row) => !row.analyst_id)
+    const unmatchedRows = rows.filter((row) => row.identity_role === 'unmapped')
 
     let sourceQuery = admin
       .from('clickdesk_chat_attendances')
