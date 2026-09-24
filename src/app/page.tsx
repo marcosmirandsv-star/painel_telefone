@@ -2493,9 +2493,7 @@ function ChatAnalystPortal({
             <p className="text-slate-400">Situação atual</p>
             <strong className="mt-1 block text-cyan-100">{status}</strong>
             <span className="mt-1 block text-xs text-slate-400">
-              {diagnostic.goalsEvaluated === 2
-                ? `${diagnostic.goalsMet} de 2 metas atingidas`
-                : `${diagnostic.goalsEvaluated} de 2 metas avaliadas`}
+              Entenda a leitura logo abaixo
             </span>
           </div>
         </div>
@@ -2554,7 +2552,7 @@ function ChatAnalystPortal({
                       ? 'Ainda sem avaliações suficientes para calcular o indicador.'
                       : diagnostic.csatDelta !== null && diagnostic.csatDelta >= 0
                         ? `${formatDelta(diagnostic.csatDelta, ' p.p.')} acima da meta.`
-                        : `${formatDelta(diagnostic.csatDelta ?? 0, ' p.p.')} abaixo da meta.`}
+                        : `${formatDelta(Math.abs(diagnostic.csatDelta ?? 0), ' p.p.').replace('+', '')} abaixo da meta.`}
                   </p>
                   <div className="mt-4 flex gap-4 border-t border-white/10 pt-3 text-sm">
                     <span className="text-slate-500">
@@ -2589,7 +2587,7 @@ function ChatAnalystPortal({
                       ? 'Ainda sem base para calcular participação nas avaliações.'
                       : diagnostic.reviewDelta !== null && diagnostic.reviewDelta >= 0
                         ? `${formatDelta(diagnostic.reviewDelta, ' p.p.')} acima da meta.`
-                        : `${formatDelta(diagnostic.reviewDelta ?? 0, ' p.p.')} abaixo da meta.`}
+                        : `${formatDelta(Math.abs(diagnostic.reviewDelta ?? 0), ' p.p.').replace('+', '')} abaixo da meta.`}
                   </p>
                   <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-3 text-sm">
                     <span className="text-slate-500">Avaliações recebidas</span>
