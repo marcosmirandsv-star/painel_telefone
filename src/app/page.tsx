@@ -4715,6 +4715,34 @@ function ChatModuleDashboard({
     chat2LiveTeamTickets > 0 ? round((chat2LiveTeamReviews / chat2LiveTeamTickets) * 100) : null
   const chat2LiveTeamAverageTickets =
     chat2LiveTeamRows.length > 0 ? round(chat2LiveTeamTickets / chat2LiveTeamRows.length) : 0
+  const chat2ProductivityRows = [...chat2PersistedAnalystRows].sort(
+    (a, b) => Number(b.attendances) - Number(a.attendances),
+  )
+  const chat2ProductivityTickets = chat2ProductivityRows.reduce(
+    (sum, item) => sum + Number(item.attendances),
+    0,
+  )
+  const chat2ProductivityPositive = chat2ProductivityRows.reduce(
+    (sum, item) => sum + Number(item.positive_reviews ?? 0),
+    0,
+  )
+  const chat2ProductivityNegative = chat2ProductivityRows.reduce(
+    (sum, item) => sum + Number(item.negative_reviews ?? 0),
+    0,
+  )
+  const chat2ProductivityReviews = chat2ProductivityPositive + chat2ProductivityNegative
+  const chat2ProductivityCsat =
+    chat2ProductivityReviews > 0
+      ? round((chat2ProductivityPositive / chat2ProductivityReviews) * 100)
+      : null
+  const chat2ProductivityReviewPercentage =
+    chat2ProductivityTickets > 0
+      ? round((chat2ProductivityReviews / chat2ProductivityTickets) * 100)
+      : null
+  const chat2ProductivityAverageTickets =
+    chat2ProductivityRows.length > 0
+      ? round(chat2ProductivityTickets / chat2ProductivityRows.length)
+      : 0
   const chat2SelectedMetric =
     chat2VisibleMetrics.find((metric) => metric.analyst_id === chat2AnalystId) ?? chat2VisibleMetrics[0] ?? null
   const chat2TeamMetrics = chat2SelectedMetric
@@ -5476,6 +5504,87 @@ function ChatModuleDashboard({
           )}
             </div>
           </details>
+
+          <section className="panel">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Equipe e produtividade</p>
+                <h3 className="mt-2 text-2xl font-bold">Visão do time</h3>
+                <p className="section-subtitle">
+                  Leia primeiro o cenário coletivo. Depois, clique em um analista para abrir o detalhamento individual logo abaixo.
+                </p>
+              </div>
+              <span className="rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-xs text-slate-400">
+                {chat2SelectedPeriod.label} · {formatChatCount(chat2ProductivityRows.length)} analista(s) com dados
+              </span>
+            </div>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+              <MetricCard label="Atendimentos do time" value={formatChatCount(chat2ProductivityTickets)} />
+              <MetricCard
+                label="CSAT do time"
+                value={chat2ProductivityCsat === null ? '—' : formatChatPercent(chat2ProductivityCsat)}
+              />
+              <MetricCard
+                label="% de avaliações"
+                value={chat2ProductivityReviewPercentage === null ? '—' : formatChatPercent(chat2ProductivityReviewPercentage)}
+              />
+              <MetricCard label="Avaliações recebidas" value={formatChatCount(chat2ProductivityReviews)} />
+              <MetricCard label="Média de atendimentos" value={formatChatCount(chat2ProductivityAverageTickets)} />
+            </div>
+
+            {chat2ProductivityRows.length > 0 ? (
+              <div className="mt-5 overflow-hidden rounded-xl border border-white/10 bg-slate-950/30">
+                <div className="grid grid-cols-[minmax(220px,1.6fr)_repeat(4,minmax(110px,0.7fr))] gap-3 border-b border-white/10 px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                  <span>Analista</span>
+                  <span className="text-right">Atendimentos</span>
+                  <span className="text-right">Vs. média</span>
+                  <span className="text-right">CSAT</span>
+                  <span className="text-right">% avaliações</span>
+                </div>
+                <div className="divide-y divide-white/5">
+                  {chat2ProductivityRows.map((item) => {
+                    const analystKey = `${item.area}::${item.assignee_name}`
+                    const selected = chat2SelectedLiveHuman
+                      ? analystKey === `${chat2SelectedLiveHuman.area}::${chat2SelectedLiveHuman.name}`
+                      : false
+                    const volumeDelta = Number(item.attendances) - chat2ProductivityAverageTickets
+                    return (
+                      <button
+                        key={analystKey}
+                        type="button"
+                        onClick={() => setChat2LiveAnalystKey(analystKey)}
+                        className={`grid w-full grid-cols-[minmax(220px,1.6fr)_repeat(4,minmax(110px,0.7fr))] items-center gap-3 px-4 py-3 text-left text-sm transition ${
+                          selected ? 'bg-cyan-300/10' : 'hover:bg-white/[0.03]'
+                        }`}
+                      >
+                        <span>
+                          <strong className="block text-slate-100">{item.assignee_name}</strong>
+                          <span className="mt-1 block text-xs text-slate-500">{item.area}</span>
+                        </span>
+                        <strong className="text-right tabular-nums">{formatChatCount(item.attendances)}</strong>
+                        <span className={`text-right tabular-nums ${
+                          volumeDelta >= 0 ? 'text-emerald-300' : 'text-amber-200'
+                        }`}>
+                          {volumeDelta > 0 ? '+' : ''}{formatChatCount(volumeDelta)}
+                        </span>
+                        <span className="text-right tabular-nums">
+                          {item.csat === null ? '—' : formatChatPercent(item.csat)}
+                        </span>
+                        <span className="text-right tabular-nums">
+                          {item.review_percentage === null ? '—' : formatChatPercent(item.review_percentage)}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="mt-5">
+                <EmptyState text="Nenhum analista com dados persistidos nesta competência." />
+              </div>
+            )}
+          </section>
 
           <section className="panel">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
