@@ -34,6 +34,7 @@ type UserProfile = {
   full_name?: string | null
   name?: string | null
   analyst_id?: string | null
+  chat_analyst_id?: string | null
 }
 
 type ScheduleNotification = {
@@ -720,6 +721,7 @@ const initialAccessUserForm = {
   password: '',
   role: 'analista',
   analystId: '',
+  chatAnalystId: '',
 }
 
 function playScheduleAlertSound() {
@@ -916,22 +918,9 @@ export default function Home() {
     if (teamResult.error) setMessage(getSupabaseMessage(teamResult.error.message))
     else setTeamMetrics(teamResult.data ?? [])
 
-    const [chatTeamsResult, chatAnalystsResult, chatMetricsResult, chatManualPodiumResult, chatExclusionsResult] = await Promise.all([
+    const [chatTeamsResult, chatAnalystsResult] = await Promise.all([
       supabase.from('chat_teams').select('id, name, legacy_name, manager_name, active').order('name'),
       supabase.from('chat_analysts').select('id, team_id, name, csat_goal, active, photo_url').order('name'),
-      supabase
-        .from('chat_monthly_metrics')
-        .select('id, team_id, analyst_id, month_label, year, month_number, period_start, period_end, csat, review_percentage, sending_percentage, total_tickets, inactive_tickets, valid_tickets, reviews, positive_reviews, negative_reviews, csat_goal, csat_delta, general_review_goal, status, chat_analysts(name, csat_goal, photo_url), chat_teams(name)')
-        .order('period_start', { ascending: false })
-        .limit(500),
-      supabase
-        .from('chat_podium_manual')
-        .select('id, team_id, analyst_id, year, month_number, position')
-        .order('year', { ascending: false }),
-      supabase
-        .from('chat_podium_exclusions')
-        .select('id, team_id, analyst_id, year, month_number, reason')
-        .order('year', { ascending: false }),
     ])
 
     if (chatTeamsResult.error) setMessage(getSupabaseMessage(chatTeamsResult.error.message))
@@ -940,14 +929,36 @@ export default function Home() {
     if (chatAnalystsResult.error) setMessage(getSupabaseMessage(chatAnalystsResult.error.message))
     else setChatAnalysts((chatAnalystsResult.data ?? []) as ChatAnalyst[])
 
-    if (chatMetricsResult.error) setMessage(getSupabaseMessage(chatMetricsResult.error.message))
-    else setChatMonthlyMetrics((chatMetricsResult.data ?? []) as ChatMonthlyMetric[])
+    if (loadedRole === 'analyst') {
+      setChatMonthlyMetrics([])
+      setChatPodiumManual([])
+      setChatPodiumExclusions([])
+    } else {
+      const [chatMetricsResult, chatManualPodiumResult, chatExclusionsResult] = await Promise.all([
+        supabase
+          .from('chat_monthly_metrics')
+          .select('id, team_id, analyst_id, month_label, year, month_number, period_start, period_end, csat, review_percentage, sending_percentage, total_tickets, inactive_tickets, valid_tickets, reviews, positive_reviews, negative_reviews, csat_goal, csat_delta, general_review_goal, status, chat_analysts(name, csat_goal, photo_url), chat_teams(name)')
+          .order('period_start', { ascending: false })
+          .limit(500),
+        supabase
+          .from('chat_podium_manual')
+          .select('id, team_id, analyst_id, year, month_number, position')
+          .order('year', { ascending: false }),
+        supabase
+          .from('chat_podium_exclusions')
+          .select('id, team_id, analyst_id, year, month_number, reason')
+          .order('year', { ascending: false }),
+      ])
 
-    if (chatManualPodiumResult.error) setChatPodiumManual([])
-    else setChatPodiumManual((chatManualPodiumResult.data ?? []) as ChatPodiumManual[])
+      if (chatMetricsResult.error) setMessage(getSupabaseMessage(chatMetricsResult.error.message))
+      else setChatMonthlyMetrics((chatMetricsResult.data ?? []) as ChatMonthlyMetric[])
 
-    if (chatExclusionsResult.error) setChatPodiumExclusions([])
-    else setChatPodiumExclusions((chatExclusionsResult.data ?? []) as ChatPodiumExclusion[])
+      if (chatManualPodiumResult.error) setChatPodiumManual([])
+      else setChatPodiumManual((chatManualPodiumResult.data ?? []) as ChatPodiumManual[])
+
+      if (chatExclusionsResult.error) setChatPodiumExclusions([])
+      else setChatPodiumExclusions((chatExclusionsResult.data ?? []) as ChatPodiumExclusion[])
+    }
 
     setLoading(false)
   }
@@ -976,6 +987,21 @@ export default function Home() {
     [profile, profileAnalystId, user?.email],
   )
   const currentProfileAnalyst = profileAnalyst ?? analystFallback
+  const profileChatAnalyst = useMemo(
+    () =>
+      chatAnalysts.find((analyst) => analyst.id === profile?.chat_analyst_id) ??
+      null,
+    [chatAnalysts, profile?.chat_analyst_id],
+  )
+  const profileChatTeam = useMemo(
+    () =>
+      profileChatAnalyst
+        ? chatTeams.find((team) => team.id === profileChatAnalyst.team_id) ?? null
+        : null,
+    [chatTeams, profileChatAnalyst],
+  )
+  const hasPhoneAnalystAccess = Boolean(currentProfileAnalyst)
+  const hasChatAnalystAccess = Boolean(profile?.chat_analyst_id)
   const visibleAnalysts = useMemo(
     () => (isManagementUser ? analysts : currentProfileAnalyst ? [currentProfileAnalyst] : []),
     [isManagementUser, analysts, currentProfileAnalyst],
@@ -994,9 +1020,29 @@ export default function Home() {
 
   useEffect(() => {
     if (isManagementUser) return
-    if (activeModule !== 'phone') setActiveModule('phone')
+
     if (activeTab !== 'dashboard') setActiveTab('dashboard')
-  }, [activeModule, activeTab, isManagementUser])
+
+    if (activeModule === 'phone' && !hasPhoneAnalystAccess && hasChatAnalystAccess) {
+      setActiveModule('chat')
+      return
+    }
+
+    if (activeModule === 'chat' && !hasChatAnalystAccess && hasPhoneAnalystAccess) {
+      setActiveModule('phone')
+      return
+    }
+
+    if (!hasPhoneAnalystAccess && hasChatAnalystAccess) {
+      setActiveModule('chat')
+    }
+  }, [
+    activeModule,
+    activeTab,
+    hasPhoneAnalystAccess,
+    hasChatAnalystAccess,
+    isManagementUser,
+  ])
 
   useEffect(() => {
     if (!isManagementUser || !profile?.full_name) {
@@ -1263,8 +1309,12 @@ export default function Home() {
         return
       }
 
-      if (accessUserForm.role === 'analista' && !accessUserForm.analystId) {
-        setMessage('Selecione o analista que sera vinculado a este usuario.')
+      if (
+        accessUserForm.role === 'analista' &&
+        !accessUserForm.analystId &&
+        !accessUserForm.chatAnalystId
+      ) {
+        setMessage('Vincule o usuário ao Telefone, ao Chat ou aos dois módulos.')
         return
       }
 
@@ -1288,6 +1338,8 @@ export default function Home() {
           password: accessUserForm.password,
           role: accessUserForm.role,
           analystId: accessUserForm.role === 'analista' ? accessUserForm.analystId : null,
+          chatAnalystId:
+            accessUserForm.role === 'analista' ? accessUserForm.chatAnalystId : null,
         }),
       })
 
@@ -1921,13 +1973,22 @@ export default function Home() {
             </p>
             <p className="mt-3 text-sm text-slate-400">
               Perfil: <strong>{getRoleLabel(userRole)}</strong>
-              {!isManagementUser && currentProfileAnalyst && (
-                <span> | Analista: <strong>{currentProfileAnalyst.name}</strong></span>
+              {!isManagementUser && (
+                <span>
+                  {' '}| Acesso individual:
+                  {currentProfileAnalyst && (
+                    <> <strong>{currentProfileAnalyst.name}</strong> · Telefone</>
+                  )}
+                  {currentProfileAnalyst && profileChatAnalyst && <span> | </span>}
+                  {profileChatAnalyst && (
+                    <> <strong>{profileChatAnalyst.name}</strong> · Chat</>
+                  )}
+                </span>
               )}
             </p>
-            {!isManagementUser && !currentProfileAnalyst && (
+            {!isManagementUser && !hasPhoneAnalystAccess && !hasChatAnalystAccess && (
               <p className="mt-2 text-sm text-amber-200">
-                Perfil de analista sem vínculo com cadastro. Peça ao gestor para revisar o usuário.
+                Perfil de analista sem vínculo com Telefone ou Chat. Peça à gestão para revisar o usuário.
               </p>
             )}
           </div>
@@ -1966,8 +2027,10 @@ export default function Home() {
           </div>
         </header>
 
-        {isManagementUser && (
-          <div className="mt-6 grid gap-3 md:grid-cols-3">
+        <div className={`mt-6 grid gap-3 ${
+          isManagementUser ? 'md:grid-cols-3' : 'md:grid-cols-2'
+        }`}>
+          {(isManagementUser || hasPhoneAnalystAccess) && (
             <button
               className={activeModule === 'phone' ? 'module-card-active' : 'module-card'}
               type="button"
@@ -1977,25 +2040,41 @@ export default function Home() {
               }}
             >
               <span>Módulo telefone</span>
-              <strong>Performance de atendimento</strong>
-              <small>Dashboard, lançamentos, metas, pódio, SARE e IA preditiva.</small>
+              <strong>
+                {isManagementUser ? 'Performance de atendimento' : 'Meu desempenho no telefone'}
+              </strong>
+              <small>
+                {isManagementUser
+                  ? 'Dashboard, lançamentos, metas, pódio, SARE e IA preditiva.'
+                  : 'Seus indicadores, metas e evolução individual.'}
+              </small>
             </button>
+          )}
+          {(isManagementUser || hasChatAnalystAccess) && (
             <button
               className={activeModule === 'chat' ? 'module-card-active' : 'module-card'}
               type="button"
               onClick={() => setActiveModule('chat')}
             >
               <span>Módulo chat</span>
-              <strong>Performance de atendimento via chat</strong>
-              <small>Dados do Zendesk, importação mensal, ranking, pódio e relatórios individuais.</small>
+              <strong>
+                {isManagementUser ? 'Performance de atendimento via chat' : 'Meu desempenho no chat'}
+              </strong>
+              <small>
+                {isManagementUser
+                  ? 'ClickDesk, visão da operação, gestão, fechamento e histórico.'
+                  : 'Seus atendimentos ClickDesk, metas e histórico individual.'}
+              </small>
             </button>
+          )}
+          {isManagementUser && (
             <Link className="module-card" href="/escalas">
               <span>Módulo escalas</span>
               <strong>Escalas e solicitações</strong>
               <small>Homologação: geração mensal, pessoas, sábados, publicação e alertas.</small>
             </Link>
-          </div>
-        )}
+          )}
+        </div>
         {activeModule === 'phone' && (
           <nav className="mt-6 flex flex-wrap gap-2">
           <TabButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')}>
@@ -2028,7 +2107,7 @@ export default function Home() {
 
         {message && <Feedback message={message} />}
 
-        {activeModule === 'chat' && (
+        {activeModule === 'chat' && isManagementUser && (
           <ChatModuleDashboard
             role={userRole}
             teams={chatTeams}
@@ -2038,6 +2117,13 @@ export default function Home() {
             podiumExclusions={chatPodiumExclusions}
             loading={loading}
             onImportComplete={loadData}
+          />
+        )}
+
+        {activeModule === 'chat' && !isManagementUser && (
+          <ChatAnalystPortal
+            analyst={profileChatAnalyst}
+            team={profileChatTeam}
           />
         )}
 
@@ -2103,6 +2189,7 @@ export default function Home() {
           <UsersView
             profiles={profiles}
             analysts={analysts}
+            chatAnalysts={chatAnalysts}
             form={accessUserForm}
             editingProfileNameId={editingProfileNameId}
             profileNameForm={profileNameForm}
@@ -2130,6 +2217,406 @@ export default function Home() {
         )}
       </section>
     </main>
+  )
+}
+
+function ChatAnalystPortal({
+  analyst,
+  team,
+}: {
+  analyst: ChatAnalyst | null
+  team: ChatTeam | null
+}) {
+  const [metrics, setMetrics] = useState<ClickDeskPersistedMetrics | null>(null)
+  const [history, setHistory] = useState<ClickDeskAnalystHistory | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  const now = new Date()
+  const year = now.getFullYear()
+  const monthNumber = now.getMonth() + 1
+  const monthKey = `${year}-${String(monthNumber).padStart(2, '0')}`
+  const monthStart = `${monthKey}-01`
+  const monthEnd = new Date(Date.UTC(year, monthNumber, 0)).toISOString().slice(0, 10)
+  const monthLabel = new Intl.DateTimeFormat('pt-BR', {
+    month: 'long',
+    year: 'numeric',
+  }).format(now)
+  const displayMonthLabel =
+    monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1)
+
+  useEffect(() => {
+    if (!analyst?.id) {
+      setMetrics(null)
+      setHistory(null)
+      return
+    }
+
+    let cancelled = false
+
+    async function loadOwnChatData() {
+      setLoading(true)
+
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+
+        if (!session?.access_token) {
+          if (!cancelled) {
+            setMetrics({ erro: 'Sua sessão expirou. Entre novamente.' })
+            setHistory({ erro: 'Sua sessão expirou. Entre novamente.' })
+          }
+          return
+        }
+
+        const headers = { Authorization: `Bearer ${session.access_token}` }
+        const metricParams = new URLSearchParams({
+          start: monthStart,
+          end: monthEnd,
+          analyst_id: analyst.id,
+        })
+        const historyParams = new URLSearchParams({
+          analyst_id: analyst.id,
+        })
+
+        const [metricResponse, historyResponse] = await Promise.all([
+          fetch(`/api/clickdesk/metrics?${metricParams.toString()}`, {
+            headers,
+            cache: 'no-store',
+          }),
+          fetch(`/api/clickdesk/history?${historyParams.toString()}`, {
+            headers,
+            cache: 'no-store',
+          }),
+        ])
+
+        const [metricData, historyData] = await Promise.all([
+          metricResponse.json() as Promise<ClickDeskPersistedMetrics>,
+          historyResponse.json() as Promise<ClickDeskAnalystHistory>,
+        ])
+
+        if (!metricResponse.ok) {
+          metricData.erro =
+            metricData.erro || 'Não foi possível carregar seus indicadores do Chat.'
+        }
+        if (!historyResponse.ok) {
+          historyData.erro =
+            historyData.erro || 'Não foi possível carregar seu histórico do Chat.'
+        }
+
+        if (!cancelled) {
+          setMetrics(metricData)
+          setHistory(historyData)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          const message = getErrorMessage(error)
+          setMetrics({ erro: message })
+          setHistory({ erro: message })
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    void loadOwnChatData()
+
+    return () => {
+      cancelled = true
+    }
+  }, [analyst?.id, monthStart, monthEnd])
+
+  if (!analyst) {
+    return (
+      <div className="mt-8">
+        <section className="panel">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-amber-200">
+            Acesso individual do Chat
+          </p>
+          <h2 className="mt-2 text-2xl font-bold">Vínculo não encontrado</h2>
+          <p className="section-subtitle">
+            Seu usuário está marcado para o Chat, mas o cadastro individual não pôde ser carregado. Peça à gestão para revisar o vínculo do acesso.
+          </p>
+        </section>
+      </div>
+    )
+  }
+
+  const ownMetric =
+    metrics?.by_analyst?.find((item) => item.analyst_id === analyst.id) ??
+    metrics?.by_analyst?.[0] ??
+    null
+  const accumulated = ownMetric ?? metrics?.performance_accumulated ?? null
+  const today = ownMetric?.today ?? metrics?.today ?? null
+  const daily = ownMetric?.daily ?? metrics?.performance_daily ?? []
+  const csat = accumulated?.csat ?? null
+  const reviewPercentage = accumulated?.review_percentage ?? null
+  const csatGoal = Number(analyst.csat_goal)
+  const reviewGoal = 25
+  const meetsCsat = csat !== null && csat >= csatGoal
+  const meetsReviews =
+    reviewPercentage !== null && reviewPercentage >= reviewGoal
+  const status =
+    meetsCsat && meetsReviews
+      ? 'Dentro das metas'
+      : meetsCsat || meetsReviews
+        ? 'Atenção'
+        : 'Prioridade'
+  const historyPoints = history?.points ?? []
+  const todayKey = new Date().toISOString().slice(0, 10)
+  const visibleDayCount =
+    now.getFullYear() === year && now.getMonth() + 1 === monthNumber
+      ? now.getDate()
+      : Number(monthEnd.slice(-2))
+  const ruler = Array.from({ length: visibleDayCount }, (_, index) => {
+    const day = String(index + 1).padStart(2, '0')
+    const date = `${monthKey}-${day}`
+    const source = daily.find((item) => item.date === date)
+    return {
+      date,
+      day,
+      attendances: source?.attendances ?? 0,
+      reviews: source?.reviews ?? 0,
+      csat: source?.csat ?? null,
+    }
+  })
+
+  return (
+    <div className="mt-8 space-y-6">
+      <section className="panel">
+        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
+          Chat · acesso individual
+        </p>
+        <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-4">
+            <AnalystAvatar
+              name={analyst.name}
+              photoUrl={analyst.photo_url ?? null}
+              size="lg"
+            />
+            <div>
+              <p className="text-sm text-slate-400">{team?.name ?? 'Equipe do Chat'}</p>
+              <h2 className="text-3xl font-bold">{analyst.name}</h2>
+              <p className="mt-1 text-sm text-slate-400">
+                {displayMonthLabel} · ClickDesk
+              </p>
+            </div>
+          </div>
+          <div className="rounded-lg border border-cyan-400/20 bg-cyan-400/5 px-4 py-3 text-sm">
+            <p className="text-slate-400">Situação atual</p>
+            <strong className="mt-1 block text-cyan-100">{status}</strong>
+          </div>
+        </div>
+
+        {loading && (
+          <p className="mt-5 rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
+            Carregando seus indicadores...
+          </p>
+        )}
+        {metrics?.erro && (
+          <p className="mt-5 rounded-lg border border-amber-300/20 bg-amber-300/5 p-4 text-sm text-amber-100">
+            {metrics.erro}
+          </p>
+        )}
+
+        {!loading && !metrics?.erro && (
+          <>
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+              <MetricCard
+                label="Atendimentos no mês"
+                value={formatChatCount(accumulated?.attendances ?? 0)}
+              />
+              <MetricCard
+                label="Atendimentos hoje"
+                value={formatChatCount(today?.attendances ?? 0)}
+              />
+              <MetricCard
+                label="CSAT"
+                value={csat === null ? '—' : formatChatPercent(csat)}
+                tone={meetsCsat ? 'success' : csat === null ? undefined : 'warning'}
+              />
+              <MetricCard
+                label="Avaliações positivas"
+                value={formatChatCount(accumulated?.positive_reviews ?? 0)}
+              />
+              <MetricCard
+                label="Avaliações negativas"
+                value={formatChatCount(accumulated?.negative_reviews ?? 0)}
+              />
+              <MetricCard
+                label="% de avaliações"
+                value={
+                  reviewPercentage === null
+                    ? '—'
+                    : formatChatPercent(reviewPercentage)
+                }
+                tone={
+                  meetsReviews
+                    ? 'success'
+                    : reviewPercentage === null
+                      ? undefined
+                      : 'warning'
+                }
+              />
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-2">
+              <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+                <p className="text-sm text-slate-400">Meta de CSAT</p>
+                <p className="mt-2 text-2xl font-bold">
+                  {formatChatPercent(csatGoal)}
+                </p>
+                <p className="mt-2 text-sm text-slate-400">
+                  {csat === null
+                    ? 'Ainda sem avaliações suficientes para calcular o CSAT.'
+                    : `Distância atual: ${formatDelta(
+                        round(csat - csatGoal),
+                        ' p.p.',
+                      )}`}
+                </p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+                <p className="text-sm text-slate-400">Meta de avaliações</p>
+                <p className="mt-2 text-2xl font-bold">
+                  {formatChatPercent(reviewGoal)}
+                </p>
+                <p className="mt-2 text-sm text-slate-400">
+                  {reviewPercentage === null
+                    ? 'Ainda sem base para calcular participação nas avaliações.'
+                    : `Resultado atual: ${formatChatPercent(reviewPercentage)}`}
+                </p>
+              </div>
+            </div>
+          </>
+        )}
+      </section>
+
+      <section className="panel">
+        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
+          Minha rotina
+        </p>
+        <h3 className="mt-2 text-2xl font-bold">Atendimentos por dia</h3>
+        <p className="section-subtitle">
+          Esta régua mostra somente os seus atendimentos humanos confirmados no ClickDesk.
+        </p>
+        <div className="mt-5 grid gap-2 sm:grid-cols-4 lg:grid-cols-8">
+          {ruler.map((item) => (
+            <div
+              key={item.date}
+              className={`rounded-lg border p-3 text-center ${
+                item.date === todayKey
+                  ? 'border-cyan-400/40 bg-cyan-400/10'
+                  : 'border-white/10 bg-slate-950/45'
+              }`}
+              title={`${item.date}: ${item.attendances} atendimento(s)`}
+            >
+              <p className="text-xs text-slate-500">{item.day}</p>
+              <strong className="mt-1 block text-lg tabular-nums">
+                {item.attendances}
+              </strong>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel">
+        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
+          Minha evolução
+        </p>
+        <h3 className="mt-2 text-2xl font-bold">Histórico ClickDesk</h3>
+        <p className="section-subtitle">
+          Meses fechados usam o snapshot oficial. O mês atual permanece vivo até o fechamento.
+        </p>
+
+        {history?.erro ? (
+          <p className="mt-5 rounded-lg border border-amber-300/20 bg-amber-300/5 p-4 text-sm text-amber-100">
+            {history.erro}
+          </p>
+        ) : historyPoints.length ? (
+          <div className="mt-5 space-y-5">
+            <div className="grid gap-4 lg:grid-cols-2">
+              <TrendLineChart
+                label="CSAT mensal"
+                points={historyPoints.map((item) => ({
+                  label: item.label.replace(' de ', '/'),
+                  value: item.csat ?? 0,
+                }))}
+                suffix="%"
+                singlePointLabel="Apenas uma competência disponível no histórico."
+                latestPointLabel="Última competência"
+                highlightedPointLabel="Competência destacada"
+              />
+              <TrendLineChart
+                label="% de avaliações mensal"
+                points={historyPoints.map((item) => ({
+                  label: item.label.replace(' de ', '/'),
+                  value: item.review_percentage ?? 0,
+                }))}
+                suffix="%"
+                goal={25}
+                goalLabel="Meta"
+                singlePointLabel="Apenas uma competência disponível no histórico."
+                latestPointLabel="Última competência"
+                highlightedPointLabel="Competência destacada"
+              />
+            </div>
+
+            <div className="space-y-3">
+              {[...historyPoints].reverse().map((item) => (
+                <div
+                  key={item.month}
+                  className="rounded-lg border border-white/10 bg-slate-950/35 p-4"
+                >
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <strong>{item.label}</strong>
+                        <span
+                          className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${
+                            item.source === 'official'
+                              ? 'border-emerald-400/20 bg-emerald-400/5 text-emerald-200'
+                              : 'border-cyan-400/20 bg-cyan-400/5 text-cyan-200'
+                          }`}
+                        >
+                          {item.source === 'official' ? 'Oficial' : 'Em andamento'}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {item.source === 'official'
+                          ? 'Resultado mensal preservado'
+                          : 'Base viva persistida do ClickDesk'}
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4 text-right">
+                      <div>
+                        <p className="text-xs text-slate-500">CSAT</p>
+                        <strong>
+                          {item.csat === null ? '—' : formatChatPercent(item.csat)}
+                        </strong>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500">Avaliações</p>
+                        <strong>
+                          {item.review_percentage === null
+                            ? '—'
+                            : formatChatPercent(item.review_percentage)}
+                        </strong>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500">Atendimentos</p>
+                        <strong>{formatChatCount(item.attendances)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <EmptyState text="Seu histórico ClickDesk será formado a partir das competências disponíveis." />
+        )}
+      </section>
+    </div>
   )
 }
 
@@ -9895,6 +10382,7 @@ function AnalystsView({
 function UsersView({
   profiles,
   analysts,
+  chatAnalysts,
   form,
   editingProfileNameId,
   profileNameForm,
@@ -9908,6 +10396,7 @@ function UsersView({
 }: {
   profiles: UserProfile[]
   analysts: Analyst[]
+  chatAnalysts: ChatAnalyst[]
   form: typeof initialAccessUserForm
   editingProfileNameId: string | null
   profileNameForm: string
@@ -9920,6 +10409,7 @@ function UsersView({
   onSaveProfileName: (profileId: string) => void
 }) {
   const activeAnalysts = analysts.filter((analyst) => analyst.active)
+  const activeChatAnalysts = chatAnalysts.filter((analyst) => analyst.active)
 
   return (
     <div className="mt-8 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
@@ -9969,6 +10459,8 @@ function UsersView({
                   ...form,
                   role: event.target.value,
                   analystId: event.target.value === 'analista' ? form.analystId : '',
+                  chatAnalystId:
+                    event.target.value === 'analista' ? form.chatAnalystId : '',
                 })
               }
             >
@@ -9979,21 +10471,43 @@ function UsersView({
           </Field>
 
           {form.role === 'analista' && (
-            <Field label="Vincular ao analista">
-              <select
-                className="form-input"
-                value={form.analystId}
-                onChange={(event) => onChange({ ...form, analystId: event.target.value })}
-                required
-              >
-                <option value="">Selecione</option>
-                {activeAnalysts.map((analyst) => (
-                  <option key={analyst.id} value={analyst.id}>
-                    {analyst.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            <div className="grid gap-4">
+              <Field label="Telefone · vincular analista">
+                <select
+                  className="form-input"
+                  value={form.analystId}
+                  onChange={(event) => onChange({ ...form, analystId: event.target.value })}
+                >
+                  <option value="">Sem acesso ao Telefone</option>
+                  {activeAnalysts.map((analyst) => (
+                    <option key={analyst.id} value={analyst.id}>
+                      {analyst.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Chat · vincular analista">
+                <select
+                  className="form-input"
+                  value={form.chatAnalystId}
+                  onChange={(event) =>
+                    onChange({ ...form, chatAnalystId: event.target.value })
+                  }
+                >
+                  <option value="">Sem acesso ao Chat</option>
+                  {activeChatAnalysts.map((analyst) => (
+                    <option key={analyst.id} value={analyst.id}>
+                      {analyst.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <p className="text-xs leading-5 text-slate-400">
+                Para perfil Analista, vincule pelo menos um módulo. O mesmo login pode ter acesso individual ao Telefone, ao Chat ou aos dois.
+              </p>
+            </div>
           )}
 
           <button className="primary-button" disabled={saving} type="submit">
@@ -10014,13 +10528,17 @@ function UsersView({
               <tr>
                 <th className="pb-3 pr-4 font-medium">Nome</th>
                 <th className="pb-3 pr-4 font-medium">Perfil</th>
-                <th className="pb-3 pr-4 font-medium">Analista vinculado</th>
+                <th className="pb-3 pr-4 font-medium">Telefone</th>
+                <th className="pb-3 pr-4 font-medium">Chat</th>
                 <th className="pb-3 font-medium">Acoes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
               {profiles.map((profile) => {
                 const analyst = analysts.find((item) => item.id === profile.analyst_id)
+                const chatAnalyst = chatAnalysts.find(
+                  (item) => item.id === profile.chat_analyst_id,
+                )
                 return (
                   <tr key={profile.id}>
                     <td className="py-3 pr-4">
@@ -10036,6 +10554,7 @@ function UsersView({
                     </td>
                     <td className="py-3 pr-4">{profile.role ?? '-'}</td>
                     <td className="py-3 pr-4">{analyst?.name ?? '-'}</td>
+                    <td className="py-3 pr-4">{chatAnalyst?.name ?? '-'}</td>
                     <td className="py-3">
                       {editingProfileNameId === profile.id ? (
                         <div className="flex flex-wrap gap-2">
