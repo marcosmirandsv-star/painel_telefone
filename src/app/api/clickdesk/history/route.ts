@@ -30,6 +30,25 @@ type ClosurePayload = {
   analistas?: ClosureAnalyst[]
 }
 
+type HistoryPoint = {
+  month: string
+  label: string
+  source: 'official' | 'live'
+  status: 'closed' | 'open'
+  closure_id: string | null
+  closed_at: string | null
+  team_id: string | null
+  team_name: string | null
+  csat_goal: number | null
+  review_goal: number
+  attendances: number
+  positive_reviews: number
+  negative_reviews: number
+  reviews: number
+  csat: number | null
+  review_percentage: number | null
+}
+
 type AttendanceRow = {
   satisfaction_label: string | null
 }
@@ -146,7 +165,7 @@ export async function GET(request: Request) {
       string,
       {
         priority: number
-        point: Record<string, unknown>
+        point: HistoryPoint
       }
     >()
 
