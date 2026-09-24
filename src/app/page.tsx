@@ -473,6 +473,22 @@ type ClickDeskPersistedMetrics = {
       daily: Array<ClickDeskPersistedAggregate & { date: string }>
     }
   >
+  self_podium_context?: {
+    team_average_attendances: number
+    team_analysts_with_data: number
+    position: number | null
+    total_ranked: number
+    eligible: boolean
+    criteria: {
+      csat_min: number
+      review_min: number
+      volume_min: number
+      csat_met: boolean
+      review_met: boolean
+      volume_met: boolean
+      completed: number
+    }
+  } | null
   data_quality?: {
     grouped_rows: number
     unmatched_grouped_rows: number
@@ -495,6 +511,23 @@ type ClickDeskPersistedMetrics = {
     status: 'needs_validation' | 'validated'
     note: string
   }
+  erro?: string
+}
+
+type ClickDeskDailyTicket = {
+  ticket_id: string
+  occurred_at: string
+  area: string
+  satisfaction_label: string | null
+  journey_status: string | null
+  timestamp_source: string | null
+}
+
+type ClickDeskDailyTicketResponse = {
+  source?: string
+  date?: string
+  analyst_id?: string
+  tickets?: ClickDeskDailyTicket[]
   erro?: string
 }
 
@@ -2311,6 +2344,9 @@ function ChatAnalystPortal({
   const [metrics, setMetrics] = useState<ClickDeskPersistedMetrics | null>(null)
   const [history, setHistory] = useState<ClickDeskAnalystHistory | null>(null)
   const [loading, setLoading] = useState(false)
+  const [selectedRoutineDate, setSelectedRoutineDate] = useState<string | null>(null)
+  const [dailyTickets, setDailyTickets] = useState<ClickDeskDailyTicketResponse | null>(null)
+  const [dailyTicketsLoading, setDailyTicketsLoading] = useState(false)
 
   const now = new Date()
   const year = now.getFullYear()
@@ -2410,6 +2446,44 @@ function ChatAnalystPortal({
     }
   }, [analyst?.id, monthStart, monthEnd])
 
+  async function loadDailyTickets(date: string) {
+    if (!analyst?.id) return
+
+    setSelectedRoutineDate(date)
+    setDailyTicketsLoading(true)
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        setDailyTickets({ erro: 'Sua sessão expirou. Entre novamente.' })
+        return
+      }
+
+      const params = new URLSearchParams({
+        date,
+        analyst_id: analyst.id,
+      })
+      const response = await fetch(`/api/clickdesk/tickets?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: 'no-store',
+      })
+      const data = (await response.json()) as ClickDeskDailyTicketResponse
+
+      if (!response.ok) {
+        data.erro = data.erro || 'Não foi possível carregar os tickets desse dia.'
+      }
+
+      setDailyTickets(data)
+    } catch (error) {
+      setDailyTickets({ erro: getErrorMessage(error) })
+    } finally {
+      setDailyTicketsLoading(false)
+    }
+  }
+
   if (!analyst) {
     return (
       <div className="mt-8">
@@ -2449,6 +2523,8 @@ function ChatAnalystPortal({
   const meetsCsat = diagnostic.csatMet === true
   const meetsReviews = diagnostic.reviewMet === true
   const status = diagnostic.statusLabel
+  const podiumContext = metrics?.self_podium_context ?? null
+  const podiumCriteria = podiumContext?.criteria ?? null
   const historyPoints = history?.points ?? []
   const todayKey = new Date().toISOString().slice(0, 10)
   const visibleDayCount =
@@ -2467,6 +2543,7 @@ function ChatAnalystPortal({
       csat: source?.csat ?? null,
     }
   })
+  const activeRoutineDays = ruler.filter((item) => item.attendances > 0)
 
   return (
     <div className="mt-8 space-y-6">
@@ -2601,6 +2678,97 @@ function ChatAnalystPortal({
 
             <ChatPerformanceDiagnosticPanel diagnostic={diagnostic} />
 
+            {podiumContext && podiumCriteria && (
+              <div className="mt-5 rounded-xl border border-cyan-400/15 bg-slate-950/35 p-5">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-300">
+                      Minha posição no período
+                    </p>
+                    <h4 className="mt-2 text-xl font-bold text-slate-100">
+                      {podiumCriteria.completed} de 3 critérios do pódio
+                    </h4>
+                    <p className="mt-2 text-sm leading-6 text-slate-400">
+                      O pódio usa uma régua própria: CSAT mínimo de {formatChatPercent(podiumCriteria.csat_min)}, avaliações a partir de {formatChatPercent(podiumCriteria.review_min)} e volume igual ou acima da média do time.
+                    </p>
+                  </div>
+
+                  <div className="grid min-w-52 grid-cols-2 gap-3">
+                    <div className="rounded-lg border border-white/10 bg-slate-950/50 p-3 text-center">
+                      <p className="text-xs text-slate-500">Posição</p>
+                      <strong className="mt-1 block text-2xl text-slate-100">
+                        {podiumContext.position ? `${podiumContext.position}º` : '—'}
+                      </strong>
+                      <span className="text-xs text-slate-500">
+                        de {podiumContext.total_ranked} com dados
+                      </span>
+                    </div>
+                    <div className="rounded-lg border border-white/10 bg-slate-950/50 p-3 text-center">
+                      <p className="text-xs text-slate-500">Média do time</p>
+                      <strong className="mt-1 block text-2xl text-slate-100">
+                        {formatChatCount(podiumContext.team_average_attendances)}
+                      </strong>
+                      <span className="text-xs text-slate-500">atendimentos</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-3 md:grid-cols-3">
+                  <div className={`rounded-lg border p-4 ${
+                    podiumCriteria.csat_met
+                      ? 'border-emerald-400/25 bg-emerald-400/5'
+                      : 'border-amber-300/25 bg-amber-300/5'
+                  }`}>
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+                      CSAT de pódio
+                    </p>
+                    <strong className="mt-2 block text-slate-100">
+                      {csat === null ? '—' : formatChatPercent(csat)}
+                    </strong>
+                    <p className="mt-1 text-sm text-slate-400">
+                      Mínimo {formatChatPercent(podiumCriteria.csat_min)}
+                    </p>
+                  </div>
+
+                  <div className={`rounded-lg border p-4 ${
+                    podiumCriteria.review_met
+                      ? 'border-emerald-400/25 bg-emerald-400/5'
+                      : 'border-amber-300/25 bg-amber-300/5'
+                  }`}>
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+                      Avaliações
+                    </p>
+                    <strong className="mt-2 block text-slate-100">
+                      {reviewPercentage === null ? '—' : formatChatPercent(reviewPercentage)}
+                    </strong>
+                    <p className="mt-1 text-sm text-slate-400">
+                      Mínimo {formatChatPercent(podiumCriteria.review_min)}
+                    </p>
+                  </div>
+
+                  <div className={`rounded-lg border p-4 ${
+                    podiumCriteria.volume_met
+                      ? 'border-emerald-400/25 bg-emerald-400/5'
+                      : 'border-amber-300/25 bg-amber-300/5'
+                  }`}>
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">
+                      Volume
+                    </p>
+                    <strong className="mt-2 block text-slate-100">
+                      {formatChatCount(accumulated?.attendances ?? 0)}
+                    </strong>
+                    <p className="mt-1 text-sm text-slate-400">
+                      Média do time {formatChatCount(podiumCriteria.volume_min)}
+                    </p>
+                  </div>
+                </div>
+
+                <p className="mt-4 text-xs leading-5 text-slate-500">
+                  A posição compara somente os analistas do seu time com dados ClickDesk neste recorte. Os resultados individuais dos colegas não são exibidos.
+                </p>
+              </div>
+            )}
+
             <div className="mt-5 rounded-xl border border-violet-400/15 bg-violet-400/5 p-5">
               <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                 <div>
@@ -2624,31 +2792,125 @@ function ChatAnalystPortal({
       </section>
 
       <section className="panel">
-        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
-          Minha rotina
-        </p>
-        <h3 className="mt-2 text-2xl font-bold">Atendimentos por dia</h3>
-        <p className="section-subtitle">
-          Esta régua mostra somente os seus atendimentos humanos confirmados no ClickDesk.
-        </p>
-        <div className="mt-5 grid gap-2 sm:grid-cols-4 lg:grid-cols-8">
-          {ruler.map((item) => (
-            <div
-              key={item.date}
-              className={`rounded-lg border p-3 text-center ${
-                item.date === todayKey
-                  ? 'border-cyan-400/40 bg-cyan-400/10'
-                  : 'border-white/10 bg-slate-950/45'
-              }`}
-              title={`${item.date}: ${item.attendances} atendimento(s)`}
-            >
-              <p className="text-xs text-slate-500">{item.day}</p>
-              <strong className="mt-1 block text-lg tabular-nums">
-                {item.attendances}
-              </strong>
-            </div>
-          ))}
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
+              Minha rotina
+            </p>
+            <h3 className="mt-2 text-2xl font-bold">Dias com atendimento</h3>
+            <p className="section-subtitle">
+              A visão foi compactada. Clique em um dia para ver os seus tickets persistidos no ClickDesk.
+            </p>
+          </div>
+          <span className="self-start rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-xs text-slate-400">
+            {activeRoutineDays.length} dia(s) com atividade
+          </span>
         </div>
+
+        {activeRoutineDays.length ? (
+          <div className="mt-5 flex flex-wrap gap-2">
+            {activeRoutineDays.map((item) => {
+              const selected = selectedRoutineDate === item.date
+              return (
+                <button
+                  key={item.date}
+                  type="button"
+                  onClick={() => void loadDailyTickets(item.date)}
+                  className={`rounded-lg border px-4 py-3 text-left transition ${
+                    selected
+                      ? 'border-cyan-300/50 bg-cyan-300/10'
+                      : 'border-white/10 bg-slate-950/45 hover:border-white/25'
+                  }`}
+                >
+                  <span className="block text-xs text-slate-500">
+                    {formatDate(item.date)}
+                  </span>
+                  <strong className="mt-1 block text-lg tabular-nums text-slate-100">
+                    {formatChatCount(item.attendances)} atend.
+                  </strong>
+                  <span className="mt-1 block text-xs text-slate-500">
+                    {formatChatCount(item.reviews)} avaliação(ões)
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        ) : (
+          <EmptyState text="Ainda não há dias com atendimentos persistidos nesta competência." />
+        )}
+
+        {selectedRoutineDate && (
+          <div className="mt-5 rounded-xl border border-white/10 bg-slate-950/35 p-5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-300">
+                  Tickets do dia
+                </p>
+                <h4 className="mt-1 text-lg font-bold">{formatDate(selectedRoutineDate)}</h4>
+              </div>
+              <button
+                type="button"
+                className="text-sm text-slate-400 hover:text-slate-200"
+                onClick={() => {
+                  setSelectedRoutineDate(null)
+                  setDailyTickets(null)
+                }}
+              >
+                Fechar detalhe
+              </button>
+            </div>
+
+            {dailyTicketsLoading ? (
+              <p className="mt-4 text-sm text-slate-400">Carregando seus tickets...</p>
+            ) : dailyTickets?.erro ? (
+              <p className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-sm text-amber-100">
+                {dailyTickets.erro}
+              </p>
+            ) : dailyTickets?.tickets?.length ? (
+              <div className="mt-4 space-y-2">
+                {dailyTickets.tickets.map((ticket) => {
+                  const time = new Intl.DateTimeFormat('pt-BR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    timeZone: 'America/Sao_Paulo',
+                  }).format(new Date(ticket.occurred_at))
+                  const satisfaction =
+                    ticket.satisfaction_label === 'positive'
+                      ? 'Positiva'
+                      : ticket.satisfaction_label === 'negative'
+                        ? 'Negativa'
+                        : 'Sem avaliação'
+
+                  return (
+                    <div
+                      key={ticket.ticket_id}
+                      className="grid gap-2 rounded-lg border border-white/10 bg-slate-950/50 px-4 py-3 sm:grid-cols-[1fr_auto_auto] sm:items-center"
+                    >
+                      <div>
+                        <strong className="text-slate-100">Ticket #{ticket.ticket_id}</strong>
+                        <p className="mt-1 text-xs text-slate-500">{ticket.area}</p>
+                      </div>
+                      <span className="text-sm tabular-nums text-slate-400">{time}</span>
+                      <span className={`rounded-md px-2 py-1 text-xs font-semibold ${
+                        satisfaction === 'Positiva'
+                          ? 'bg-emerald-400/10 text-emerald-200'
+                          : satisfaction === 'Negativa'
+                            ? 'bg-amber-300/10 text-amber-100'
+                            : 'bg-white/5 text-slate-400'
+                      }`}>
+                        {satisfaction}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-slate-400">
+                Nenhum ticket persistido foi encontrado para este dia.
+              </p>
+            )}
+          </div>
+        )}
       </section>
 
       <section className="panel">
