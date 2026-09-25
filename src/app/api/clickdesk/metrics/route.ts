@@ -326,7 +326,11 @@ export async function GET(request: Request) {
         unmatched_grouped_rows: unmatchedRows.length,
         unmatched_attendances: aggregate(unmatchedRows).attendances,
       },
-      latest_sync: access.isManagement ? latestSync.data ?? null : null,
+      latest_sync: access.isManagement
+        ? latestSync.data ?? null
+        : latestSync.data?.finished_at
+          ? { finished_at: latestSync.data.finished_at }
+          : null,
       date_basis: {
         sources: timestampSources,
         status: dateBasisNeedsValidation ? 'needs_validation' : 'validated',
