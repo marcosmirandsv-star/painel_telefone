@@ -14285,19 +14285,19 @@ async function exportChatIndividualReport({
             </div>
             <span class="podium-badge">${escapeHtml(podiumText)}</span>
           </div>
-          <p class="summary-note">Leitura individual baseada nos indicadores oficiais da competência. Comparações operacionais entre colegas permanecem na visão gerencial e não compõem este documento.</p>
+          <p class="summary-note">Síntese individual da competência, com foco no resultado alcançado, no histórico disponível e nos próximos passos.</p>
         </section>
 
         <div class="kpi-grid">
           <div class="kpi-card">
             <span>CSAT</span>
             <strong>${formatPercent(metric.csat)}</strong>
-            <em>Meta individual: ${csatGoal}% · ${escapeHtml(csatText)}</em>
+            <em>Meta ${csatGoal}% · ${formatDelta(csatGap, ' p.p.')}</em>
           </div>
           <div class="kpi-card">
             <span>% de avaliações</span>
             <strong>${formatPercent(metric.review_percentage)}</strong>
-            <em>Referência: ${reviewGoal}% · ${escapeHtml(reviewText)}</em>
+            <em>Referência ${reviewGoal}% · ${formatDelta(reviewGap, ' p.p.')}</em>
           </div>
           <div class="kpi-card">
             <span>Avaliações recebidas</span>
@@ -14330,7 +14330,7 @@ async function exportChatIndividualReport({
             <div class="reading-card">
               <span>Volume do período</span>
               <strong>${formatChatCount(metric.total_tickets)} atendimentos</strong>
-              <p>O volume é apresentado como dado factual. O contexto de distribuição entre analistas é tratado exclusivamente na visão de gestão.</p>
+              <p>${formatChatCount(metric.total_tickets)} atendimentos registrados na competência.</p>
             </div>
           </div>
         </section>
@@ -14629,36 +14629,36 @@ function buildChatFeedbackText({
   const analystName = getChatAnalystName(metric)
   const csatGoal = Number(metric.csat_goal) || 90
   const reviewGoal = Number(metric.general_review_goal) || 25
-  const csatGap = round(Number(metric.csat) - csatGoal)
-  const reviewGap = round(Number(metric.review_percentage) - reviewGoal)
-  const podiumText =
-    podiumPosition > 0 && podiumPosition <= 3
-      ? `${podiumPosition}º lugar no pódio`
-      : 'fora dos três primeiros lugares'
-  const qualityFact =
-    csatGap >= 0
-      ? `CSAT ${formatPercent(metric.csat)}, ${formatDelta(csatGap, ' p.p.')} acima da meta de ${csatGoal}%`
-      : `CSAT ${formatPercent(metric.csat)}, ${formatDelta(Math.abs(csatGap), ' p.p.').replace('+', '')} abaixo da meta de ${csatGoal}%`
-  const reviewFact =
-    reviewGap >= 0
-      ? `avaliações ${formatPercent(metric.review_percentage)}, ${formatDelta(reviewGap, ' p.p.')} acima da referência de ${reviewGoal}%`
-      : `avaliações ${formatPercent(metric.review_percentage)}, ${formatDelta(Math.abs(reviewGap), ' p.p.').replace('+', '')} abaixo da referência de ${reviewGoal}%`
-  const priority =
-    csatGap < 0
-      ? 'revisar a qualidade percebida nos atendimentos avaliados negativamente'
-      : reviewGap < 0
-        ? 'ampliar a participação nas avaliações para aumentar a representatividade da amostra'
-        : 'identificar quais práticas reais ajudaram a sustentar os indicadores e decidir como mantê-las no próximo ciclo'
-  const verification =
-    'Os indicadores mostram resultado, mas não comprovam comportamentos específicos. Exemplos reais da operação, observações do gestor e leituras qualitativas validadas devem orientar qualquer conclusão sobre conduta.'
+  const csatMet = Number(metric.csat) >= csatGoal
+  const reviewMet = Number(metric.review_percentage) >= reviewGoal
+  const isPodium = podiumPosition > 0 && podiumPosition <= 3
+
+  const cycleReading =
+    csatMet && reviewMet
+      ? `${analystName} encerra a competência dentro das metas de qualidade e participação nas avaliações.${isPodium ? ` O resultado também levou ao ${podiumPosition}º lugar no pódio.` : ''}`
+      : !csatMet && !reviewMet
+        ? `${analystName} encerra a competência com dois pontos que pedem acompanhamento: qualidade percebida e participação nas avaliações.`
+        : !csatMet
+          ? `${analystName} encerra a competência com participação adequada nas avaliações, mas com atenção necessária à qualidade percebida pelos clientes.`
+          : `${analystName} encerra a competência com qualidade percebida dentro da meta, mas ainda precisa ampliar a participação dos clientes nas avaliações.`
+
+  const nextStep =
+    !csatMet
+      ? 'O próximo passo é revisar as avaliações negativas e as evidências reais dos atendimentos para entender o que influenciou a experiência do cliente e definir uma ação concreta para o próximo ciclo.'
+      : !reviewMet
+        ? 'O próximo passo é reforçar um encerramento claro do atendimento e o convite natural à pesquisa, acompanhando se a amostra cresce no próximo fechamento.'
+        : 'O próximo passo é identificar, nas evidências reais do atendimento, quais práticas ajudaram a sustentar esse resultado e transformá-las em um padrão consciente para o próximo ciclo.'
+
+  const evidenceRule =
+    'Os indicadores mostram o resultado do período, mas não explicam sozinhos o comportamento que o produziu. Reconhecimentos ou ajustes comportamentais devem ser apoiados por exemplos reais, observações da gestão ou leituras qualitativas validadas.'
 
   return [
-    `Base factual do ciclo: ${analystName} registrou ${qualityFact}; ${reviewFact}, com ${metric.reviews} respostas sobre ${metric.valid_tickets} atendimentos válidos; e ${metric.total_tickets} atendimentos no período. Posição: ${podiumText}.`,
-    `Ponto prioritário: ${priority}.`,
-    `Contexto a considerar: ${verification}`,
+    cycleReading,
+    nextStep,
+    evidenceRule,
     managerNotes.trim()
-      ? `Observação registrada pelo gestor: ${managerNotes.trim()}`
-      : 'Observação do gestor: não informada.',
+      ? `Contexto registrado pela gestão: ${managerNotes.trim()}`
+      : '',
   ]
     .filter(Boolean)
     .join('\n\n')
