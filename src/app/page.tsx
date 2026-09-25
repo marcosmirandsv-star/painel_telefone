@@ -4002,6 +4002,28 @@ function ChatModuleDashboard({
             ? `Alerta de qualidade: o CSAT caiu de ${formatChatPercent(previousAverageCsat)} para ${formatChatPercent(averageCsat)}. Priorize a leitura dos atendimentos negativos e alinhe o comportamento que precisa mudar.`
             : `Alerta de participação: as avaliações passaram de ${formatChatPercent(previousAverageReviews)} para ${formatChatPercent(averageReviews)}. A qualidade pode estar preservada, mas é preciso aumentar a quantidade de clientes que respondem à pesquisa.`
 
+  const chatManagementPriorities = chatOpportunities.slice(0, 5).map((item) => {
+    const reasons = item.reasons
+    const action =
+      reasons.some((reason) => reason.includes('CSAT'))
+        ? 'Revisar avaliações negativas e alinhar um comportamento observável para o próximo ciclo.'
+        : reasons.some((reason) => reason.includes('avaliações'))
+          ? 'Reforçar o encerramento do atendimento e acompanhar a participação na pesquisa.'
+          : reasons.some((reason) => reason.includes('volume'))
+            ? 'Validar contexto operacional antes de tratar o volume como desempenho individual.'
+            : 'Acompanhar a evolução do indicador antes do próximo fechamento.'
+
+    return {
+      analyst: getChatAnalystName(item.metric),
+      team: getChatTeamName(item.metric),
+      reasons,
+      action,
+      csat: Number(item.metric.csat),
+      reviews: Number(item.metric.review_percentage),
+      tickets: Number(item.metric.total_tickets),
+    }
+  })
+
   const chatMonthlyContextCards = [
     {
       label: 'Mês analisado',
@@ -4016,7 +4038,7 @@ function ChatModuleDashboard({
         : 'Importe meses anteriores para liberar tendência e comparação.',
     },
     {
-      label: 'Base Zendesk',
+      label: 'Base consolidada',
       value: `${calculationMetrics.length} analista(s)`,
       detail: `${totals.tickets} atendimentos, ${totals.validTickets} válidos e ${totals.reviews} avaliações.`,
     },
@@ -6555,11 +6577,76 @@ function ChatModuleDashboard({
       </section>
 
       <section className={chatActiveTab === 'podium' ? 'panel' : 'hidden'}>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Prioridades do período</p>
+            <h2 className="mt-2 text-2xl font-bold">Quem precisa de atenção agora?</h2>
+            <p className="section-subtitle">
+              A fila abaixo usa somente indicadores objetivos. Causa, sentimento e influência do atendimento humano só serão atribuídos quando a camada qualitativa estiver validada.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-lg bg-slate-950/45 px-3 py-2">
+              <span className="block text-xs text-slate-500">Prioridades</span>
+              <strong className="mt-1 block text-lg tabular-nums">{chatManagementPriorities.length}</strong>
+            </div>
+            <div className="rounded-lg bg-slate-950/45 px-3 py-2">
+              <span className="block text-xs text-slate-500">Elegíveis</span>
+              <strong className="mt-1 block text-lg tabular-nums text-emerald-300">{chatEligibleCount}</strong>
+            </div>
+            <div className="rounded-lg bg-slate-950/45 px-3 py-2">
+              <span className="block text-xs text-slate-500">Críticos</span>
+              <strong className="mt-1 block text-lg tabular-nums text-rose-300">{chatCriticalCount}</strong>
+            </div>
+          </div>
+        </div>
+
+        {chatManagementPriorities.length > 0 ? (
+          <div className="mt-5 space-y-3">
+            {chatManagementPriorities.map((item, index) => (
+              <div key={item.analyst} className="rounded-xl border border-white/10 bg-slate-950/30 p-4">
+                <div className="grid gap-4 xl:grid-cols-[auto_1.1fr_1.4fr_1fr] xl:items-center">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-300/10 text-sm font-bold text-amber-200">
+                    {index + 1}
+                  </span>
+                  <div>
+                    <strong className="text-slate-100">{item.analyst}</strong>
+                    <p className="mt-1 text-xs text-slate-500">{item.team}</p>
+                    <p className="mt-2 text-xs text-slate-400">
+                      CSAT {formatChatPercent(item.csat)} · avaliações {formatChatPercent(item.reviews)} · {formatChatCount(item.tickets)} atendimentos
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Sinais objetivos</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {item.reasons.map((reason) => (
+                        <span key={reason} className="rounded-md border border-amber-300/15 bg-amber-300/5 px-2 py-1 text-xs text-amber-100">
+                          {formatStatusText(reason)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-300">Próxima ação</p>
+                    <p className="mt-2 text-sm leading-5 text-slate-300">{item.action}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-5 rounded-xl border border-emerald-400/15 bg-emerald-400/5 p-5 text-sm text-emerald-100">
+            Nenhum analista entrou na fila objetiva de prioridade neste período. Mantenha o acompanhamento e valide se o resultado se sustenta no próximo ciclo.
+          </div>
+        )}
+      </section>
+
+      <section className={chatActiveTab === 'podium' ? 'panel' : 'hidden'}>
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Inteligência de gestão</p>
-          <h2 className="mt-2 text-2xl font-bold">Três camadas para decidir o próximo movimento</h2>
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Leitura gerencial</p>
+          <h2 className="mt-2 text-2xl font-bold">Diagnóstico, ação e decisão</h2>
           <p className="section-subtitle">
-            Leitura preditiva local baseada no Zendesk: diagnóstico operacional, plano tático e decisão estratégica para o fechamento mensal.
+            Esta camada transforma os indicadores do período em uma sequência prática de gestão, sem atribuir causas que ainda não foram validadas qualitativamente.
           </p>
         </div>
 
@@ -6575,8 +6662,8 @@ function ChatModuleDashboard({
 
         <div className="mt-5 grid gap-4 xl:grid-cols-3">
           <div className="rounded-lg bg-slate-900 p-5">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">1. Operacional</p>
-            <h3 className="mt-3 text-xl font-bold">Diagnóstico</h3>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">1. Diagnóstico</p>
+            <h3 className="mt-3 text-xl font-bold">O que os números mostram</h3>
             <p className="mt-3 text-sm leading-6 text-slate-300">{chatManagementDiagnosis}</p>
             <div className="mt-4 grid gap-2 text-sm text-slate-300">
               <span>CSAT médio: <strong>{formatChatPercent(averageCsat)}</strong></span>
@@ -6587,8 +6674,8 @@ function ChatModuleDashboard({
           </div>
 
           <div className="rounded-lg bg-slate-900 p-5">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">2. Tática</p>
-            <h3 className="mt-3 text-xl font-bold">Plano de ação</h3>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">2. Ação</p>
+            <h3 className="mt-3 text-xl font-bold">O que fazer agora</h3>
             <ul className="mt-3 space-y-3 text-sm leading-6 text-slate-300">
               {chatTacticalPlan.map((item) => (
                 <li key={item} className="rounded-md bg-slate-950/70 px-3 py-2">{item}</li>
@@ -6597,8 +6684,8 @@ function ChatModuleDashboard({
           </div>
 
           <div className="rounded-lg bg-slate-900 p-5">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">3. Estratégica</p>
-            <h3 className="mt-3 text-xl font-bold">Decisão recomendada</h3>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">3. Decisão</p>
+            <h3 className="mt-3 text-xl font-bold">Como conduzir o fechamento</h3>
             <p className="mt-3 text-sm leading-6 text-slate-300">{chatStrategicDecision}</p>
             <p className="mt-4 rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-100">{chatStrategicTrend}</p>
           </div>
@@ -6625,10 +6712,10 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <section className={chatActiveTab === 'podium' ? 'panel' : 'hidden'}>
+      <section className={chatActiveTab === 'reports' ? 'panel' : 'hidden'}>
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Fechamento mensal</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Leitura para fechamento</p>
             <h2 className="mt-2 text-2xl font-bold">{chatClosureReading}</h2>
           </div>
           <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">
