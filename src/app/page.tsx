@@ -13,6 +13,8 @@ import {
   type ChatPerformanceDiagnostic,
 } from '@/lib/chat-diagnostic'
 
+const QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS = false
+
 type Goal = {
   id: string
   key: string
@@ -3312,21 +3314,41 @@ function ChatAnalystPortal({
                       </strong>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="btn-primary w-full"
-                    disabled={
-                      qualitativeSampleLoading ||
-                      ((evaluatedSample?.negative?.length ?? 0) + (evaluatedSample?.positive?.length ?? 0) === 0)
-                    }
-                    onClick={() => void analyzeQualitativeSample()}
-                  >
-                    {qualitativeSampleLoading ? 'Analisando amostra...' : 'Analisar amostra do mês'}
-                  </button>
+                  {QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS ? (
+                    <button
+                      type="button"
+                      className="btn-primary w-full"
+                      disabled={
+                        qualitativeSampleLoading ||
+                        ((evaluatedSample?.negative?.length ?? 0) + (evaluatedSample?.positive?.length ?? 0) === 0)
+                      }
+                      onClick={() => void analyzeQualitativeSample()}
+                    >
+                      {qualitativeSampleLoading ? 'Analisando amostra...' : 'Analisar amostra do mês'}
+                    </button>
+                  ) : (
+                    <span className="block rounded-md border border-violet-300/20 bg-violet-300/5 px-3 py-2 text-center text-xs font-semibold text-violet-100">
+                      IA qualitativa · em preparação
+                    </span>
+                  )}
                 </div>
               </div>
 
-              {evaluatedSample?.erro ? (
+              {!QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS ? (
+                <div className="mt-5 rounded-xl border border-violet-300/15 bg-slate-950/35 p-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <strong className="text-slate-100">Análise qualitativa em preparação</strong>
+                      <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">
+                        A amostra de avaliações já está identificada, mas a leitura do transcript por IA permanece temporariamente desativada no acesso individual até concluir a validação técnica e gerencial.
+                      </p>
+                    </div>
+                    <span className="self-start rounded-md bg-violet-400/10 px-2 py-1 text-[11px] font-semibold text-violet-200">
+                      Estrutura preservada
+                    </span>
+                  </div>
+                </div>
+              ) : evaluatedSample?.erro ? (
                 <p className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-sm text-amber-100">
                   {evaluatedSample.erro}
                 </p>
@@ -3354,7 +3376,9 @@ function ChatAnalystPortal({
               )}
 
               <p className="mt-4 text-xs leading-5 text-slate-500">
-                A amostra é apenas um atalho. Na rotina diária, qualquer ticket avaliado também pode ser analisado individualmente.
+                {QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS
+                  ? 'A amostra é apenas um atalho. Na rotina diária, qualquer ticket avaliado também pode ser analisado individualmente.'
+                  : 'Enquanto a IA qualitativa não é liberada, os números e avaliações continuam disponíveis para acompanhamento objetivo.'}
               </p>
             </div>
           </>
@@ -3476,24 +3500,28 @@ function ChatAnalystPortal({
                           {satisfaction}
                         </span>
                         {evaluated ? (
-                          <button
-                            type="button"
-                            className="small-button"
-                            disabled={qualitativeLoading}
-                            onClick={() => void analyzeQualitativeTicket(ticket.ticket_id)}
-                          >
-                            {qualitativeLoading
-                              ? 'Analisando...'
-                              : qualitativeResult?.analysis
-                                ? 'Ver análise'
-                                : 'Analisar com IA'}
-                          </button>
+                          QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS ? (
+                            <button
+                              type="button"
+                              className="small-button"
+                              disabled={qualitativeLoading}
+                              onClick={() => void analyzeQualitativeTicket(ticket.ticket_id)}
+                            >
+                              {qualitativeLoading
+                                ? 'Analisando...'
+                                : qualitativeResult?.analysis
+                                  ? 'Ver análise'
+                                  : 'Analisar com IA'}
+                            </button>
+                          ) : (
+                            <span className="text-xs font-semibold text-violet-200">IA em preparação</span>
+                          )
                         ) : (
                           <span className="text-xs text-slate-600">Sem análise</span>
                         )}
                       </div>
 
-                      {qualitativeResult && (
+                      {QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS && qualitativeResult && (
                         <QualitativeAnalysisCard
                           result={qualitativeResult}
                           reanalyzing={qualitativeLoading}
