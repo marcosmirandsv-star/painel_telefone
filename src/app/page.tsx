@@ -5891,9 +5891,11 @@ function ChatModuleDashboard({
       const csatGap = csatValue === null ? null : round(csatValue - csatGoal)
       const reviewGap = reviewValue === null ? null : round(reviewValue - reviewGoal)
       const volumeGap = round(Number(item.attendances) - teamAverage)
+      const volumePercentGap =
+        teamAverage > 0 ? round(((Number(item.attendances) - teamAverage) / teamAverage) * 100) : 0
       const csatNeedsAttention = csatGap === null || csatGap < 0
       const reviewNeedsAttention = reviewGap === null || reviewGap < 0
-      const volumeNeedsContext = volumeGap < 0
+      const volumeNeedsContext = teamAverage >= 10 && volumePercentGap <= -20
       const priority = csatNeedsAttention || reviewNeedsAttention
       const signals: string[] = []
 
@@ -5910,7 +5912,7 @@ function ChatModuleDashboard({
       }
 
       if (volumeNeedsContext) {
-        signals.push(`Volume ${formatDelta(volumeGap)} vs. média do time`)
+        signals.push(`Volume ${formatChatPercent(Math.abs(volumePercentGap))} abaixo da média da área`)
       }
 
       let action = 'Manter acompanhamento e reconhecer a consistência do resultado.'
@@ -5942,6 +5944,7 @@ function ChatModuleDashboard({
         csatGap,
         reviewGap,
         volumeGap,
+        volumePercentGap,
         priority,
         volumeNeedsContext,
         signals,
@@ -6243,17 +6246,16 @@ function ChatModuleDashboard({
               />
               <MetricCard label="Avaliações recebidas" value={formatChatCount(chat2ProductivityReviews)} />
               <MetricCard
-                label={selectedTeamId === 'all' ? 'Média geral de atendimentos' : 'Média de atendimentos do time'}
+                label="Média por analista"
                 value={formatChatCount(chat2ProductivityAverageTickets)}
               />
             </div>
 
             {chat2ProductivityRows.length > 0 ? (
               <div className="mt-5 overflow-x-auto rounded-xl border border-white/10 bg-slate-950/30">
-                <div className="grid min-w-[780px] grid-cols-[minmax(220px,1.6fr)_repeat(4,minmax(110px,0.7fr))] gap-3 border-b border-white/10 px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                <div className="grid min-w-[680px] grid-cols-[minmax(220px,1.6fr)_repeat(3,minmax(110px,0.7fr))] gap-3 border-b border-white/10 px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
                   <span>Analista</span>
                   <span className="text-right">Atendimentos</span>
-                  <span className="text-right">Vs. média do time</span>
                   <span className="text-right">CSAT</span>
                   <span className="text-right">% avaliações</span>
                 </div>
@@ -6263,15 +6265,12 @@ function ChatModuleDashboard({
                     const selected = chat2SelectedLiveHuman
                       ? analystKey === `${chat2SelectedLiveHuman.area}::${chat2SelectedLiveHuman.name}`
                       : false
-                    const teamKey = item.team_id ?? item.area ?? 'sem-time'
-                    const teamAverage = chat2ProductivityAverageByTeam[teamKey] ?? chat2ProductivityAverageTickets
-                    const volumeDelta = Number(item.attendances) - teamAverage
                     return (
                       <button
                         key={analystKey}
                         type="button"
                         onClick={() => setChat2LiveAnalystKey(analystKey)}
-                        className={`grid min-w-[780px] w-full grid-cols-[minmax(220px,1.6fr)_repeat(4,minmax(110px,0.7fr))] items-center gap-3 px-4 py-3 text-left text-sm transition ${
+                        className={`grid min-w-[680px] w-full grid-cols-[minmax(220px,1.6fr)_repeat(3,minmax(110px,0.7fr))] items-center gap-3 px-4 py-3 text-left text-sm transition ${
                           selected ? 'bg-cyan-300/10' : 'hover:bg-white/[0.03]'
                         }`}
                       >
@@ -6280,11 +6279,6 @@ function ChatModuleDashboard({
                           <span className="mt-1 block text-xs text-slate-500">{item.area}</span>
                         </span>
                         <strong className="text-right tabular-nums">{formatChatCount(item.attendances)}</strong>
-                        <span className={`text-right tabular-nums ${
-                          volumeDelta >= 0 ? 'text-emerald-300' : 'text-amber-200'
-                        }`}>
-                          {volumeDelta > 0 ? '+' : ''}{formatChatCount(volumeDelta)}
-                        </span>
                         <span className="text-right tabular-nums">
                           {item.csat === null ? '—' : formatChatPercent(item.csat)}
                         </span>
@@ -7181,7 +7175,7 @@ function ChatModuleDashboard({
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Gestão e ações</p>
             <h2 className="mt-2 text-2xl font-bold">Quem precisa da sua atenção e qual é o próximo passo?</h2>
             <p className="section-subtitle">
-              Fila construída com a base viva do ClickDesk. Qualidade e participação definem prioridade; volume abaixo da média do próprio time aparece como contexto operacional a validar, não como falha automática.
+              Fila construída com a base viva do ClickDesk. Qualidade e participação definem prioridade; somente diferenças relevantes de volume aparecem como contexto operacional a validar, nunca como falha automática.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
@@ -7282,7 +7276,7 @@ function ChatModuleDashboard({
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-300">Contexto operacional</p>
             <strong className="mt-2 block text-2xl tabular-nums">{chat2ManagementVolumeContexts.length}</strong>
             <p className="mt-2 text-sm leading-6 text-slate-400">
-              analista(s) abaixo da média do próprio time. Antes de qualquer cobrança, valide disponibilidade, ausências, apoio a outras demandas e duração dos atendimentos.
+              analista(s) com volume pelo menos 20% abaixo da média da própria área, quando já existe base mínima. Antes de qualquer cobrança, valide disponibilidade, ausências, apoio a outras demandas e duração dos atendimentos.
             </p>
           </div>
         </div>
