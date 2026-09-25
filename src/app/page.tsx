@@ -567,6 +567,9 @@ type ClickDeskQualitativeSummary = {
     analyzed: number
     analyzed_positive: number
     analyzed_negative: number
+    approved: number
+    pending: number
+    rejected: number
   }
   coverage?: {
     evaluated_percentage: number
@@ -586,6 +589,30 @@ type ClickDeskQualitativeSummary = {
     negative: number
     coaching_signals: number
     top_causes: { key: string; count: number }[]
+  }[]
+  pending_reviews?: {
+    ticket_id: string
+    analyst_id: string
+    analyst_name: string
+    satisfaction_label: string | null
+    cause: {
+      category: string
+      summary: string
+      confidence: string
+    }
+    human_influence: {
+      classification: string
+      summary: string
+      confidence: string
+    }
+    controllability: {
+      classification: string
+      summary: string
+    }
+    coaching_signal: {
+      available: boolean
+      summary: string
+    }
   }[]
   validation_queue?: {
     ticket_id: string
@@ -610,6 +637,8 @@ type ClickDeskQualitativeResponse = {
   model?: string
   cached?: boolean
   analyzed_at?: string
+  validation_status?: 'pending' | 'approved' | 'rejected'
+  validated_at?: string | null
   analysis?: {
     initial_sentiment: string
     final_sentiment: string
@@ -3641,6 +3670,7 @@ function ChatModuleDashboard({
   const [clickDeskQualitativeSummary, setClickDeskQualitativeSummary] = useState<ClickDeskQualitativeSummary | null>(null)
   const [clickDeskQualitativeSummaryLoading, setClickDeskQualitativeSummaryLoading] = useState(false)
   const [clickDeskQualitativeSummaryRefresh, setClickDeskQualitativeSummaryRefresh] = useState(0)
+  const [clickDeskQualitativeValidationTicketId, setClickDeskQualitativeValidationTicketId] = useState('')
   const [manualPodiumDraft, setManualPodiumDraft] = useState<Record<number, string>>({})
   const [chatPodiumMessage, setChatPodiumMessage] = useState('')
   const [chatAnalystForm, setChatAnalystForm] = useState({ teamId: '', name: '', csatGoal: '86', photoFile: null as File | null })
