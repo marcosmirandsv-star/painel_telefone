@@ -280,7 +280,7 @@ export async function POST(request: Request) {
       const cached = await access.admin
         .from('clickdesk_qualitative_analyses')
         .select(
-          'clickdesk_ticket_id,analyst_id,occurred_date,area,satisfaction_label,analysis,model,transcript_characters,updated_at',
+          'clickdesk_ticket_id,analyst_id,occurred_date,area,satisfaction_label,analysis,model,transcript_characters,validation_status,validated_at,updated_at',
         )
         .eq('clickdesk_ticket_id', ticketId)
         .maybeSingle()
@@ -297,6 +297,8 @@ export async function POST(request: Request) {
           transcript_characters_analyzed: cached.data.transcript_characters,
           model: cached.data.model,
           analyzed_at: cached.data.updated_at,
+          validation_status: cached.data.validation_status,
+          validated_at: cached.data.validated_at,
           analysis: normalizeQualitativeAnalysis(cached.data.analysis),
         })
       }
@@ -382,6 +384,10 @@ export async function POST(request: Request) {
             transcript_hash: transcriptHash,
             transcript_characters: transcript.length,
             created_by: access.userId,
+            validation_status: 'pending',
+            validated_by: null,
+            validated_at: null,
+            validation_notes: null,
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'clickdesk_ticket_id' },
@@ -407,6 +413,8 @@ export async function POST(request: Request) {
       transcript_characters_analyzed: transcript.length,
       model: result.model,
       analyzed_at: new Date().toISOString(),
+      validation_status: 'pending',
+      validated_at: null,
       analysis: result.analysis,
     })
   })
