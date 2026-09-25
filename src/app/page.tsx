@@ -5658,22 +5658,36 @@ function ChatModuleDashboard({
   const chat2DailyMap = new Map(
     (chat2SelectedPersistedAnalyst?.daily ?? []).map((item) => [item.date, item]),
   )
-  const chat2DailyRuler: Array<ClickDeskPersistedAggregate & { date: string }> = []
+  const chat2DailyCoverageDates = [
+    ...(clickDeskPersistedMetrics?.performance_daily ?? []).map((item) => item.date),
+    ...(clickDeskPersistedMetrics?.daily ?? []).map((item) => item.date),
+    ...((clickDeskPersistedMetrics?.by_analyst ?? []).flatMap((item) => item.daily.map((day) => day.date))),
+  ].filter(Boolean)
+  const chat2DailyCoverageStart =
+    chat2DailyCoverageDates.length > 0
+      ? [...chat2DailyCoverageDates].sort((a, b) => a.localeCompare(b))[0]
+      : null
+  const chat2DailyRuler: Array<ClickDeskPersistedAggregate & { date: string; covered: boolean }> = []
   if (clickDeskPersistedMetrics?.period?.start && clickDeskPersistedMetrics?.period?.end) {
     const cursor = new Date(`${clickDeskPersistedMetrics.period.start}T00:00:00Z`)
     const limit = new Date(`${clickDeskPersistedMetrics.period.end}T00:00:00Z`)
     while (cursor <= limit) {
       const date = cursor.toISOString().slice(0, 10)
+      const covered = chat2DailyCoverageStart ? date >= chat2DailyCoverageStart : true
+      const persistedDay = chat2DailyMap.get(date)
       chat2DailyRuler.push(
-        chat2DailyMap.get(date) ?? {
-          date,
-          attendances: 0,
-          positive_reviews: 0,
-          negative_reviews: 0,
-          reviews: 0,
-          csat: null,
-          review_percentage: null,
-        },
+        persistedDay
+          ? { ...persistedDay, covered: true }
+          : {
+              date,
+              covered,
+              attendances: 0,
+              positive_reviews: 0,
+              negative_reviews: 0,
+              reviews: 0,
+              csat: null,
+              review_percentage: null,
+            },
       )
       cursor.setUTCDate(cursor.getUTCDate() + 1)
     }
@@ -5815,7 +5829,9 @@ function ChatModuleDashboard({
   const chat2OperationBelowVolume = chat2ProductivityRows.filter((item) => {
     const teamKey = item.team_id ?? item.area ?? 'sem-time'
     const teamAverage = chat2ProductivityAverageByTeam[teamKey] ?? chat2ProductivityAverageTickets
-    return Number(item.attendances) < teamAverage
+    const volumePercentGap =
+      teamAverage > 0 ? round(((Number(item.attendances) - teamAverage) / teamAverage) * 100) : 0
+    return teamAverage >= 10 && volumePercentGap <= -20
   })
   const chat2OperationStatus =
     chat2ProductivityRows.length === 0
@@ -6399,7 +6415,8 @@ function ChatModuleDashboard({
 
                 {clickDeskPersistedMetrics?.period && (
                   <p className="mt-3 text-xs text-slate-500">
-                    Acumulado persistido: {formatDate(clickDeskPersistedMetrics.period.start)} a {formatDate(clickDeskPersistedMetrics.period.end)}
+                    Período selecionado: {formatDate(clickDeskPersistedMetrics.period.start)} a {formatDate(clickDeskPersistedMetrics.period.end)}
+                    {chat2DailyCoverageStart ? ` · base diária desde ${formatDate(chat2DailyCoverageStart)}` : ''}
                     {' '}· Hoje: {clickDeskPersistedMetrics.today?.date ? formatDate(clickDeskPersistedMetrics.today.date) : '—'}.
                   </p>
                 )}
@@ -6423,8 +6440,8 @@ function ChatModuleDashboard({
                         >
                           <option value="all">Competência inteira</option>
                           {chat2DailyRuler.map((item) => (
-                            <option key={item.date} value={item.date}>
-                              {formatDate(item.date)} · {formatChatCount(item.attendances)} atendimento(s)
+                            <option key={item.date} value={item.date} disabled={!item.covered}>
+                              {formatDate(item.date)} · {item.covered ? `${formatChatCount(item.attendances)} atendimento(s)` : 'sem base diária'}
                             </option>
                           ))}
                         </select>
@@ -6438,16 +6455,25 @@ function ChatModuleDashboard({
                           <button
                             key={item.date}
                             type="button"
-                            onClick={() => setChat2DailyDateFilter(selected ? 'all' : item.date)}
+                            disabled={!item.covered}
+                            onClick={() => item.covered && setChat2DailyDateFilter(selected ? 'all' : item.date)}
                             className={`min-w-16 rounded-lg border px-3 py-3 text-center transition ${
-                              selected
-                                ? 'border-cyan-300/60 bg-cyan-300/10 text-cyan-100'
-                                : 'border-white/10 bg-slate-950/45 text-slate-300 hover:border-white/25'
+                              !item.covered
+                                ? 'cursor-not-allowed border-white/5 bg-slate-950/25 text-slate-600'
+                                : selected
+                                  ? 'border-cyan-300/60 bg-cyan-300/10 text-cyan-100'
+                                  : 'border-white/10 bg-slate-950/45 text-slate-300 hover:border-white/25'
                             }`}
-                            title={`${formatDate(item.date)} · ${formatChatCount(item.attendances)} atendimento(s)`}
+                            title={
+                              item.covered
+                                ? `${formatDate(item.date)} · ${formatChatCount(item.attendances)} atendimento(s)`
+                                : `${formatDate(item.date)} · sem base diária disponível`
+                            }
                           >
                             <span className="block text-xs text-slate-500">{item.date.slice(8, 10)}</span>
-                            <strong className="mt-1 block text-lg tabular-nums">{formatChatCount(item.attendances)}</strong>
+                            <strong className="mt-1 block text-lg tabular-nums">
+                              {item.covered ? formatChatCount(item.attendances) : '—'}
+                            </strong>
                           </button>
                         )
                       })}
@@ -6502,7 +6528,7 @@ function ChatModuleDashboard({
                       </div>
                     ) : (
                       <p className="mt-3 text-xs text-slate-500">
-                        Os números dentro da régua são os atendimentos daquele dia. Dias sem atendimento aparecem como 0.
+                        Depois do início da cobertura diária, dias sem atendimento aparecem como 0. Datas anteriores à base disponível aparecem como —.
                       </p>
                     )}
                   </div>
@@ -6578,7 +6604,7 @@ function ChatModuleDashboard({
                 </div>
 
                 <div className="mt-4 rounded-lg border border-cyan-400/15 bg-cyan-400/5 px-4 py-3 text-xs leading-5 text-slate-400">
-                  Base do período: {formatChatCount(chat2LiveAttendances)} jornadas IA → humano confirmadas.
+                  Base do período: {formatChatCount(chat2LiveAttendances)} atendimentos com transição IA → humano confirmada.
                   Os indicadores permanecem vivos durante a competência e são preservados no fechamento oficial.
                 </div>
               </>
@@ -7062,7 +7088,7 @@ function ChatModuleDashboard({
                 <strong className="mt-1 block text-xl tabular-nums text-amber-200">{chat2OperationBelowReviews.length}</strong>
               </div>
               <div>
-                <span className="block text-xs text-slate-500">Volume &lt; média</span>
+                <span className="block text-xs text-slate-500">Volume em atenção</span>
                 <strong className="mt-1 block text-xl tabular-nums text-amber-200">{chat2OperationBelowVolume.length}</strong>
               </div>
             </div>
