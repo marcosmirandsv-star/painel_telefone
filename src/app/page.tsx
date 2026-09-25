@@ -5173,7 +5173,6 @@ function ChatModuleDashboard({
           totalTickets: Number(historyMetric.total_tickets),
         }))
       const qualitativeContext = await loadChatQualitativeFeedbackContext(selectedChatReportMetric)
-      const qualitativeContext = await loadChatQualitativeFeedbackContext(selectedChatReportMetric)
       const response = await fetch('/api/chat-feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -5250,6 +5249,7 @@ function ChatModuleDashboard({
           sendingPercentage: Number(historyMetric.sending_percentage),
           totalTickets: Number(historyMetric.total_tickets),
         }))
+      const qualitativeContext = await loadChatQualitativeFeedbackContext(selectedChatReportMetric)
       const response = await fetch('/api/chat-feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
