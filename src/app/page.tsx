@@ -8336,14 +8336,23 @@ function ChatModuleDashboard({
                   <p className="mt-2 text-xs leading-5 text-slate-400">{chatReportQualitativeStatus}</p>
                 )}
               </div>
-              <button
-                className="btn-secondary shrink-0 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={!selectedChatReportMetric || chatReportQualitativePreparing}
-                type="button"
-                onClick={() => void handlePrepareChatQualitativeSample()}
-              >
-                {chatReportQualitativePreparing ? 'Preparando leitura...' : 'Preparar leitura qualitativa'}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className="btn-secondary shrink-0 disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={!selectedChatReportMetric || chatReportQualitativePreparing}
+                  type="button"
+                  onClick={() => void handlePrepareChatQualitativeSample()}
+                >
+                  {chatReportQualitativePreparing ? 'Preparando leitura...' : 'Preparar leitura qualitativa'}
+                </button>
+                <button
+                  className="small-button shrink-0"
+                  type="button"
+                  onClick={() => setChatActiveTab('podium')}
+                >
+                  Ir para validação
+                </button>
+              </div>
             </div>
           </div>
 
