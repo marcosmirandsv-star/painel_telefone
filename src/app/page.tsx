@@ -531,6 +531,31 @@ type ClickDeskDailyTicketResponse = {
   erro?: string
 }
 
+type ClickDeskEvaluatedSampleTicket = ClickDeskDailyTicket & {
+  occurred_date: string
+  has_analysis: boolean
+}
+
+type ClickDeskEvaluatedSampleResponse = {
+  source?: string
+  analyst_id?: string
+  period?: { start: string; end: string }
+  totals?: {
+    positive: number
+    negative: number
+    evaluated: number
+  }
+  sample_rule?: {
+    negative_limit: number
+    positive_limit: number
+    strategy: string
+  }
+  negative?: ClickDeskEvaluatedSampleTicket[]
+  positive?: ClickDeskEvaluatedSampleTicket[]
+  erro?: string
+  error?: string
+}
+
 type ClickDeskQualitativeResponse = {
   source?: string
   ticket_id?: string
@@ -540,6 +565,8 @@ type ClickDeskQualitativeResponse = {
   satisfaction_label?: string | null
   transcript_characters_analyzed?: number
   model?: string
+  cached?: boolean
+  analyzed_at?: string
   analysis?: {
     initial_sentiment: string
     final_sentiment: string
@@ -2370,6 +2397,135 @@ function ChatPerformanceDiagnosticPanel({
   )
 }
 
+function QualitativeAnalysisCard({
+  result,
+  onReanalyze,
+  reanalyzing = false,
+}: {
+  result: ClickDeskQualitativeResponse
+  onReanalyze?: () => void
+  reanalyzing?: boolean
+}) {
+  if (result.error) {
+    return (
+      <div className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-sm text-amber-100">
+        {result.error}
+      </div>
+    )
+  }
+
+  if (!result.analysis) return null
+
+  return (
+    <div className="mt-3 rounded-xl border border-violet-400/15 bg-violet-400/5 p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">
+            Leitura qualitativa do atendimento
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            {result.cached ? 'Análise já preservada' : 'Análise gerada agora'}
+            {result.analyzed_at ? ` · ${formatDateTime(result.analyzed_at)}` : ''}
+          </p>
+        </div>
+        {onReanalyze && (
+          <button
+            type="button"
+            className="text-xs font-semibold text-violet-200 hover:text-violet-100 disabled:opacity-50"
+            disabled={reanalyzing}
+            onClick={onReanalyze}
+          >
+            {reanalyzing ? 'Reanalisando...' : 'Reanalisar'}
+          </button>
+        )}
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-lg bg-slate-950/45 p-3">
+          <span className="text-xs text-slate-500">Sentimento</span>
+          <strong className="mt-1 block text-sm">
+            {formatQualitativeLabel(result.analysis.initial_sentiment)}
+            {' → '}
+            {formatQualitativeLabel(result.analysis.final_sentiment)}
+          </strong>
+        </div>
+        <div className="rounded-lg bg-slate-950/45 p-3">
+          <span className="text-xs text-slate-500">Causa provável</span>
+          <strong className="mt-1 block text-sm">
+            {formatQualitativeLabel(result.analysis.primary_cause.category)}
+          </strong>
+          <span className="mt-1 block text-xs text-slate-500">
+            confiança {formatQualitativeLabel(result.analysis.primary_cause.confidence)}
+          </span>
+        </div>
+        <div className="rounded-lg bg-slate-950/45 p-3">
+          <span className="text-xs text-slate-500">Influência humana</span>
+          <strong className="mt-1 block text-sm">
+            {formatQualitativeLabel(result.analysis.human_influence.classification)}
+          </strong>
+          <span className="mt-1 block text-xs text-slate-500">
+            confiança {formatQualitativeLabel(result.analysis.human_influence.confidence)}
+          </span>
+        </div>
+        <div className="rounded-lg bg-slate-950/45 p-3">
+          <span className="text-xs text-slate-500">Controlabilidade</span>
+          <strong className="mt-1 block text-sm">
+            {formatQualitativeLabel(result.analysis.controllability.classification)}
+          </strong>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
+            Por que essa avaliação pode ter acontecido?
+          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            {result.analysis.primary_cause.summary}
+          </p>
+          <p className="mt-3 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
+            Influência do atendimento humano
+          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            {result.analysis.human_influence.summary}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
+            Evidências resumidas
+          </p>
+          {result.analysis.evidence_summary.length ? (
+            <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-6 text-slate-300">
+              {result.analysis.evidence_summary.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2 text-sm text-slate-500">Sem evidência suficiente para resumir.</p>
+          )}
+          {result.analysis.limitations.length > 0 && (
+            <>
+              <p className="mt-3 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
+                Limitações
+              </p>
+              <p className="mt-2 text-xs leading-5 text-slate-500">
+                {result.analysis.limitations.join(' · ')}
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-lg border border-white/10 bg-slate-950/30 px-3 py-3 text-sm">
+        <span className="text-slate-500">Ponto para feedback: </span>
+        <strong className={result.analysis.coaching_signal.available ? 'text-cyan-200' : 'text-slate-300'}>
+          {result.analysis.coaching_signal.summary}
+        </strong>
+      </div>
+    </div>
+  )
+}
+
 function ChatAnalystPortal({
   analyst,
   team,
@@ -2383,6 +2539,9 @@ function ChatAnalystPortal({
   const [selectedRoutineDate, setSelectedRoutineDate] = useState<string | null>(null)
   const [dailyTickets, setDailyTickets] = useState<ClickDeskDailyTicketResponse | null>(null)
   const [dailyTicketsLoading, setDailyTicketsLoading] = useState(false)
+  const [evaluatedSample, setEvaluatedSample] = useState<ClickDeskEvaluatedSampleResponse | null>(null)
+  const [qualitativeByTicket, setQualitativeByTicket] = useState<Record<string, ClickDeskQualitativeResponse>>({})
+  const [qualitativeLoadingTicketId, setQualitativeLoadingTicketId] = useState('')
 
   const now = new Date()
   const year = now.getFullYear()
@@ -2434,8 +2593,13 @@ function ChatAnalystPortal({
         const historyParams = new URLSearchParams({
           analyst_id: ownAnalystId,
         })
+        const sampleParams = new URLSearchParams({
+          start: monthStart,
+          end: monthEnd,
+          analyst_id: ownAnalystId,
+        })
 
-        const [metricResponse, historyResponse] = await Promise.all([
+        const [metricResponse, historyResponse, sampleResponse] = await Promise.all([
           fetch(`/api/clickdesk/metrics?${metricParams.toString()}`, {
             headers,
             cache: 'no-store',
@@ -2444,11 +2608,16 @@ function ChatAnalystPortal({
             headers,
             cache: 'no-store',
           }),
+          fetch(`/api/clickdesk/evaluated-sample?${sampleParams.toString()}`, {
+            headers,
+            cache: 'no-store',
+          }),
         ])
 
-        const [metricData, historyData] = await Promise.all([
+        const [metricData, historyData, sampleData] = await Promise.all([
           metricResponse.json() as Promise<ClickDeskPersistedMetrics>,
           historyResponse.json() as Promise<ClickDeskAnalystHistory>,
+          sampleResponse.json() as Promise<ClickDeskEvaluatedSampleResponse>,
         ])
 
         if (!metricResponse.ok) {
@@ -2459,10 +2628,15 @@ function ChatAnalystPortal({
           historyData.erro =
             historyData.erro || 'Não foi possível carregar seu histórico do Chat.'
         }
+        if (!sampleResponse.ok) {
+          sampleData.erro =
+            sampleData.erro || sampleData.error || 'Não foi possível carregar sua amostra de avaliações.'
+        }
 
         if (!cancelled) {
           setMetrics(metricData)
           setHistory(historyData)
+          setEvaluatedSample(sampleData)
         }
       } catch (error) {
         if (!cancelled) {
@@ -2481,6 +2655,63 @@ function ChatAnalystPortal({
       cancelled = true
     }
   }, [analyst?.id, monthStart, monthEnd])
+
+  async function analyzeQualitativeTicket(ticketId: string, force = false) {
+    setQualitativeLoadingTicketId(ticketId)
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        setQualitativeByTicket((current) => ({
+          ...current,
+          [ticketId]: { error: 'Sua sessão expirou. Entre novamente.' },
+        }))
+        return
+      }
+
+      const response = await fetch('/api/clickdesk/qualitative', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ticket_id: ticketId, force }),
+      })
+      const data = (await response.json()) as ClickDeskQualitativeResponse
+
+      if (!response.ok && !data.error) {
+        data.error = 'Não foi possível analisar qualitativamente este atendimento.'
+      }
+
+      setQualitativeByTicket((current) => ({ ...current, [ticketId]: data }))
+
+      if (response.ok) {
+        setEvaluatedSample((current) =>
+          current
+            ? {
+                ...current,
+                negative: current.negative?.map((item) =>
+                  item.ticket_id === ticketId ? { ...item, has_analysis: true } : item,
+                ),
+                positive: current.positive?.map((item) =>
+                  item.ticket_id === ticketId ? { ...item, has_analysis: true } : item,
+                ),
+              }
+            : current,
+        )
+      }
+    } catch (error) {
+      setQualitativeByTicket((current) => ({
+        ...current,
+        [ticketId]: { error: getErrorMessage(error) },
+      }))
+    } finally {
+      setQualitativeLoadingTicketId('')
+    }
+  }
 
   async function loadDailyTickets(date: string) {
     if (!analyst?.id) return
