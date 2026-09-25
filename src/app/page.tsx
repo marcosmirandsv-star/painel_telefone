@@ -2499,6 +2499,23 @@ function QualitativeAnalysisCard({
             {result.cached ? 'Análise já preservada' : 'Análise gerada agora'}
             {result.analyzed_at ? ` · ${formatDateTime(result.analyzed_at)}` : ''}
           </p>
+          {result.validation_status && (
+            <span
+              className={`mt-2 inline-flex rounded-md px-2 py-1 text-[11px] font-semibold ${
+                result.validation_status === 'approved'
+                  ? 'bg-emerald-400/10 text-emerald-200'
+                  : result.validation_status === 'rejected'
+                    ? 'bg-rose-400/10 text-rose-200'
+                    : 'bg-amber-300/10 text-amber-100'
+              }`}
+            >
+              {result.validation_status === 'approved'
+                ? 'Validada pela gestão'
+                : result.validation_status === 'rejected'
+                  ? 'Descartada da consolidação'
+                  : 'Aguardando validação da gestão'}
+            </span>
+          )}
         </div>
         {onReanalyze && (
           <button
@@ -4115,6 +4132,58 @@ function ChatModuleDashboard({
 
   async function handleAnalyzeClickDeskQualitative() {
     await runManagementQualitativeAnalysis(clickDeskQualitativeTicketId)
+  }
+
+  async function handleValidateClickDeskQualitative(
+    ticketId: string,
+    status: 'approved' | 'rejected',
+  ) {
+    setClickDeskQualitativeValidationTicketId(ticketId)
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        setClickDeskQualitativeResult({ error: 'Sua sessão de homologação não está ativa.' })
+        return
+      }
+
+      const response = await fetch('/api/clickdesk/qualitative-validation', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ticket_id: ticketId, status }),
+      })
+      const data = (await response.json()) as ClickDeskQualitativeResponse
+
+      if (!response.ok && !data.error) {
+        data.error = 'Não foi possível salvar a validação desta análise.'
+      }
+
+      if (data.error) {
+        setClickDeskQualitativeResult(data)
+        return
+      }
+
+      setClickDeskQualitativeResult((current) =>
+        current?.ticket_id === ticketId
+          ? {
+              ...current,
+              validation_status: data.validation_status,
+              validated_at: data.validated_at,
+            }
+          : current,
+      )
+      setClickDeskQualitativeSummaryRefresh((current) => current + 1)
+    } catch (error) {
+      setClickDeskQualitativeResult({ error: getErrorMessage(error) })
+    } finally {
+      setClickDeskQualitativeValidationTicketId('')
+    }
   }
 
   async function handleChatMonthlyImport(event: FormEvent<HTMLFormElement>) {
