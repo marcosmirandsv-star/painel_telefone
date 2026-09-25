@@ -13837,26 +13837,44 @@ async function exportChatIndividualReport({
     ? `<img class="profile-photo" src="${embeddedPhotoUrl}" alt="Foto de ${safeName}" width="76" height="76" style="width:76px;height:76px;max-width:76px;max-height:76px;display:block;" />`
     : ''
   const csatGoal = Number(metric.csat_goal) || 90
-  const reviewGoal = 25
+  const reviewGoal = Number(metric.general_review_goal) || 25
   const csatGap = round(Number(metric.csat) - csatGoal)
   const reviewGap = round(Number(metric.review_percentage) - reviewGoal)
-  const productivityGap = averageTickets ? round(((Number(metric.total_tickets) - averageTickets) / averageTickets) * 100) : 0
-  const podiumText = podiumPosition > 0
-    ? `${podiumPosition}o Lugar - CSAT: ${formatPercent(metric.csat)} | ${formatChatCount(metric.total_tickets)} atendimentos | ${formatPercent(metric.review_percentage)} avaliações`
-    : 'Não elegível ao pódio neste período'
-  const status = metric.status || (Number(metric.csat) >= csatGoal && Number(metric.review_percentage) >= reviewGoal ? 'Meta Superada' : 'Em acompanhamento')
-  const statusColor = status === 'Meta Superada' ? '#059669' : status === 'Critico' ? '#dc2626' : '#d97706'
-  const csatText = csatGap >= 0
-    ? `O resultado superou a referência de ${csatGoal}% em ${formatDelta(csatGap, ' p.p.')}.`
-    : `O resultado ficou ${formatDelta(csatGap, ' p.p.')} abaixo da referência de ${csatGoal}%.`
-  const reviewText = reviewGap >= 0
-    ? `O resultado superou a meta de avaliações em ${formatDelta(reviewGap, ' p.p.')}.`
-    : `O resultado ficou ${formatDelta(reviewGap, ' p.p.')} abaixo da meta minima de avaliações.`
-  const productivityText = productivityGap >= 0
-    ? `${analystName} absorveu uma demanda ${formatDelta(productivityGap, '%')} superior a média da operação.`
-    : `${analystName} ficou ${formatDelta(productivityGap, '%')} abaixo da média de atendimentos da operação.`
-  const finalFeedback = feedbackText.trim() || buildChatFeedbackText({ metric, averageTickets, podiumPosition, managerNotes })
-  const managerNotesHtml = managerNotes.trim() ? `<h2>Observações do gestor</h2><div class="note-box">${formatChatFeedbackForReport(managerNotes)}</div>` : ''
+  const podiumText =
+    podiumPosition > 0
+      ? `${podiumPosition}º lugar no pódio`
+      : 'Fora do pódio nesta competência'
+  const status =
+    metric.status ||
+    (Number(metric.csat) >= csatGoal && Number(metric.review_percentage) >= reviewGoal
+      ? 'Meta Superada'
+      : 'Em acompanhamento')
+  const statusColor =
+    status === 'Meta Superada'
+      ? '#059669'
+      : status === 'Critico'
+        ? '#dc2626'
+        : '#d97706'
+  const csatText =
+    csatGap >= 0
+      ? `${formatDelta(csatGap, ' p.p.')} acima da meta individual de ${csatGoal}%.`
+      : `${formatDelta(Math.abs(csatGap), ' p.p.').replace('+', '')} abaixo da meta individual de ${csatGoal}%.`
+  const reviewText =
+    reviewGap >= 0
+      ? `${formatDelta(reviewGap, ' p.p.')} acima da referência de ${reviewGoal}%.`
+      : `${formatDelta(Math.abs(reviewGap), ' p.p.').replace('+', '')} abaixo da referência de ${reviewGoal}%.`
+  const finalFeedback =
+    feedbackText.trim() ||
+    buildChatFeedbackText({ metric, averageTickets, podiumPosition, managerNotes })
+  const managerNotesHtml = managerNotes.trim()
+    ? `<section class="section-block">
+        <div class="section-heading">
+          <span class="section-kicker">Contexto da liderança</span>
+          <h2>Observações do gestor</h2>
+        </div>
+        <div class="note-box">${formatChatFeedbackForReport(managerNotes)}</div>
+      </section>`
+    : ''
   const evolutionRows = buildChatReportEvolutionRows(monthlyHistory)
   const qualitativeFindings = qualitativeContext?.findings ?? []
   const negativeQualitativeFindings = qualitativeFindings.filter(
@@ -13940,153 +13958,406 @@ async function exportChatIndividualReport({
 
   const qualitativeHtml = qualitativeFindings.length
     ? `
-        <h2>Resumo qualitativo da experiência</h2>
-        <div class="box">
-          <p><strong>IA + validação da gestão:</strong> ${qualitativeFindings.length} ticket(s) aprovado(s) na amostra — ${negativeQualitativeFindings.length} negativo(s) e ${positiveQualitativeFindings.length} positivo(s).</p>
-          <p class="muted">Cobertura: ${qualitativeContext?.negativeAnalyzed ?? 0} de ${qualitativeContext?.negativeTotal ?? 0} avaliações negativas e ${qualitativeContext?.positiveAnalyzed ?? 0} de ${qualitativeContext?.positiveTotal ?? 0} avaliações positivas.</p>
-          <p><strong>Nas negativas:</strong> ${escapeHtml(negativeSummaryText)}</p>
-          <p><strong>Nas positivas:</strong> ${escapeHtml(positiveSummaryText)}</p>
-          <p><strong>Foco do próximo ciclo:</strong> ${escapeHtml(compactQualitativeText(qualitativeFocusText, 220))}</p>
-          <p class="muted">Resumo amostral baseado somente em leituras qualitativas aprovadas pela gestão; não representa automaticamente todos os atendimentos da competência.</p>
+      <section class="section-block">
+        <div class="section-heading">
+          <span class="section-kicker">IA + validação da gestão</span>
+          <h2>Resumo qualitativo da experiência</h2>
         </div>
-      `
-    : ''
+        <div class="insight-box">
+          <div class="sample-line">
+            <strong>${qualitativeFindings.length} leitura(s) aprovada(s)</strong>
+            <span>${negativeQualitativeFindings.length} negativa(s) · ${positiveQualitativeFindings.length} positiva(s)</span>
+          </div>
+          <p class="muted">Cobertura validada: ${qualitativeContext?.negativeAnalyzed ?? 0} de ${qualitativeContext?.negativeTotal ?? 0} negativas e ${qualitativeContext?.positiveAnalyzed ?? 0} de ${qualitativeContext?.positiveTotal ?? 0} positivas.</p>
+          <div class="qualitative-grid">
+            <div class="qualitative-item">
+              <span>Nas negativas</span>
+              <p>${escapeHtml(negativeSummaryText)}</p>
+            </div>
+            <div class="qualitative-item">
+              <span>Nas positivas</span>
+              <p>${escapeHtml(positiveSummaryText)}</p>
+            </div>
+          </div>
+          <div class="focus-line">
+            <span>Foco do próximo ciclo</span>
+            <strong>${escapeHtml(compactQualitativeText(qualitativeFocusText, 220))}</strong>
+          </div>
+          <p class="footnote">Leitura amostral baseada somente em análises aprovadas pela gestão. Não representa automaticamente todos os atendimentos da competência.</p>
+        </div>
+      </section>
+    `
+    : `
+      <section class="section-block">
+        <div class="section-heading">
+          <span class="section-kicker">Experiência do cliente</span>
+          <h2>Leitura qualitativa</h2>
+        </div>
+        <div class="empty-insight">
+          <strong>Sem leitura qualitativa validada nesta competência.</strong>
+          <p>O relatório preserva somente evidências aprovadas pela gestão; nenhuma hipótese da IA foi incorporada ao documento.</p>
+        </div>
+      </section>
+    `
 
   const documentHtml = `
     <!doctype html>
     <html>
       <head>
         <meta charset="utf-8" />
-        <title>Análise individual - ${safeName}</title>
+        <title>Relatório individual - ${safeName}</title>
         <style>
-          body { font-family: Arial, sans-serif; color: #111827; margin: 34px; }
-          h1 { font-size: 26px; margin: 0 0 6px; color: #0f172a; }
-          h2 { color: #0f766e; font-size: 18px; margin: 24px 0 8px; }
-          h3 { font-size: 14px; margin: 16px 0 6px; color: #0f172a; }
-          p { font-size: 12px; line-height: 1.55; margin: 0 0 8px; }
-          ul { margin-top: 6px; }
-          li { font-size: 12px; line-height: 1.55; margin-bottom: 5px; }
-          .header { border-bottom: 3px solid #06b6d4; padding-bottom: 12px; margin-bottom: 18px; }
+          * { box-sizing: border-box; }
+          body {
+            font-family: Arial, Helvetica, sans-serif;
+            color: #172033;
+            margin: 30px;
+            background: #ffffff;
+          }
+          h1 { font-size: 25px; line-height: 1.15; margin: 0; color: #0f172a; }
+          h2 { font-size: 17px; line-height: 1.25; margin: 2px 0 0; color: #0f172a; }
+          h3 { font-size: 13px; margin: 0 0 5px; color: #0f172a; }
+          p { font-size: 11.5px; line-height: 1.55; margin: 0 0 7px; }
+          .header {
+            padding: 0 0 16px;
+            margin-bottom: 16px;
+            border-bottom: 1px solid #cbd5e1;
+          }
           .header-content { display: flex; align-items: center; gap: 16px; }
-          .profile-photo { width: 76px !important; height: 76px !important; max-width: 76px !important; max-height: 76px !important; border-radius: 50%; object-fit: cover; border: 2px solid #0891b2; display: block; }
-          .subtitle { color: #475569; margin-bottom: 0; }
-          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0 18px; }
-          .box { border: 1px solid #cbd5e1; background: #f8fafc; padding: 12px; margin-bottom: 12px; }
-          .box h2 { margin-top: 0; }
-          .status { border-left: 5px solid ${statusColor}; background: #f8fafc; padding: 12px; margin-top: 8px; }
-          .status strong { color: ${statusColor}; font-size: 16px; }
-          .muted { color: #475569; }
-          .metric { font-weight: bold; color: #0f172a; }
-          .trend { border: 1px solid #cbd5e1; background: #f8fafc; padding: 12px; margin: 10px 0 16px; }
-          .trend-table { border-collapse: collapse; width: 100%; margin-top: 12px; }
-          .trend-table th { background: #0f766e; color: #ffffff; font-size: 10px; padding: 7px; text-align: left; }
-          .trend-table td { border: 1px solid #dbe3ef; font-size: 10px; padding: 7px; vertical-align: middle; }
-          .chart-title { font-size: 12px; font-weight: bold; color: #0f172a; margin: 12px 0 6px; }
-          .chart-legend { font-size: 10px; color: #475569; margin: 4px 0 8px; }
-          .legend-dot { display: inline-block; width: 9px; height: 9px; margin-right: 4px; border-radius: 9px; }
-          .line-chart { width: 100%; height: 165px; border: 1px solid #cbd5e1; background: #ffffff; }
-          .volume-row { display: grid; grid-template-columns: 78px 1fr 64px; gap: 8px; align-items: center; margin: 7px 0; }
-          .volume-label { font-size: 10px; font-weight: bold; color: #0f172a; }
-          .volume-track { background: #e2e8f0; height: 16px; border-radius: 2px; overflow: hidden; }
-          .volume-bar { background: #059669; height: 16px; border-radius: 2px; }
-          .volume-value { font-size: 10px; font-weight: bold; text-align: right; }
-          .coach { border-left: 5px solid #0891b2; background: #ecfeff; padding: 12px; margin-top: 8px; }
-          .note-box { border-left: 5px solid #64748b; background: #f8fafc; padding: 12px; margin-top: 8px; }
-          .report-chart { display: block; width: 100%; max-width: 640px; height: auto; margin: 8px auto 16px; border: 1px solid #cbd5e1; background: #ffffff; page-break-inside: avoid; }
-          .kpi-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 12px 0 16px; }
-          .kpi-card { border: 1px solid #cbd5e1; background: #ffffff; padding: 10px; }
-          .kpi-card span { display: block; color: #475569; font-size: 10px; margin-bottom: 5px; }
-          .kpi-card strong { display: block; color: #0f172a; font-size: 18px; }
-          .kpi-card em { display: block; color: #475569; font-size: 10px; font-style: normal; margin-top: 5px; }
-          .strategy-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin: 12px 0 14px; }
-          .strategy-card { border: 1px solid #cbd5e1; background: #ffffff; padding: 10px; page-break-inside: avoid; }
-          .strategy-card span { display: block; color: #475569; font-size: 10px; margin-bottom: 5px; }
-          .strategy-card strong { display: block; color: #0f172a; font-size: 13px; line-height: 1.35; }
-          .strategy-card em { display: block; color: #475569; font-size: 10px; font-style: normal; margin-top: 5px; }
-          .coach h3 { margin-top: 0; color: #0f172a; }
-          @page { margin: 18mm; }
+          .profile-photo {
+            width: 76px !important;
+            height: 76px !important;
+            max-width: 76px !important;
+            max-height: 76px !important;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid #0e7490;
+            display: block;
+          }
+          .eyebrow {
+            display: block;
+            color: #0e7490;
+            font-size: 9px;
+            font-weight: bold;
+            letter-spacing: 1.2px;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+          }
+          .subtitle { color: #64748b; margin: 5px 0 0; font-size: 10.5px; }
+          .source-pill {
+            display: inline-block;
+            margin-top: 7px;
+            padding: 4px 8px;
+            border: 1px solid #bae6fd;
+            background: #f0f9ff;
+            color: #075985;
+            font-size: 9px;
+            font-weight: bold;
+          }
+          .summary-card {
+            border: 1px solid #dbe4ee;
+            border-left: 5px solid ${statusColor};
+            background: #f8fafc;
+            padding: 14px;
+            margin: 0 0 14px;
+          }
+          .summary-top { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; }
+          .status-label { color: ${statusColor}; font-size: 17px; font-weight: bold; display: block; margin-top: 3px; }
+          .podium-badge {
+            border: 1px solid #cbd5e1;
+            background: #ffffff;
+            padding: 7px 10px;
+            font-size: 10px;
+            font-weight: bold;
+            color: #334155;
+            white-space: nowrap;
+          }
+          .summary-note { color: #64748b; margin-top: 8px; margin-bottom: 0; }
+          .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin: 0 0 18px;
+          }
+          .kpi-card {
+            border: 1px solid #dbe4ee;
+            background: #ffffff;
+            padding: 10px;
+            min-height: 74px;
+          }
+          .kpi-card span {
+            display: block;
+            color: #64748b;
+            font-size: 9px;
+            margin-bottom: 5px;
+          }
+          .kpi-card strong {
+            display: block;
+            color: #0f172a;
+            font-size: 18px;
+            line-height: 1.1;
+          }
+          .kpi-card em {
+            display: block;
+            color: #64748b;
+            font-size: 9px;
+            font-style: normal;
+            margin-top: 5px;
+            line-height: 1.35;
+          }
+          .section-block { margin: 20px 0 0; }
+          .section-heading { margin-bottom: 9px; }
+          .section-kicker {
+            display: block;
+            color: #0e7490;
+            font-size: 9px;
+            font-weight: bold;
+            letter-spacing: 0.9px;
+            text-transform: uppercase;
+            margin-bottom: 3px;
+          }
+          .reading-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+          }
+          .reading-card {
+            border: 1px solid #dbe4ee;
+            background: #f8fafc;
+            padding: 11px;
+            page-break-inside: avoid;
+          }
+          .reading-card span {
+            display: block;
+            color: #64748b;
+            font-size: 9px;
+            margin-bottom: 5px;
+          }
+          .reading-card strong {
+            display: block;
+            color: #0f172a;
+            font-size: 12px;
+            line-height: 1.35;
+            margin-bottom: 5px;
+          }
+          .reading-card p { color: #475569; margin-bottom: 0; }
+          .trend {
+            border: 1px solid #dbe4ee;
+            background: #f8fafc;
+            padding: 12px;
+            margin: 0;
+          }
+          .strategy-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+            margin: 0 0 12px;
+          }
+          .strategy-card {
+            border: 1px solid #dbe4ee;
+            background: #ffffff;
+            padding: 9px;
+            page-break-inside: avoid;
+          }
+          .strategy-card span { display: block; color: #64748b; font-size: 9px; margin-bottom: 4px; }
+          .strategy-card strong { display: block; color: #0f172a; font-size: 11px; line-height: 1.35; }
+          .strategy-card em { display: block; color: #64748b; font-size: 9px; font-style: normal; margin-top: 4px; }
+          .report-chart {
+            display: block;
+            width: 100%;
+            max-width: 640px;
+            height: auto;
+            margin: 7px auto 13px;
+            border: 1px solid #dbe4ee;
+            background: #ffffff;
+            page-break-inside: avoid;
+          }
+          .chart-title { font-size: 10.5px; font-weight: bold; color: #0f172a; margin: 10px 0 4px; }
+          .chart-legend { font-size: 9px; color: #64748b; margin: 0 0 6px; }
+          .initial-history {
+            border: 1px solid #dbe4ee;
+            background: #f8fafc;
+            padding: 13px;
+          }
+          .initial-history strong { display: block; color: #0f172a; font-size: 13px; margin-bottom: 5px; }
+          .snapshot-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: 10px;
+          }
+          .snapshot-item { background: #ffffff; border: 1px solid #e2e8f0; padding: 8px; }
+          .snapshot-item span { display: block; color: #64748b; font-size: 9px; }
+          .snapshot-item strong { display: block; color: #0f172a; font-size: 13px; margin-top: 3px; }
+          .insight-box {
+            border: 1px solid #dbe4ee;
+            background: #f8fafc;
+            padding: 12px;
+          }
+          .sample-line { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 7px; }
+          .sample-line strong { color: #0f172a; font-size: 11px; }
+          .sample-line span { color: #64748b; font-size: 10px; }
+          .qualitative-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin: 10px 0;
+          }
+          .qualitative-item { background: #ffffff; border: 1px solid #e2e8f0; padding: 9px; }
+          .qualitative-item span { display: block; color: #0e7490; font-size: 9px; font-weight: bold; margin-bottom: 4px; text-transform: uppercase; }
+          .qualitative-item p { margin-bottom: 0; }
+          .focus-line {
+            border-left: 4px solid #0e7490;
+            background: #ecfeff;
+            padding: 9px 10px;
+            margin-top: 8px;
+          }
+          .focus-line span { display: block; color: #0e7490; font-size: 9px; font-weight: bold; text-transform: uppercase; margin-bottom: 3px; }
+          .focus-line strong { color: #0f172a; font-size: 11px; line-height: 1.4; }
+          .empty-insight {
+            border: 1px dashed #cbd5e1;
+            background: #f8fafc;
+            padding: 12px;
+          }
+          .empty-insight strong { display: block; color: #334155; font-size: 11px; margin-bottom: 4px; }
+          .empty-insight p { color: #64748b; margin-bottom: 0; }
+          .coach {
+            border-left: 5px solid #0891b2;
+            background: #ecfeff;
+            padding: 12px;
+            margin-top: 7px;
+            page-break-inside: avoid;
+          }
+          .coach p:last-child { margin-bottom: 0; }
+          .note-box {
+            border-left: 5px solid #64748b;
+            background: #f8fafc;
+            padding: 12px;
+          }
+          .muted { color: #64748b; }
+          .footnote { color: #64748b; font-size: 9px; margin: 8px 0 0; }
+          .report-footer {
+            border-top: 1px solid #e2e8f0;
+            color: #94a3b8;
+            font-size: 8.5px;
+            margin-top: 22px;
+            padding-top: 8px;
+          }
+          @page { margin: 17mm; }
           @media print {
             body { margin: 0; }
-            .box, .kpi-card, .strategy-card, .report-chart, .coach { page-break-inside: avoid; }
+            .summary-card, .kpi-card, .reading-card, .strategy-card, .report-chart,
+            .insight-box, .coach, .note-box, .initial-history { page-break-inside: avoid; }
           }
         </style>
       </head>
       <body>
-        <div class="header">
+        <header class="header">
           <div class="header-content">
             ${photoHtml}
-            <div><h1>Relatório de Performance - ${safeName}</h1><p class="subtitle">Período: ${escapeHtml(periodLabel)} | Fonte: ${escapeHtml(dataSourceLabel)}${qualitativeFindings.length ? ' + resumo qualitativo validado' : ''}</p></div>
+            <div>
+              <span class="eyebrow">Central de Performance · Chat</span>
+              <h1>Relatório individual · ${safeName}</h1>
+              <p class="subtitle">${escapeHtml(periodLabel)}</p>
+              <span class="source-pill">${escapeHtml(dataSourceLabel)}</span>
+            </div>
           </div>
-        </div>
+        </header>
 
-        <div class="box">
-          <h2>Resumo do fechamento</h2>
-          <p>Status geral: <span class="metric">${escapeHtml(status)}</span></p>
-          <p>Posição no pódio: ${escapeHtml(podiumText)}</p>
-          <p class="muted">A leitura abaixo separa resultado, comparação com meta e orientação de desenvolvimento para evitar repetição de dados.</p>
-        </div>
+        <section class="summary-card">
+          <div class="summary-top">
+            <div>
+              <span class="eyebrow">Situação do período</span>
+              <strong class="status-label">${escapeHtml(status)}</strong>
+            </div>
+            <span class="podium-badge">${escapeHtml(podiumText)}</span>
+          </div>
+          <p class="summary-note">Leitura individual baseada nos indicadores oficiais da competência. Comparações operacionais entre colegas permanecem na visão gerencial e não compõem este documento.</p>
+        </section>
 
         <div class="kpi-grid">
           <div class="kpi-card">
-            <span>Qualidade percebida</span>
+            <span>CSAT</span>
             <strong>${formatPercent(metric.csat)}</strong>
-            <em>Meta individual: ${csatGoal}% (${formatDelta(csatGap, ' p.p.')})</em>
+            <em>Meta individual: ${csatGoal}% · ${escapeHtml(csatText)}</em>
           </div>
           <div class="kpi-card">
-            <span>Participação em avaliações</span>
+            <span>% de avaliações</span>
             <strong>${formatPercent(metric.review_percentage)}</strong>
-            <em>${metric.reviews} respostas sobre ${metric.valid_tickets} válidos</em>
+            <em>Referência: ${reviewGoal}% · ${escapeHtml(reviewText)}</em>
           </div>
           <div class="kpi-card">
-            <span>Volume mensal</span>
-            <strong>${metric.total_tickets}</strong>
-            <em>Média da operação: ${averageTickets} (${formatDelta(productivityGap, '%')})</em>
+            <span>Avaliações recebidas</span>
+            <strong>${formatChatCount(metric.reviews)}</strong>
+            <em>${formatChatCount(metric.positive_reviews)} positivas · ${formatChatCount(metric.negative_reviews)} negativas</em>
+          </div>
+          <div class="kpi-card">
+            <span>Atendimentos</span>
+            <strong>${formatChatCount(metric.total_tickets)}</strong>
+            <em>Volume registrado na competência</em>
           </div>
         </div>
 
-        <h2>Análise técnica de desempenho</h2>
-        <h3>Qualidade e Satisfação do Cliente (CSAT)</h3>
-        <p>O(A) colaborador(a) registrou um indice de <strong>Satisfação (CSAT) de ${formatPercent(metric.csat)}</strong>.</p>
-        <ul>
-          <li><strong>Comparativo com a meta:</strong> ${escapeHtml(csatText)}</li>
-          <li><strong>Análise detalhada:</strong> Do volume total de feedbacks recebidos (${metric.reviews}), <strong>${metric.positive_reviews} foram positivos</strong>. Houve ${metric.negative_reviews} registros negativos.</li>
-        </ul>
+        <section class="section-block">
+          <div class="section-heading">
+            <span class="section-kicker">Leitura objetiva</span>
+            <h2>O que os números mostram</h2>
+          </div>
+          <div class="reading-grid">
+            <div class="reading-card">
+              <span>Qualidade percebida</span>
+              <strong>CSAT de ${formatPercent(metric.csat)}</strong>
+              <p>${escapeHtml(csatText)} Foram registradas ${formatChatCount(metric.positive_reviews)} avaliação(ões) positiva(s) e ${formatChatCount(metric.negative_reviews)} negativa(s).</p>
+            </div>
+            <div class="reading-card">
+              <span>Participação dos clientes</span>
+              <strong>${formatPercent(metric.review_percentage)} dos atendimentos avaliados</strong>
+              <p>${escapeHtml(reviewText)} A taxa considera ${formatChatCount(metric.reviews)} respostas sobre ${formatChatCount(metric.valid_tickets)} atendimentos válidos.</p>
+            </div>
+            <div class="reading-card">
+              <span>Volume do período</span>
+              <strong>${formatChatCount(metric.total_tickets)} atendimentos</strong>
+              <p>O volume é apresentado como dado factual. O contexto de distribuição entre analistas é tratado exclusivamente na visão de gestão.</p>
+            </div>
+          </div>
+        </section>
 
-        <h3>Engajamento e Coleta de Feedback</h3>
-        <p>O(A) colaborador(a) alcancou uma <strong>taxa de avaliações de ${formatPercent(metric.review_percentage)}</strong>.</p>
-        <ul>
-          <li><strong>Comparativo com a meta:</strong> ${escapeHtml(reviewText)}</li>
-          <li><strong>Calculo:</strong> A taxa foi calculada sobre ${metric.reviews} avaliações divididas por ${metric.valid_tickets} atendimentos válidos.</li>
-        </ul>
-
-        <h3>Produtividade e Volumetria</h3>
-        <p>O volume total de atendimentos realizados pelo(a) colaborador(a) foi de <strong>${metric.total_tickets} chamados</strong>.</p>
-        <ul>
-          <li><strong>Comparativo com a operação:</strong> A média de atendimentos por agente foi de ${averageTickets}. ${escapeHtml(productivityText)}</li>
-          <li><strong>Destaque:</strong> ${escapeHtml(podiumText)}.</li>
-        </ul>
-
-        <h2>Evolução mensal</h2>
-        <p class="muted">Leitura comparativa dos meses importados. O objetivo e enxergar rapidamente melhora, queda ou estabilidade em CSAT, avaliações e volume.</p>
-        ${evolutionRows}
+        <section class="section-block">
+          <div class="section-heading">
+            <span class="section-kicker">Histórico ClickDesk</span>
+            <h2>Evolução do analista</h2>
+          </div>
+          ${evolutionRows}
+        </section>
 
         ${qualitativeHtml}
 
         ${managerNotesHtml}
 
-        <h2>Feedback</h2>
-        <div class="coach">
-          ${formatChatFeedbackForReport(finalFeedback)}
-        </div>
+        <section class="section-block">
+          <div class="section-heading">
+            <span class="section-kicker">Devolutiva</span>
+            <h2>Feedback do ciclo</h2>
+          </div>
+          <div class="coach">
+            ${formatChatFeedbackForReport(finalFeedback)}
+          </div>
+        </section>
+
+        <footer class="report-footer">
+          Relatório gerado pela Central de Performance. Fonte da competência: ${escapeHtml(dataSourceLabel)}.
+          Indicadores quantitativos representam o período selecionado; leituras qualitativas só aparecem quando aprovadas pela gestão.
+        </footer>
       </body>
     </html>
   `
+
   const blob = new Blob(['\ufeff', documentHtml], {
     type: 'application/msword;charset=utf-8',
   })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
-  const fileName = `análise-${slugifyFileName(analystName)}-${slugifyFileName(periodLabel)}.doc`
+  const fileName = `relatório-${slugifyFileName(analystName)}-${slugifyFileName(periodLabel)}.doc`
 
   link.href = url
   link.download = fileName
@@ -14184,69 +14455,112 @@ function buildChatReportLineChart(
 }
 
 function buildChatReportEvolutionRows(history: ChatMonthlyMetric[]) {
-  if (!history.length) return '<p class="muted">Sem historico mensal suficiente para exibir evolução.</p>'
+  if (!history.length) {
+    return `
+      <div class="empty-insight">
+        <strong>Histórico ClickDesk ainda não disponível.</strong>
+        <p>A evolução será formada conforme novas competências forem fechadas, sem misturar a série antiga do Zendesk.</p>
+      </div>
+    `
+  }
 
   const first = history[0]
   const last = history.at(-1) ?? first
+
+  if (history.length === 1) {
+    return `
+      <div class="initial-history">
+        <strong>Fotografia inicial</strong>
+        <p class="muted">Esta é a primeira competência ClickDesk disponível para este analista. Ainda não existe base suficiente para classificar melhora, queda ou estabilidade. A tendência será apresentada a partir do próximo fechamento.</p>
+        <div class="snapshot-grid">
+          <div class="snapshot-item">
+            <span>Competência</span>
+            <strong>${escapeHtml(last.month_label)}</strong>
+          </div>
+          <div class="snapshot-item">
+            <span>CSAT</span>
+            <strong>${formatPercent(last.csat)}</strong>
+          </div>
+          <div class="snapshot-item">
+            <span>% de avaliações</span>
+            <strong>${formatPercent(last.review_percentage)}</strong>
+          </div>
+        </div>
+      </div>
+    `
+  }
+
   const csatDelta = round(Number(last.csat) - Number(first.csat))
   const reviewDelta = round(Number(last.review_percentage) - Number(first.review_percentage))
   const maxTickets = Math.max(...history.map((metric) => Number(metric.total_tickets)), 1)
   const bestCsat = [...history].sort((a, b) => Number(b.csat) - Number(a.csat))[0]
   const lowestCsat = [...history].sort((a, b) => Number(a.csat) - Number(b.csat))[0]
-  const bestReview = [...history].sort((a, b) => Number(b.review_percentage) - Number(a.review_percentage))[0]
+  const bestReview = [...history].sort(
+    (a, b) => Number(b.review_percentage) - Number(a.review_percentage),
+  )[0]
+  const lastCsatGoal = Number(last.csat_goal) || 90
+  const lastReviewGoal = Number(last.general_review_goal) || 25
   const trendSignal =
-    history.length <= 1
-      ? 'Fotografia inicial'
-      : csatDelta >= 0 && reviewDelta >= 0
-        ? 'Evolucao favoravel'
-        : csatDelta < 0 && reviewDelta < 0
-          ? 'Queda combinada'
-          : 'Evolucao mista'
+    csatDelta >= 0 && reviewDelta >= 0
+      ? 'Evolução favorável'
+      : csatDelta < 0 && reviewDelta < 0
+        ? 'Queda combinada'
+        : 'Evolução mista'
   const focusText =
-    Number(last.csat) < 90
-      ? 'priorizar qualidade percebida e revisar causas de avaliações negativas.'
-      : Number(last.review_percentage) < 25
-        ? 'aumentar a amostra de avaliações para tornar a leitura mais sustentavel.'
+    Number(last.csat) < lastCsatGoal
+      ? 'Priorizar qualidade percebida e revisar as causas confirmadas nas avaliações negativas.'
+      : Number(last.review_percentage) < lastReviewGoal
+        ? 'Ampliar a participação nas avaliações para tornar a leitura mais representativa.'
         : csatDelta < 0
-          ? 'entender o que mudou no ultimo ciclo para recuperar o patamar anterior.'
+          ? 'Entender o que mudou no último ciclo e preservar as práticas que sustentavam o patamar anterior.'
           : reviewDelta < 0
-            ? 'preservar o CSAT e recuperar participação dos clientes nas avaliações.'
-            : 'manter consistencia e compartilhar as praticas que sustentaram o resultado.'
-  const percentageChart = buildChatReportLineChart(history, [
-    { label: 'CSAT', color: '#0891b2', value: (metric) => Number(metric.csat) },
-    { label: 'Avaliações', color: '#7c3aed', value: (metric) => Number(metric.review_percentage) },
-    { label: 'Sem avaliação', color: '#d97706', value: (metric) => Number(metric.sending_percentage) },
-  ], 100, '%')
-  const volumeMaximum = Math.ceil(maxTickets / 100) * 100
-  const volumeChart = buildChatReportLineChart(history, [
-    { label: 'Atendimentos', color: '#059669', value: (metric) => Number(metric.total_tickets) },
-  ], volumeMaximum)
+            ? 'Preservar o CSAT e recuperar a participação dos clientes nas avaliações.'
+            : 'Manter a consistência e identificar quais práticas sustentaram o resultado.'
+
+  const percentageChart = buildChatReportLineChart(
+    history,
+    [
+      { label: 'CSAT', color: '#0891b2', value: (metric) => Number(metric.csat) },
+      { label: 'Avaliações', color: '#7c3aed', value: (metric) => Number(metric.review_percentage) },
+      { label: 'Sem avaliação', color: '#d97706', value: (metric) => Number(metric.sending_percentage) },
+    ],
+    100,
+    '%',
+  )
+  const volumeMaximum = Math.max(100, Math.ceil(maxTickets / 100) * 100)
+  const volumeChart = buildChatReportLineChart(
+    history,
+    [{ label: 'Atendimentos', color: '#059669', value: (metric) => Number(metric.total_tickets) }],
+    volumeMaximum,
+  )
 
   return `
     <div class="trend">
       <div class="strategy-grid">
         <div class="strategy-card">
-          <span>Leitura do historico</span>
+          <span>Leitura do histórico</span>
           <strong>${escapeHtml(trendSignal)}</strong>
-          <em>Melhor CSAT: ${escapeHtml(bestCsat.month_label.replace(' 2026', ''))} (${formatPercent(bestCsat.csat)}).</em>
+          <em>Do primeiro ao último mês: CSAT ${formatDelta(csatDelta, ' p.p.')} · avaliações ${formatDelta(reviewDelta, ' p.p.')}.</em>
         </div>
         <div class="strategy-card">
-          <span>Ponto de atenção</span>
-          <strong>${escapeHtml(lowestCsat.month_label.replace(' 2026', ''))} teve o menor CSAT</strong>
-          <em>Maior amostra de avaliações: ${escapeHtml(bestReview.month_label.replace(' 2026', ''))} (${formatPercent(bestReview.review_percentage)}).</em>
+          <span>Referências da série</span>
+          <strong>Melhor CSAT: ${escapeHtml(bestCsat.month_label)}</strong>
+          <em>Menor CSAT: ${escapeHtml(lowestCsat.month_label)} · maior participação: ${escapeHtml(bestReview.month_label)}.</em>
         </div>
         <div class="strategy-card">
           <span>Foco recomendado</span>
           <strong>${escapeHtml(focusText)}</strong>
-          <em>Use esta leitura para orientar o próximo ciclo mensal.</em>
+          <em>Leitura baseada exclusivamente na série ClickDesk.</em>
         </div>
       </div>
-      <p class="chart-title">Evolução mensal de qualidade e avaliações</p>
-      <p class="chart-legend">As três linhas usam escala percentual de 0% a 100%.</p>
-      <img class="report-chart" src="${percentageChart}" width="640" height="215" alt="Gráfico mensal de CSAT, avaliações e atendimentos sem avaliação" />
-      <p class="chart-title">Evolução mensal de atendimentos</p>
-      <p class="chart-legend">Volume total registrado em cada mês.</p>
-      <img class="report-chart" src="${volumeChart}" width="640" height="215" alt="Gráfico mensal do volume de atendimentos" />
+
+      <p class="chart-title">Qualidade e participação nas avaliações</p>
+      <p class="chart-legend">Evolução percentual das competências ClickDesk disponíveis.</p>
+      <img class="report-chart" src="${percentageChart}" width="640" height="215" alt="Evolução mensal de CSAT e avaliações" />
+
+      <p class="chart-title">Atendimentos por competência</p>
+      <p class="chart-legend">Volume individual registrado em cada competência, sem comparação com colegas.</p>
+      <img class="report-chart" src="${volumeChart}" width="640" height="215" alt="Evolução mensal do volume individual" />
     </div>
   `
 }
@@ -14306,35 +14620,34 @@ function buildChatFeedbackText({
   const reviewGoal = Number(metric.general_review_goal) || 25
   const csatGap = round(Number(metric.csat) - csatGoal)
   const reviewGap = round(Number(metric.review_percentage) - reviewGoal)
-  const ticketGap = round(Number(metric.total_tickets) - averageTickets)
-  const podiumText = podiumPosition > 0 && podiumPosition <= 3
-    ? `${podiumPosition}º lugar no pódio`
-    : 'fora dos três primeiros lugares'
-  const qualityFact = csatGap >= 0
-    ? `CSAT ${formatPercent(metric.csat)}, ${formatDelta(csatGap, ' p.p.')} acima da meta de ${csatGoal}%`
-    : `CSAT ${formatPercent(metric.csat)}, ${formatDelta(Math.abs(csatGap), ' p.p.')} abaixo da meta de ${csatGoal}%`
-  const reviewFact = reviewGap >= 0
-    ? `avaliações ${formatPercent(metric.review_percentage)}, ${formatDelta(reviewGap, ' p.p.')} acima da referência de ${reviewGoal}%`
-    : `avaliações ${formatPercent(metric.review_percentage)}, ${formatDelta(Math.abs(reviewGap), ' p.p.')} abaixo da referência de ${reviewGoal}%`
-  const volumeFact = averageTickets
-    ? `${metric.total_tickets} atendimentos totais, ${Math.abs(ticketGap)} ${ticketGap >= 0 ? 'acima' : 'abaixo'} da média de ${formatChatCount(averageTickets)}`
-    : `${metric.total_tickets} atendimentos totais`
-  const priority = csatGap < 0
-    ? 'revisar a qualidade percebida nos atendimentos avaliados negativamente'
-    : reviewGap < 0
-      ? 'aumentar a quantidade de avaliações para ampliar a amostra do resultado'
-      : ticketGap < 0
-        ? 'verificar o contexto do volume antes de definir se existe oportunidade individual'
-        : 'identificar qual prática contribuiu para o equilíbrio dos indicadores e decidir como mantê-la'
-  const verification = ticketGap < 0
-    ? 'Observar juntos disponibilidade para puxar tickets da fila, duração dos atendimentos, pausas, ausências e atuação em outras atividades. Os números não identificam sozinhos a causa da diferença.'
-    : 'Os indicadores não comprovam comportamentos específicos. Utilize exemplos reais da operação ou observações do gestor antes de associar o resultado a uma conduta.'
+  const podiumText =
+    podiumPosition > 0 && podiumPosition <= 3
+      ? `${podiumPosition}º lugar no pódio`
+      : 'fora dos três primeiros lugares'
+  const qualityFact =
+    csatGap >= 0
+      ? `CSAT ${formatPercent(metric.csat)}, ${formatDelta(csatGap, ' p.p.')} acima da meta de ${csatGoal}%`
+      : `CSAT ${formatPercent(metric.csat)}, ${formatDelta(Math.abs(csatGap), ' p.p.').replace('+', '')} abaixo da meta de ${csatGoal}%`
+  const reviewFact =
+    reviewGap >= 0
+      ? `avaliações ${formatPercent(metric.review_percentage)}, ${formatDelta(reviewGap, ' p.p.')} acima da referência de ${reviewGoal}%`
+      : `avaliações ${formatPercent(metric.review_percentage)}, ${formatDelta(Math.abs(reviewGap), ' p.p.').replace('+', '')} abaixo da referência de ${reviewGoal}%`
+  const priority =
+    csatGap < 0
+      ? 'revisar a qualidade percebida nos atendimentos avaliados negativamente'
+      : reviewGap < 0
+        ? 'ampliar a participação nas avaliações para aumentar a representatividade da amostra'
+        : 'identificar quais práticas reais ajudaram a sustentar os indicadores e decidir como mantê-las no próximo ciclo'
+  const verification =
+    'Os indicadores mostram resultado, mas não comprovam comportamentos específicos. Exemplos reais da operação, observações do gestor e leituras qualitativas validadas devem orientar qualquer conclusão sobre conduta.'
 
   return [
-    `Base factual do ciclo: ${analystName} registrou ${qualityFact}; ${reviewFact}, com ${metric.reviews} respostas sobre ${metric.valid_tickets} atendimentos válidos; e ${volumeFact}. Posição: ${podiumText}.`,
+    `Base factual do ciclo: ${analystName} registrou ${qualityFact}; ${reviewFact}, com ${metric.reviews} respostas sobre ${metric.valid_tickets} atendimentos válidos; e ${metric.total_tickets} atendimentos no período. Posição: ${podiumText}.`,
     `Ponto prioritário: ${priority}.`,
-    `Contexto a verificar: ${verification}`,
-    managerNotes.trim() ? `Observação registrada pelo gestor: ${managerNotes.trim()}` : 'Observação do gestor: não informada.',
+    `Contexto a considerar: ${verification}`,
+    managerNotes.trim()
+      ? `Observação registrada pelo gestor: ${managerNotes.trim()}`
+      : 'Observação do gestor: não informada.',
   ]
     .filter(Boolean)
     .join('\n\n')
