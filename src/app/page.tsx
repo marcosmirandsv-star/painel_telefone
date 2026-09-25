@@ -3046,6 +3046,11 @@ function ChatAnalystPortal({
                 <p className="mt-1 text-sm text-slate-400">
                   {displayMonthLabel} · ClickDesk
                 </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {metrics?.latest_sync?.finished_at
+                    ? `Última atualização: ${formatDateTime(metrics.latest_sync.finished_at)}`
+                    : 'Última atualização ainda não informada'}
+                </p>
               </div>
             </div>
 
@@ -5851,9 +5856,16 @@ function ChatModuleDashboard({
                 Acompanhe volume, qualidade, avaliações, posição no ranking e evolução de cada analista com a base persistida do ClickDesk.
               </p>
             </div>
-            <span className="rounded-md border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-sm font-semibold text-cyan-100">
-              ClickDesk · base viva
-            </span>
+            <div className="text-left lg:text-right">
+              <span className="inline-flex rounded-md border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-sm font-semibold text-cyan-100">
+                ClickDesk · base viva
+              </span>
+              <p className="mt-2 text-xs text-slate-500">
+                {clickDeskPersistedMetrics?.latest_sync?.finished_at
+                  ? `Última atualização: ${formatDateTime(clickDeskPersistedMetrics.latest_sync.finished_at)}`
+                  : 'Última atualização ainda não informada'}
+              </p>
+            </div>
           </div>
         </section>
       )}
@@ -5870,7 +5882,7 @@ function ChatModuleDashboard({
         <section className="panel workspace-section-intro">
           <p className="workspace-eyebrow">Gestão e ações</p>
           <h2 className="mt-2 text-2xl font-bold">Onde agir e o que acompanhar?</h2>
-          <p className="section-subtitle">Diagnóstico gerencial, prioridades, pontos de atenção e ações para o próximo ciclo. A camada qualitativa de IA será incorporada depois da reorganização visual.</p>
+          <p className="section-subtitle">Diagnóstico gerencial, prioridades, pontos de atenção e ações para o próximo ciclo, com a camada qualitativa de IA em validação controlada por evidências.</p>
         </section>
       )}
 
