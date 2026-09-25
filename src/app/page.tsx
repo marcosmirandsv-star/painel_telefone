@@ -3743,6 +3743,7 @@ function ChatModuleDashboard({
   const [clickDeskQualitativeSummaryLoading, setClickDeskQualitativeSummaryLoading] = useState(false)
   const [clickDeskQualitativeSummaryRefresh, setClickDeskQualitativeSummaryRefresh] = useState(0)
   const [clickDeskQualitativeValidationTicketId, setClickDeskQualitativeValidationTicketId] = useState('')
+  const [chatQualitativeFocusAnalystId, setChatQualitativeFocusAnalystId] = useState('')
   const [manualPodiumDraft, setManualPodiumDraft] = useState<Record<number, string>>({})
   const [chatPodiumMessage, setChatPodiumMessage] = useState('')
   const [chatAnalystForm, setChatAnalystForm] = useState({ teamId: '', name: '', csatGoal: '86', photoFile: null as File | null })
@@ -5570,6 +5571,9 @@ function ChatModuleDashboard({
       let completed = 0
       let cached = 0
       let failed = 0
+      let firstFailure = ''
+
+      setChatQualitativeFocusAnalystId(metric.analyst_id)
 
       for (const ticket of sampleTickets) {
         try {
@@ -5582,16 +5586,23 @@ function ChatModuleDashboard({
             body: JSON.stringify({ ticket_id: ticket.ticket_id }),
           })
           const result = (await response.json()) as ClickDeskQualitativeResponse
+          result.error = result.error || result.erro
 
           if (!response.ok || result.error) {
             failed += 1
+            if (!firstFailure) {
+              firstFailure =
+                result.error ||
+                `Falha HTTP ${response.status} ao analisar o ticket ${ticket.ticket_id}.`
+            }
             continue
           }
 
           completed += 1
           if (result.cached) cached += 1
-        } catch {
+        } catch (error) {
           failed += 1
+          if (!firstFailure) firstFailure = getErrorMessage(error)
         }
       }
 
@@ -5601,7 +5612,9 @@ function ChatModuleDashboard({
       const failedText = failed > 0 ? ` · ${failed} não concluída(s)` : ''
 
       setChatReportQualitativeStatus(
-        `Leitura preparada: ${completed} de ${sampleTickets.length} tickets (${negativeCount} negativos + ${positiveCount} positivos)${reusedText}${failedText}. Valide as leituras em Gestão e ações; somente as aprovadas entram no feedback.`,
+        completed > 0
+          ? `Leitura preparada: ${completed} de ${sampleTickets.length} tickets (${negativeCount} negativos + ${positiveCount} positivos)${reusedText}${failedText}. Valide as leituras em Gestão e ações; somente as aprovadas entram no feedback.`
+          : `Nenhuma leitura foi concluída (${failed} de ${sampleTickets.length} falharam).${firstFailure ? ` Motivo: ${firstFailure}` : ''}`,
       )
     } catch (error) {
       setChatReportQualitativeStatus(getErrorMessage(error))
@@ -8558,7 +8571,7 @@ function ChatModuleDashboard({
           {!chatRanking.length && <EmptyState text="Nenhum dado para análise neste filtro." />}
         </div>
       </section>
-      <section className={chatActiveTab === 'reports' ? 'panel' : 'hidden'}>
+      <section id="chat-report-individual" className={chatActiveTab === 'reports' ? 'panel' : 'hidden'}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Relatório individual</p>
@@ -8679,9 +8692,19 @@ function ChatModuleDashboard({
                 <button
                   className="small-button shrink-0"
                   type="button"
-                  onClick={() => setChatActiveTab('podium')}
+                  disabled={!selectedChatReportMetric}
+                  onClick={() => {
+                    if (!selectedChatReportMetric) return
+                    setChatQualitativeFocusAnalystId(selectedChatReportMetric.analyst_id)
+                    setChatActiveTab('podium')
+                    window.setTimeout(() => {
+                      document
+                        .getElementById('chat-qualitative-validation')
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }, 80)
+                  }}
                 >
-                  Ir para validação
+                  Validar leituras deste analista
                 </button>
               </div>
             </div>
