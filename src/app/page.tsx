@@ -763,6 +763,9 @@ type ClickDeskClosurePreview = {
     csat_goal: number | null
     review_goal: number
     attendances: number
+    positive_reviews: number
+    negative_reviews: number
+    reviews: number
     csat: number | null
     review_percentage: number | null
   }>
@@ -3760,6 +3763,55 @@ function ChatModuleDashboard({
     setClickDeskClosureMessage('')
   }, [selectedTeamId, chat2PeriodKey])
 
+  useEffect(() => {
+    if (!isManagementUser || chatActiveTab !== 'reports' || !chat2PeriodKey) return
+
+    let cancelled = false
+
+    async function loadOfficialReportSnapshot() {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+
+        if (!session?.access_token) return
+
+        const [yearText, monthText] = chat2PeriodKey.split('-')
+        const year = Number(yearText)
+        const monthNumber = Number(monthText)
+        if (!Number.isInteger(year) || !Number.isInteger(monthNumber)) return
+
+        const params = new URLSearchParams({
+          mes: `${year}-${String(monthNumber).padStart(2, '0')}`,
+          canal: 'chat',
+          equipe: selectedTeamId,
+          fonte: 'oficial',
+        })
+        const response = await fetch(`/api/clickdesk/closures?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: 'no-store',
+        })
+
+        if (cancelled) return
+
+        if (response.ok) {
+          const data = (await response.json()) as ClickDeskClosurePreview
+          setClickDeskOfficialClosure(data)
+        } else {
+          setClickDeskOfficialClosure(null)
+        }
+      } catch {
+        if (!cancelled) setClickDeskOfficialClosure(null)
+      }
+    }
+
+    void loadOfficialReportSnapshot()
+
+    return () => {
+      cancelled = true
+    }
+  }, [isManagementUser, chatActiveTab, chat2PeriodKey, selectedTeamId])
+
   async function loadChatImportHistory() {
     if (!isManagementUser) return
 
@@ -4021,10 +4073,8 @@ function ChatModuleDashboard({
         return
       }
 
-      const closureYear =
-        chatActiveTab === 'reports' && selectedPeriod ? selectedPeriod.year : chat2SelectedPeriod.year
-      const closureMonthNumber =
-        chatActiveTab === 'reports' && selectedPeriod ? selectedPeriod.monthNumber : chat2SelectedPeriod.monthNumber
+      const closureYear = chat2SelectedPeriod.year
+      const closureMonthNumber = chat2SelectedPeriod.monthNumber
       const month = `${closureYear}-${String(closureMonthNumber).padStart(2, '0')}`
       const params = new URLSearchParams({
         mes: month,
@@ -4090,10 +4140,8 @@ function ChatModuleDashboard({
         return
       }
 
-      const closureYear =
-        chatActiveTab === 'reports' && selectedPeriod ? selectedPeriod.year : chat2SelectedPeriod.year
-      const closureMonthNumber =
-        chatActiveTab === 'reports' && selectedPeriod ? selectedPeriod.monthNumber : chat2SelectedPeriod.monthNumber
+      const closureYear = chat2SelectedPeriod.year
+      const closureMonthNumber = chat2SelectedPeriod.monthNumber
       const month = `${closureYear}-${String(closureMonthNumber).padStart(2, '0')}`
       const params = new URLSearchParams({
         mes: month,
@@ -4638,18 +4686,197 @@ function ChatModuleDashboard({
       return Number(a.metric.csat) - Number(b.metric.csat)
     })
     .slice(0, 6)
-  const selectedChatReportMetric =
-    visibleMetrics.find((metric) => metric.id === selectedChatReportMetricId) ?? visibleMetrics[0] ?? null
-  const selectedChatRankingItem = selectedChatReportMetric
-    ? chatRanking.find((item) => item.metric.id === selectedChatReportMetric.id)
-    : null
-  const selectedChatPodiumPosition = selectedChatReportMetric
-    ? podium.findIndex((metric) => metric?.analyst_id === selectedChatReportMetric.analyst_id) + 1
+  const [chatReportYearText, chatReportMonthText] = chat2PeriodKey.split('-')
+  const chatReportNow = new Date()
+  const chatReportYear = Number(chatReportYearText) || chatReportNow.getFullYear()
+  const chatReportMonthNumber = Number(chatReportMonthText) || chatReportNow.getMonth() + 1
+  const chatReportPeriodBase = getChatMonthPeriod(chatReportYear, chatReportMonthNumber)
+  const chatReportPeriod = {
+    ...chatReportPeriodBase,
+    year: chatReportYear,
+    monthNumber: chatReportMonthNumber,
+    key: `${chatReportYear}-${chatReportMonthNumber}`,
+  }
+  const chatReportMonthKey = `${chatReportYear}-${String(chatReportMonthNumber).padStart(2, '0')}`
+  const legacyChatReportMetrics = metrics.filter((metric) => {
+    const matchesTeam = selectedTeamId === 'all' || metric.team_id === selectedTeamId
+    return (
+      matchesTeam &&
+      metric.year === chatReportYear &&
+      metric.month_number === chatReportMonthNumber
+    )
+  })
+  const clickDeskReportPeriodMatches =
+    clickDeskPersistedMetrics?.period?.start === chatReportPeriod.start &&
+    clickDeskPersistedMetrics?.period?.end === chatReportPeriod.end
+  const clickDeskReportHasOfficialSnapshot =
+    Boolean(clickDeskOfficialClosure?.fechamento_id) &&
+    clickDeskOfficialClosure?.mes === chatReportMonthKey
+
+  const clickDeskOfficialReportMetrics: ChatMonthlyMetric[] =
+    clickDeskReportHasOfficialSnapshot
+      ? (clickDeskOfficialClosure?.analistas ?? []).map((item) => {
+          const analystProfile = analysts.find((analyst) => analyst.id === item.analyst_id)
+          const csatGoal = Number(item.csat_goal ?? analystProfile?.csat_goal ?? 90)
+          const reviewGoal = Number(item.review_goal ?? 25)
+          const csat = Number(item.csat ?? 0)
+          const reviewPercentage = Number(item.review_percentage ?? 0)
+          const teamName =
+            item.team_name ??
+            teams.find((team) => team.id === item.team_id)?.name ??
+            'Equipe'
+
+          return {
+            id: `clickdesk:${chatReportMonthKey}:${item.analyst_id}`,
+            team_id: item.team_id ?? analystProfile?.team_id ?? '',
+            analyst_id: item.analyst_id,
+            month_label: chatReportPeriod.label,
+            year: chatReportYear,
+            month_number: chatReportMonthNumber,
+            period_start: chatReportPeriod.start,
+            period_end: chatReportPeriod.end,
+            csat,
+            review_percentage: reviewPercentage,
+            sending_percentage: round(Math.max(0, 100 - reviewPercentage)),
+            total_tickets: Number(item.attendances ?? 0),
+            inactive_tickets: 0,
+            valid_tickets: Number(item.attendances ?? 0),
+            reviews: Number(item.reviews ?? 0),
+            positive_reviews: Number(item.positive_reviews ?? 0),
+            negative_reviews: Number(item.negative_reviews ?? 0),
+            csat_goal: csatGoal,
+            csat_delta: round(csat - csatGoal),
+            general_review_goal: reviewGoal,
+            status:
+              csat >= csatGoal && reviewPercentage >= reviewGoal
+                ? 'Meta Superada'
+                : csat < csatGoal && reviewPercentage < reviewGoal
+                  ? 'Critico'
+                  : 'Em acompanhamento',
+            chat_analysts: {
+              name: item.name,
+              csat_goal: csatGoal,
+              photo_url: analystProfile?.photo_url ?? null,
+            },
+            chat_teams: { name: teamName },
+          }
+        })
+      : []
+
+  const clickDeskLiveReportMetrics: ChatMonthlyMetric[] =
+    !clickDeskReportHasOfficialSnapshot && clickDeskReportPeriodMatches
+      ? (clickDeskPersistedMetrics?.by_analyst ?? [])
+          .filter((item) => Boolean(item.analyst_id))
+          .map((item) => {
+            const analystId = item.analyst_id as string
+            const analystProfile = analysts.find((analyst) => analyst.id === analystId)
+            const csatGoal = Number(analystProfile?.csat_goal ?? 90)
+            const reviewGoal = 25
+            const csat = Number(item.csat ?? 0)
+            const reviewPercentage = Number(item.review_percentage ?? 0)
+            const teamName =
+              teams.find((team) => team.id === item.team_id)?.name ??
+              item.area ??
+              'Equipe'
+
+            return {
+              id: `clickdesk:${chatReportMonthKey}:${analystId}`,
+              team_id: item.team_id ?? analystProfile?.team_id ?? '',
+              analyst_id: analystId,
+              month_label: chatReportPeriod.label,
+              year: chatReportYear,
+              month_number: chatReportMonthNumber,
+              period_start: chatReportPeriod.start,
+              period_end: chatReportPeriod.end,
+              csat,
+              review_percentage: reviewPercentage,
+              sending_percentage: round(Math.max(0, 100 - reviewPercentage)),
+              total_tickets: Number(item.attendances ?? 0),
+              inactive_tickets: 0,
+              valid_tickets: Number(item.attendances ?? 0),
+              reviews: Number(item.reviews ?? 0),
+              positive_reviews: Number(item.positive_reviews ?? 0),
+              negative_reviews: Number(item.negative_reviews ?? 0),
+              csat_goal: csatGoal,
+              csat_delta: round(csat - csatGoal),
+              general_review_goal: reviewGoal,
+              status:
+                csat >= csatGoal && reviewPercentage >= reviewGoal
+                  ? 'Meta Superada'
+                  : csat < csatGoal && reviewPercentage < reviewGoal
+                    ? 'Critico'
+                    : 'Em acompanhamento',
+              chat_analysts: {
+                name: analystProfile?.name ?? item.assignee_name,
+                csat_goal: csatGoal,
+                photo_url: analystProfile?.photo_url ?? null,
+              },
+              chat_teams: { name: teamName },
+            }
+          })
+      : []
+
+  const clickDeskChatReportMetrics =
+    clickDeskOfficialReportMetrics.length > 0
+      ? clickDeskOfficialReportMetrics
+      : clickDeskLiveReportMetrics
+  const chatReportUsesClickDesk = clickDeskChatReportMetrics.length > 0
+  const chatReportMetrics =
+    chatReportUsesClickDesk ? clickDeskChatReportMetrics : legacyChatReportMetrics
+  const chatReportAverageTickets = chatReportMetrics.length
+    ? round(
+        chatReportMetrics.reduce(
+          (sum, metric) => sum + Number(metric.total_tickets),
+          0,
+        ) / chatReportMetrics.length,
+      )
     : 0
+  const chatReportExcludedIds = new Set(
+    podiumExclusions
+      .filter((item) => {
+        const matchesTeam = selectedTeamId === 'all' || item.team_id === selectedTeamId
+        return (
+          matchesTeam &&
+          item.year === chatReportYear &&
+          item.month_number === chatReportMonthNumber
+        )
+      })
+      .map((item) => item.analyst_id),
+  )
+  const chatReportRanking = buildChatRanking(
+    chatReportMetrics,
+    chatReportAverageTickets,
+    chatReportExcludedIds,
+  )
+  const selectedChatReportMetric =
+    chatReportMetrics.find((metric) => metric.id === selectedChatReportMetricId) ??
+    chatReportMetrics[0] ??
+    null
+  const selectedChatRankingItem = selectedChatReportMetric
+    ? chatReportRanking.find((item) => item.metric.id === selectedChatReportMetric.id)
+    : null
+  const automaticChatReportPodium = chatReportRanking
+    .filter((item) => item.eligible && !item.excluded)
+    .slice(0, 3)
+    .map((item) => item.metric)
+  const selectedChatPodiumPosition = selectedChatReportMetric
+    ? chatReportUsesClickDesk
+      ? automaticChatReportPodium.findIndex(
+          (metric) => metric.analyst_id === selectedChatReportMetric.analyst_id,
+        ) + 1
+      : podium.findIndex(
+          (metric) => metric?.analyst_id === selectedChatReportMetric.analyst_id,
+        ) + 1
+    : 0
+  const chatReportSourceLabel = chatReportUsesClickDesk
+    ? clickDeskReportHasOfficialSnapshot
+      ? 'ClickDesk · fechamento oficial'
+      : 'ClickDesk · base viva'
+    : 'Zendesk · histórico legado'
   const chatReportFeedbackSuggestion = selectedChatReportMetric
     ? buildChatFeedbackText({
         metric: selectedChatReportMetric,
-        averageTickets,
+        averageTickets: chatReportAverageTickets,
         podiumPosition: selectedChatPodiumPosition,
         managerNotes: chatManagerNotes,
       })
@@ -5354,6 +5581,94 @@ function ChatModuleDashboard({
     }
   }
 
+  async function loadChatReportHistoryMetrics(
+    metric: ChatMonthlyMetric,
+  ): Promise<ChatMonthlyMetric[]> {
+    if (!chatReportUsesClickDesk) {
+      return metrics
+        .filter((historyMetric) => historyMetric.analyst_id === metric.analyst_id)
+        .sort((a, b) =>
+          a.year === b.year
+            ? a.month_number - b.month_number
+            : a.year - b.year,
+        )
+    }
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session?.access_token) return [metric]
+
+      const params = new URLSearchParams({ analyst_id: metric.analyst_id })
+      const response = await fetch(
+        `/api/clickdesk/history?${params.toString()}`,
+        {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: 'no-store',
+        },
+      )
+      const data = (await response.json()) as ClickDeskAnalystHistory
+      if (!response.ok || !data.points?.length) return [metric]
+
+      const analystName = getChatAnalystName(metric)
+      const analystPhoto =
+        analysts.find((analyst) => analyst.id === metric.analyst_id)?.photo_url ??
+        getChatAnalystPhoto(metric)
+
+      return data.points.map((point) => {
+        const [yearText, monthText] = point.month.split('-')
+        const year = Number(yearText)
+        const monthNumber = Number(monthText)
+        const period = getChatMonthPeriod(year, monthNumber)
+        const csatGoal = Number(point.csat_goal ?? metric.csat_goal ?? 90)
+        const reviewGoal = Number(point.review_goal ?? 25)
+        const csat = Number(point.csat ?? 0)
+        const reviewPercentage = Number(point.review_percentage ?? 0)
+
+        return {
+          id: `clickdesk-history:${point.month}:${metric.analyst_id}`,
+          team_id: point.team_id ?? metric.team_id,
+          analyst_id: metric.analyst_id,
+          month_label: point.label,
+          year,
+          month_number: monthNumber,
+          period_start: period.start,
+          period_end: period.end,
+          csat,
+          review_percentage: reviewPercentage,
+          sending_percentage: round(Math.max(0, 100 - reviewPercentage)),
+          total_tickets: Number(point.attendances ?? 0),
+          inactive_tickets: 0,
+          valid_tickets: Number(point.attendances ?? 0),
+          reviews: Number(point.reviews ?? 0),
+          positive_reviews: Number(point.positive_reviews ?? 0),
+          negative_reviews: Number(point.negative_reviews ?? 0),
+          csat_goal: csatGoal,
+          csat_delta: round(csat - csatGoal),
+          general_review_goal: reviewGoal,
+          status:
+            csat >= csatGoal && reviewPercentage >= reviewGoal
+              ? 'Meta Superada'
+              : csat < csatGoal && reviewPercentage < reviewGoal
+                ? 'Critico'
+                : 'Em acompanhamento',
+          chat_analysts: {
+            name: analystName,
+            csat_goal: csatGoal,
+            photo_url: analystPhoto,
+          },
+          chat_teams: {
+            name: point.team_name ?? getChatTeamName(metric),
+          },
+        }
+      })
+    } catch {
+      return [metric]
+    }
+  }
+
   function handleGenerateChatFeedbackDraft() {
     if (!selectedChatReportMetric) {
       setChatExportMessage('Selecione um analista com dados antes de gerar o feedback.')
@@ -5374,16 +5689,14 @@ function ChatModuleDashboard({
     setChatExportMessage('Gerando feedback com IA...')
 
     try {
-      const history = metrics
-        .filter((historyMetric) => historyMetric.analyst_id === selectedChatReportMetric.analyst_id)
-        .sort((a, b) => (a.year === b.year ? a.month_number - b.month_number : a.year - b.year))
-        .map((historyMetric) => ({
-          monthLabel: historyMetric.month_label,
-          csat: Number(historyMetric.csat),
-          reviewPercentage: Number(historyMetric.review_percentage),
-          sendingPercentage: Number(historyMetric.sending_percentage),
-          totalTickets: Number(historyMetric.total_tickets),
-        }))
+      const reportHistory = await loadChatReportHistoryMetrics(selectedChatReportMetric)
+      const history = reportHistory.map((historyMetric) => ({
+        monthLabel: historyMetric.month_label,
+        csat: Number(historyMetric.csat),
+        reviewPercentage: Number(historyMetric.review_percentage),
+        sendingPercentage: Number(historyMetric.sending_percentage),
+        totalTickets: Number(historyMetric.total_tickets),
+      }))
       const qualitativeContext = await loadChatQualitativeFeedbackContext(selectedChatReportMetric)
       const response = await fetch('/api/chat-feedback', {
         method: 'POST',
@@ -5393,10 +5706,10 @@ function ChatModuleDashboard({
           feedbackStyle: chatFeedbackStyle,
           feedbackGoal: chatFeedbackGoal,
           generationMode: 'generate',
-          periodLabel: selectedPeriod?.label ?? 'Período',
+          periodLabel: chatReportPeriod.label,
           managerNotes: chatManagerNotes,
           fallbackText: chatReportFeedbackSuggestion,
-          averageTickets,
+          averageTickets: chatReportAverageTickets,
           podiumPosition: selectedChatPodiumPosition,
           metric: {
             analystName: getChatAnalystName(selectedChatReportMetric),
@@ -5451,16 +5764,14 @@ function ChatModuleDashboard({
     setChatExportMessage('Melhorando texto com IA...')
 
     try {
-      const history = metrics
-        .filter((historyMetric) => historyMetric.analyst_id === selectedChatReportMetric.analyst_id)
-        .sort((a, b) => (a.year === b.year ? a.month_number - b.month_number : a.year - b.year))
-        .map((historyMetric) => ({
-          monthLabel: historyMetric.month_label,
-          csat: Number(historyMetric.csat),
-          reviewPercentage: Number(historyMetric.review_percentage),
-          sendingPercentage: Number(historyMetric.sending_percentage),
-          totalTickets: Number(historyMetric.total_tickets),
-        }))
+      const reportHistory = await loadChatReportHistoryMetrics(selectedChatReportMetric)
+      const history = reportHistory.map((historyMetric) => ({
+        monthLabel: historyMetric.month_label,
+        csat: Number(historyMetric.csat),
+        reviewPercentage: Number(historyMetric.review_percentage),
+        sendingPercentage: Number(historyMetric.sending_percentage),
+        totalTickets: Number(historyMetric.total_tickets),
+      }))
       const qualitativeContext = await loadChatQualitativeFeedbackContext(selectedChatReportMetric)
       const response = await fetch('/api/chat-feedback', {
         method: 'POST',
@@ -5470,10 +5781,10 @@ function ChatModuleDashboard({
           feedbackStyle: chatFeedbackStyle,
           feedbackGoal: chatFeedbackGoal,
           generationMode: 'improve',
-          periodLabel: selectedPeriod?.label ?? 'Período',
+          periodLabel: chatReportPeriod.label,
           managerNotes: chatManagerNotes,
           fallbackText: baseFeedback,
-          averageTickets,
+          averageTickets: chatReportAverageTickets,
           podiumPosition: selectedChatPodiumPosition,
           metric: {
             analystName: getChatAnalystName(selectedChatReportMetric),
@@ -5512,7 +5823,8 @@ function ChatModuleDashboard({
   }
 
   function buildChatReportExportPayload(
-    qualitativeContext?: ChatQualitativeFeedbackContext,
+    qualitativeContext: ChatQualitativeFeedbackContext | undefined,
+    monthlyHistory: ChatMonthlyMetric[],
   ) {
     if (!selectedChatReportMetric) return null
 
@@ -5520,15 +5832,14 @@ function ChatModuleDashboard({
 
     return {
       metric: selectedChatReportMetric,
-      periodLabel: selectedPeriod?.label ?? 'Período',
-      averageTickets,
+      periodLabel: chatReportPeriod.label,
+      averageTickets: chatReportAverageTickets,
       podiumPosition: selectedChatPodiumPosition,
-      monthlyHistory: metrics
-        .filter((historyMetric) => historyMetric.analyst_id === selectedChatReportMetric.analyst_id)
-        .sort((a, b) => (a.year === b.year ? a.month_number - b.month_number : a.year - b.year)),
+      monthlyHistory,
       managerNotes: chatManagerNotes,
       feedbackText: finalFeedbackText,
       qualitativeContext,
+      dataSourceLabel: chatReportSourceLabel,
       photoUrl: getAnalystPhoto(
         getChatAnalystName(selectedChatReportMetric),
         analysts.find((analyst) => analyst.id === selectedChatReportMetric.analyst_id)?.photo_url,
@@ -5547,7 +5858,8 @@ function ChatModuleDashboard({
       const qualitativeContext = await loadChatQualitativeFeedbackContext(
         selectedChatReportMetric,
       )
-      const payload = buildChatReportExportPayload(qualitativeContext)
+      const monthlyHistory = await loadChatReportHistoryMetrics(selectedChatReportMetric)
+      const payload = buildChatReportExportPayload(qualitativeContext, monthlyHistory)
 
       if (!payload) {
         setChatExportMessage('Não foi possível montar os dados do relatório individual.')
@@ -5570,8 +5882,26 @@ function ChatModuleDashboard({
     const period = getChatMonthPeriod(year, monthNumber)
     return { ...period, year, monthNumber, key: `${year}-${monthNumber}` }
   })
+  const chatReportPeriods = Array.from(
+    new Map(
+      [
+        ...chat2Periods,
+        ...periods.map((period) => ({
+          ...getChatMonthPeriod(period.year, period.monthNumber),
+          label: period.label,
+          year: period.year,
+          monthNumber: period.monthNumber,
+          key: `${period.year}-${period.monthNumber}`,
+        })),
+      ].map((period) => [period.key, period]),
+    ).values(),
+  ).sort((a, b) => b.start.localeCompare(a.start))
+  const chat2PeriodOptions =
+    chatActiveTab === 'reports' ? chatReportPeriods : chat2Periods
   const chat2SelectedPeriod =
-    chat2Periods.find((period) => period.key === chat2PeriodKey) ?? chat2Periods[0]
+    chat2PeriodOptions.find((period) => period.key === chat2PeriodKey) ??
+    chat2PeriodOptions[0] ??
+    chat2Periods[0]
   const chat2PreviousDate = new Date(Date.UTC(chat2SelectedPeriod.year, chat2SelectedPeriod.monthNumber - 2, 1))
   const chat2PreviousPeriod = {
     ...getChatMonthPeriod(chat2PreviousDate.getUTCFullYear(), chat2PreviousDate.getUTCMonth() + 1),
@@ -6042,10 +6372,31 @@ function ChatModuleDashboard({
                 ))}
               </select>
             </Field>
-            <Field label={chatActiveTab === 'prototype' || chatActiveTab === 'overview' || chatActiveTab === 'podium' ? 'Período ClickDesk' : 'Período'}>
-              {chatActiveTab === 'prototype' || chatActiveTab === 'overview' || chatActiveTab === 'podium' ? (
-                <select className="form-input" value={chat2PeriodKey} onChange={(event) => setChat2PeriodKey(event.target.value)}>
-                  {chat2Periods.map((period) => (
+            <Field
+              label={
+                chatActiveTab === 'reports'
+                  ? 'Período do relatório'
+                  : chatActiveTab === 'prototype' || chatActiveTab === 'overview' || chatActiveTab === 'podium'
+                    ? 'Período ClickDesk'
+                    : 'Período'
+              }
+            >
+              {chatActiveTab === 'prototype' || chatActiveTab === 'overview' || chatActiveTab === 'podium' || chatActiveTab === 'reports' ? (
+                <select
+                  className="form-input"
+                  value={chat2PeriodKey}
+                  onChange={(event) => {
+                    const value = event.target.value
+                    setChat2PeriodKey(value)
+                    if (chatActiveTab === 'reports') {
+                      setSelectedPeriodKey(value)
+                      setSelectedChatReportMetricId('')
+                      setChatFeedbackDraft('')
+                      setChatReportQualitativeStatus('')
+                    }
+                  }}
+                >
+                  {(chatActiveTab === 'reports' ? chatReportPeriods : chat2Periods).map((period) => (
                     <option key={period.key} value={period.key}>
                       {period.label}{period.key === chat2Periods[0]?.key ? ' · mês atual' : ''}
                     </option>
@@ -8125,6 +8476,9 @@ function ChatModuleDashboard({
             <p className="section-subtitle">
               Fluxo guiado: confira os dados, gere o feedback, revise o texto final e exporte o documento individual.
             </p>
+            <p className="mt-2 text-xs text-slate-500">
+              Fonte desta competência: <strong className="text-slate-300">{chatReportSourceLabel}</strong>
+            </p>
           </div>
 
           <div className="grid flex-1 gap-3 md:grid-cols-3">
@@ -8138,7 +8492,7 @@ function ChatModuleDashboard({
                   setChatReportQualitativeStatus('')
                 }}
               >
-                {visibleMetrics.map((metric) => (
+                {chatReportMetrics.map((metric) => (
                   <option key={metric.id} value={metric.id}>
                     {getChatAnalystName(metric)}
                   </option>
@@ -8177,7 +8531,7 @@ function ChatModuleDashboard({
             <MetricCard label="Atendimentos" value={selectedChatReportMetric.total_tickets} />
             <MetricCard
               label="Volume vs média"
-              value={`${Number(selectedChatReportMetric.total_tickets) - averageTickets >= 0 ? '+' : ''}${formatChatCount(round(Number(selectedChatReportMetric.total_tickets) - averageTickets))}`}
+              value={`${Number(selectedChatReportMetric.total_tickets) - chatReportAverageTickets >= 0 ? '+' : ''}${formatChatCount(round(Number(selectedChatReportMetric.total_tickets) - chatReportAverageTickets))}`}
             />
             <MetricCard label="Pódio" value={selectedChatPodiumPosition > 0 ? `${selectedChatPodiumPosition}º lugar` : 'Fora'} />
           </div>
@@ -13378,6 +13732,7 @@ async function exportChatIndividualReport({
   managerNotes,
   feedbackText,
   qualitativeContext,
+  dataSourceLabel,
   photoUrl,
 }: {
   metric: ChatMonthlyMetric
@@ -13388,6 +13743,7 @@ async function exportChatIndividualReport({
   managerNotes: string
   feedbackText: string
   qualitativeContext?: ChatQualitativeFeedbackContext
+  dataSourceLabel: string
   photoUrl?: string | null
 }) {
   const analystName = getChatAnalystName(metric)
@@ -13575,7 +13931,7 @@ async function exportChatIndividualReport({
         <div class="header">
           <div class="header-content">
             ${photoHtml}
-            <div><h1>Relatório de Performance - ${safeName}</h1><p class="subtitle">Período: ${escapeHtml(periodLabel)} | Fonte: indicadores mensais${qualitativeFindings.length ? ' + resumo qualitativo ClickDesk' : ''}</p></div>
+            <div><h1>Relatório de Performance - ${safeName}</h1><p class="subtitle">Período: ${escapeHtml(periodLabel)} | Fonte: ${escapeHtml(dataSourceLabel)}${qualitativeFindings.length ? ' + resumo qualitativo validado' : ''}</p></div>
           </div>
         </div>
 
