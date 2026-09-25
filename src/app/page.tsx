@@ -5879,6 +5879,99 @@ function ChatModuleDashboard({
     csat: item.reviews > 0 ? round((item.positive / item.reviews) * 100) : null,
     reviewPercentage: item.attendances > 0 ? round((item.reviews / item.attendances) * 100) : null,
   }))
+  const chat2ManagementRows = chat2ProductivityRows
+    .map((item) => {
+      const analystProfile =
+        analysts.find((analyst) => analyst.id === item.analyst_id) ??
+        analysts.find((analyst) => normalizeChatText(analyst.name) === normalizeChatText(item.assignee_name)) ??
+        null
+      const csatGoal = analystProfile ? Number(analystProfile.csat_goal) : 90
+      const reviewGoal = 25
+      const teamKey = item.team_id ?? item.area ?? 'sem-time'
+      const teamAverage = chat2ProductivityAverageByTeam[teamKey] ?? chat2ProductivityAverageTickets
+      const csatValue = item.csat === null ? null : Number(item.csat)
+      const reviewValue = item.review_percentage === null ? null : Number(item.review_percentage)
+      const csatGap = csatValue === null ? null : round(csatValue - csatGoal)
+      const reviewGap = reviewValue === null ? null : round(reviewValue - reviewGoal)
+      const volumeGap = round(Number(item.attendances) - teamAverage)
+      const csatNeedsAttention = csatGap === null || csatGap < 0
+      const reviewNeedsAttention = reviewGap === null || reviewGap < 0
+      const volumeNeedsContext = volumeGap < 0
+      const priority = csatNeedsAttention || reviewNeedsAttention
+      const signals: string[] = []
+
+      if (csatGap === null) {
+        signals.push('CSAT ainda sem base')
+      } else if (csatGap < 0) {
+        signals.push(`CSAT ${formatDelta(csatGap, ' p.p.')} da meta individual`)
+      }
+
+      if (reviewGap === null) {
+        signals.push('Avaliações ainda sem base')
+      } else if (reviewGap < 0) {
+        signals.push(`Avaliações ${formatDelta(reviewGap, ' p.p.')} da referência`)
+      }
+
+      if (volumeNeedsContext) {
+        signals.push(`Volume ${formatDelta(volumeGap)} vs. média do time`)
+      }
+
+      let action = 'Manter acompanhamento e reconhecer a consistência do resultado.'
+      if (csatNeedsAttention && reviewNeedsAttention) {
+        action = Number(item.negative_reviews ?? 0) > 0
+          ? `Revisar ${formatChatCount(item.negative_reviews)} avaliação(ões) negativa(s) antes do 1:1 e, em paralelo, reforçar o encerramento com convite à pesquisa.`
+          : 'Revisar a qualidade do atendimento e ampliar a base de avaliações antes de definir uma ação individual.'
+      } else if (csatNeedsAttention) {
+        action = Number(item.negative_reviews ?? 0) > 0
+          ? `Revisar ${formatChatCount(item.negative_reviews)} avaliação(ões) negativa(s) e identificar fatos observáveis antes do feedback.`
+          : 'Acompanhar novas avaliações e revisar atendimentos antes de atribuir causa ao CSAT.'
+      } else if (reviewNeedsAttention) {
+        action = 'Reforçar o encerramento do atendimento e o convite à pesquisa; acompanhar se a participação sobe no próximo recorte.'
+      } else if (volumeNeedsContext) {
+        action = 'Validar disponibilidade, apoio a outras demandas, ausências e duração dos atendimentos antes de tratar o volume como desempenho individual.'
+      }
+
+      const score =
+        (csatNeedsAttention ? 4 : 0) +
+        (reviewNeedsAttention ? 2 : 0) +
+        (volumeNeedsContext ? 1 : 0) +
+        (Number(item.negative_reviews ?? 0) > 0 ? 1 : 0)
+
+      return {
+        ...item,
+        csatGoal,
+        reviewGoal,
+        teamAverage,
+        csatGap,
+        reviewGap,
+        volumeGap,
+        priority,
+        volumeNeedsContext,
+        signals,
+        action,
+        score,
+      }
+    })
+    .sort((a, b) => {
+      if (Number(b.priority) !== Number(a.priority)) return Number(b.priority) - Number(a.priority)
+      if (b.score !== a.score) return b.score - a.score
+      return (a.csat ?? 0) - (b.csat ?? 0)
+    })
+  const chat2ManagementPriorities = chat2ManagementRows.filter((item) => item.priority)
+  const chat2ManagementVolumeContexts = chat2ManagementRows.filter((item) => item.volumeNeedsContext)
+  const chat2ManagementHealthy = chat2ManagementRows.filter(
+    (item) => !item.priority,
+  )
+  const chat2ManagementCsatAttention = chat2ManagementRows.filter(
+    (item) => item.csatGap === null || item.csatGap < 0,
+  )
+  const chat2ManagementReviewAttention = chat2ManagementRows.filter(
+    (item) => item.reviewGap === null || item.reviewGap < 0,
+  )
+  const chat2ManagementNegativeReviews = chat2ManagementRows.reduce(
+    (sum, item) => sum + Number(item.negative_reviews ?? 0),
+    0,
+  )
   const chat2SelectedMetric =
     chat2VisibleMetrics.find((metric) => metric.analyst_id === chat2AnalystId) ?? chat2VisibleMetrics[0] ?? null
   const chat2TeamMetrics = chat2SelectedMetric
@@ -7088,49 +7181,53 @@ function ChatModuleDashboard({
       <section className={chatActiveTab === 'podium' ? 'panel' : 'hidden'}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Prioridades do período</p>
-            <h2 className="mt-2 text-2xl font-bold">Quem precisa de atenção agora?</h2>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Gestão e ações</p>
+            <h2 className="mt-2 text-2xl font-bold">Quem precisa da sua atenção e qual é o próximo passo?</h2>
             <p className="section-subtitle">
-              A fila abaixo usa somente indicadores objetivos. Causa, sentimento e influência do atendimento humano só serão atribuídos quando a camada qualitativa estiver validada.
+              Fila construída com a base viva do ClickDesk. Qualidade e participação definem prioridade; volume abaixo da média do próprio time aparece como contexto operacional a validar, não como falha automática.
             </p>
           </div>
-          <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
             <div className="rounded-lg bg-slate-950/45 px-3 py-2">
               <span className="block text-xs text-slate-500">Prioridades</span>
-              <strong className="mt-1 block text-lg tabular-nums">{chatManagementPriorities.length}</strong>
+              <strong className="mt-1 block text-lg tabular-nums text-amber-200">{chat2ManagementPriorities.length}</strong>
             </div>
             <div className="rounded-lg bg-slate-950/45 px-3 py-2">
-              <span className="block text-xs text-slate-500">Elegíveis</span>
-              <strong className="mt-1 block text-lg tabular-nums text-emerald-300">{chatEligibleCount}</strong>
+              <span className="block text-xs text-slate-500">Dentro das metas</span>
+              <strong className="mt-1 block text-lg tabular-nums text-emerald-300">{chat2ManagementHealthy.length}</strong>
             </div>
             <div className="rounded-lg bg-slate-950/45 px-3 py-2">
-              <span className="block text-xs text-slate-500">Críticos</span>
-              <strong className="mt-1 block text-lg tabular-nums text-rose-300">{chatCriticalCount}</strong>
+              <span className="block text-xs text-slate-500">Contexto de volume</span>
+              <strong className="mt-1 block text-lg tabular-nums text-cyan-200">{chat2ManagementVolumeContexts.length}</strong>
+            </div>
+            <div className="rounded-lg bg-slate-950/45 px-3 py-2">
+              <span className="block text-xs text-slate-500">Negativas</span>
+              <strong className="mt-1 block text-lg tabular-nums text-rose-200">{chat2ManagementNegativeReviews}</strong>
             </div>
           </div>
         </div>
 
-        {chatManagementPriorities.length > 0 ? (
+        {chat2ManagementPriorities.length > 0 ? (
           <div className="mt-5 space-y-3">
-            {chatManagementPriorities.map((item, index) => (
-              <div key={item.analyst} className="rounded-xl border border-white/10 bg-slate-950/30 p-4">
-                <div className="grid gap-4 xl:grid-cols-[auto_1.1fr_1.4fr_1fr] xl:items-center">
+            {chat2ManagementPriorities.map((item, index) => (
+              <div key={`${item.area}::${item.assignee_name}`} className="rounded-xl border border-white/10 bg-slate-950/30 p-4">
+                <div className="grid gap-4 xl:grid-cols-[auto_1.15fr_1.4fr_1.15fr_auto] xl:items-center">
                   <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-300/10 text-sm font-bold text-amber-200">
                     {index + 1}
                   </span>
                   <div>
-                    <strong className="text-slate-100">{item.analyst}</strong>
-                    <p className="mt-1 text-xs text-slate-500">{item.team}</p>
+                    <strong className="text-slate-100">{item.assignee_name}</strong>
+                    <p className="mt-1 text-xs text-slate-500">{item.area}</p>
                     <p className="mt-2 text-xs text-slate-400">
-                      CSAT {formatChatPercent(item.csat)} · avaliações {formatChatPercent(item.reviews)} · {formatChatCount(item.tickets)} atendimentos
+                      CSAT {item.csat === null ? '—' : formatChatPercent(item.csat)} · avaliações {item.review_percentage === null ? '—' : formatChatPercent(item.review_percentage)} · {formatChatCount(item.attendances)} atendimentos
                     </p>
                   </div>
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Sinais objetivos</p>
                     <div className="mt-2 flex flex-wrap gap-2">
-                      {item.reasons.map((reason) => (
-                        <span key={reason} className="rounded-md border border-amber-300/15 bg-amber-300/5 px-2 py-1 text-xs text-amber-100">
-                          {formatStatusText(reason)}
+                      {item.signals.map((signal) => (
+                        <span key={signal} className="rounded-md border border-amber-300/15 bg-amber-300/5 px-2 py-1 text-xs text-amber-100">
+                          {signal}
                         </span>
                       ))}
                     </div>
@@ -7139,85 +7236,76 @@ function ChatModuleDashboard({
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-300">Próxima ação</p>
                     <p className="mt-2 text-sm leading-5 text-slate-300">{item.action}</p>
                   </div>
+                  <button
+                    type="button"
+                    className="small-button"
+                    onClick={() => {
+                      setChat2LiveAnalystKey(`${item.area}::${item.assignee_name}`)
+                      setChatActiveTab('prototype')
+                    }}
+                  >
+                    Abrir analista
+                  </button>
                 </div>
               </div>
             ))}
           </div>
         ) : (
           <div className="mt-5 rounded-xl border border-emerald-400/15 bg-emerald-400/5 p-5 text-sm text-emerald-100">
-            Nenhum analista entrou na fila objetiva de prioridade neste período. Mantenha o acompanhamento e valide se o resultado se sustenta no próximo ciclo.
+            Nenhum analista está abaixo da meta individual de CSAT ou da referência de 25% de avaliações neste recorte.
           </div>
         )}
       </section>
 
       <section className={chatActiveTab === 'podium' ? 'panel' : 'hidden'}>
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Leitura gerencial</p>
-          <h2 className="mt-2 text-2xl font-bold">Diagnóstico, ação e decisão</h2>
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Plano de gestão</p>
+          <h2 className="mt-2 text-2xl font-bold">O que atacar primeiro?</h2>
           <p className="section-subtitle">
-            Esta camada transforma os indicadores do período em uma sequência prática de gestão, sem atribuir causas que ainda não foram validadas qualitativamente.
+            A leitura abaixo separa qualidade, participação e contexto operacional para evitar que indicadores diferentes recebam a mesma tratativa.
           </p>
         </div>
 
-        <div className="mt-5 grid gap-3 lg:grid-cols-3">
-          {chatMonthlyContextCards.map((card) => (
-            <div key={card.label} className="rounded-lg border border-cyan-400/15 bg-cyan-400/5 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-300">{card.label}</p>
-              <p className="mt-2 text-lg font-bold">{card.value}</p>
-              <p className="mt-1 text-sm leading-6 text-slate-300">{card.detail}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-5 grid gap-4 xl:grid-cols-3">
-          <div className="rounded-lg bg-slate-900 p-5">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">1. Diagnóstico</p>
-            <h3 className="mt-3 text-xl font-bold">O que os números mostram</h3>
-            <p className="mt-3 text-sm leading-6 text-slate-300">{chatManagementDiagnosis}</p>
-            <div className="mt-4 grid gap-2 text-sm text-slate-300">
-              <span>CSAT médio: <strong>{formatChatPercent(averageCsat)}</strong></span>
-              <span>Avaliações: <strong>{formatChatPercent(averageReviews)}</strong></span>
-              <span>Sem avaliação: <strong>{formatChatPercent(averageSending)}</strong></span>
-              <span>Inativos: <strong>{formatChatPercent(chatInactiveRate)}</strong></span>
-            </div>
+        <div className="mt-5 grid gap-4 lg:grid-cols-3">
+          <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-200">Qualidade</p>
+            <strong className="mt-2 block text-2xl tabular-nums">{chat2ManagementCsatAttention.length}</strong>
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              analista(s) abaixo da própria meta de CSAT ou ainda sem base suficiente. Priorize avaliações negativas e fatos observáveis antes do feedback.
+            </p>
           </div>
-
-          <div className="rounded-lg bg-slate-900 p-5">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">2. Ação</p>
-            <h3 className="mt-3 text-xl font-bold">O que fazer agora</h3>
-            <ul className="mt-3 space-y-3 text-sm leading-6 text-slate-300">
-              {chatTacticalPlan.map((item) => (
-                <li key={item} className="rounded-md bg-slate-950/70 px-3 py-2">{item}</li>
-              ))}
-            </ul>
+          <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-200">Participação</p>
+            <strong className="mt-2 block text-2xl tabular-nums">{chat2ManagementReviewAttention.length}</strong>
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              analista(s) abaixo de 25% de avaliações ou ainda sem base. Trabalhe encerramento, confirmação da solução e convite à pesquisa.
+            </p>
           </div>
-
-          <div className="rounded-lg bg-slate-900 p-5">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">3. Decisão</p>
-            <h3 className="mt-3 text-xl font-bold">Como conduzir o fechamento</h3>
-            <p className="mt-3 text-sm leading-6 text-slate-300">{chatStrategicDecision}</p>
-            <p className="mt-4 rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-100">{chatStrategicTrend}</p>
+          <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-300">Contexto operacional</p>
+            <strong className="mt-2 block text-2xl tabular-nums">{chat2ManagementVolumeContexts.length}</strong>
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              analista(s) abaixo da média do próprio time. Antes de qualquer cobrança, valide disponibilidade, ausências, apoio a outras demandas e duração dos atendimentos.
+            </p>
           </div>
         </div>
-      </section>
 
-      <section className={chatActiveTab === 'podium' ? 'panel' : 'hidden'}>
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Inteligência do fechamento mensal</p>
-          <h2 className="mt-2 text-2xl font-bold">Ações de gestão para o próximo ciclo</h2>
-          <p className="section-subtitle">
-            Leitura desenhada para o uso real do chat: fechamento mensal, reconhecimento, exceções operacionais e plano do próximo mês.
-          </p>
-        </div>
-
-        <div className="mt-5 grid gap-4 xl:grid-cols-4">
-          {chatMonthlyManagementCards.map((card) => (
-            <div key={card.label} className="rounded-lg bg-slate-900 p-5">
-              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">{card.label}</p>
-              <h3 className="mt-3 text-lg font-bold">{card.title}</h3>
-              <p className="mt-3 text-sm leading-6 text-slate-300">{card.text}</p>
+        <div className="mt-5 rounded-xl border border-cyan-400/15 bg-cyan-400/5 p-5">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-300">Sequência recomendada</p>
+          <div className="mt-3 grid gap-3 md:grid-cols-3">
+            <div className="rounded-lg bg-slate-950/40 p-4">
+              <strong className="text-slate-100">1. Validar o fato</strong>
+              <p className="mt-2 text-sm leading-6 text-slate-400">Confira o indicador e, quando houver CSAT baixo, leia as avaliações negativas antes de concluir a causa.</p>
             </div>
-          ))}
+            <div className="rounded-lg bg-slate-950/40 p-4">
+              <strong className="text-slate-100">2. Separar causa de contexto</strong>
+              <p className="mt-2 text-sm leading-6 text-slate-400">Volume baixo pede contexto operacional. Qualidade e participação pedem ações diferentes.</p>
+            </div>
+            <div className="rounded-lg bg-slate-950/40 p-4">
+              <strong className="text-slate-100">3. Combinar uma ação observável</strong>
+              <p className="mt-2 text-sm leading-6 text-slate-400">Feche o 1:1 com uma mudança concreta e um indicador para acompanhar no próximo recorte.</p>
+            </div>
+          </div>
         </div>
       </section>
 
