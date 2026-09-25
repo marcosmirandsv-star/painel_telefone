@@ -311,7 +311,6 @@ async function generateWithVercelGateway(prompt: string) {
           temperature: 0.15,
           max_tokens: 1800,
           stream: false,
-          response_format: { type: 'json_object' },
         }),
       },
     )
