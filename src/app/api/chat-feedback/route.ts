@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { normalizeQualitativeAnalysis } from '@/lib/clickdesk-qualitative'
 
 export const runtime = 'nodejs'
 
@@ -38,6 +39,18 @@ type ChatFeedbackRequest = {
     sendingPercentage: number
     totalTickets: number
   }[]
+  qualitativeContext?: {
+    analyzedCount?: number
+    negativeAnalyzed?: number
+    positiveAnalyzed?: number
+    negativeTotal?: number
+    positiveTotal?: number
+    findings?: {
+      satisfactionLabel?: string | null
+      occurredDate?: string | null
+      analysis?: unknown
+    }[]
+  }
 }
 
 const styleInstructions = {
@@ -168,6 +181,18 @@ function buildPrompt(body: ChatFeedbackRequest) {
     : '- Quando o volume estiver abaixo da média, informe a diferença em atendimentos e proponha verificar juntos o contexto operacional, como pausas, ausências, duração dos atendimentos ou atuação em outras atividades. Nunca afirme que existe um método de distribuição de chamados nem atribua a diferença à pessoa sem evidência.'
   const caseProfile = classifyFeedbackCase(body)
   const managerHasContext = Boolean(body.managerNotes?.trim())
+  const qualitativeContext = body.qualitativeContext
+  const qualitativeFindings = (qualitativeContext?.findings ?? [])
+    .slice(0, 8)
+    .map((item) => ({
+      satisfaction: item.satisfactionLabel ?? 'sem classificação',
+      date: item.occurredDate ?? 'data não informada',
+      analysis: normalizeQualitativeAnalysis(item.analysis),
+    }))
+  const qualitativeCoverage =
+    qualitativeContext && Number(qualitativeContext.analyzedCount) > 0
+      ? `${Number(qualitativeContext.analyzedCount)} tickets analisados; ${Number(qualitativeContext.negativeAnalyzed ?? 0)} de ${Number(qualitativeContext.negativeTotal ?? 0)} negativas e ${Number(qualitativeContext.positiveAnalyzed ?? 0)} de ${Number(qualitativeContext.positiveTotal ?? 0)} positivas.`
+      : 'Nenhum ticket qualitativo analisado para este ciclo.'
 
   return `
 Você é um coach sênior de atendimento ao cliente e editor de relatórios de performance. Sua tarefa é escrever uma devolutiva individual, específica e natural a partir de fatos calculados pelo sistema e do contexto fornecido pelo gestor.
@@ -197,6 +222,10 @@ ${volumeRule}
 - Só chame uma colocação de pódio quando ela estiver entre o primeiro e o terceiro lugar. Nas demais, diga "posição no ranking".
 - Não mencione variação contra período anterior quando não houver um valor anterior real no histórico recebido.
 - Não invente a causa de um resultado. Quando a causa não estiver nos dados ou nas observações, registre que gestor e analista vão verificá-la juntos.
+- Quando houver evidências qualitativas, trate-as explicitamente como amostra dos tickets analisados. Nunca generalize um padrão da amostra para todos os atendimentos do mês.
+- Respeite o nível de confiança da análise qualitativa. Confiança baixa deve aparecer como hipótese ou ponto a validar, nunca como conclusão.
+- Só transforme uma evidência qualitativa em orientação comportamental quando coaching_signal.available for verdadeiro ou quando as observações do gestor trouxerem o mesmo comportamento de forma explícita.
+- Uma causa classificada como empresa, sistema, processo, cliente ou fator externo não deve ser convertida em culpa individual do analista.
 - Não comece com parabéns genérico. Comece pelo aspecto que torna este caso diferente dos demais.
 - A base do sistema é uma ficha factual, não um modelo de redação. Não copie sua ordem, frases ou cadência. Use-a somente para preservar fatos e limites da análise.
 - Se houver observações do gestor, trate-as como principal fonte de personalização e conecte-as ao combinado. Se não houver, não invente comportamento observado nem contexto operacional.
@@ -237,6 +266,12 @@ ${JSON.stringify(body.monthlyHistory ?? [], null, 2)}
 Observacoes do gestor:
 ${body.managerNotes?.trim() || 'Sem observações adicionais.'}
 Contexto específico fornecido pelo gestor: ${managerHasContext ? 'sim; ele deve orientar a personalização do texto' : 'não; limite-se aos indicadores e sinalize hipóteses como pontos a verificar'}
+
+Cobertura qualitativa da amostra:
+${qualitativeCoverage}
+
+Evidências qualitativas estruturadas dos tickets já analisados:
+${qualitativeFindings.length ? JSON.stringify(qualitativeFindings, null, 2) : 'Nenhuma evidência qualitativa disponível.'}
 
 Base factual do sistema. Preserve os fatos, mas não copie a redação nem a estrutura:
 ${body.fallbackText ?? ''}
