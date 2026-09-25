@@ -2501,31 +2501,6 @@ function QualitativeAnalysisCard({
 
   if (!result.analysis) return null
 
-  if (result.validation_status === 'rejected') {
-    return (
-      <div className="mt-3 rounded-lg border border-rose-400/20 bg-rose-400/5 p-4 text-sm text-rose-100">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <strong>Leitura descartada pela gestão</strong>
-            <p className="mt-1 text-xs leading-5 text-slate-400">
-              Esta interpretação não entra nos padrões da operação nem no feedback mensal.
-            </p>
-          </div>
-          {onReanalyze && (
-            <button
-              type="button"
-              className="small-button"
-              disabled={reanalyzing}
-              onClick={() => onReanalyze()}
-            >
-              {reanalyzing ? 'Reanalisando...' : 'Reanalisar ticket'}
-            </button>
-          )}
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="mt-3 rounded-xl border border-violet-400/15 bg-violet-400/5 p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
