@@ -4828,14 +4828,6 @@ function ChatModuleDashboard({
   const chatReportUsesClickDesk = clickDeskChatReportMetrics.length > 0
   const chatReportMetrics =
     chatReportUsesClickDesk ? clickDeskChatReportMetrics : legacyChatReportMetrics
-  const chatReportAverageTickets = chatReportMetrics.length
-    ? round(
-        chatReportMetrics.reduce(
-          (sum, metric) => sum + Number(metric.total_tickets),
-          0,
-        ) / chatReportMetrics.length,
-      )
-    : 0
   const chatReportExcludedIds = new Set(
     podiumExclusions
       .filter((item) => {
@@ -4848,6 +4840,18 @@ function ChatModuleDashboard({
       })
       .map((item) => item.analyst_id),
   )
+  const chatReportCalculationMetrics = chatReportMetrics.filter(
+    (metric) => !chatReportExcludedIds.has(metric.analyst_id),
+  )
+  const chatReportAverageTickets = chatReportCalculationMetrics.length
+    ? round(
+        chatReportCalculationMetrics.reduce(
+          (sum, metric) => sum + Number(metric.total_tickets),
+          0,
+        ) / chatReportCalculationMetrics.length,
+      )
+    : 0
+  const chatReportVolumeReference = Math.ceil(chatReportAverageTickets)
   const chatReportRanking = buildChatRanking(
     chatReportMetrics,
     chatReportAverageTickets,
@@ -4894,13 +4898,35 @@ function ChatModuleDashboard({
       item.month_number === chatReportMonthNumber
     )
   })
+  const chatReportActiveManualPodium = manualPodium
+    .filter(
+      (item) =>
+        selectedTeamId !== 'all' &&
+        item.team_id === selectedTeamId &&
+        item.year === chatReportYear &&
+        item.month_number === chatReportMonthNumber,
+    )
+    .sort((a, b) => a.position - b.position)
+  const chatReportManualEligibleIds = new Set(
+    chatReportRanking.filter((item) => item.eligible).map((item) => item.metric.analyst_id),
+  )
+  const chatReportPodium = [1, 2, 3].map((position, index) => {
+    const manual = chatReportActiveManualPodium.find((item) => item.position === position)
+    return manual
+      ? chatReportRanking.find(
+          (item) =>
+            item.metric.analyst_id === manual.analyst_id &&
+            item.eligible,
+        )?.metric ?? automaticChatReportPodium[index] ?? null
+      : automaticChatReportPodium[index] ?? null
+  })
   const chatReportEligibleItems = chatReportRanking.filter((item) => item.eligible)
   const chatReportEligibleCount = chatReportEligibleItems.length
-  const chatReportCriticalCount = chatReportMetrics.filter(
+  const chatReportCriticalCount = chatReportCalculationMetrics.filter(
     (metric) => metric.status === 'Critico',
   ).length
   const chatReportTopHighlight =
-    chatReportEligibleItems[0]?.metric ?? chatReportRanking[0]?.metric ?? null
+    chatReportEligibleItems[0]?.metric ?? chatReportRanking.find((item) => !item.excluded)?.metric ?? null
   const chatReportAttentionItem = chatReportRanking.find(
     (item) => !item.eligible && !item.excluded,
   )
@@ -5336,12 +5362,17 @@ function ChatModuleDashboard({
   }
 
   function getManualPodiumDraftValue(position: number) {
-    return manualPodiumDraft[position] ?? activeManualPodium.find((item) => item.position === position)?.analyst_id ?? ''
+    const source =
+      chatActiveTab === 'reports' ? chatReportActiveManualPodium : activeManualPodium
+    return manualPodiumDraft[position] ?? source.find((item) => item.position === position)?.analyst_id ?? ''
   }
   async function handleSaveChatManualPodium() {
     setChatPodiumMessage('')
 
-    if (!selectedPeriod) {
+    const podiumPeriod =
+      chatActiveTab === 'reports' ? chatReportPeriod : selectedPeriod
+
+    if (!podiumPeriod) {
       setChatPodiumMessage('Selecione um período antes de salvar o pódio manual.')
       return
     }
@@ -5358,8 +5389,8 @@ function ChatModuleDashboard({
           ? {
               team_id: selectedTeamId,
               analyst_id: analystId,
-              year: selectedPeriod.year,
-              month_number: selectedPeriod.monthNumber,
+              year: podiumPeriod.year,
+              month_number: podiumPeriod.monthNumber,
               position,
             }
           : null
@@ -5376,8 +5407,10 @@ function ChatModuleDashboard({
       return
     }
 
+    const eligibleIds =
+      chatActiveTab === 'reports' ? chatReportManualEligibleIds : manualPodiumEligibleIds
     const ineligibleManualSelection = rows.find(
-      (row) => !manualPodiumEligibleIds.has(row.analyst_id),
+      (row) => !eligibleIds.has(row.analyst_id),
     )
     if (ineligibleManualSelection) {
       setChatPodiumMessage(
@@ -5391,8 +5424,8 @@ function ChatModuleDashboard({
         .from('chat_podium_manual')
         .delete()
         .eq('team_id', selectedTeamId)
-        .eq('year', selectedPeriod.year)
-        .eq('month_number', selectedPeriod.monthNumber)
+        .eq('year', podiumPeriod.year)
+        .eq('month_number', podiumPeriod.monthNumber)
 
       if (deleteResult.error) throw deleteResult.error
 
@@ -5410,7 +5443,10 @@ function ChatModuleDashboard({
   async function handleResetChatManualPodium() {
     setChatPodiumMessage('')
 
-    if (!selectedPeriod || selectedTeamId === 'all') {
+    const podiumPeriod =
+      chatActiveTab === 'reports' ? chatReportPeriod : selectedPeriod
+
+    if (!podiumPeriod || selectedTeamId === 'all') {
       setChatPodiumMessage('Selecione uma equipe especifica para resetar o pódio manual.')
       return
     }
@@ -5420,8 +5456,8 @@ function ChatModuleDashboard({
         .from('chat_podium_manual')
         .delete()
         .eq('team_id', selectedTeamId)
-        .eq('year', selectedPeriod.year)
-        .eq('month_number', selectedPeriod.monthNumber)
+        .eq('year', podiumPeriod.year)
+        .eq('month_number', podiumPeriod.monthNumber)
 
       if (error) throw error
 
@@ -5442,10 +5478,10 @@ function ChatModuleDashboard({
       if (currentExclusion) {
         const { error } = await supabase.from('chat_podium_exclusions').delete().eq('id', currentExclusion.id)
         if (error) throw error
-        setChatExportMessage(`${getChatAnalystName(metric)} voltou a compor os cálculos e a concorrer ao pódio deste período.`)
+        setChatExportMessage(`${getChatAnalystName(metric)} voltou a compor o ranking e a concorrer ao pódio deste período.`)
       } else {
         const reason = window.prompt(
-          `Motivo para desconsiderar ${getChatAnalystName(metric)} de todos os cálculos deste período:`,
+          `Motivo para desconsiderar ${getChatAnalystName(metric)} do ranking e do pódio deste período:`,
           'Emprestimo para outro setor / volume atipico',
         )
 
@@ -5463,7 +5499,7 @@ function ChatModuleDashboard({
         )
         if (error) throw error
         setChatExportMessage(
-          `${getChatAnalystName(metric)} foi desconsiderado de CSAT, avaliações, volume, médias e ranking deste período.`,
+          `${getChatAnalystName(metric)} foi desconsiderado do ranking e do pódio deste período. O resultado oficial da competência permanece preservado.`,
         )
       }
 
@@ -8144,7 +8180,7 @@ function ChatModuleDashboard({
             <h2 className="mt-2 text-2xl font-bold">{chatReportClosureReading}</h2>
           </div>
           <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">
-            {chatReportEligibleCount} elegíveis de {chatReportMetrics.length}
+            {chatReportEligibleCount} {chatReportEligibleCount === 1 ? 'elegível' : 'elegíveis'} de {chatReportCalculationMetrics.length}
           </span>
         </div>
 
@@ -8162,10 +8198,10 @@ function ChatModuleDashboard({
             <p className="mt-1 text-sm text-slate-300">{chatReportAttentionText}</p>
           </div>
           <div className="rounded-lg bg-slate-900 p-4">
-            <p className="text-sm text-slate-400">Média de volume para pódio</p>
-            <p className="mt-2 text-lg font-bold tabular-nums">{formatChatCount(chatReportAverageTickets)} atendimentos</p>
+            <p className="text-sm text-slate-400">Referência mínima de volume</p>
+            <p className="mt-2 text-lg font-bold tabular-nums">{formatChatCount(chatReportVolumeReference)} atendimentos</p>
             <p className="mt-1 text-sm text-slate-300">
-              Quem fica abaixo dessa média aparece como volume abaixo da média no ranking.
+              Para cumprir o critério de volume neste período, é necessário atingir pelo menos essa quantidade de atendimentos.
             </p>
           </div>
         </div>
@@ -8260,7 +8296,7 @@ function ChatModuleDashboard({
               O ranking automático define os elegíveis. O ajuste manual pode reorganizar a ordem entre eles, mas não coloca no pódio quem deixou de cumprir os critérios.
             </p>
           </div>
-          {!chatReportUsesClickDesk && activeManualPodium.length > 0 && (
+          {chatReportActiveManualPodium.length > 0 && (
             <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">
               Pódio manual ativo
             </span>
@@ -8269,11 +8305,11 @@ function ChatModuleDashboard({
 
         <div className="mt-5 grid gap-4 md:grid-cols-3">
           {[0, 1, 2].map((index) => {
-            const winner = chatReportUsesClickDesk ? automaticChatReportPodium[index] : podium[index]
+            const winner = chatReportPodium[index]
 
             return (
               <div key={index} className="rounded-lg bg-slate-900 p-4">
-                <p className="text-sm text-slate-400">{index + 1}o lugar</p>
+                <p className="text-sm text-slate-400">{index + 1}º lugar</p>
                 {winner ? (
                   <>
                     <div className="mt-3 flex items-center gap-3">
@@ -8290,8 +8326,7 @@ function ChatModuleDashboard({
           })}
         </div>
 
-        {!chatReportUsesClickDesk && (
-          <div className="mt-5 grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto_auto]">
+        <div className="mt-5 grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto_auto]">
           {[1, 2, 3].map((position) => (
             <Field key={position} label={`${position}o lugar manual`}>
               <select
@@ -8301,7 +8336,7 @@ function ChatModuleDashboard({
                 onChange={(event) => setManualPodiumDraft((current) => ({ ...current, [position]: event.target.value }))}
               >
                 <option value="">Automático</option>
-                {calculatedChatRanking
+                {chatReportRanking
                   .filter((item) => item.eligible)
                   .map((item) => (
                     <option key={item.metric.id} value={item.metric.analyst_id}>
@@ -8318,17 +8353,11 @@ function ChatModuleDashboard({
             Resetar
           </button>
           </div>
-        )}
 
-        {!chatReportUsesClickDesk && selectedTeamId === 'all' && (
+        {selectedTeamId === 'all' && (
           <p className="mt-3 text-sm text-slate-400">Para ajustar manualmente, selecione uma equipe específica no filtro do módulo chat.</p>
         )}
-        {!chatReportUsesClickDesk && chatPodiumMessage && <p className="mt-4 rounded-md bg-slate-900/70 px-4 py-3 text-sm text-slate-200">{chatPodiumMessage}</p>}
-        {chatReportUsesClickDesk && (
-          <p className="mt-3 text-sm text-slate-400">
-            Na competência ClickDesk, o pódio desta tela segue automaticamente a base selecionada. O histórico legado mantém os ajustes manuais já existentes.
-          </p>
-        )}
+        {chatPodiumMessage && <p className="mt-4 rounded-md bg-slate-900/70 px-4 py-3 text-sm text-slate-200">{chatPodiumMessage}</p>}
       </section>
 
       <div className={chatActiveTab === 'reports' ? 'grid gap-6 xl:grid-cols-2' : 'hidden'}>
@@ -8341,13 +8370,13 @@ function ChatModuleDashboard({
               </p>
             </div>
             <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">
-              Média exigida: {formatChatCount(chatReportAverageTickets)} atendimentos
+              Referência mínima: {formatChatCount(chatReportVolumeReference)} atendimentos
             </span>
           </div>
 
           {chatReportExclusions.length > 0 && (
             <div className="mt-4 rounded-lg border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">
-              Cálculos refeitos com {chatReportMetrics.length - chatReportExclusions.length} analista(s). {chatReportExclusions.length} registro(s)
+              Cálculos refeitos com {chatReportCalculationMetrics.length} analista(s). {chatReportExclusions.length} registro(s)
               desconsiderado(s) integralmente neste período por exceção operacional.
             </div>
           )}
@@ -8386,7 +8415,7 @@ function ChatModuleDashboard({
                   <th className="pb-3 pr-4 font-medium">CSAT</th>
                   <th className="pb-3 pr-4 font-medium">Avaliações</th>
                   <th className="pb-3 pr-4 font-medium">Atendimentos</th>
-                  <th className="pb-3 pr-4 font-medium">Volume vs média</th>
+                  <th className="pb-3 pr-4 font-medium">Vs. referência</th>
                   <th className="pb-3 pr-4 font-medium">Status</th>
                   <th className="pb-3 pr-4 font-medium">Motivo</th>
                   <th className="pb-3 font-medium">Cálculo</th>
@@ -8394,12 +8423,12 @@ function ChatModuleDashboard({
               </thead>
               <tbody className="divide-y divide-white/10">
                 {chatReportRanking.map((item, index) => {
-                  const volumeGap = Number(item.metric.total_tickets) - chatReportAverageTickets
+                  const volumeGap = Number(item.metric.total_tickets) - chatReportVolumeReference
                   const excluded = Boolean(getChatPodiumExclusion(item.metric))
 
                   return (
                     <tr key={item.metric.id}>
-                      <td className="py-3 pr-4 font-bold text-cyan-300">{item.excluded ? '—' : `${index + 1}o`}</td>
+                      <td className="py-3 pr-4 font-bold text-cyan-300">{item.excluded ? '—' : `${index + 1}º`}</td>
                       <td className="py-3 pr-4 font-semibold">{getChatAnalystName(item.metric)}</td>
                       <td className="whitespace-nowrap py-3 pr-4 tabular-nums">{formatChatPercent(item.metric.csat)}</td>
                       <td className="whitespace-nowrap py-3 pr-4 tabular-nums">{formatChatPercent(item.metric.review_percentage)}</td>
@@ -8585,12 +8614,9 @@ function ChatModuleDashboard({
         {selectedChatReportMetric ? (
           <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             <MetricCard label="CSAT" value={formatChatPercent(selectedChatReportMetric.csat)} />
-            <MetricCard label="Avaliações" value={formatChatPercent(selectedChatReportMetric.review_percentage)} />
+            <MetricCard label="% de avaliações" value={formatChatPercent(selectedChatReportMetric.review_percentage)} />
+            <MetricCard label="Avaliações recebidas" value={formatChatCount(selectedChatReportMetric.reviews)} />
             <MetricCard label="Atendimentos" value={selectedChatReportMetric.total_tickets} />
-            <MetricCard
-              label="Volume vs média"
-              value={`${Number(selectedChatReportMetric.total_tickets) - chatReportAverageTickets >= 0 ? '+' : ''}${formatChatCount(round(Number(selectedChatReportMetric.total_tickets) - chatReportAverageTickets))}`}
-            />
             <MetricCard label="Pódio" value={selectedChatPodiumPosition > 0 ? `${selectedChatPodiumPosition}º lugar` : 'Fora'} />
           </div>
         ) : (
@@ -15211,9 +15237,12 @@ function getChatMetricStatus(csat: number, reviewPercentage: number, csatGoal: n
 }
 function getChatAttentionReasons(metric: ChatMonthlyMetric, averageTickets: number) {
   const reasons: string[] = []
+  const minimumVolumeReference = Math.ceil(averageTickets)
   if (Number(metric.csat) < 90) reasons.push('CSAT abaixo de 90%')
   if (Number(metric.review_percentage) < 25) reasons.push('avaliações abaixo de 25%')
-  if (Number(metric.total_tickets) < averageTickets) reasons.push('volume abaixo da média (' + averageTickets + ' atend.)')
+  if (Number(metric.total_tickets) < averageTickets) {
+    reasons.push(`volume abaixo da referência mínima (${minimumVolumeReference} atend.)`)
+  }
   return reasons
 }
 
