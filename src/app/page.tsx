@@ -5773,18 +5773,23 @@ function ChatModuleDashboard({
     0,
   )
   const chat2PreviousAccumulated = clickDeskPreviousMetrics?.performance_accumulated ?? null
+  const chat2HasPreviousComparison = (clickDeskPreviousMetrics?.by_analyst?.length ?? 0) > 0
   const chat2OperationCsatDelta =
-    chat2ProductivityCsat !== null && chat2PreviousAccumulated?.csat !== null && chat2PreviousAccumulated?.csat !== undefined
+    chat2HasPreviousComparison &&
+    chat2ProductivityCsat !== null &&
+    chat2PreviousAccumulated?.csat !== null &&
+    chat2PreviousAccumulated?.csat !== undefined
       ? round(chat2ProductivityCsat - Number(chat2PreviousAccumulated.csat))
       : null
   const chat2OperationReviewDelta =
+    chat2HasPreviousComparison &&
     chat2ProductivityReviewPercentage !== null &&
     chat2PreviousAccumulated?.review_percentage !== null &&
     chat2PreviousAccumulated?.review_percentage !== undefined
       ? round(chat2ProductivityReviewPercentage - Number(chat2PreviousAccumulated.review_percentage))
       : null
   const chat2OperationVolumeDelta =
-    chat2PreviousAccumulated
+    chat2HasPreviousComparison && chat2PreviousAccumulated
       ? chat2ProductivityTickets - Number(chat2PreviousAccumulated.attendances ?? 0)
       : null
   const chat2OperationBelowCsat = chat2ProductivityRows.filter(
@@ -7105,7 +7110,7 @@ function ChatModuleDashboard({
 
           <section className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
             <div className="panel">
-              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Minha evolução</p>
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Evolução do analista</p>
               <h3 className="mt-2 text-2xl font-bold">Histórico ClickDesk</h3>
               <p className="section-subtitle">
                 A nova série histórica será formada somente com dados ClickDesk, sem misturar os números antigos do Zendesk.
@@ -7121,7 +7126,7 @@ function ChatModuleDashboard({
                 </div>
               ) : chat2HistoryPoints.length > 0 ? (
                 <div className="mt-5 space-y-5">
-                  <div className="grid gap-4 lg:grid-cols-2">
+                  <div className="grid gap-4 lg:grid-cols-3">
                     <TrendLineChart
                       label="CSAT mensal"
                       points={chat2HistoryPoints.map((item) => ({
@@ -7142,6 +7147,16 @@ function ChatModuleDashboard({
                       suffix="%"
                       goal={25}
                       goalLabel="Meta"
+                      singlePointLabel="Apenas uma competência disponível no histórico."
+                      latestPointLabel="Última competência"
+                      highlightedPointLabel="Competência destacada"
+                    />
+                    <TrendLineChart
+                      label="Atendimentos mensais"
+                      points={chat2HistoryPoints.map((item) => ({
+                        label: item.label.replace(' de ', '/'),
+                        value: item.attendances,
+                      }))}
                       singlePointLabel="Apenas uma competência disponível no histórico."
                       latestPointLabel="Última competência"
                       highlightedPointLabel="Competência destacada"
@@ -7481,32 +7496,32 @@ function ChatModuleDashboard({
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <div className="executive-card">
                 <p>CSAT vs mês anterior</p>
-                <strong>{chat2OperationCsatDelta === null ? '—' : formatDelta(chat2OperationCsatDelta, ' p.p.')}</strong>
+                <strong>{chat2OperationCsatDelta === null ? 'Sem base anterior' : formatDelta(chat2OperationCsatDelta, ' p.p.')}</strong>
                 <span>
                   Atual: {chat2ProductivityCsat === null ? '—' : formatChatPercent(chat2ProductivityCsat)}
-                  {chat2PreviousAccumulated?.csat !== null && chat2PreviousAccumulated?.csat !== undefined
+                  {chat2HasPreviousComparison && chat2PreviousAccumulated?.csat !== null && chat2PreviousAccumulated?.csat !== undefined
                     ? ` · anterior ${formatChatPercent(chat2PreviousAccumulated.csat)}`
-                    : ''}
+                    : ' · sem competência ClickDesk anterior'}
                 </span>
               </div>
               <div className="executive-card">
                 <p>Avaliações vs mês anterior</p>
-                <strong>{chat2OperationReviewDelta === null ? '—' : formatDelta(chat2OperationReviewDelta, ' p.p.')}</strong>
+                <strong>{chat2OperationReviewDelta === null ? 'Sem base anterior' : formatDelta(chat2OperationReviewDelta, ' p.p.')}</strong>
                 <span>
                   Atual: {chat2ProductivityReviewPercentage === null ? '—' : formatChatPercent(chat2ProductivityReviewPercentage)}
-                  {chat2PreviousAccumulated?.review_percentage !== null && chat2PreviousAccumulated?.review_percentage !== undefined
+                  {chat2HasPreviousComparison && chat2PreviousAccumulated?.review_percentage !== null && chat2PreviousAccumulated?.review_percentage !== undefined
                     ? ` · anterior ${formatChatPercent(chat2PreviousAccumulated.review_percentage)}`
-                    : ''}
+                    : ' · sem competência ClickDesk anterior'}
                 </span>
               </div>
               <div className="executive-card">
                 <p>Volume vs mês anterior</p>
-                <strong>{chat2OperationVolumeDelta === null ? '—' : formatDelta(chat2OperationVolumeDelta)}</strong>
+                <strong>{chat2OperationVolumeDelta === null ? 'Sem base anterior' : formatDelta(chat2OperationVolumeDelta)}</strong>
                 <span>
                   Atual: {formatChatCount(chat2ProductivityTickets)}
-                  {chat2PreviousAccumulated
+                  {chat2HasPreviousComparison && chat2PreviousAccumulated
                     ? ` · anterior ${formatChatCount(chat2PreviousAccumulated.attendances)}`
-                    : ''}
+                    : ' · sem competência ClickDesk anterior'}
                 </span>
               </div>
             </div>
@@ -8196,10 +8211,10 @@ function ChatModuleDashboard({
 
       <section className={chatActiveTab === 'overview' ? 'panel' : 'hidden'}>
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Histórico oficial</p>
-          <h2 className="mt-2 text-2xl font-bold">Qualidade, participação e volume ao longo dos fechamentos</h2>
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Histórico anterior · Zendesk</p>
+          <h2 className="mt-2 text-2xl font-bold">Série preservada dos fechamentos anteriores</h2>
           <p className="section-subtitle">
-            Esta camada preserva a evolução dos meses já importados/fechados. A fotografia acima usa a base viva do ClickDesk para a competência selecionada.
+            Estes números pertencem ao histórico legado do Zendesk e ficam preservados apenas para comparação histórica. Eles não entram nos cálculos da fotografia ClickDesk exibida acima.
           </p>
         </div>
 
@@ -8225,7 +8240,10 @@ function ChatModuleDashboard({
           />
         </div>
 
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <p className="mt-5 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+          Indicadores do fechamento legado
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-lg bg-slate-900 p-4">
             <p className="text-sm text-slate-400">Atendimentos válidos</p>
             <strong className="mt-2 block text-2xl tabular-nums">{formatChatCount(totals.validTickets)}</strong>
