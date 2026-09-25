@@ -76,9 +76,11 @@ const goalInstructions = {
 
 function classifyFeedbackCase(body: ChatFeedbackRequest) {
   const metric = body.metric
-  const hasUsableVolume = body.serviceModule === 'phone'
-    ? Number(metric?.totalTickets) > 0
-    : Number(metric?.validTickets) > 0
+  const serviceModule = body.serviceModule ?? 'chat'
+  const hasUsableVolume =
+    serviceModule === 'phone'
+      ? Number(metric?.totalTickets) > 0
+      : Number(metric?.validTickets) > 0
 
   if (!metric || !hasUsableVolume) {
     return {
@@ -95,8 +97,10 @@ function classifyFeedbackCase(body: ChatFeedbackRequest) {
   const averageTickets = Number(body.averageTickets)
   const history = body.monthlyHistory ?? []
   const previous = history.length > 1 ? history.at(-2) : null
-  const hasRelevantDrop = Boolean(previous)
-    && (csat <= Number(previous?.csat) - 2 || reviews <= Number(previous?.reviewPercentage) - 5)
+  const hasRelevantDrop =
+    Boolean(previous) &&
+    (csat <= Number(previous?.csat) - 2 ||
+      reviews <= Number(previous?.reviewPercentage) - 5)
 
   if (hasRelevantDrop) {
     return {
@@ -104,6 +108,37 @@ function classifyFeedbackCase(body: ChatFeedbackRequest) {
       guidance: 'Priorize a mudança em relação ao mês anterior, preserve os pontos ainda positivos e proponha verificar o que mudou sem inventar causas.',
     }
   }
+
+  if (serviceModule === 'chat') {
+    if (csat >= csatGoal && reviews >= reviewGoal) {
+      return {
+        label: 'Reconhecimento integral',
+        guidance: 'Reconheça o equilíbrio entre qualidade percebida e participação nas avaliações. O combinado deve identificar uma prática real que mereça ser mantida, sem criar um problema artificial e sem comparar o volume individual com o de colegas.',
+      }
+    }
+
+    if (csat < csatGoal && reviews >= reviewGoal) {
+      return {
+        label: 'Qualidade abaixo da meta com amostra adequada',
+        guidance: 'Concentre a devolutiva na experiência percebida pelo cliente e use avaliações negativas ou outras evidências reais para orientar a conversa.',
+      }
+    }
+
+    if (csat >= csatGoal && reviews < reviewGoal) {
+      return {
+        label: 'Qualidade positiva com baixa amostra de avaliações',
+        guidance: 'Reconheça o CSAT, mas explique que a quantidade de respostas ainda limita a representatividade da leitura. Foque no encerramento e no convite natural para avaliação.',
+      }
+    }
+
+    return {
+      label: body.podiumPosition && body.podiumPosition <= 3
+        ? 'Resultado em posição de pódio'
+        : 'Qualidade e participação em atenção',
+      guidance: 'Escolha somente o indicador que mais limita o resultado, preserve explicitamente o que já está funcionando e não use comparação de volume com colegas na devolutiva individual.',
+    }
+  }
+
   if (csat >= csatGoal && reviews >= reviewGoal && (!averageTickets || tickets >= averageTickets)) {
     return {
       label: 'Reconhecimento integral',
@@ -129,7 +164,9 @@ function classifyFeedbackCase(body: ChatFeedbackRequest) {
     }
   }
   return {
-    label: body.podiumPosition && body.podiumPosition <= 3 ? 'Resultado em posição de pódio' : 'Resultado misto fora do pódio',
+    label: body.podiumPosition && body.podiumPosition <= 3
+      ? 'Resultado em posição de pódio'
+      : 'Resultado misto fora do pódio',
     guidance: 'Escolha somente o indicador que mais limita o resultado e preserve explicitamente o que já está funcionando.',
   }
 }
@@ -182,7 +219,7 @@ function buildPrompt(body: ChatFeedbackRequest) {
     ? '- O módulo telefone é alimentado semanalmente, mas a devolutiva final é mensal. Pode orientar acompanhamento semanal quando isso ajudar o fechamento.'
     : '- Não diga para acompanhar semanalmente, porque o módulo do chat é analisado mensalmente.'
   const volumeRule = serviceModule === 'chat'
-    ? '- No chat, os tickets entram em uma fila comum e não existe distribuição de chamados pela liderança ou pelo sistema. Cada analista puxa o próximo ticket conforme sua disponibilidade e carga. Nunca mencione "fluxo de distribuição", "distribuição da fila" ou garantia de volume regular. Para investigar volume abaixo da média, proponha observar juntos disponibilidade para puxar novos tickets, tempo dos atendimentos, pausas, ausências e atuação em outras atividades.'
+    ? '- No relatório individual do chat, trate o total de atendimentos apenas como dado factual do período. Não compare o volume do analista com média, ranking de volume ou colegas e não transforme essa diferença em orientação individual. Comparações operacionais de volume pertencem à visão gerencial.'
     : '- Quando o volume estiver abaixo da média, informe a diferença em atendimentos e proponha verificar juntos o contexto operacional, como pausas, ausências, duração dos atendimentos ou atuação em outras atividades. Nunca afirme que existe um método de distribuição de chamados nem atribua a diferença à pessoa sem evidência.'
   const caseProfile = classifyFeedbackCase(body)
   const managerHasContext = Boolean(body.managerNotes?.trim())
@@ -235,7 +272,8 @@ ${volumeRule}
 - A base do sistema é uma ficha factual, não um modelo de redação. Não copie sua ordem, frases ou cadência. Use-a somente para preservar fatos e limites da análise.
 - Se houver observações do gestor, trate-as como principal fonte de personalização e conecte-as ao combinado. Se não houver, não invente comportamento observado nem contexto operacional.
 - Revise ortografia, concordância e clareza das observações do gestor antes de incorporá-las. Preserve o sentido, mas não copie erros nem apresente a observação como uma nota solta.
-- Preserve os números necessários para sustentar a conclusão, mas não enumere todos os campos recebidos quando eles não contribuírem para o foco principal.
+- Preserve somente os números necessários para sustentar a conclusão. Não reabra o feedback enumerando CSAT, avaliações, respostas, atendimentos e pódio como se fosse outro resumo estatístico; esses indicadores já aparecem no relatório.
+- Na devolutiva, prefira explicar o significado do resultado e o próximo passo. Use no máximo um ou dois números quando forem realmente necessários ao foco principal.
 - Não use Markdown, asteriscos, bullets soltos ou titulos decorativos. Escreva em texto limpo, com nomes de seções seguidos de dois-pontos.
 - Mantenha os nomes das seções do modelo escolhido, mas varie abertura, extensão, ritmo e construção. Não repita a mesma fórmula em todas as seções.
 - O feedback deve ser completo e útil. Se for direto, ainda assim precisa conter leitura do ciclo, orientação prática e expectativa para o próximo fechamento.
@@ -246,7 +284,7 @@ ${volumeRule}
 - Evite frases prontas como "patamar de reconhecimento", "excelência na resolução", "grande confiabilidade" e "manter consistência" quando não houver uma explicação concreta adequada ao caso.
 - Em modo de melhoria, reorganize e reescreva de verdade; não faça apenas substituições de palavras.
 - Não termine frase pela metade. Entregue um texto completo, pronto para colar no relatório.
-- Mantenha entre 150 e 260 palavras. Prefira especificidade e naturalidade em vez de texto longo.
+- Mantenha entre 120 e 190 palavras. Prefira especificidade, naturalidade e direção prática em vez de repetir o painel em texto.
 - ${styleInstructions[feedbackStyle]}
 
 Periodo: ${body.periodLabel ?? 'Periodo não informado'}
@@ -262,8 +300,7 @@ Atendimentos válidos: ${metric?.validTickets}
 Avaliacoes recebidas: ${metric?.reviews}
 Positivas: ${metric?.positiveReviews}
 Negativas: ${metric?.negativeReviews}
-Media de atendimentos da operacao: ${body.averageTickets}
-Posição no pódio: ${body.podiumPosition && body.podiumPosition > 0 ? `${body.podiumPosition}o lugar` : 'fora do pódio'}
+${serviceModule === 'phone' ? `Media de atendimentos da operacao: ${body.averageTickets}\n` : ''}Posição no pódio: ${body.podiumPosition && body.podiumPosition > 0 ? `${body.podiumPosition}o lugar` : 'fora do pódio'}
 
 Historico mensal:
 ${JSON.stringify(body.monthlyHistory ?? [], null, 2)}
