@@ -667,6 +667,7 @@ type ClickDeskQualitativeResponse = {
     limitations: string[]
   }
   error?: string
+  erro?: string
 }
 
 type ChatQualitativeFeedbackContext = {
@@ -2878,6 +2879,7 @@ function ChatAnalystPortal({
         body: JSON.stringify({ ticket_id: ticketId, force }),
       })
       const data = (await response.json()) as ClickDeskQualitativeResponse
+      data.error = data.error || data.erro
 
       if (!response.ok && !data.error) {
         data.error = 'Não foi possível analisar qualitativamente este atendimento.'
@@ -4249,6 +4251,7 @@ function ChatModuleDashboard({
         body: JSON.stringify({ ticket_id: normalizedTicketId }),
       })
       const data = (await response.json()) as ClickDeskQualitativeResponse
+      data.error = data.error || data.erro
 
       if (!response.ok && !data.error) {
         data.error = 'Não foi possível analisar qualitativamente este atendimento.'
@@ -4294,6 +4297,7 @@ function ChatModuleDashboard({
         body: JSON.stringify({ ticket_id: ticketId, status }),
       })
       const data = (await response.json()) as ClickDeskQualitativeResponse
+      data.error = data.error || data.erro
 
       if (!response.ok && !data.error) {
         data.error = 'Não foi possível salvar a validação desta análise.'
