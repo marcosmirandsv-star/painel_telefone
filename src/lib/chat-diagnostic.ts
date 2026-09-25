@@ -90,9 +90,15 @@ export function buildChatPerformanceDiagnostic({
   if (!hasCsatGoal) {
     summary = 'A meta individual de CSAT ainda não está configurada para este analista.'
   } else if (goalsEvaluated === 2) {
-    const csatText = `CSAT ${percent(csat!)} (${aboveOrBelow(csatDelta!)} da meta de ${percent(csatGoal)})`
-    const reviewText = `avaliações ${percent(reviewPercentage!)} (${aboveOrBelow(reviewDelta!)} da meta de ${percent(reviewGoal)})`
-    summary = `${goalsMet} de 2 metas atingidas. ${csatText}; ${reviewText}.`
+    if (csatMet === true && reviewMet === true) {
+      summary = 'Qualidade e participação nas avaliações estão dentro das referências atuais. O foco agora é acompanhar a estabilidade ao longo da competência.'
+    } else if (csatMet === false && reviewMet === true) {
+      summary = 'A participação nas avaliações já oferece uma base consistente, mas a satisfação registrada pede investigação das avaliações negativas.'
+    } else if (csatMet === true && reviewMet === false) {
+      summary = 'A satisfação está dentro da meta, mas a participação nas avaliações ainda precisa ganhar representatividade antes de conclusões mais fortes.'
+    } else {
+      summary = 'Qualidade e participação estão abaixo das referências atuais. O próximo passo é fortalecer a base de avaliações e investigar o que está pressionando a satisfação.'
+    }
   } else if (hasReview && !hasCsat) {
     summary = `A participação nas avaliações está em ${percent(reviewPercentage)}, mas ainda não há avaliações suficientes para calcular o CSAT.`
   } else if (hasCsat && !hasReview) {
@@ -111,21 +117,21 @@ export function buildChatPerformanceDiagnostic({
       csatMargin >= reviewMargin
         ? {
             title: 'Satisfação registrada pelos clientes',
-            detail: `CSAT em ${percent(csat!)}: ${pp(csatMargin)} acima da meta.`,
+            detail: 'A satisfação registrada está acima da referência individual e sustenta uma leitura positiva de qualidade neste recorte.',
           }
         : {
             title: 'Participação nas avaliações',
-            detail: `Avaliações em ${percent(reviewPercentage!)}: ${pp(reviewMargin)} acima da meta.`,
+            detail: 'A participação nas avaliações está acima da referência mínima e oferece uma base mais representativa para acompanhar a percepção dos clientes.',
           }
   } else if (csatMet === true) {
     strength = {
       title: 'Satisfação registrada pelos clientes',
-      detail: `CSAT em ${percent(csat!)}: ${pp(csatDelta ?? 0)} acima da meta.`,
+      detail: 'A satisfação registrada está acima da referência individual neste recorte.',
     }
   } else if (reviewMet === true) {
     strength = {
       title: 'Participação nas avaliações',
-      detail: `Avaliações em ${percent(reviewPercentage!)}: ${pp(reviewDelta ?? 0)} acima da meta.`,
+      detail: 'A participação nas avaliações está acima da referência mínima e já oferece uma base útil para acompanhamento.',
     }
   } else if (goalsEvaluated < 2) {
     strength = {
@@ -147,12 +153,12 @@ export function buildChatPerformanceDiagnostic({
   } else if (csatMet === false) {
     attention = {
       title: 'Satisfação do cliente',
-      detail: `O CSAT está ${pp(csatDelta ?? 0)} abaixo da meta individual de ${percent(csatGoal!)}.`,
+      detail: 'A satisfação registrada está abaixo da meta individual; vale priorizar a leitura das avaliações negativas antes de definir qualquer ação.',
     }
   } else if (reviewMet === false) {
     attention = {
       title: 'Participação nas avaliações',
-      detail: `O percentual de avaliações está ${pp(reviewDelta ?? 0)} abaixo da meta de ${percent(reviewGoal)}.`,
+      detail: 'A participação nas avaliações está abaixo da referência mínima, o que reduz a representatividade da leitura atual.',
     }
   } else if (goalsEvaluated < 2) {
     attention = {
