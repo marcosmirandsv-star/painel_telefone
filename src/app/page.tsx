@@ -2526,6 +2526,94 @@ function QualitativeAnalysisCard({
   )
 }
 
+function QualitativeSampleTicketList({
+  title,
+  subtitle,
+  tickets,
+  tone,
+  results,
+  loadingTicketId,
+  onAnalyze,
+}: {
+  title: string
+  subtitle: string
+  tickets: ClickDeskEvaluatedSampleTicket[]
+  tone: 'positive' | 'negative'
+  results: Record<string, ClickDeskQualitativeResponse>
+  loadingTicketId: string
+  onAnalyze: (ticketId: string, force?: boolean) => void
+}) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-slate-950/30 p-4">
+      <div>
+        <h4 className="font-semibold text-slate-100">{title}</h4>
+        <p className="mt-1 text-xs leading-5 text-slate-500">{subtitle}</p>
+      </div>
+
+      {tickets.length ? (
+        <div className="mt-4 space-y-3">
+          {tickets.map((ticket) => {
+            const result = results[ticket.ticket_id]
+            const loading = loadingTicketId === ticket.ticket_id
+            return (
+              <div key={ticket.ticket_id} className="rounded-lg border border-white/10 bg-slate-950/45 p-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <strong className="text-sm text-slate-100">Ticket #{ticket.ticket_id}</strong>
+                      <span
+                        className={`rounded-md px-2 py-1 text-[11px] font-semibold ${
+                          tone === 'negative'
+                            ? 'bg-amber-300/10 text-amber-100'
+                            : 'bg-emerald-400/10 text-emerald-200'
+                        }`}
+                      >
+                        {tone === 'negative' ? 'Negativa' : 'Positiva'}
+                      </span>
+                      {ticket.has_analysis && !result && (
+                        <span className="rounded-md bg-violet-400/10 px-2 py-1 text-[11px] font-semibold text-violet-200">
+                          Análise salva
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {formatDate(ticket.occurred_date)} · {ticket.area}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="small-button self-start sm:self-auto"
+                    disabled={loading}
+                    onClick={() => onAnalyze(ticket.ticket_id)}
+                  >
+                    {loading
+                      ? 'Analisando...'
+                      : ticket.has_analysis
+                        ? 'Ver análise'
+                        : 'Analisar com IA'}
+                  </button>
+                </div>
+
+                {result && (
+                  <QualitativeAnalysisCard
+                    result={result}
+                    reanalyzing={loading}
+                    onReanalyze={() => onAnalyze(ticket.ticket_id, true)}
+                  />
+                )}
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <p className="mt-4 text-sm text-slate-500">
+          Nenhuma avaliação deste tipo disponível na competência.
+        </p>
+      )}
+    </div>
+  )
+}
+
 function ChatAnalystPortal({
   analyst,
   team,
@@ -3068,22 +3156,64 @@ function ChatAnalystPortal({
             )}
 
             <div className="mt-5 rounded-xl border border-violet-400/15 bg-violet-400/5 p-5">
-              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-violet-200">
-                    Próxima camada · IA qualitativa
+                    Entenda suas avaliações · IA qualitativa
                   </p>
-                  <strong className="mt-2 block text-slate-100">
-                    A causa ainda não está sendo atribuída
+                  <strong className="mt-2 block text-xl text-slate-100">
+                    O número mostra o resultado. Agora você pode investigar o porquê.
                   </strong>
                   <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-400">
-                    Quando a análise qualitativa for ativada, este espaço vai explicar os motivos das avaliações negativas, sentimento inicial e final, influência do atendimento humano e evidências da conversa. Até lá, o painel mostra somente fatos calculáveis.
+                    O painel separa uma amostra distribuída ao longo da competência: até 3 avaliações negativas para investigar pontos de atenção e até 5 positivas para identificar o que funcionou. A análise usa o transcript do ClickDesk e não trata hipótese como fato.
                   </p>
                 </div>
-                <span className="self-start rounded-md border border-violet-300/20 px-3 py-2 text-xs font-semibold text-violet-200">
-                  Preparado para IA
-                </span>
+                <div className="grid grid-cols-2 gap-2 text-center">
+                  <div className="rounded-lg bg-slate-950/40 px-3 py-2">
+                    <span className="block text-xs text-slate-500">Negativas no mês</span>
+                    <strong className="mt-1 block text-lg text-amber-100">
+                      {formatChatCount(evaluatedSample?.totals?.negative ?? accumulated?.negative_reviews ?? 0)}
+                    </strong>
+                  </div>
+                  <div className="rounded-lg bg-slate-950/40 px-3 py-2">
+                    <span className="block text-xs text-slate-500">Positivas no mês</span>
+                    <strong className="mt-1 block text-lg text-emerald-200">
+                      {formatChatCount(evaluatedSample?.totals?.positive ?? accumulated?.positive_reviews ?? 0)}
+                    </strong>
+                  </div>
+                </div>
               </div>
+
+              {evaluatedSample?.erro ? (
+                <p className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-sm text-amber-100">
+                  {evaluatedSample.erro}
+                </p>
+              ) : (
+                <div className="mt-5 grid gap-4 xl:grid-cols-2">
+                  <QualitativeSampleTicketList
+                    title="Negativas para entender"
+                    subtitle="Até 3 tickets distribuídos ao longo do mês. Se houver menos, o painel mostra todos."
+                    tickets={evaluatedSample?.negative ?? []}
+                    tone="negative"
+                    results={qualitativeByTicket}
+                    loadingTicketId={qualitativeLoadingTicketId}
+                    onAnalyze={(ticketId, force) => void analyzeQualitativeTicket(ticketId, force)}
+                  />
+                  <QualitativeSampleTicketList
+                    title="Positivas para aprender"
+                    subtitle="Até 5 tickets distribuídos ao longo do mês para reconhecer padrões que vale repetir."
+                    tickets={evaluatedSample?.positive ?? []}
+                    tone="positive"
+                    results={qualitativeByTicket}
+                    loadingTicketId={qualitativeLoadingTicketId}
+                    onAnalyze={(ticketId, force) => void analyzeQualitativeTicket(ticketId, force)}
+                  />
+                </div>
+              )}
+
+              <p className="mt-4 text-xs leading-5 text-slate-500">
+                A amostra é apenas um atalho. Na rotina diária, qualquer ticket avaliado também pode ser analisado individualmente.
+              </p>
             </div>
           </>
         )}
