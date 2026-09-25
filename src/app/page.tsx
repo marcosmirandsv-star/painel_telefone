@@ -13419,45 +13419,95 @@ async function exportChatIndividualReport({
   const managerNotesHtml = managerNotes.trim() ? `<h2>Observações do gestor</h2><div class="note-box">${formatChatFeedbackForReport(managerNotes)}</div>` : ''
   const evolutionRows = buildChatReportEvolutionRows(monthlyHistory)
   const qualitativeFindings = qualitativeContext?.findings ?? []
-  const countQualitativeValues = (values: string[]) => {
+  const negativeQualitativeFindings = qualitativeFindings.filter(
+    (item) => item.satisfactionLabel === 'negative',
+  )
+  const positiveQualitativeFindings = qualitativeFindings.filter(
+    (item) => item.satisfactionLabel === 'positive',
+  )
+  const compactQualitativeText = (value: string, maxLength = 180) => {
+    const normalized = value.trim().replace(/\s+/g, ' ')
+    if (normalized.length <= maxLength) return normalized
+    const cutAt = normalized.lastIndexOf(' ', maxLength - 1)
+    return `${normalized.slice(0, cutAt > 80 ? cutAt : maxLength).trim()}…`
+  }
+  const topQualitativeLabels = (
+    findings: typeof qualitativeFindings,
+    selector: (item: (typeof qualitativeFindings)[number]) => string,
+    limit = 2,
+  ) => {
     const counts: Record<string, number> = {}
-    values.forEach((value) => {
+    findings.forEach((item) => {
+      const value = selector(item)
+      if (!value) return
       counts[value] = (counts[value] ?? 0) + 1
     })
+
     return Object.entries(counts)
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .map(([key, count]) => `${formatQualitativeLabel(key)} (${count})`)
-      .join(', ')
+      .slice(0, limit)
+      .map(([key, count]) => `${formatQualitativeLabel(key)}${count > 1 ? ` (${count})` : ''}`)
+      .join(' · ')
   }
-  const qualitativeCauseText = countQualitativeValues(
-    qualitativeFindings.map((item) => item.analysis.primary_cause.category),
+  const uniqueQualitativeSummaries = (
+    findings: typeof qualitativeFindings,
+    selector: (item: (typeof qualitativeFindings)[number]) => string,
+    limit = 1,
+  ) => {
+    const summaries = findings
+      .map(selector)
+      .map((value) => compactQualitativeText(value))
+      .filter(Boolean)
+
+    return [...new Set(summaries)].slice(0, limit).join(' ')
+  }
+
+  const negativeCauseText = topQualitativeLabels(
+    negativeQualitativeFindings,
+    (item) => item.analysis.primary_cause.category,
   )
-  const qualitativeInfluenceText = countQualitativeValues(
-    qualitativeFindings.map((item) => item.analysis.human_influence.classification),
+  const negativeHumanText = uniqueQualitativeSummaries(
+    negativeQualitativeFindings,
+    (item) => item.analysis.human_influence.summary,
   )
-  const qualitativeControlText = countQualitativeValues(
-    qualitativeFindings.map((item) => item.analysis.controllability.classification),
+  const positiveHumanText = uniqueQualitativeSummaries(
+    positiveQualitativeFindings,
+    (item) => item.analysis.human_influence.summary,
+    2,
   )
-  const qualitativeCoachingSignals = qualitativeFindings
-    .filter((item) => item.analysis.coaching_signal.available)
-    .map((item) => item.analysis.coaching_signal.summary)
-    .filter(Boolean)
-    .slice(0, 3)
+  const positiveCauseText = topQualitativeLabels(
+    positiveQualitativeFindings,
+    (item) => item.analysis.primary_cause.category,
+  )
+  const qualitativeFocusText =
+    qualitativeFindings
+      .filter((item) => item.analysis.coaching_signal.available)
+      .map((item) => compactQualitativeText(item.analysis.coaching_signal.summary))
+      .filter(Boolean)[0] ??
+    (negativeCauseText
+      ? `Acompanhar a recorrência de ${negativeCauseText.toLowerCase()} e reforçar as práticas que preservaram as experiências positivas.`
+      : 'Manter as práticas que sustentaram as experiências positivas e acompanhar novas avaliações no próximo ciclo.')
+
+  const negativeSummaryText = negativeQualitativeFindings.length
+    ? `Na amostra negativa, os principais sinais foram ${negativeCauseText || 'diversificados, sem um padrão recorrente suficiente'}.${negativeHumanText ? ` ${negativeHumanText}` : ''}`
+    : 'Nenhuma avaliação negativa validada na amostra.'
+
+  const positiveSummaryText = positiveQualitativeFindings.length
+    ? positiveHumanText
+      ? `Na amostra positiva, destacaram-se: ${positiveHumanText}`
+      : `Na amostra positiva, os principais sinais foram ${positiveCauseText || 'favoráveis, sem um padrão único dominante'}.`
+    : 'Nenhuma avaliação positiva validada na amostra.'
+
   const qualitativeHtml = qualitativeFindings.length
     ? `
-        <h2>Leitura qualitativa validada</h2>
+        <h2>Resumo qualitativo da experiência</h2>
         <div class="box">
-          <p><strong>Amostra aprovada:</strong> ${qualitativeFindings.length} ticket(s) analisado(s) e validado(s) pela gestão.</p>
-          <p><strong>Cobertura:</strong> ${qualitativeContext?.negativeAnalyzed ?? 0} de ${qualitativeContext?.negativeTotal ?? 0} avaliações negativas e ${qualitativeContext?.positiveAnalyzed ?? 0} de ${qualitativeContext?.positiveTotal ?? 0} avaliações positivas.</p>
-          <p><strong>Causas observadas na amostra:</strong> ${escapeHtml(qualitativeCauseText || 'Sem padrão suficiente.')}</p>
-          <p><strong>Influência do atendimento humano:</strong> ${escapeHtml(qualitativeInfluenceText || 'Sem padrão suficiente.')}</p>
-          <p><strong>Controlabilidade:</strong> ${escapeHtml(qualitativeControlText || 'Sem padrão suficiente.')}</p>
-          ${
-            qualitativeCoachingSignals.length
-              ? `<p><strong>Sinais de desenvolvimento validados:</strong> ${escapeHtml(qualitativeCoachingSignals.join(' | '))}</p>`
-              : ''
-          }
-          <p class="muted">Esta leitura é amostral e descreve apenas tickets analisados e aprovados. Ela não representa automaticamente todos os atendimentos do período.</p>
+          <p><strong>IA + validação da gestão:</strong> ${qualitativeFindings.length} ticket(s) aprovado(s) na amostra — ${negativeQualitativeFindings.length} negativo(s) e ${positiveQualitativeFindings.length} positivo(s).</p>
+          <p class="muted">Cobertura: ${qualitativeContext?.negativeAnalyzed ?? 0} de ${qualitativeContext?.negativeTotal ?? 0} avaliações negativas e ${qualitativeContext?.positiveAnalyzed ?? 0} de ${qualitativeContext?.positiveTotal ?? 0} avaliações positivas.</p>
+          <p><strong>Nas negativas:</strong> ${escapeHtml(negativeSummaryText)}</p>
+          <p><strong>Nas positivas:</strong> ${escapeHtml(positiveSummaryText)}</p>
+          <p><strong>Foco do próximo ciclo:</strong> ${escapeHtml(compactQualitativeText(qualitativeFocusText, 220))}</p>
+          <p class="muted">Resumo amostral baseado somente em leituras qualitativas aprovadas pela gestão; não representa automaticamente todos os atendimentos da competência.</p>
         </div>
       `
     : ''
@@ -13525,7 +13575,7 @@ async function exportChatIndividualReport({
         <div class="header">
           <div class="header-content">
             ${photoHtml}
-            <div><h1>Relatório de Performance - ${safeName}</h1><p class="subtitle">Período: ${escapeHtml(periodLabel)} | Fonte: indicadores mensais${qualitativeFindings.length ? ' + ClickDesk qualitativo' : ''}</p></div>
+            <div><h1>Relatório de Performance - ${safeName}</h1><p class="subtitle">Período: ${escapeHtml(periodLabel)} | Fonte: indicadores mensais${qualitativeFindings.length ? ' + resumo qualitativo ClickDesk' : ''}</p></div>
           </div>
         </div>
 
