@@ -5,6 +5,7 @@ export const runtime = 'nodejs'
 
 type ChatFeedbackRequest = {
   serviceModule?: 'chat' | 'phone'
+  dataSourceLabel?: string
   feedbackStyle?: 'coach' | 'sare' | 'mimo'
   feedbackGoal?: 'recognition' | 'courseCorrection' | 'maintenance' | 'development'
   generationMode?: 'generate' | 'improve'
@@ -172,7 +173,11 @@ function buildPrompt(body: ChatFeedbackRequest) {
   const generationMode = body.generationMode ?? 'generate'
   const serviceModule = body.serviceModule ?? 'chat'
   const moduleName = serviceModule === 'phone' ? 'telefone' : 'chat'
-  const sourceName = serviceModule === 'phone' ? 'lançamentos do painel de telefone' : 'dados do Zendesk'
+  const sourceName =
+    body.dataSourceLabel?.trim() ||
+    (serviceModule === 'phone'
+      ? 'lançamentos do painel de telefone'
+      : 'dados do histórico do chat')
   const cadenceRule = serviceModule === 'phone'
     ? '- O módulo telefone é alimentado semanalmente, mas a devolutiva final é mensal. Pode orientar acompanhamento semanal quando isso ajudar o fechamento.'
     : '- Não diga para acompanhar semanalmente, porque o módulo do chat é analisado mensalmente.'
@@ -516,9 +521,12 @@ export async function POST(request: Request) {
       const publicReason = getPublicProviderError(providerError)
       console.warn('Chat feedback external AI unavailable:', getErrorText(providerError))
 
-      const fallbackSource = body.serviceModule === 'phone'
-        ? 'Usei a sugestão local baseada nos lançamentos do telefone e nas regras do painel.'
-        : 'Usei a sugestão local baseada nos números do Zendesk e nas regras do painel.'
+      const fallbackSource =
+        body.serviceModule === 'phone'
+          ? 'Usei a sugestão local baseada nos lançamentos do telefone e nas regras do painel.'
+          : body.dataSourceLabel?.trim()
+            ? `Usei a sugestão local baseada em ${body.dataSourceLabel.trim()} e nas regras do painel.`
+            : 'Usei a sugestão local baseada nos dados disponíveis do chat e nas regras do painel.'
 
       return NextResponse.json({
         feedback: fallbackFeedback,
