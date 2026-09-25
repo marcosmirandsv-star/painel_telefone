@@ -5009,6 +5009,39 @@ function ChatModuleDashboard({
     }
   }
 
+  async function loadChatQualitativeFeedbackContext(metric: ChatMonthlyMetric) {
+    const start = `${metric.year}-${String(metric.month_number).padStart(2, '0')}-01`
+    const end = new Date(Date.UTC(metric.year, metric.month_number, 0))
+      .toISOString()
+      .slice(0, 10)
+
+    const result = await supabase
+      .from('clickdesk_qualitative_analyses')
+      .select('satisfaction_label,occurred_date,analysis')
+      .eq('analyst_id', metric.analyst_id)
+      .gte('occurred_date', start)
+      .lte('occurred_date', end)
+      .order('occurred_date', { ascending: true })
+      .limit(8)
+
+    if (result.error || !result.data?.length) return undefined
+
+    const findings = result.data.map((item) => ({
+      satisfactionLabel: item.satisfaction_label,
+      occurredDate: item.occurred_date,
+      analysis: item.analysis,
+    }))
+
+    return {
+      analyzedCount: findings.length,
+      negativeAnalyzed: findings.filter((item) => item.satisfactionLabel === 'negative').length,
+      positiveAnalyzed: findings.filter((item) => item.satisfactionLabel === 'positive').length,
+      negativeTotal: Number(metric.negative_reviews),
+      positiveTotal: Number(metric.positive_reviews),
+      findings,
+    }
+  }
+
   function handleGenerateChatFeedbackDraft() {
     if (!selectedChatReportMetric) {
       setChatExportMessage('Selecione um analista com dados antes de gerar o feedback.')
@@ -5039,6 +5072,8 @@ function ChatModuleDashboard({
           sendingPercentage: Number(historyMetric.sending_percentage),
           totalTickets: Number(historyMetric.total_tickets),
         }))
+      const qualitativeContext = await loadChatQualitativeFeedbackContext(selectedChatReportMetric)
+      const qualitativeContext = await loadChatQualitativeFeedbackContext(selectedChatReportMetric)
       const response = await fetch('/api/chat-feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -5069,6 +5104,7 @@ function ChatModuleDashboard({
             status: selectedChatReportMetric.status,
           },
           monthlyHistory: history,
+          qualitativeContext,
         }),
       })
       const data = await response.json()
@@ -5144,6 +5180,7 @@ function ChatModuleDashboard({
             status: selectedChatReportMetric.status,
           },
           monthlyHistory: history,
+          qualitativeContext,
         }),
       })
       const data = await response.json()
