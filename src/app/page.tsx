@@ -5242,7 +5242,7 @@ function ChatModuleDashboard({
       const failedText = failed > 0 ? ` · ${failed} não concluída(s)` : ''
 
       setChatReportQualitativeStatus(
-        `Leitura preparada: ${completed} de ${sampleTickets.length} tickets (${negativeCount} negativos + ${positiveCount} positivos)${reusedText}${failedText}.`,
+        `Leitura preparada: ${completed} de ${sampleTickets.length} tickets (${negativeCount} negativos + ${positiveCount} positivos)${reusedText}${failedText}. Valide as leituras em Gestão e ações; somente as aprovadas entram no feedback.`,
       )
     } catch (error) {
       setChatReportQualitativeStatus(getErrorMessage(error))
@@ -8302,7 +8302,7 @@ function ChatModuleDashboard({
           </div>
           <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
             <p className="font-semibold text-slate-100">2. Entender a amostra</p>
-            <p className="mt-2">Prepare até 3 negativas e 5 positivas para levar evidências reais da conversa ao feedback.</p>
+            <p className="mt-2">Prepare até 3 negativas e 5 positivas e valide as leituras antes de levá-las ao feedback.</p>
           </div>
           <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
             <p className="font-semibold text-slate-100">3. Revisar feedback</p>
@@ -8330,7 +8330,7 @@ function ChatModuleDashboard({
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">Leitura qualitativa opcional</p>
                 <p className="mt-1 text-sm text-slate-300">
-                  Prepare a amostra antes do feedback para que a IA use causas, influência humana e evidências já validadas.
+                  Prepare a amostra e depois valide as leituras em Gestão e ações. Somente o que for aprovado entra como evidência do feedback.
                 </p>
                 {chatReportQualitativeStatus && (
                   <p className="mt-2 text-xs leading-5 text-slate-400">{chatReportQualitativeStatus}</p>
