@@ -9,6 +9,21 @@ import { normalizeQualitativeAnalysis } from '@/lib/clickdesk-qualitative'
 
 export const runtime = 'nodejs'
 
+type AttendanceRow = {
+  clickdesk_ticket_id: string
+  analyst_id: string | null
+  assignee_name: string
+  satisfaction_label: string | null
+}
+
+type AnalysisRow = {
+  clickdesk_ticket_id: string
+  analyst_id: string
+  satisfaction_label: string | null
+  analysis: unknown
+  updated_at: string
+}
+
 function validDate(value: string) {
   return (
     /^20\d{2}-\d{2}-\d{2}$/.test(value) &&
@@ -21,12 +36,20 @@ function validUuid(value: string) {
   return /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value)
 }
 
-function countBy<T extends string>(items: T[]) {
+function countValues(items: string[]) {
   const counts: Record<string, number> = {}
-  for (const item of items) counts[item] = (counts[item] ?? 0) + 1
-  return Object.entries(counts)
-    .map(([key, count]) => ({ key, count }))
+
+  for (const item of items) {
+    counts[item] = (counts[item] ?? 0) + 1
+  }
+
+  return Object.keys(counts)
+    .map((key) => ({ key, count: counts[key] }))
     .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key))
+}
+
+function percentage(part: number, total: number) {
+  return total > 0 ? Math.round((part / total) * 10000) / 100 : 0
 }
 
 export async function GET(request: Request) {
@@ -61,67 +84,52 @@ export async function GET(request: Request) {
     if (teamId && !validUuid(teamId)) throw new ApiError(400, 'team_id inválido.')
     if (analystId && !validUuid(analystId)) throw new ApiError(400, 'analyst_id inválido.')
 
-    let analystsQuery = access.admin
-      .from('chat_analysts')
-      .select('id,name,team_id')
-      .eq('active', true)
-
-    if (teamId) analystsQuery = analystsQuery.eq('team_id', teamId)
-    if (analystId) analystsQuery = analystsQuery.eq('id', analystId)
-
-    const analystsResult = await analystsQuery
-    if (analystsResult.error) {
-      throw new ApiError(503, 'Não foi possível carregar os analistas para o resumo qualitativo.')
-    }
-
-    const analystRows = analystsResult.data ?? []
-    const analystIds = analystRows.map((item) => item.id)
-    const analystNames = new Map(analystRows.map((item) => [item.id, item.name]))
-
-    if (!analystIds.length) {
-      return json({
-        source: 'clickdesk_qualitative_cache',
-        period: { start, end },
-        scope: { team_id: teamId, analyst_id: analystId },
-        totals: { evaluated: 0, positive: 0, negative: 0, analyzed: 0, analyzed_positive: 0, analyzed_negative: 0 },
-        coverage: { evaluated_percentage: 0, positive_percentage: 0, negative_percentage: 0 },
-        causes: [],
-        human_influence: [],
-        controllability: [],
-        sentiment_change: [],
-        coaching_signals: 0,
-        analysts: [],
-      })
-    }
-
     let attendanceQuery = access.admin
       .from('clickdesk_chat_attendances')
-      .select('clickdesk_ticket_id,analyst_id,satisfaction_label')
+      .select('clickdesk_ticket_id,analyst_id,assignee_name,satisfaction_label')
       .eq('identity_role', 'analyst')
       .gte('occurred_date', start)
       .lte('occurred_date', end)
-      .in('analyst_id', analystIds)
       .in('satisfaction_label', ['positive', 'negative'])
+
+    if (teamId) attendanceQuery = attendanceQuery.eq('team_id', teamId)
+    if (analystId) attendanceQuery = attendanceQuery.eq('analyst_id', analystId)
 
     const attendanceResult = await attendanceQuery
     if (attendanceResult.error) {
       throw new ApiError(503, 'Não foi possível calcular a cobertura das avaliações.')
     }
 
-    const analysisResult = await access.admin
+    const evaluated = (attendanceResult.data ?? []) as AttendanceRow[]
+    const evaluatedTicketIds = new Set(evaluated.map((item) => item.clickdesk_ticket_id))
+    const analystNames = new Map<string, string>()
+
+    for (const item of evaluated) {
+      if (item.analyst_id && !analystNames.has(item.analyst_id)) {
+        analystNames.set(item.analyst_id, item.assignee_name)
+      }
+    }
+
+    let analysisQuery = access.admin
       .from('clickdesk_qualitative_analyses')
       .select('clickdesk_ticket_id,analyst_id,satisfaction_label,analysis,updated_at')
       .gte('occurred_date', start)
       .lte('occurred_date', end)
-      .in('analyst_id', analystIds)
       .order('updated_at', { ascending: false })
 
+    if (analystId) analysisQuery = analysisQuery.eq('analyst_id', analystId)
+
+    const analysisResult = await analysisQuery
     if (analysisResult.error) {
       throw new ApiError(503, 'Não foi possível carregar as análises qualitativas preservadas.')
     }
 
-    const evaluated = attendanceResult.data ?? []
-    const analyses = analysisResult.data ?? []
+    const allAnalyses = (analysisResult.data ?? []) as AnalysisRow[]
+    const analyses =
+      teamId || analystId
+        ? allAnalyses.filter((item) => evaluatedTicketIds.has(item.clickdesk_ticket_id))
+        : allAnalyses
+
     const evaluatedPositive = evaluated.filter((item) => item.satisfaction_label === 'positive').length
     const evaluatedNegative = evaluated.filter((item) => item.satisfaction_label === 'negative').length
     const analyzedPositive = analyses.filter((item) => item.satisfaction_label === 'positive').length
@@ -131,15 +139,6 @@ export async function GET(request: Request) {
       ...item,
       normalized: normalizeQualitativeAnalysis(item.analysis),
     }))
-
-    const causes = countBy(normalized.map((item) => item.normalized.primary_cause.category))
-    const humanInfluence = countBy(normalized.map((item) => item.normalized.human_influence.classification))
-    const controllability = countBy(normalized.map((item) => item.normalized.controllability.classification))
-    const sentimentChange = countBy(
-      normalized.map(
-        (item) => `${item.normalized.initial_sentiment}->${item.normalized.final_sentiment}`,
-      ),
-    )
 
     const analystAggregation = new Map<
       string,
@@ -155,25 +154,25 @@ export async function GET(request: Request) {
     >()
 
     for (const item of normalized) {
-      const key = item.analyst_id
-      const current = analystAggregation.get(key) ?? {
-        analyst_id: key,
-        analyst_name: analystNames.get(key) ?? 'Analista',
+      const current = analystAggregation.get(item.analyst_id) ?? {
+        analyst_id: item.analyst_id,
+        analyst_name: analystNames.get(item.analyst_id) ?? 'Analista',
         analyzed: 0,
         positive: 0,
         negative: 0,
         coaching_signals: 0,
         causes: [],
       }
+
       current.analyzed += 1
       if (item.satisfaction_label === 'positive') current.positive += 1
       if (item.satisfaction_label === 'negative') current.negative += 1
       if (item.normalized.coaching_signal.available) current.coaching_signals += 1
       current.causes.push(item.normalized.primary_cause.category)
-      analystAggregation.set(key, current)
+      analystAggregation.set(item.analyst_id, current)
     }
 
-    const analysts = [...analystAggregation.values()]
+    const analysts = Array.from(analystAggregation.values())
       .map((item) => ({
         analyst_id: item.analyst_id,
         analyst_name: item.analyst_name,
@@ -181,12 +180,9 @@ export async function GET(request: Request) {
         positive: item.positive,
         negative: item.negative,
         coaching_signals: item.coaching_signals,
-        top_causes: countBy(item.causes).slice(0, 3),
+        top_causes: countValues(item.causes).slice(0, 3),
       }))
       .sort((a, b) => b.analyzed - a.analyzed || a.analyst_name.localeCompare(b.analyst_name))
-
-    const percentage = (part: number, total: number) =>
-      total > 0 ? Math.round((part / total) * 10000) / 100 : 0
 
     return json({
       source: 'clickdesk_qualitative_cache',
@@ -205,11 +201,24 @@ export async function GET(request: Request) {
         positive_percentage: percentage(analyzedPositive, evaluatedPositive),
         negative_percentage: percentage(analyzedNegative, evaluatedNegative),
       },
-      causes,
-      human_influence: humanInfluence,
-      controllability,
-      sentiment_change: sentimentChange,
-      coaching_signals: normalized.filter((item) => item.normalized.coaching_signal.available).length,
+      causes: countValues(
+        normalized.map((item) => item.normalized.primary_cause.category),
+      ),
+      human_influence: countValues(
+        normalized.map((item) => item.normalized.human_influence.classification),
+      ),
+      controllability: countValues(
+        normalized.map((item) => item.normalized.controllability.classification),
+      ),
+      sentiment_change: countValues(
+        normalized.map(
+          (item) =>
+            `${item.normalized.initial_sentiment}->${item.normalized.final_sentiment}`,
+        ),
+      ),
+      coaching_signals: normalized.filter(
+        (item) => item.normalized.coaching_signal.available,
+      ).length,
       analysts,
     })
   })
