@@ -4885,7 +4885,6 @@ function ChatModuleDashboard({
   const chatReportFeedbackSuggestion = selectedChatReportMetric
     ? buildChatFeedbackText({
         metric: selectedChatReportMetric,
-        averageTickets: chatReportAverageTickets,
         podiumPosition: selectedChatPodiumPosition,
         managerNotes: chatManagerNotes,
       })
@@ -13865,7 +13864,7 @@ async function exportChatIndividualReport({
       : `${formatDelta(Math.abs(reviewGap), ' p.p.').replace('+', '')} abaixo da referência de ${reviewGoal}%.`
   const finalFeedback =
     feedbackText.trim() ||
-    buildChatFeedbackText({ metric, averageTickets, podiumPosition, managerNotes })
+    buildChatFeedbackText({ metric, podiumPosition, managerNotes })
   const managerNotesHtml = managerNotes.trim()
     ? `<section class="section-block">
         <div class="section-heading">
@@ -14606,12 +14605,10 @@ function normalizeFeedbackManagerVoice(text: string) {
 }
 function buildChatFeedbackText({
   metric,
-  averageTickets,
   podiumPosition,
   managerNotes,
 }: {
   metric: ChatMonthlyMetric
-  averageTickets: number
   podiumPosition: number
   managerNotes: string
 }) {
