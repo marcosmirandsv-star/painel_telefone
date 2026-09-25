@@ -587,6 +587,15 @@ type ClickDeskQualitativeSummary = {
     coaching_signals: number
     top_causes: { key: string; count: number }[]
   }[]
+  validation_queue?: {
+    ticket_id: string
+    analyst_id: string | null
+    analyst_name: string
+    occurred_date: string
+    occurred_at: string
+    area: string
+    satisfaction_label: string | null
+  }[]
   error?: string
 }
 
@@ -3631,6 +3640,7 @@ function ChatModuleDashboard({
   const [clickDeskQualitativeResult, setClickDeskQualitativeResult] = useState<ClickDeskQualitativeResponse | null>(null)
   const [clickDeskQualitativeSummary, setClickDeskQualitativeSummary] = useState<ClickDeskQualitativeSummary | null>(null)
   const [clickDeskQualitativeSummaryLoading, setClickDeskQualitativeSummaryLoading] = useState(false)
+  const [clickDeskQualitativeSummaryRefresh, setClickDeskQualitativeSummaryRefresh] = useState(0)
   const [manualPodiumDraft, setManualPodiumDraft] = useState<Record<number, string>>({})
   const [chatPodiumMessage, setChatPodiumMessage] = useState('')
   const [chatAnalystForm, setChatAnalystForm] = useState({ teamId: '', name: '', csatGoal: '86', photoFile: null as File | null })
@@ -4027,13 +4037,14 @@ function ChatModuleDashboard({
     }
   }
 
-  async function handleAnalyzeClickDeskQualitative() {
-    const ticketId = clickDeskQualitativeTicketId.trim()
-    if (!ticketId) {
+  async function runManagementQualitativeAnalysis(ticketId: string) {
+    const normalizedTicketId = ticketId.trim()
+    if (!normalizedTicketId) {
       setClickDeskQualitativeResult({ error: 'Informe um ticket persistido para validar a análise.' })
       return
     }
 
+    setClickDeskQualitativeTicketId(normalizedTicketId)
     setClickDeskQualitativeLoading(true)
     setClickDeskQualitativeResult(null)
 
@@ -4053,7 +4064,7 @@ function ChatModuleDashboard({
           Authorization: `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ticket_id: ticketId }),
+        body: JSON.stringify({ ticket_id: normalizedTicketId }),
       })
       const data = (await response.json()) as ClickDeskQualitativeResponse
 
@@ -4062,11 +4073,18 @@ function ChatModuleDashboard({
       }
 
       setClickDeskQualitativeResult(data)
+      if (response.ok && !data.error) {
+        setClickDeskQualitativeSummaryRefresh((current) => current + 1)
+      }
     } catch (error) {
       setClickDeskQualitativeResult({ error: getErrorMessage(error) })
     } finally {
       setClickDeskQualitativeLoading(false)
     }
+  }
+
+  async function handleAnalyzeClickDeskQualitative() {
+    await runManagementQualitativeAnalysis(clickDeskQualitativeTicketId)
   }
 
   async function handleChatMonthlyImport(event: FormEvent<HTMLFormElement>) {
@@ -4287,7 +4305,7 @@ function ChatModuleDashboard({
     return () => {
       cancelled = true
     }
-  }, [isManagementUser, chatActiveTab, activePeriodForQualitativeSummary, selectedTeamId])
+  }, [isManagementUser, chatActiveTab, activePeriodForQualitativeSummary, selectedTeamId, clickDeskQualitativeSummaryRefresh])
 
   if (!isManagementUser) {
     return (
@@ -7382,6 +7400,52 @@ function ChatModuleDashboard({
                   <span className="mt-1 block text-xs text-slate-500">com comportamento observável</span>
                 </div>
               </div>
+
+              {(clickDeskQualitativeSummary?.validation_queue?.length ?? 0) > 0 && (
+                <div className="mt-5 rounded-lg border border-amber-300/15 bg-amber-300/5 p-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-100">Fila de validação</p>
+                      <h4 className="mt-1 font-semibold text-slate-100">Negativas ainda não analisadas</h4>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Até 5 casos reais do filtro atual para validar a leitura da IA antes de ampliar a automação.
+                      </p>
+                    </div>
+                    <span className="text-xs text-slate-500">
+                      {clickDeskQualitativeSummary?.validation_queue?.length ?? 0} pendente(s) exibida(s)
+                    </span>
+                  </div>
+
+                  <div className="mt-3 space-y-2">
+                    {clickDeskQualitativeSummary?.validation_queue?.map((item) => (
+                      <div
+                        key={item.ticket_id}
+                        className="grid gap-3 rounded-lg border border-white/10 bg-slate-950/40 px-3 py-3 md:grid-cols-[1fr_auto_auto] md:items-center"
+                      >
+                        <div>
+                          <strong className="text-sm text-slate-100">{item.analyst_name}</strong>
+                          <p className="mt-1 text-xs text-slate-500">
+                            Ticket #{item.ticket_id} · {formatDate(item.occurred_date)} · {item.area}
+                          </p>
+                        </div>
+                        <span className="rounded-md bg-amber-300/10 px-2 py-1 text-xs font-semibold text-amber-100">
+                          Negativa
+                        </span>
+                        <button
+                          type="button"
+                          className="small-button"
+                          disabled={clickDeskQualitativeLoading}
+                          onClick={() => void runManagementQualitativeAnalysis(item.ticket_id)}
+                        >
+                          {clickDeskQualitativeLoading && clickDeskQualitativeTicketId === item.ticket_id
+                            ? 'Analisando...'
+                            : 'Analisar agora'}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {(clickDeskQualitativeSummary?.totals?.analyzed ?? 0) > 0 ? (
                 <div className="mt-5 grid gap-4 xl:grid-cols-3">
