@@ -556,6 +556,40 @@ type ClickDeskEvaluatedSampleResponse = {
   error?: string
 }
 
+type ClickDeskQualitativeSummary = {
+  source?: string
+  period?: { start: string; end: string }
+  scope?: { team_id: string | null; analyst_id: string | null }
+  totals?: {
+    evaluated: number
+    positive: number
+    negative: number
+    analyzed: number
+    analyzed_positive: number
+    analyzed_negative: number
+  }
+  coverage?: {
+    evaluated_percentage: number
+    positive_percentage: number
+    negative_percentage: number
+  }
+  causes?: { key: string; count: number }[]
+  human_influence?: { key: string; count: number }[]
+  controllability?: { key: string; count: number }[]
+  sentiment_change?: { key: string; count: number }[]
+  coaching_signals?: number
+  analysts?: {
+    analyst_id: string
+    analyst_name: string
+    analyzed: number
+    positive: number
+    negative: number
+    coaching_signals: number
+    top_causes: { key: string; count: number }[]
+  }[]
+  error?: string
+}
+
 type ClickDeskQualitativeResponse = {
   source?: string
   ticket_id?: string
@@ -3593,6 +3627,8 @@ function ChatModuleDashboard({
   const [clickDeskQualitativeTicketId, setClickDeskQualitativeTicketId] = useState('')
   const [clickDeskQualitativeLoading, setClickDeskQualitativeLoading] = useState(false)
   const [clickDeskQualitativeResult, setClickDeskQualitativeResult] = useState<ClickDeskQualitativeResponse | null>(null)
+  const [clickDeskQualitativeSummary, setClickDeskQualitativeSummary] = useState<ClickDeskQualitativeSummary | null>(null)
+  const [clickDeskQualitativeSummaryLoading, setClickDeskQualitativeSummaryLoading] = useState(false)
   const [manualPodiumDraft, setManualPodiumDraft] = useState<Record<number, string>>({})
   const [chatPodiumMessage, setChatPodiumMessage] = useState('')
   const [chatAnalystForm, setChatAnalystForm] = useState({ teamId: '', name: '', csatGoal: '86', photoFile: null as File | null })
@@ -4189,6 +4225,67 @@ function ChatModuleDashboard({
       setChatAnalystForm((current) => ({ ...current, teamId: teams[0].id }))
     }
   }, [teams, chatAnalystForm.teamId])
+
+  const activePeriodForQualitativeSummary =
+    periods.find((period) => `${period.year}-${period.monthNumber}` === selectedPeriodKey) ??
+    periods[0]
+
+  useEffect(() => {
+    if (!isManagementUser || chatActiveTab !== 'podium' || !activePeriodForQualitativeSummary) return
+
+    let cancelled = false
+
+    async function loadQualitativeSummary() {
+      setClickDeskQualitativeSummaryLoading(true)
+
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+
+        if (!session?.access_token) {
+          if (!cancelled) {
+            setClickDeskQualitativeSummary({ error: 'Sua sessão de homologação não está ativa.' })
+          }
+          return
+        }
+
+        const period = activePeriodForQualitativeSummary
+        const end = new Date(Date.UTC(period.year, period.monthNumber, 0))
+          .toISOString()
+          .slice(0, 10)
+        const params = new URLSearchParams({
+          start: period.start,
+          end,
+        })
+        if (selectedTeamId !== 'all') params.set('team_id', selectedTeamId)
+
+        const response = await fetch(`/api/clickdesk/qualitative-summary?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: 'no-store',
+        })
+        const data = (await response.json()) as ClickDeskQualitativeSummary
+
+        if (!response.ok && !data.error) {
+          data.error = 'Não foi possível consolidar as análises qualitativas.'
+        }
+
+        if (!cancelled) setClickDeskQualitativeSummary(data)
+      } catch (error) {
+        if (!cancelled) {
+          setClickDeskQualitativeSummary({ error: getErrorMessage(error) })
+        }
+      } finally {
+        if (!cancelled) setClickDeskQualitativeSummaryLoading(false)
+      }
+    }
+
+    void loadQualitativeSummary()
+
+    return () => {
+      cancelled = true
+    }
+  }, [isManagementUser, chatActiveTab, activePeriodForQualitativeSummary, selectedTeamId])
 
   if (!isManagementUser) {
     return (
