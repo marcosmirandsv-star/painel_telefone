@@ -3721,6 +3721,7 @@ function ChatModuleDashboard({
   const [clickDeskConversationLoading, setClickDeskConversationLoading] = useState(false)
   const [clickDeskConversationDiagnostic, setClickDeskConversationDiagnostic] = useState<ClickDeskConversationDiagnostic | null>(null)
   const [clickDeskPersistedMetrics, setClickDeskPersistedMetrics] = useState<ClickDeskPersistedMetrics | null>(null)
+  const [clickDeskPreviousMetrics, setClickDeskPreviousMetrics] = useState<ClickDeskPersistedMetrics | null>(null)
   const [clickDeskSyncResult, setClickDeskSyncResult] = useState<ClickDeskSyncResult | null>(null)
   const [clickDeskAnalystHistory, setClickDeskAnalystHistory] = useState<ClickDeskAnalystHistory | null>(null)
   const [clickDeskHistoryLoading, setClickDeskHistoryLoading] = useState(false)
@@ -3881,6 +3882,41 @@ function ChatModuleDashboard({
       setClickDeskPersistedMetrics(data)
     } catch (error) {
       setClickDeskPersistedMetrics({
+        erro: getErrorMessage(error),
+      })
+    }
+  }
+
+  async function loadClickDeskPreviousMetricsOnly(
+    period: { start: string; end: string },
+    teamId: string,
+  ) {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session?.access_token) return
+
+      const params = new URLSearchParams({
+        start: period.start,
+        end: period.end,
+      })
+      if (teamId !== 'all') params.set('team_id', teamId)
+
+      const response = await fetch(`/api/clickdesk/metrics?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: 'no-store',
+      })
+      const data = (await response.json()) as ClickDeskPersistedMetrics
+
+      if (!response.ok) {
+        data.erro = data.erro || 'Não foi possível carregar a competência anterior do ClickDesk.'
+      }
+
+      setClickDeskPreviousMetrics(data)
+    } catch (error) {
+      setClickDeskPreviousMetrics({
         erro: getErrorMessage(error),
       })
     }
@@ -5539,6 +5575,12 @@ function ChatModuleDashboard({
   })
   const chat2SelectedPeriod =
     chat2Periods.find((period) => period.key === chat2PeriodKey) ?? chat2Periods[0]
+  const chat2PreviousDate = new Date(Date.UTC(chat2SelectedPeriod.year, chat2SelectedPeriod.monthNumber - 2, 1))
+  const chat2PreviousPeriod = {
+    ...getChatMonthPeriod(chat2PreviousDate.getUTCFullYear(), chat2PreviousDate.getUTCMonth() + 1),
+    year: chat2PreviousDate.getUTCFullYear(),
+    monthNumber: chat2PreviousDate.getUTCMonth() + 1,
+  }
 
   useEffect(() => {
     void loadClickDeskPersistedMetricsOnly(
@@ -5548,9 +5590,18 @@ function ChatModuleDashboard({
       },
       selectedTeamId,
     )
+    void loadClickDeskPreviousMetricsOnly(
+      {
+        start: chat2PreviousPeriod.start,
+        end: chat2PreviousPeriod.end,
+      },
+      selectedTeamId,
+    )
   }, [
     chat2SelectedPeriod.start,
     chat2SelectedPeriod.end,
+    chat2PreviousPeriod.start,
+    chat2PreviousPeriod.end,
     selectedTeamId,
     isManagementUser,
   ])
@@ -5717,6 +5768,93 @@ function ChatModuleDashboard({
     chat2ProductivityRows.length > 0
       ? round(chat2ProductivityTickets / chat2ProductivityRows.length)
       : 0
+  const chat2OperationTodayTickets = chat2ProductivityRows.reduce(
+    (sum, item) => sum + Number(item.today?.attendances ?? 0),
+    0,
+  )
+  const chat2PreviousAccumulated = clickDeskPreviousMetrics?.performance_accumulated ?? null
+  const chat2OperationCsatDelta =
+    chat2ProductivityCsat !== null && chat2PreviousAccumulated?.csat !== null && chat2PreviousAccumulated?.csat !== undefined
+      ? round(chat2ProductivityCsat - Number(chat2PreviousAccumulated.csat))
+      : null
+  const chat2OperationReviewDelta =
+    chat2ProductivityReviewPercentage !== null &&
+    chat2PreviousAccumulated?.review_percentage !== null &&
+    chat2PreviousAccumulated?.review_percentage !== undefined
+      ? round(chat2ProductivityReviewPercentage - Number(chat2PreviousAccumulated.review_percentage))
+      : null
+  const chat2OperationVolumeDelta =
+    chat2PreviousAccumulated
+      ? chat2ProductivityTickets - Number(chat2PreviousAccumulated.attendances ?? 0)
+      : null
+  const chat2OperationBelowCsat = chat2ProductivityRows.filter(
+    (item) => item.csat !== null && Number(item.csat) < 90,
+  )
+  const chat2OperationBelowReviews = chat2ProductivityRows.filter(
+    (item) => item.review_percentage === null || Number(item.review_percentage) < 25,
+  )
+  const chat2OperationBelowVolume = chat2ProductivityRows.filter(
+    (item) => Number(item.attendances) < chat2ProductivityAverageTickets,
+  )
+  const chat2OperationStatus =
+    chat2ProductivityRows.length === 0
+      ? 'Aguardando base'
+      : (chat2ProductivityCsat ?? 0) >= 90 && (chat2ProductivityReviewPercentage ?? 0) >= 25
+        ? 'Operação saudável'
+        : (chat2ProductivityCsat ?? 0) < 85 || (chat2ProductivityReviewPercentage ?? 0) < 20
+          ? 'Acompanhamento prioritário'
+          : 'Operação em atenção'
+  const chat2OperationStatusTone =
+    chat2ProductivityRows.length === 0
+      ? 'text-slate-300'
+      : (chat2ProductivityCsat ?? 0) >= 90 && (chat2ProductivityReviewPercentage ?? 0) >= 25
+        ? 'text-emerald-300'
+        : (chat2ProductivityCsat ?? 0) < 85 || (chat2ProductivityReviewPercentage ?? 0) < 20
+          ? 'text-rose-300'
+          : 'text-amber-300'
+  const chat2OperationReading =
+    chat2ProductivityRows.length === 0
+      ? 'Ainda não há base persistida suficiente para esta competência.'
+      : (chat2ProductivityCsat ?? 0) < 90 && (chat2ProductivityReviewPercentage ?? 0) >= 25
+        ? 'A participação nas avaliações já oferece uma base consistente, mas a satisfação do time está abaixo da referência de 90%.'
+        : (chat2ProductivityCsat ?? 0) >= 90 && (chat2ProductivityReviewPercentage ?? 0) < 25
+          ? 'A satisfação está saudável, mas a participação nas avaliações ainda está abaixo da referência de 25%.'
+          : (chat2ProductivityCsat ?? 0) < 90 && (chat2ProductivityReviewPercentage ?? 0) < 25
+            ? 'Qualidade e participação pedem acompanhamento conjunto antes do próximo fechamento.'
+            : chat2OperationBelowVolume.length > 0
+              ? 'Os indicadores gerais estão saudáveis; o principal cuidado agora é entender diferenças de volume dentro do time.'
+              : 'Qualidade, participação e volume sustentam uma leitura saudável da operação.'
+  const chat2OperationAreas = Object.values(
+    chat2ProductivityRows.reduce<Record<string, {
+      area: string
+      analysts: number
+      attendances: number
+      positive: number
+      negative: number
+      reviews: number
+    }>>((acc, item) => {
+      const key = item.area || 'Área não identificada'
+      const current = acc[key] ?? {
+        area: key,
+        analysts: 0,
+        attendances: 0,
+        positive: 0,
+        negative: 0,
+        reviews: 0,
+      }
+      current.analysts += 1
+      current.attendances += Number(item.attendances)
+      current.positive += Number(item.positive_reviews ?? 0)
+      current.negative += Number(item.negative_reviews ?? 0)
+      current.reviews += Number(item.reviews ?? 0)
+      acc[key] = current
+      return acc
+    }, {}),
+  ).map((item) => ({
+    ...item,
+    csat: item.reviews > 0 ? round((item.positive / item.reviews) * 100) : null,
+    reviewPercentage: item.attendances > 0 ? round((item.reviews / item.attendances) * 100) : null,
+  }))
   const chat2SelectedMetric =
     chat2VisibleMetrics.find((metric) => metric.analyst_id === chat2AnalystId) ?? chat2VisibleMetrics[0] ?? null
   const chat2TeamMetrics = chat2SelectedMetric
@@ -5771,8 +5909,8 @@ function ChatModuleDashboard({
                 ))}
               </select>
             </Field>
-            <Field label={chatActiveTab === 'prototype' ? 'Período ClickDesk' : 'Período'}>
-              {chatActiveTab === 'prototype' ? (
+            <Field label={chatActiveTab === 'prototype' || chatActiveTab === 'overview' ? 'Período ClickDesk' : 'Período'}>
+              {chatActiveTab === 'prototype' || chatActiveTab === 'overview' ? (
                 <select className="form-input" value={chat2PeriodKey} onChange={(event) => setChat2PeriodKey(event.target.value)}>
                   {chat2Periods.map((period) => (
                     <option key={period.key} value={period.key}>
@@ -5871,9 +6009,25 @@ function ChatModuleDashboard({
 
       {chatActiveTab === 'overview' && (
         <section className="panel workspace-section-intro">
-          <p className="workspace-eyebrow">Operação</p>
-          <h2 className="mt-2 text-2xl font-bold">O que aconteceu no período?</h2>
-          <p className="section-subtitle">Resultado consolidado, comparação com o mês anterior e evolução dos principais indicadores.</p>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="workspace-eyebrow">Visão da operação</p>
+              <h2 className="mt-2 text-2xl font-bold">Como está a operação agora?</h2>
+              <p className="section-subtitle">
+                Fotografia da competência com base viva do ClickDesk, comparação com o mês anterior e alertas objetivos para orientar a gestão.
+              </p>
+            </div>
+            <div className="text-left lg:text-right">
+              <span className="inline-flex rounded-md border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-sm font-semibold text-cyan-100">
+                ClickDesk · base viva
+              </span>
+              <p className="mt-2 text-xs text-slate-500">
+                {clickDeskPersistedMetrics?.latest_sync?.finished_at
+                  ? `Dados atualizados em ${formatDateTime(clickDeskPersistedMetrics.latest_sync.finished_at)}`
+                  : 'Última atualização ainda não informada'}
+              </p>
+            </div>
+          </div>
         </section>
       )}
 
@@ -7270,12 +7424,21 @@ function ChatModuleDashboard({
           </div>
         </div>
       </section>
-      <div className={chatActiveTab === 'overview' ? 'metric-zone grid gap-4 sm:grid-cols-2 xl:grid-cols-5' : 'hidden'}>
-        <MetricCard label="Equipe" value={selectedTeamName} />
-        <MetricCard label="Analistas no período" value={formatChatCount(calculationMetrics.length)} />
-        <MetricCard label="CSAT médio" value={loading ? '...' : formatChatPercent(averageCsat)} tone={averageCsat >= 90 ? 'success' : averageCsat >= 85 ? 'warning' : 'danger'} />
-        <MetricCard label="% de avaliações" value={formatChatPercent(averageReviews)} tone={averageReviews >= 25 ? 'success' : averageReviews >= 20 ? 'warning' : 'danger'} />
-        <MetricCard label="Atendimentos" value={formatChatCount(totals.tickets)} />
+      <div className={chatActiveTab === 'overview' ? 'metric-zone grid gap-4 sm:grid-cols-2 xl:grid-cols-6' : 'hidden'}>
+        <MetricCard label="Atendimentos" value={formatChatCount(chat2ProductivityTickets)} />
+        <MetricCard label="Hoje na base" value={formatChatCount(chat2OperationTodayTickets)} />
+        <MetricCard
+          label="CSAT do time"
+          value={chat2ProductivityCsat === null ? '—' : formatChatPercent(chat2ProductivityCsat)}
+          tone={(chat2ProductivityCsat ?? 0) >= 90 ? 'success' : (chat2ProductivityCsat ?? 0) >= 85 ? 'warning' : 'danger'}
+        />
+        <MetricCard
+          label="% de avaliações"
+          value={chat2ProductivityReviewPercentage === null ? '—' : formatChatPercent(chat2ProductivityReviewPercentage)}
+          tone={(chat2ProductivityReviewPercentage ?? 0) >= 25 ? 'success' : (chat2ProductivityReviewPercentage ?? 0) >= 20 ? 'warning' : 'danger'}
+        />
+        <MetricCard label="Positivas" value={formatChatCount(chat2ProductivityPositive)} tone="success" />
+        <MetricCard label="Negativas" value={formatChatCount(chat2ProductivityNegative)} tone={chat2ProductivityNegative > 0 ? 'warning' : 'success'} />
       </div>
 
       <CriteriaLegend
@@ -7292,58 +7455,126 @@ function ChatModuleDashboard({
         <div className="grid gap-5 xl:grid-cols-[1.05fr_1.95fr]">
           <div className="rounded-xl border border-white/10 bg-slate-950/35 p-5">
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Leitura da operação</p>
-            <h2 className={`mt-3 text-3xl font-bold ${chatExecutiveTone}`}>{chatExecutiveStatus}</h2>
+            <h2 className={`mt-3 text-3xl font-bold ${chat2OperationStatusTone}`}>{chat2OperationStatus}</h2>
             <p className="mt-3 text-sm leading-6 text-slate-300">
-              {selectedPeriod?.label ?? 'Período'} · {selectedTeamName}
+              {chat2SelectedPeriod.label} · {selectedTeamName}
             </p>
-            <p className="mt-3 text-sm leading-6 text-slate-400">{chatMainAlert}</p>
+            <p className="mt-3 text-sm leading-6 text-slate-400">{chat2OperationReading}</p>
 
             <div className="mt-5 grid grid-cols-3 gap-2 border-t border-white/10 pt-4 text-center">
               <div>
-                <span className="block text-xs text-slate-500">Elegíveis</span>
-                <strong className="mt-1 block text-xl tabular-nums text-emerald-300">{chatEligibleCount}</strong>
+                <span className="block text-xs text-slate-500">CSAT &lt; 90%</span>
+                <strong className="mt-1 block text-xl tabular-nums text-amber-200">{chat2OperationBelowCsat.length}</strong>
               </div>
               <div>
-                <span className="block text-xs text-slate-500">Em atenção</span>
-                <strong className="mt-1 block text-xl tabular-nums text-amber-200">{attention.length}</strong>
+                <span className="block text-xs text-slate-500">Avaliações &lt; 25%</span>
+                <strong className="mt-1 block text-xl tabular-nums text-amber-200">{chat2OperationBelowReviews.length}</strong>
               </div>
               <div>
-                <span className="block text-xs text-slate-500">Críticos</span>
-                <strong className="mt-1 block text-xl tabular-nums text-rose-300">{chatCriticalCount}</strong>
+                <span className="block text-xs text-slate-500">Volume &lt; média</span>
+                <strong className="mt-1 block text-xl tabular-nums text-amber-200">{chat2OperationBelowVolume.length}</strong>
               </div>
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <div className="executive-card">
-              <p>CSAT vs mês anterior</p>
-              <strong>{formatDelta(chatCsatDelta, ' p.p.')}</strong>
-              <span>Atual: {formatChatPercent(averageCsat)}</span>
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="executive-card">
+                <p>CSAT vs mês anterior</p>
+                <strong>{chat2OperationCsatDelta === null ? '—' : formatDelta(chat2OperationCsatDelta, ' p.p.')}</strong>
+                <span>
+                  Atual: {chat2ProductivityCsat === null ? '—' : formatChatPercent(chat2ProductivityCsat)}
+                  {chat2PreviousAccumulated?.csat !== null && chat2PreviousAccumulated?.csat !== undefined
+                    ? ` · anterior ${formatChatPercent(chat2PreviousAccumulated.csat)}`
+                    : ''}
+                </span>
+              </div>
+              <div className="executive-card">
+                <p>Avaliações vs mês anterior</p>
+                <strong>{chat2OperationReviewDelta === null ? '—' : formatDelta(chat2OperationReviewDelta, ' p.p.')}</strong>
+                <span>
+                  Atual: {chat2ProductivityReviewPercentage === null ? '—' : formatChatPercent(chat2ProductivityReviewPercentage)}
+                  {chat2PreviousAccumulated?.review_percentage !== null && chat2PreviousAccumulated?.review_percentage !== undefined
+                    ? ` · anterior ${formatChatPercent(chat2PreviousAccumulated.review_percentage)}`
+                    : ''}
+                </span>
+              </div>
+              <div className="executive-card">
+                <p>Volume vs mês anterior</p>
+                <strong>{chat2OperationVolumeDelta === null ? '—' : formatDelta(chat2OperationVolumeDelta)}</strong>
+                <span>
+                  Atual: {formatChatCount(chat2ProductivityTickets)}
+                  {chat2PreviousAccumulated
+                    ? ` · anterior ${formatChatCount(chat2PreviousAccumulated.attendances)}`
+                    : ''}
+                </span>
+              </div>
             </div>
-            <div className="executive-card">
-              <p>Avaliações vs mês anterior</p>
-              <strong>{formatDelta(chatReviewDelta, ' p.p.')}</strong>
-              <span>Atual: {formatChatPercent(averageReviews)}</span>
-            </div>
-            <div className="executive-card">
-              <p>Sem avaliação</p>
-              <strong>{formatChatPercent(averageSending)}</strong>
-              <span>{formatDelta(chatSendingDelta, ' p.p.')} vs anterior</span>
-            </div>
-            <div className="rounded-lg border border-white/10 bg-slate-900 p-4 sm:col-span-2 xl:col-span-3">
-              <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-center">
+
+            <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <p className="text-sm text-slate-400">Prioridade gerencial do período</p>
-                  <p className="mt-2 font-semibold text-slate-100">{chatRecommendedAction}</p>
+                  <p className="text-sm text-slate-400">Contexto operacional</p>
+                  <strong className="mt-1 block text-lg text-slate-100">
+                    {formatChatCount(chat2ProductivityRows.length)} analista(s) com dados · média de {formatChatCount(chat2ProductivityAverageTickets)} atendimentos
+                  </strong>
                 </div>
-                <div className="rounded-lg bg-slate-950/45 px-4 py-3 text-right">
-                  <span className="block text-xs text-slate-500">Média de volume</span>
-                  <strong className="mt-1 block text-xl tabular-nums">{formatChatCount(averageTickets)}</strong>
-                  <span className="text-xs text-slate-500">atendimentos por analista</span>
-                </div>
+                <span className="text-xs text-slate-500">
+                  Referências: CSAT 90% · avaliações 25%
+                </span>
               </div>
             </div>
           </div>
+        </div>
+
+        <div className="mt-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.14em] text-cyan-300">Leitura por área</p>
+              <h3 className="mt-1 text-xl font-bold">Onde o resultado está concentrado?</h3>
+            </div>
+            <span className="text-xs text-slate-500">Somente atendimentos classificados como analista</span>
+          </div>
+
+          {chat2OperationAreas.length > 0 ? (
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              {chat2OperationAreas.map((item) => (
+                <div key={item.area} className="rounded-xl border border-white/10 bg-slate-950/35 p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <strong className="text-slate-100">{item.area}</strong>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {formatChatCount(item.analysts)} analista(s) com dados
+                      </p>
+                    </div>
+                    <strong className="text-xl tabular-nums text-cyan-200">{formatChatCount(item.attendances)}</strong>
+                  </div>
+                  <div className="mt-4 grid grid-cols-3 gap-3 text-sm">
+                    <div>
+                      <span className="block text-xs text-slate-500">CSAT</span>
+                      <strong className="mt-1 block tabular-nums">
+                        {item.csat === null ? '—' : formatChatPercent(item.csat)}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="block text-xs text-slate-500">% avaliações</span>
+                      <strong className="mt-1 block tabular-nums">
+                        {item.reviewPercentage === null ? '—' : formatChatPercent(item.reviewPercentage)}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="block text-xs text-slate-500">Avaliações</span>
+                      <strong className="mt-1 block tabular-nums">{formatChatCount(item.reviews)}</strong>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-4">
+              <EmptyState text="Ainda não há dados persistidos do ClickDesk para esta competência." />
+            </div>
+          )}
         </div>
       </section>
 
@@ -7965,10 +8196,10 @@ function ChatModuleDashboard({
 
       <section className={chatActiveTab === 'overview' ? 'panel' : 'hidden'}>
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Evolução da operação</p>
-          <h2 className="mt-2 text-2xl font-bold">Qualidade, participação e volume</h2>
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Histórico oficial</p>
+          <h2 className="mt-2 text-2xl font-bold">Qualidade, participação e volume ao longo dos fechamentos</h2>
           <p className="section-subtitle">
-            A leitura histórica combina os indicadores percentuais com o volume total para mostrar se a operação mudou de resultado junto com a carga de atendimento.
+            Esta camada preserva a evolução dos meses já importados/fechados. A fotografia acima usa a base viva do ClickDesk para a competência selecionada.
           </p>
         </div>
 
