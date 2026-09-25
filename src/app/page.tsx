@@ -666,6 +666,19 @@ type ClickDeskQualitativeResponse = {
   error?: string
 }
 
+type ChatQualitativeFeedbackContext = {
+  analyzedCount: number
+  negativeAnalyzed: number
+  positiveAnalyzed: number
+  negativeTotal: number
+  positiveTotal: number
+  findings: {
+    satisfactionLabel: string | null
+    occurredDate: string | null
+    analysis: NonNullable<ClickDeskQualitativeResponse['analysis']>
+  }[]
+}
+
 type ClickDeskHistoryPoint = {
   month: string
   label: string
@@ -5251,7 +5264,9 @@ function ChatModuleDashboard({
     }
   }
 
-  async function loadChatQualitativeFeedbackContext(metric: ChatMonthlyMetric) {
+  async function loadChatQualitativeFeedbackContext(
+    metric: ChatMonthlyMetric,
+  ): Promise<ChatQualitativeFeedbackContext | undefined> {
     const start = `${metric.year}-${String(metric.month_number).padStart(2, '0')}-01`
     const end = new Date(Date.UTC(metric.year, metric.month_number, 0))
       .toISOString()
@@ -5269,11 +5284,21 @@ function ChatModuleDashboard({
 
     if (result.error || !result.data?.length) return undefined
 
-    const findings = result.data.map((item) => ({
-      satisfactionLabel: item.satisfaction_label,
-      occurredDate: item.occurred_date,
-      analysis: item.analysis,
-    }))
+    const findings = result.data
+      .map((item) => ({
+        satisfactionLabel: item.satisfaction_label,
+        occurredDate: item.occurred_date,
+        analysis: item.analysis as ClickDeskQualitativeResponse['analysis'],
+      }))
+      .filter(
+        (
+          item,
+        ): item is {
+          satisfactionLabel: string | null
+          occurredDate: string | null
+          analysis: NonNullable<ClickDeskQualitativeResponse['analysis']>
+        } => Boolean(item.analysis),
+      )
 
     return {
       analyzedCount: findings.length,
