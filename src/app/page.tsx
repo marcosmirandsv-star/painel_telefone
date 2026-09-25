@@ -5768,6 +5768,23 @@ function ChatModuleDashboard({
     chat2ProductivityRows.length > 0
       ? round(chat2ProductivityTickets / chat2ProductivityRows.length)
       : 0
+  const chat2ProductivityTeamVolumeStats = chat2ProductivityRows.reduce<Record<string, { tickets: number; analysts: number }>>(
+    (acc, item) => {
+      const key = item.team_id ?? item.area ?? 'sem-time'
+      const current = acc[key] ?? { tickets: 0, analysts: 0 }
+      current.tickets += Number(item.attendances)
+      current.analysts += 1
+      acc[key] = current
+      return acc
+    },
+    {},
+  )
+  const chat2ProductivityAverageByTeam = Object.fromEntries(
+    Object.entries(chat2ProductivityTeamVolumeStats).map(([key, item]) => [
+      key,
+      item.analysts > 0 ? round(item.tickets / item.analysts) : 0,
+    ]),
+  )
   const chat2OperationTodayTickets = chat2ProductivityRows.reduce(
     (sum, item) => sum + Number(item.today?.attendances ?? 0),
     0,
@@ -5798,9 +5815,11 @@ function ChatModuleDashboard({
   const chat2OperationBelowReviews = chat2ProductivityRows.filter(
     (item) => item.review_percentage === null || Number(item.review_percentage) < 25,
   )
-  const chat2OperationBelowVolume = chat2ProductivityRows.filter(
-    (item) => Number(item.attendances) < chat2ProductivityAverageTickets,
-  )
+  const chat2OperationBelowVolume = chat2ProductivityRows.filter((item) => {
+    const teamKey = item.team_id ?? item.area ?? 'sem-time'
+    const teamAverage = chat2ProductivityAverageByTeam[teamKey] ?? chat2ProductivityAverageTickets
+    return Number(item.attendances) < teamAverage
+  })
   const chat2OperationStatus =
     chat2ProductivityRows.length === 0
       ? 'Aguardando base'
@@ -6670,7 +6689,10 @@ function ChatModuleDashboard({
                 value={chat2ProductivityReviewPercentage === null ? '—' : formatChatPercent(chat2ProductivityReviewPercentage)}
               />
               <MetricCard label="Avaliações recebidas" value={formatChatCount(chat2ProductivityReviews)} />
-              <MetricCard label="Média de atendimentos" value={formatChatCount(chat2ProductivityAverageTickets)} />
+              <MetricCard
+                label={selectedTeamId === 'all' ? 'Média geral de atendimentos' : 'Média de atendimentos do time'}
+                value={formatChatCount(chat2ProductivityAverageTickets)}
+              />
             </div>
 
             {chat2ProductivityRows.length > 0 ? (
@@ -6678,7 +6700,7 @@ function ChatModuleDashboard({
                 <div className="grid min-w-[780px] grid-cols-[minmax(220px,1.6fr)_repeat(4,minmax(110px,0.7fr))] gap-3 border-b border-white/10 px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
                   <span>Analista</span>
                   <span className="text-right">Atendimentos</span>
-                  <span className="text-right">Vs. média</span>
+                  <span className="text-right">Vs. média do time</span>
                   <span className="text-right">CSAT</span>
                   <span className="text-right">% avaliações</span>
                 </div>
@@ -6688,7 +6710,9 @@ function ChatModuleDashboard({
                     const selected = chat2SelectedLiveHuman
                       ? analystKey === `${chat2SelectedLiveHuman.area}::${chat2SelectedLiveHuman.name}`
                       : false
-                    const volumeDelta = Number(item.attendances) - chat2ProductivityAverageTickets
+                    const teamKey = item.team_id ?? item.area ?? 'sem-time'
+                    const teamAverage = chat2ProductivityAverageByTeam[teamKey] ?? chat2ProductivityAverageTickets
+                    const volumeDelta = Number(item.attendances) - teamAverage
                     return (
                       <button
                         key={analystKey}
@@ -6792,10 +6816,15 @@ function ChatModuleDashboard({
                       </span>
                     </div>
                     <div className="rounded-lg bg-slate-900 px-4 py-3">
-                      <p className="text-slate-400">Leitura ClickDesk</p>
+                      <p className="text-slate-400">Base ClickDesk</p>
                       <strong className="mt-1 block text-base">
-                        {clickDeskConversationDiagnostic?.scan?.human?.complete ? 'Completa' : 'Parcial'}
+                        {clickDeskPersistedMetrics?.erro ? 'Indisponível' : 'Persistida'}
                       </strong>
+                      <span className="mt-1 block text-xs text-slate-500">
+                        {clickDeskPersistedMetrics?.latest_sync?.finished_at
+                          ? `Atualizada em ${formatDateTime(clickDeskPersistedMetrics.latest_sync.finished_at)}`
+                          : 'Competência em acompanhamento'}
+                      </span>
                     </div>
                   </div>
                 </div>
