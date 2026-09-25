@@ -5467,7 +5467,9 @@ function ChatModuleDashboard({
     }
   }
 
-  function buildChatReportExportPayload() {
+  function buildChatReportExportPayload(
+    qualitativeContext?: ChatQualitativeFeedbackContext,
+  ) {
     if (!selectedChatReportMetric) return null
 
     const finalFeedbackText = normalizeChatReportFeedback(chatFeedbackDraft, chatReportFeedbackSuggestion, chatFeedbackStyle)
@@ -5482,6 +5484,7 @@ function ChatModuleDashboard({
         .sort((a, b) => (a.year === b.year ? a.month_number - b.month_number : a.year - b.year)),
       managerNotes: chatManagerNotes,
       feedbackText: finalFeedbackText,
+      qualitativeContext,
       photoUrl: getAnalystPhoto(
         getChatAnalystName(selectedChatReportMetric),
         analysts.find((analyst) => analyst.id === selectedChatReportMetric.analyst_id)?.photo_url,
@@ -5490,15 +5493,23 @@ function ChatModuleDashboard({
   }
 
   async function handleExportChatIndividualReport() {
-    const payload = buildChatReportExportPayload()
-
-    if (!payload) {
+    if (!selectedChatReportMetric) {
       setChatExportMessage('Selecione um analista com dados antes de exportar o relatório individual.')
       return
     }
 
     try {
       setChatExportMessage('Preparando relatório e incorporando a foto do analista...')
+      const qualitativeContext = await loadChatQualitativeFeedbackContext(
+        selectedChatReportMetric,
+      )
+      const payload = buildChatReportExportPayload(qualitativeContext)
+
+      if (!payload) {
+        setChatExportMessage('Não foi possível montar os dados do relatório individual.')
+        return
+      }
+
       const fileName = await exportChatIndividualReport(payload)
       setChatExportMessage(`Relatório individual gerado: ${fileName}. Verifique a pasta Downloads.`)
     } catch (error) {
@@ -13512,6 +13523,7 @@ async function exportChatIndividualReport({
   monthlyHistory,
   managerNotes,
   feedbackText,
+  qualitativeContext,
   photoUrl,
 }: {
   metric: ChatMonthlyMetric
@@ -13521,6 +13533,7 @@ async function exportChatIndividualReport({
   monthlyHistory: ChatMonthlyMetric[]
   managerNotes: string
   feedbackText: string
+  qualitativeContext?: ChatQualitativeFeedbackContext
   photoUrl?: string | null
 }) {
   const analystName = getChatAnalystName(metric)
@@ -13551,6 +13564,49 @@ async function exportChatIndividualReport({
   const finalFeedback = feedbackText.trim() || buildChatFeedbackText({ metric, averageTickets, podiumPosition, managerNotes })
   const managerNotesHtml = managerNotes.trim() ? `<h2>Observações do gestor</h2><div class="note-box">${formatChatFeedbackForReport(managerNotes)}</div>` : ''
   const evolutionRows = buildChatReportEvolutionRows(monthlyHistory)
+  const qualitativeFindings = qualitativeContext?.findings ?? []
+  const countQualitativeValues = (values: string[]) => {
+    const counts: Record<string, number> = {}
+    values.forEach((value) => {
+      counts[value] = (counts[value] ?? 0) + 1
+    })
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([key, count]) => `${formatQualitativeLabel(key)} (${count})`)
+      .join(', ')
+  }
+  const qualitativeCauseText = countQualitativeValues(
+    qualitativeFindings.map((item) => item.analysis.primary_cause.category),
+  )
+  const qualitativeInfluenceText = countQualitativeValues(
+    qualitativeFindings.map((item) => item.analysis.human_influence.classification),
+  )
+  const qualitativeControlText = countQualitativeValues(
+    qualitativeFindings.map((item) => item.analysis.controllability.classification),
+  )
+  const qualitativeCoachingSignals = qualitativeFindings
+    .filter((item) => item.analysis.coaching_signal.available)
+    .map((item) => item.analysis.coaching_signal.summary)
+    .filter(Boolean)
+    .slice(0, 3)
+  const qualitativeHtml = qualitativeFindings.length
+    ? `
+        <h2>Leitura qualitativa validada</h2>
+        <div class="box">
+          <p><strong>Amostra aprovada:</strong> ${qualitativeFindings.length} ticket(s) analisado(s) e validado(s) pela gestão.</p>
+          <p><strong>Cobertura:</strong> ${qualitativeContext?.negativeAnalyzed ?? 0} de ${qualitativeContext?.negativeTotal ?? 0} avaliações negativas e ${qualitativeContext?.positiveAnalyzed ?? 0} de ${qualitativeContext?.positiveTotal ?? 0} avaliações positivas.</p>
+          <p><strong>Causas observadas na amostra:</strong> ${escapeHtml(qualitativeCauseText || 'Sem padrão suficiente.')}</p>
+          <p><strong>Influência do atendimento humano:</strong> ${escapeHtml(qualitativeInfluenceText || 'Sem padrão suficiente.')}</p>
+          <p><strong>Controlabilidade:</strong> ${escapeHtml(qualitativeControlText || 'Sem padrão suficiente.')}</p>
+          ${
+            qualitativeCoachingSignals.length
+              ? `<p><strong>Sinais de desenvolvimento validados:</strong> ${escapeHtml(qualitativeCoachingSignals.join(' | '))}</p>`
+              : ''
+          }
+          <p class="muted">Esta leitura é amostral e descreve apenas tickets analisados e aprovados. Ela não representa automaticamente todos os atendimentos do período.</p>
+        </div>
+      `
+    : ''
 
   const documentHtml = `
     <!doctype html>
@@ -13615,7 +13671,7 @@ async function exportChatIndividualReport({
         <div class="header">
           <div class="header-content">
             ${photoHtml}
-            <div><h1>Relatório de Performance - ${safeName}</h1><p class="subtitle">Período: ${escapeHtml(periodLabel)} | Fonte: Zendesk</p></div>
+            <div><h1>Relatório de Performance - ${safeName}</h1><p class="subtitle">Período: ${escapeHtml(periodLabel)} | Fonte: indicadores mensais${qualitativeFindings.length ? ' + ClickDesk qualitativo' : ''}</p></div>
           </div>
         </div>
 
@@ -13669,6 +13725,8 @@ async function exportChatIndividualReport({
         <h2>Evolução mensal</h2>
         <p class="muted">Leitura comparativa dos meses importados. O objetivo e enxergar rapidamente melhora, queda ou estabilidade em CSAT, avaliações e volume.</p>
         ${evolutionRows}
+
+        ${qualitativeHtml}
 
         ${managerNotesHtml}
 
