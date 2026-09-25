@@ -5236,6 +5236,7 @@ function ChatModuleDashboard({
       .from('clickdesk_qualitative_analyses')
       .select('satisfaction_label,occurred_date,analysis')
       .eq('analyst_id', metric.analyst_id)
+      .eq('validation_status', 'approved')
       .gte('occurred_date', start)
       .lte('occurred_date', end)
       .order('occurred_date', { ascending: true })
