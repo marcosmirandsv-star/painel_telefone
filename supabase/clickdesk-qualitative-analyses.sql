@@ -24,7 +24,12 @@ grant select, insert, update, delete on public.clickdesk_qualitative_analyses to
 
 drop policy if exists "management can read qualitative analyses"
   on public.clickdesk_qualitative_analyses;
-create policy "management can read qualitative analyses"
+drop policy if exists "analysts can read own qualitative analyses"
+  on public.clickdesk_qualitative_analyses;
+drop policy if exists "authorized users can read qualitative analyses"
+  on public.clickdesk_qualitative_analyses;
+
+create policy "authorized users can read qualitative analyses"
 on public.clickdesk_qualitative_analyses
 for select
 to authenticated
@@ -33,23 +38,15 @@ using (
     select 1
     from public.profiles p
     where p.id = (select auth.uid())
-      and lower(p.role::text) in ('master', 'coordenadora', 'coordinator')
-  )
-);
-
-drop policy if exists "analysts can read own qualitative analyses"
-  on public.clickdesk_qualitative_analyses;
-create policy "analysts can read own qualitative analyses"
-on public.clickdesk_qualitative_analyses
-for select
-to authenticated
-using (
-  analyst_id = (
-    select p.chat_analyst_id
-    from public.profiles p
-    where p.id = (select auth.uid())
+      and (
+        lower(p.role::text) in ('master', 'coordenadora', 'coordinator')
+        or p.chat_analyst_id = analyst_id
+      )
   )
 );
 
 create index if not exists clickdesk_qualitative_analyses_analyst_date_idx
   on public.clickdesk_qualitative_analyses (analyst_id, occurred_date desc);
+
+create index if not exists clickdesk_qualitative_analyses_created_by_idx
+  on public.clickdesk_qualitative_analyses (created_by);
