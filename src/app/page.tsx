@@ -2630,6 +2630,7 @@ function ChatAnalystPortal({
   const [evaluatedSample, setEvaluatedSample] = useState<ClickDeskEvaluatedSampleResponse | null>(null)
   const [qualitativeByTicket, setQualitativeByTicket] = useState<Record<string, ClickDeskQualitativeResponse>>({})
   const [qualitativeLoadingTicketId, setQualitativeLoadingTicketId] = useState('')
+  const [qualitativeSampleLoading, setQualitativeSampleLoading] = useState(false)
 
   const now = new Date()
   const year = now.getFullYear()
@@ -2797,6 +2798,25 @@ function ChatAnalystPortal({
         [ticketId]: { error: getErrorMessage(error) },
       }))
     } finally {
+      setQualitativeLoadingTicketId('')
+    }
+  }
+
+  async function analyzeQualitativeSample() {
+    const tickets = [
+      ...(evaluatedSample?.negative ?? []),
+      ...(evaluatedSample?.positive ?? []),
+    ]
+
+    if (!tickets.length) return
+
+    setQualitativeSampleLoading(true)
+    try {
+      for (const ticket of tickets) {
+        await analyzeQualitativeTicket(ticket.ticket_id)
+      }
+    } finally {
+      setQualitativeSampleLoading(false)
       setQualitativeLoadingTicketId('')
     }
   }
@@ -3168,19 +3188,32 @@ function ChatAnalystPortal({
                     O painel separa uma amostra distribuída ao longo da competência: até 3 avaliações negativas para investigar pontos de atenção e até 5 positivas para identificar o que funcionou. A análise usa o transcript do ClickDesk e não trata hipótese como fato.
                   </p>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-center">
-                  <div className="rounded-lg bg-slate-950/40 px-3 py-2">
-                    <span className="block text-xs text-slate-500">Negativas no mês</span>
-                    <strong className="mt-1 block text-lg text-amber-100">
-                      {formatChatCount(evaluatedSample?.totals?.negative ?? accumulated?.negative_reviews ?? 0)}
-                    </strong>
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2 text-center">
+                    <div className="rounded-lg bg-slate-950/40 px-3 py-2">
+                      <span className="block text-xs text-slate-500">Negativas no mês</span>
+                      <strong className="mt-1 block text-lg text-amber-100">
+                        {formatChatCount(evaluatedSample?.totals?.negative ?? accumulated?.negative_reviews ?? 0)}
+                      </strong>
+                    </div>
+                    <div className="rounded-lg bg-slate-950/40 px-3 py-2">
+                      <span className="block text-xs text-slate-500">Positivas no mês</span>
+                      <strong className="mt-1 block text-lg text-emerald-200">
+                        {formatChatCount(evaluatedSample?.totals?.positive ?? accumulated?.positive_reviews ?? 0)}
+                      </strong>
+                    </div>
                   </div>
-                  <div className="rounded-lg bg-slate-950/40 px-3 py-2">
-                    <span className="block text-xs text-slate-500">Positivas no mês</span>
-                    <strong className="mt-1 block text-lg text-emerald-200">
-                      {formatChatCount(evaluatedSample?.totals?.positive ?? accumulated?.positive_reviews ?? 0)}
-                    </strong>
-                  </div>
+                  <button
+                    type="button"
+                    className="btn-primary w-full"
+                    disabled={
+                      qualitativeSampleLoading ||
+                      ((evaluatedSample?.negative?.length ?? 0) + (evaluatedSample?.positive?.length ?? 0) === 0)
+                    }
+                    onClick={() => void analyzeQualitativeSample()}
+                  >
+                    {qualitativeSampleLoading ? 'Analisando amostra...' : 'Analisar amostra do mês'}
+                  </button>
                 </div>
               </div>
 
