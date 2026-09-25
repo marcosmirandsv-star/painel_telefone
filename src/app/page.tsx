@@ -3163,13 +3163,15 @@ function ChatAnalystPortal({
                         ? `${formatDelta(diagnostic.csatDelta, ' p.p.')} acima da meta.`
                         : `${formatDelta(Math.abs(diagnostic.csatDelta ?? 0), ' p.p.').replace('+', '')} abaixo da meta.`}
                   </p>
-                  <div className="mt-4 flex gap-4 border-t border-white/10 pt-3 text-sm">
-                    <span className="text-slate-500">
+                  <div className="mt-4 flex flex-wrap gap-4 border-t border-white/10 pt-3 text-sm">
+                    <a className="text-slate-500 hover:text-emerald-200" href="#minhas-avaliacoes">
                       Positivas <strong className="text-slate-200">{formatChatCount(accumulated?.positive_reviews ?? 0)}</strong>
-                    </span>
-                    <span className="text-slate-500">
+                      <span className="ml-1 text-xs">ver tickets</span>
+                    </a>
+                    <a className="text-slate-500 hover:text-amber-100" href="#minhas-avaliacoes">
                       Negativas <strong className="text-slate-200">{formatChatCount(accumulated?.negative_reviews ?? 0)}</strong>
-                    </span>
+                      <span className="ml-1 text-xs">entender</span>
+                    </a>
                   </div>
                 </div>
 
@@ -3282,7 +3284,7 @@ function ChatAnalystPortal({
               </div>
             )}
 
-            <div className="mt-5 rounded-xl border border-violet-400/15 bg-violet-400/5 p-5">
+            <div id="minhas-avaliacoes" className="mt-5 scroll-mt-24 rounded-xl border border-violet-400/15 bg-violet-400/5 p-5">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.14em] text-violet-200">
