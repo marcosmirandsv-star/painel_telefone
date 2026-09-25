@@ -3309,25 +3309,55 @@ function ChatAnalystPortal({
                         ? 'Negativa'
                         : 'Sem avaliação'
 
+                  const qualitativeResult = qualitativeByTicket[ticket.ticket_id]
+                  const qualitativeLoading = qualitativeLoadingTicketId === ticket.ticket_id
+                  const evaluated = ticket.satisfaction_label === 'positive' || ticket.satisfaction_label === 'negative'
+
                   return (
                     <div
                       key={ticket.ticket_id}
-                      className="grid gap-2 rounded-lg border border-white/10 bg-slate-950/50 px-4 py-3 sm:grid-cols-[1fr_auto_auto] sm:items-center"
+                      className="rounded-lg border border-white/10 bg-slate-950/50 px-4 py-3"
                     >
-                      <div>
-                        <strong className="text-slate-100">Ticket #{ticket.ticket_id}</strong>
-                        <p className="mt-1 text-xs text-slate-500">{ticket.area}</p>
+                      <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto] sm:items-center">
+                        <div>
+                          <strong className="text-slate-100">Ticket #{ticket.ticket_id}</strong>
+                          <p className="mt-1 text-xs text-slate-500">{ticket.area}</p>
+                        </div>
+                        <span className="text-sm tabular-nums text-slate-400">{time}</span>
+                        <span className={`rounded-md px-2 py-1 text-xs font-semibold ${
+                          satisfaction === 'Positiva'
+                            ? 'bg-emerald-400/10 text-emerald-200'
+                            : satisfaction === 'Negativa'
+                              ? 'bg-amber-300/10 text-amber-100'
+                              : 'bg-white/5 text-slate-400'
+                        }`}>
+                          {satisfaction}
+                        </span>
+                        {evaluated ? (
+                          <button
+                            type="button"
+                            className="small-button"
+                            disabled={qualitativeLoading}
+                            onClick={() => void analyzeQualitativeTicket(ticket.ticket_id)}
+                          >
+                            {qualitativeLoading
+                              ? 'Analisando...'
+                              : qualitativeResult?.analysis
+                                ? 'Ver análise'
+                                : 'Analisar com IA'}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-slate-600">Sem análise</span>
+                        )}
                       </div>
-                      <span className="text-sm tabular-nums text-slate-400">{time}</span>
-                      <span className={`rounded-md px-2 py-1 text-xs font-semibold ${
-                        satisfaction === 'Positiva'
-                          ? 'bg-emerald-400/10 text-emerald-200'
-                          : satisfaction === 'Negativa'
-                            ? 'bg-amber-300/10 text-amber-100'
-                            : 'bg-white/5 text-slate-400'
-                      }`}>
-                        {satisfaction}
-                      </span>
+
+                      {qualitativeResult && (
+                        <QualitativeAnalysisCard
+                          result={qualitativeResult}
+                          reanalyzing={qualitativeLoading}
+                          onReanalyze={() => void analyzeQualitativeTicket(ticket.ticket_id, true)}
+                        />
+                      )}
                     </div>
                   )
                 })}
