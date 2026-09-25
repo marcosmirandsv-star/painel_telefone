@@ -22,6 +22,19 @@ create table if not exists public.clickdesk_qualitative_analyses (
   updated_at timestamptz not null default now()
 );
 
+alter table public.clickdesk_qualitative_analyses
+  add column if not exists validation_status text not null default 'pending',
+  add column if not exists validated_by uuid references auth.users(id) on delete set null,
+  add column if not exists validated_at timestamptz,
+  add column if not exists validation_notes text;
+
+alter table public.clickdesk_qualitative_analyses
+  drop constraint if exists clickdesk_qualitative_analyses_validation_status_check;
+
+alter table public.clickdesk_qualitative_analyses
+  add constraint clickdesk_qualitative_analyses_validation_status_check
+  check (validation_status in ('pending','approved','rejected'));
+
 alter table public.clickdesk_qualitative_analyses enable row level security;
 
 grant select on public.clickdesk_qualitative_analyses to authenticated;
