@@ -4886,6 +4886,37 @@ function ChatModuleDashboard({
         managerNotes: chatManagerNotes,
       })
     : ''
+  const chatReportExclusions = podiumExclusions.filter((item) => {
+    const matchesTeam = selectedTeamId === 'all' || item.team_id === selectedTeamId
+    return (
+      matchesTeam &&
+      item.year === chatReportYear &&
+      item.month_number === chatReportMonthNumber
+    )
+  })
+  const chatReportEligibleItems = chatReportRanking.filter((item) => item.eligible)
+  const chatReportEligibleCount = chatReportEligibleItems.length
+  const chatReportCriticalCount = chatReportMetrics.filter(
+    (metric) => metric.status === 'Critico',
+  ).length
+  const chatReportTopHighlight =
+    chatReportEligibleItems[0]?.metric ?? chatReportRanking[0]?.metric ?? null
+  const chatReportAttentionItem = chatReportRanking.find(
+    (item) => !item.eligible && !item.excluded,
+  )
+  const chatReportAttentionHighlight = chatReportAttentionItem?.metric ?? null
+  const chatReportAttentionText = chatReportAttentionItem?.reasons.length
+    ? formatStatusText(chatReportAttentionItem.reasons.join(', '))
+    : 'Sem prioridade aberta no período.'
+  const chatReportClosureReading =
+    !chatReportMetrics.length
+      ? 'Ainda não há base suficiente para leitura do fechamento.'
+      : chatReportEligibleCount >= 3 && !chatReportCriticalCount
+        ? 'Fechamento forte: há pódio completo e nenhum caso crítico no período.'
+        : chatReportEligibleCount > 0
+          ? 'Fechamento positivo, com oportunidade de ampliar a quantidade de elegíveis ao pódio.'
+          : 'Fechamento pede atenção: nenhum analista ficou plenamente elegível ao pódio.'
+
   const chatExecutiveStatus =
     !calculationMetrics.length
       ? 'Sem dados no período'
@@ -5295,7 +5326,7 @@ function ChatModuleDashboard({
     setChatAnalystMessage('Foto personalizada removida. A imagem inicial ou as iniciais serão exibidas.')
   }
   function getChatPodiumExclusion(metric: ChatMonthlyMetric) {
-    return activePodiumExclusions.find(
+    return podiumExclusions.find(
       (exclusion) =>
         exclusion.analyst_id === metric.analyst_id &&
         exclusion.team_id === metric.team_id &&
@@ -5708,6 +5739,7 @@ function ChatModuleDashboard({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           serviceModule: 'chat',
+          dataSourceLabel: chatReportSourceLabel,
           feedbackStyle: chatFeedbackStyle,
           feedbackGoal: chatFeedbackGoal,
           generationMode: 'generate',
@@ -5783,6 +5815,7 @@ function ChatModuleDashboard({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           serviceModule: 'chat',
+          dataSourceLabel: chatReportSourceLabel,
           feedbackStyle: chatFeedbackStyle,
           feedbackGoal: chatFeedbackGoal,
           generationMode: 'improve',
@@ -8107,29 +8140,30 @@ function ChatModuleDashboard({
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Leitura para fechamento</p>
-            <h2 className="mt-2 text-2xl font-bold">{chatClosureReading}</h2>
+            <p className="mt-1 text-xs text-slate-500">Fonte: {chatReportSourceLabel}</p>
+            <h2 className="mt-2 text-2xl font-bold">{chatReportClosureReading}</h2>
           </div>
           <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">
-            {chatEligibleCount} elegíveis de {calculationMetrics.length}
+            {chatReportEligibleCount} elegíveis de {chatReportMetrics.length}
           </span>
         </div>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-3">
           <div className="rounded-lg bg-slate-900 p-4">
             <p className="text-sm text-slate-400">Destaque do período</p>
-            <p className="mt-2 text-lg font-bold">{chatTopHighlight ? getChatAnalystName(chatTopHighlight) : 'Aguardando dados'}</p>
+            <p className="mt-2 text-lg font-bold">{chatReportTopHighlight ? getChatAnalystName(chatReportTopHighlight) : 'Aguardando dados'}</p>
             <p className="mt-1 text-sm text-slate-300">
-              {chatTopHighlight ? `CSAT ${formatChatPercent(chatTopHighlight.csat)} | ${formatChatPercent(chatTopHighlight.review_percentage)} avaliações | ${formatChatCount(chatTopHighlight.total_tickets)} atendimentos` : 'Importe um mês para liberar a leitura.'}
+              {chatReportTopHighlight ? `CSAT ${formatChatPercent(chatReportTopHighlight.csat)} | ${formatChatPercent(chatReportTopHighlight.review_percentage)} avaliações | ${formatChatCount(chatReportTopHighlight.total_tickets)} atendimentos` : 'Selecione uma competência com dados para liberar a leitura.'}
             </p>
           </div>
           <div className="rounded-lg bg-slate-900 p-4">
             <p className="text-sm text-slate-400">Principal ponto de atenção</p>
-            <p className="mt-2 text-lg font-bold">{chatAttentionHighlight ? getChatAnalystName(chatAttentionHighlight) : 'Sem prioridade aberta'}</p>
-            <p className="mt-1 text-sm text-slate-300">{chatAttentionText}</p>
+            <p className="mt-2 text-lg font-bold">{chatReportAttentionHighlight ? getChatAnalystName(chatReportAttentionHighlight) : 'Sem prioridade aberta'}</p>
+            <p className="mt-1 text-sm text-slate-300">{chatReportAttentionText}</p>
           </div>
           <div className="rounded-lg bg-slate-900 p-4">
             <p className="text-sm text-slate-400">Média de volume para pódio</p>
-            <p className="mt-2 text-lg font-bold tabular-nums">{formatChatCount(averageTickets)} atendimentos</p>
+            <p className="mt-2 text-lg font-bold tabular-nums">{formatChatCount(chatReportAverageTickets)} atendimentos</p>
             <p className="mt-1 text-sm text-slate-300">
               Quem fica abaixo dessa média aparece como volume abaixo da média no ranking.
             </p>
@@ -8226,7 +8260,7 @@ function ChatModuleDashboard({
               O ranking automático define os elegíveis. O ajuste manual pode reorganizar a ordem entre eles, mas não coloca no pódio quem deixou de cumprir os critérios.
             </p>
           </div>
-          {activeManualPodium.length > 0 && (
+          {!chatReportUsesClickDesk && activeManualPodium.length > 0 && (
             <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">
               Pódio manual ativo
             </span>
@@ -8235,7 +8269,7 @@ function ChatModuleDashboard({
 
         <div className="mt-5 grid gap-4 md:grid-cols-3">
           {[0, 1, 2].map((index) => {
-            const winner = podium[index]
+            const winner = chatReportUsesClickDesk ? automaticChatReportPodium[index] : podium[index]
 
             return (
               <div key={index} className="rounded-lg bg-slate-900 p-4">
@@ -8256,7 +8290,8 @@ function ChatModuleDashboard({
           })}
         </div>
 
-        <div className="mt-5 grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto_auto]">
+        {!chatReportUsesClickDesk && (
+          <div className="mt-5 grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto_auto]">
           {[1, 2, 3].map((position) => (
             <Field key={position} label={`${position}o lugar manual`}>
               <select
@@ -8282,12 +8317,18 @@ function ChatModuleDashboard({
           <button className="secondary-button self-end" type="button" onClick={handleResetChatManualPodium}>
             Resetar
           </button>
-        </div>
+          </div>
+        )}
 
-        {selectedTeamId === 'all' && (
+        {!chatReportUsesClickDesk && selectedTeamId === 'all' && (
           <p className="mt-3 text-sm text-slate-400">Para ajustar manualmente, selecione uma equipe específica no filtro do módulo chat.</p>
         )}
-        {chatPodiumMessage && <p className="mt-4 rounded-md bg-slate-900/70 px-4 py-3 text-sm text-slate-200">{chatPodiumMessage}</p>}
+        {!chatReportUsesClickDesk && chatPodiumMessage && <p className="mt-4 rounded-md bg-slate-900/70 px-4 py-3 text-sm text-slate-200">{chatPodiumMessage}</p>}
+        {chatReportUsesClickDesk && (
+          <p className="mt-3 text-sm text-slate-400">
+            Na competência ClickDesk, o pódio desta tela segue automaticamente a base selecionada. O histórico legado mantém os ajustes manuais já existentes.
+          </p>
+        )}
       </section>
 
       <div className={chatActiveTab === 'reports' ? 'grid gap-6 xl:grid-cols-2' : 'hidden'}>
@@ -8300,13 +8341,13 @@ function ChatModuleDashboard({
               </p>
             </div>
             <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">
-              Média exigida: {formatChatCount(averageTickets)} atendimentos
+              Média exigida: {formatChatCount(chatReportAverageTickets)} atendimentos
             </span>
           </div>
 
-          {activePodiumExclusions.length > 0 && (
+          {chatReportExclusions.length > 0 && (
             <div className="mt-4 rounded-lg border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">
-              Cálculos refeitos com {calculationMetrics.length} analista(s). {activePodiumExclusions.length} registro(s)
+              Cálculos refeitos com {chatReportMetrics.length - chatReportExclusions.length} analista(s). {chatReportExclusions.length} registro(s)
               desconsiderado(s) integralmente neste período por exceção operacional.
             </div>
           )}
@@ -8314,24 +8355,24 @@ function ChatModuleDashboard({
           <div className="mt-5 grid gap-4 md:grid-cols-4">
             <div className="rounded-lg bg-slate-900 p-4">
               <p className="text-sm text-slate-400">Elegíveis</p>
-              <p className="mt-2 text-2xl font-bold text-emerald-300">{chatEligibleCount}</p>
+              <p className="mt-2 text-2xl font-bold text-emerald-300">{chatReportEligibleCount}</p>
             </div>
             <div className="rounded-lg bg-slate-900 p-4">
               <p className="text-sm text-slate-400">Fora por volume</p>
               <p className="mt-2 text-2xl font-bold text-amber-200">
-                {calculatedChatRanking.filter((item) => item.reasons.some((reason) => reason.includes('volume abaixo'))).length}
+                {chatReportRanking.filter((item) => item.reasons.some((reason) => reason.includes('volume abaixo'))).length}
               </p>
             </div>
             <div className="rounded-lg bg-slate-900 p-4">
               <p className="text-sm text-slate-400">Fora por CSAT</p>
               <p className="mt-2 text-2xl font-bold text-amber-200">
-                {calculatedChatRanking.filter((item) => item.reasons.some((reason) => reason.includes('CSAT abaixo'))).length}
+                {chatReportRanking.filter((item) => item.reasons.some((reason) => reason.includes('CSAT abaixo'))).length}
               </p>
             </div>
             <div className="rounded-lg bg-slate-900 p-4">
               <p className="text-sm text-slate-400">Fora por avaliações</p>
               <p className="mt-2 text-2xl font-bold text-amber-200">
-                {calculatedChatRanking.filter((item) => item.reasons.some((reason) => reason.includes('avaliações abaixo'))).length}
+                {chatReportRanking.filter((item) => item.reasons.some((reason) => reason.includes('avaliações abaixo'))).length}
               </p>
             </div>
           </div>
@@ -8352,8 +8393,8 @@ function ChatModuleDashboard({
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/10">
-                {chatRanking.map((item, index) => {
-                  const volumeGap = Number(item.metric.total_tickets) - averageTickets
+                {chatReportRanking.map((item, index) => {
+                  const volumeGap = Number(item.metric.total_tickets) - chatReportAverageTickets
                   const excluded = Boolean(getChatPodiumExclusion(item.metric))
 
                   return (
@@ -8389,7 +8430,7 @@ function ChatModuleDashboard({
               </tbody>
             </table>
 
-            {!chatRanking.length && <EmptyState text="Nenhum dado de chat encontrado neste período." />}
+            {!chatReportRanking.length && <EmptyState text="Nenhum dado de chat encontrado neste período." />}
           </div>
         </section>
 
