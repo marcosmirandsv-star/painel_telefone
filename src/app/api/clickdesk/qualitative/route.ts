@@ -105,6 +105,18 @@ function extractGeminiText(data: unknown) {
     .trim() ?? ''
 }
 
+function extractGatewayText(data: unknown) {
+  const response = data as {
+    choices?: {
+      message?: {
+        content?: string
+      }
+    }[]
+  }
+
+  return response.choices?.[0]?.message?.content?.trim() ?? ''
+}
+
 function buildQualitativePrompt(input: {
   transcript: string
   satisfaction: string | null
@@ -177,12 +189,7 @@ ${input.transcript}
 
 async function generateWithGemini(prompt: string) {
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY
-  if (!apiKey) {
-    throw new ApiError(
-      503,
-      'IA qualitativa indisponível: GEMINI_API_KEY não configurada no ambiente.',
-    )
-  }
+  if (!apiKey) return null
 
   const configuredModel = process.env.GEMINI_MODEL?.trim()
   const models = Array.from(
@@ -234,9 +241,8 @@ async function generateWithGemini(prompt: string) {
         `HTTP ${response.status}`
       errors.push(`${model}: ${sanitizeProviderMessage(String(message))}`)
       if (response.status === 404 || /model|not found/i.test(String(message))) continue
-      throw new ApiError(
-        503,
-        `IA qualitativa indisponível: ${sanitizeProviderMessage(String(message)).slice(0, 260)}`,
+      throw new Error(
+        `Gemini ${model}: ${sanitizeProviderMessage(String(message)).slice(0, 260)}`,
       )
     }
 
@@ -248,6 +254,7 @@ async function generateWithGemini(prompt: string) {
 
     try {
       return {
+        provider: 'gemini-direct',
         model,
         analysis: normalizeQualitativeAnalysis(parseJsonResponse(text)),
       }
@@ -256,9 +263,124 @@ async function generateWithGemini(prompt: string) {
     }
   }
 
+  throw new Error(
+    `Gemini não devolveu uma análise válida. ${errors.join(' | ').slice(0, 500)}`,
+  )
+}
+
+async function generateWithVercelGateway(prompt: string) {
+  const authToken =
+    process.env.AI_GATEWAY_API_KEY?.trim() ||
+    process.env.VERCEL_OIDC_TOKEN?.trim()
+
+  if (!authToken) return null
+
+  const configuredModel = process.env.CLICKDESK_QUALITATIVE_MODEL?.trim()
+  const models = Array.from(
+    new Set(
+      [
+        configuredModel,
+        'google/gemini-3.6-flash',
+      ].filter(Boolean) as string[],
+    ),
+  )
+  const errors: string[] = []
+
+  for (const model of models) {
+    const response = await fetch(
+      'https://ai-gateway.vercel.sh/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: 'system',
+              content:
+                'Analise atendimento de forma conservadora. Evidência insuficiente deve resultar em unclear, nunca em invenção. Responda somente JSON válido.',
+            },
+            {
+              role: 'user',
+              content: prompt,
+            },
+          ],
+          temperature: 0.15,
+          max_tokens: 1800,
+          stream: false,
+          response_format: { type: 'json_object' },
+        }),
+      },
+    )
+
+    const data = await response.json().catch(() => null)
+
+    if (!response.ok) {
+      const message =
+        data?.error?.message ||
+        data?.message ||
+        `HTTP ${response.status}`
+      errors.push(`${model}: ${sanitizeProviderMessage(String(message))}`)
+      if (
+        response.status === 404 ||
+        /model|not found|unsupported/i.test(String(message))
+      ) {
+        continue
+      }
+      throw new Error(
+        `Vercel AI Gateway ${model}: ${sanitizeProviderMessage(String(message)).slice(0, 260)}`,
+      )
+    }
+
+    const text = extractGatewayText(data)
+    if (!text) {
+      errors.push(`${model}: resposta vazia`)
+      continue
+    }
+
+    try {
+      return {
+        provider: 'vercel-ai-gateway',
+        model,
+        analysis: normalizeQualitativeAnalysis(parseJsonResponse(text)),
+      }
+    } catch (error) {
+      errors.push(`${model}: JSON inválido - ${getErrorText(error).slice(0, 120)}`)
+    }
+  }
+
+  throw new Error(
+    `Vercel AI Gateway não devolveu uma análise válida. ${errors.join(' | ').slice(0, 500)}`,
+  )
+}
+
+async function generateQualitativeAnalysis(prompt: string) {
+  const errors: string[] = []
+
+  try {
+    const directGemini = await generateWithGemini(prompt)
+    if (directGemini) return directGemini
+  } catch (error) {
+    errors.push(getErrorText(error))
+  }
+
+  try {
+    const gateway = await generateWithVercelGateway(prompt)
+    if (gateway) return gateway
+  } catch (error) {
+    errors.push(getErrorText(error))
+  }
+
+  const reason = errors.length
+    ? errors.join(' | ').slice(0, 650)
+    : 'nenhum provedor de IA está disponível no ambiente'
+
   throw new ApiError(
     503,
-    `IA qualitativa não devolveu uma análise válida. ${errors.join(' | ').slice(0, 500)}`,
+    `IA qualitativa indisponível: ${sanitizeProviderMessage(reason)}.`,
   )
 }
 
@@ -356,7 +478,7 @@ export async function POST(request: Request) {
     }
 
     const transcriptHash = createHash('sha256').update(transcript).digest('hex')
-    const result = await generateWithGemini(
+    const result = await generateQualitativeAnalysis(
       buildQualitativePrompt({
         transcript,
         satisfaction: persisted.data.satisfaction_label,
@@ -403,7 +525,7 @@ export async function POST(request: Request) {
     }
 
     return json({
-      source: 'clickdesk_transcript_gemini',
+      source: `clickdesk_transcript_${result.provider}`,
       cached,
       ticket_id: ticketId,
       analyst_id: persisted.data.analyst_id,
