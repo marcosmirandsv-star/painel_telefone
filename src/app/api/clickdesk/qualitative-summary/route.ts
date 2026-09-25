@@ -24,6 +24,7 @@ type AnalysisRow = {
   analyst_id: string
   satisfaction_label: string | null
   analysis: unknown
+  validation_status: 'pending' | 'approved' | 'rejected'
   updated_at: string
 }
 
@@ -116,7 +117,7 @@ export async function GET(request: Request) {
 
     let analysisQuery = access.admin
       .from('clickdesk_qualitative_analyses')
-      .select('clickdesk_ticket_id,analyst_id,satisfaction_label,analysis,updated_at')
+      .select('clickdesk_ticket_id,analyst_id,satisfaction_label,analysis,validation_status,updated_at')
       .gte('occurred_date', start)
       .lte('occurred_date', end)
       .order('updated_at', { ascending: false })
@@ -143,6 +144,9 @@ export async function GET(request: Request) {
       ...item,
       normalized: normalizeQualitativeAnalysis(item.analysis),
     }))
+    const approved = normalized.filter((item) => item.validation_status === 'approved')
+    const pending = normalized.filter((item) => item.validation_status === 'pending')
+    const rejected = normalized.filter((item) => item.validation_status === 'rejected')
 
     const analystAggregation = new Map<
       string,
@@ -157,7 +161,7 @@ export async function GET(request: Request) {
       }
     >()
 
-    for (const item of normalized) {
+    for (const item of approved) {
       const current = analystAggregation.get(item.analyst_id) ?? {
         analyst_id: item.analyst_id,
         analyst_name: analystNames.get(item.analyst_id) ?? 'Analista',
@@ -189,6 +193,17 @@ export async function GET(request: Request) {
       .sort((a, b) => b.analyzed - a.analyzed || a.analyst_name.localeCompare(b.analyst_name))
 
     const analyzedTicketIds = new Set(analyses.map((item) => item.clickdesk_ticket_id))
+    const pendingReviews = pending.slice(0, 8).map((item) => ({
+      ticket_id: item.clickdesk_ticket_id,
+      analyst_id: item.analyst_id,
+      analyst_name: analystNames.get(item.analyst_id) ?? 'Analista',
+      satisfaction_label: item.satisfaction_label,
+      cause: item.normalized.primary_cause,
+      human_influence: item.normalized.human_influence,
+      controllability: item.normalized.controllability,
+      coaching_signal: item.normalized.coaching_signal,
+    }))
+
     const validationQueue = evaluated
       .filter(
         (item) =>
@@ -217,6 +232,9 @@ export async function GET(request: Request) {
         analyzed: analyses.length,
         analyzed_positive: analyzedPositive,
         analyzed_negative: analyzedNegative,
+        approved: approved.length,
+        pending: pending.length,
+        rejected: rejected.length,
       },
       coverage: {
         evaluated_percentage: percentage(analyses.length, evaluated.length),
@@ -224,24 +242,25 @@ export async function GET(request: Request) {
         negative_percentage: percentage(analyzedNegative, evaluatedNegative),
       },
       causes: countValues(
-        normalized.map((item) => item.normalized.primary_cause.category),
+        approved.map((item) => item.normalized.primary_cause.category),
       ),
       human_influence: countValues(
-        normalized.map((item) => item.normalized.human_influence.classification),
+        approved.map((item) => item.normalized.human_influence.classification),
       ),
       controllability: countValues(
-        normalized.map((item) => item.normalized.controllability.classification),
+        approved.map((item) => item.normalized.controllability.classification),
       ),
       sentiment_change: countValues(
-        normalized.map(
+        approved.map(
           (item) =>
             `${item.normalized.initial_sentiment}->${item.normalized.final_sentiment}`,
         ),
       ),
-      coaching_signals: normalized.filter(
+      coaching_signals: approved.filter(
         (item) => item.normalized.coaching_signal.available,
       ).length,
       analysts,
+      pending_reviews: pendingReviews,
       validation_queue: validationQueue,
     })
   })
