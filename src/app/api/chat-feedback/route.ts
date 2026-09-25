@@ -193,14 +193,14 @@ function getPublicProviderError(error: unknown) {
   }
 
   if (/curto|incompleto|truncado|MAX_TOKENS/i.test(message)) {
-    return `a Gemini respondeu, mas o texto foi rejeitado pelo controle de qualidade. Detalhe: ${message.slice(0, 260)}`
+    return `a IA externa respondeu, mas o texto foi rejeitado pelo controle de qualidade. Detalhe: ${message.slice(0, 260)}`
   }
 
-  if (/Nenhum modelo Gemini/i.test(message)) {
+  if (/Nenhum modelo Gemini|AI Gateway|GitHub Models/i.test(message)) {
     return message.slice(0, 420)
   }
 
-  return `Gemini respondeu: ${message.slice(0, 320)}`
+  return `IA externa respondeu: ${message.slice(0, 320)}`
 }
 
 function buildPrompt(body: ChatFeedbackRequest) {
@@ -476,6 +476,64 @@ async function generateWithGemini(prompt: string, style: ChatFeedbackRequest['fe
   throw new Error(`Nenhum modelo Gemini disponível respondeu para gerar o feedback. Tentativas: ${errors.join(' | ')}`)
 }
 
+async function generateWithVercelGateway(prompt: string) {
+  const token =
+    process.env.AI_GATEWAY_API_KEY?.trim() ||
+    process.env.VERCEL_OIDC_TOKEN?.trim()
+
+  if (!token) {
+    throw new Error('Vercel AI Gateway sem credencial disponível no deploy.')
+  }
+
+  const model =
+    process.env.CHAT_AI_GATEWAY_MODEL?.trim() ||
+    'google/gemini-3.6-flash'
+
+  const response = await fetch('https://ai-gateway.vercel.sh/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'Você escreve devolutivas mensais individualizadas, com voz humana de liderança. Varie a construção conforme o caso e nunca deduza comportamentos apenas dos indicadores.',
+        },
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+      temperature: 0.65,
+      max_tokens: 1800,
+      stream: false,
+    }),
+  })
+
+  const data = await response.json().catch(() => null)
+
+  if (!response.ok) {
+    const message =
+      data?.error?.message ||
+      data?.message ||
+      `HTTP ${response.status}`
+    throw new Error(
+      `Vercel AI Gateway ${model}: ${sanitizeProviderMessage(String(message)).slice(0, 320)}`,
+    )
+  }
+
+  const text = extractChatCompletionText(data).trim()
+  if (!text) {
+    throw new Error(`Vercel AI Gateway ${model}: resposta vazia.`)
+  }
+
+  return text
+}
+
 async function generateWithGitHubModels(prompt: string) {
   const token = process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN
 
@@ -518,11 +576,66 @@ async function generateWithGitHubModels(prompt: string) {
 }
 
 async function generateExternalFeedback(prompt: string, style: ChatFeedbackRequest['feedbackStyle']) {
-  if (process.env.CHAT_AI_PROVIDER === 'github-models') {
-    return { feedback: assertCompleteFeedback(normalizeManagerVoice(await generateWithGitHubModels(prompt)), style), source: 'github-models' }
+  const provider = process.env.CHAT_AI_PROVIDER?.trim()
+  const errors: string[] = []
+
+  if (provider === 'github-models') {
+    return {
+      feedback: assertCompleteFeedback(
+        normalizeManagerVoice(await generateWithGitHubModels(prompt)),
+        style,
+      ),
+      source: 'github-models',
+    }
   }
 
-  return { feedback: await generateWithGemini(prompt, style), source: 'gemini' }
+  if (provider === 'vercel-ai-gateway') {
+    return {
+      feedback: assertCompleteFeedback(
+        normalizeManagerVoice(await generateWithVercelGateway(prompt)),
+        style,
+      ),
+      source: 'vercel-ai-gateway',
+    }
+  }
+
+  try {
+    if (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY) {
+      return { feedback: await generateWithGemini(prompt, style), source: 'gemini' }
+    }
+  } catch (error) {
+    errors.push(getErrorText(error))
+  }
+
+  try {
+    return {
+      feedback: assertCompleteFeedback(
+        normalizeManagerVoice(await generateWithVercelGateway(prompt)),
+        style,
+      ),
+      source: 'vercel-ai-gateway',
+    }
+  } catch (error) {
+    errors.push(getErrorText(error))
+  }
+
+  if (process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN) {
+    try {
+      return {
+        feedback: assertCompleteFeedback(
+          normalizeManagerVoice(await generateWithGitHubModels(prompt)),
+          style,
+        ),
+        source: 'github-models',
+      }
+    } catch (error) {
+      errors.push(getErrorText(error))
+    }
+  }
+
+  throw new Error(
+    `Nenhum provedor de IA externa conseguiu gerar o feedback. ${errors.join(' | ').slice(0, 700)}`,
+  )
 }
 
 export async function POST(request: Request) {
