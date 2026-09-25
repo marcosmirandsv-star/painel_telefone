@@ -3781,16 +3781,20 @@ function ChatModuleDashboard({
       return matchesTeam && matchesPeriod
     })
     .sort((a, b) => a.position - b.position)
-  const manualPodiumMetrics = activeManualPodium
-    .map((manual) => calculationMetrics.find((metric) => metric.analyst_id === manual.analyst_id) ?? null)
-    .filter((metric): metric is ChatMonthlyMetric => Boolean(metric))
   const chatRanking = buildChatRanking(visibleMetrics, averageTickets, excludedChatAnalystIds)
   const calculatedChatRanking = chatRanking.filter((item) => !item.excluded)
+  const manualPodiumEligibleIds = new Set(
+    chatRanking.filter((item) => item.eligible).map((item) => item.metric.analyst_id),
+  )
   const automaticPodium = chatRanking.filter((item) => item.eligible).slice(0, 3).map((item) => item.metric)
   const podium = [1, 2, 3].map((position, index) => {
     const manual = activeManualPodium.find((item) => item.position === position)
     return manual
-      ? calculationMetrics.find((metric) => metric.analyst_id === manual.analyst_id) ?? automaticPodium[index] ?? null
+      ? calculationMetrics.find(
+          (metric) =>
+            metric.analyst_id === manual.analyst_id &&
+            manualPodiumEligibleIds.has(metric.analyst_id),
+        ) ?? automaticPodium[index] ?? null
       : automaticPodium[index] ?? null
   })
   const attention = calculationMetrics
@@ -4295,6 +4299,16 @@ function ChatModuleDashboard({
 
     if (new Set(rows.map((row) => row.analyst_id)).size !== rows.length) {
       setChatPodiumMessage('O mesmo analista nao pode ocupar mais de uma posição.')
+      return
+    }
+
+    const ineligibleManualSelection = rows.find(
+      (row) => !manualPodiumEligibleIds.has(row.analyst_id),
+    )
+    if (ineligibleManualSelection) {
+      setChatPodiumMessage(
+        'O ajuste manual só pode reorganizar analistas elegíveis. Quem não cumpre os critérios continua fora do pódio.',
+      )
       return
     }
 
@@ -6829,7 +6843,7 @@ function ChatModuleDashboard({
           <div>
             <h2 className="section-title">Pódio final do chat</h2>
             <p className="section-subtitle">
-              Usa o ranking automático, mas permite ajuste manual por equipe e período quando houver empréstimo, cobertura ou exceção operacional.
+              O ranking automático define os elegíveis. O ajuste manual pode reorganizar a ordem entre eles, mas não coloca no pódio quem deixou de cumprir os critérios.
             </p>
           </div>
           {activeManualPodium.length > 0 && (
@@ -6872,11 +6886,13 @@ function ChatModuleDashboard({
                 onChange={(event) => setManualPodiumDraft((current) => ({ ...current, [position]: event.target.value }))}
               >
                 <option value="">Automático</option>
-                {calculationMetrics.map((metric) => (
-                  <option key={metric.id} value={metric.analyst_id}>
-                    {getChatAnalystName(metric)}
-                  </option>
-                ))}
+                {calculatedChatRanking
+                  .filter((item) => item.eligible)
+                  .map((item) => (
+                    <option key={item.metric.id} value={item.metric.analyst_id}>
+                      {getChatAnalystName(item.metric)}
+                    </option>
+                  ))}
               </select>
             </Field>
           ))}
