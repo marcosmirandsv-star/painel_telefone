@@ -3758,6 +3758,8 @@ function ChatModuleDashboard({
   }, [chat2LiveAnalystKey, chat2PeriodKey])
 
   useEffect(() => {
+    setClickDeskPersistedMetrics(null)
+    setClickDeskPreviousMetrics(null)
     setClickDeskClosurePreview(null)
     setClickDeskOfficialClosure(null)
     setClickDeskClosureMessage('')
@@ -4713,7 +4715,8 @@ function ChatModuleDashboard({
     String(clickDeskPersistedMetrics?.period?.end) <= chatReportPeriod.end
   const clickDeskReportHasOfficialSnapshot =
     Boolean(clickDeskOfficialClosure?.fechamento_id) &&
-    clickDeskOfficialClosure?.mes === chatReportMonthKey
+    clickDeskOfficialClosure?.mes === chatReportMonthKey &&
+    clickDeskOfficialClosure?.equipe === selectedTeamId
 
   const clickDeskOfficialReportMetrics: ChatMonthlyMetric[] =
     clickDeskReportHasOfficialSnapshot
