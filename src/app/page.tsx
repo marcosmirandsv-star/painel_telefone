@@ -5616,6 +5616,9 @@ function ChatModuleDashboard({
           ? `Leitura preparada: ${completed} de ${sampleTickets.length} tickets (${negativeCount} negativos + ${positiveCount} positivos)${reusedText}${failedText}. Valide as leituras em Gestão e ações; somente as aprovadas entram no feedback.`
           : `Nenhuma leitura foi concluída (${failed} de ${sampleTickets.length} falharam).${firstFailure ? ` Motivo: ${firstFailure}` : ''}`,
       )
+      if (completed > 0) {
+        setClickDeskQualitativeSummaryRefresh((current) => current + 1)
+      }
     } catch (error) {
       setChatReportQualitativeStatus(getErrorMessage(error))
     } finally {
