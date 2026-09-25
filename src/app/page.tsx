@@ -2516,7 +2516,7 @@ function QualitativeAnalysisCard({
               type="button"
               className="small-button"
               disabled={reanalyzing}
-              onClick={onReanalyze}
+              onClick={() => onReanalyze()}
             >
               {reanalyzing ? 'Reanalisando...' : 'Reanalisar ticket'}
             </button>
