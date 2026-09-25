@@ -14,6 +14,9 @@ type AttendanceRow = {
   analyst_id: string | null
   assignee_name: string
   satisfaction_label: string | null
+  occurred_date: string
+  occurred_at: string
+  area: string
 }
 
 type AnalysisRow = {
@@ -86,11 +89,12 @@ export async function GET(request: Request) {
 
     let attendanceQuery = access.admin
       .from('clickdesk_chat_attendances')
-      .select('clickdesk_ticket_id,analyst_id,assignee_name,satisfaction_label')
+      .select('clickdesk_ticket_id,analyst_id,assignee_name,satisfaction_label,occurred_date,occurred_at,area')
       .eq('identity_role', 'analyst')
       .gte('occurred_date', start)
       .lte('occurred_date', end)
       .in('satisfaction_label', ['positive', 'negative'])
+      .order('occurred_at', { ascending: false })
 
     if (teamId) attendanceQuery = attendanceQuery.eq('team_id', teamId)
     if (analystId) attendanceQuery = attendanceQuery.eq('analyst_id', analystId)
@@ -184,6 +188,24 @@ export async function GET(request: Request) {
       }))
       .sort((a, b) => b.analyzed - a.analyzed || a.analyst_name.localeCompare(b.analyst_name))
 
+    const analyzedTicketIds = new Set(analyses.map((item) => item.clickdesk_ticket_id))
+    const validationQueue = evaluated
+      .filter(
+        (item) =>
+          item.satisfaction_label === 'negative' &&
+          !analyzedTicketIds.has(item.clickdesk_ticket_id),
+      )
+      .slice(0, 5)
+      .map((item) => ({
+        ticket_id: item.clickdesk_ticket_id,
+        analyst_id: item.analyst_id,
+        analyst_name: item.assignee_name,
+        occurred_date: item.occurred_date,
+        occurred_at: item.occurred_at,
+        area: item.area,
+        satisfaction_label: item.satisfaction_label,
+      }))
+
     return json({
       source: 'clickdesk_qualitative_cache',
       period: { start, end },
@@ -220,6 +242,7 @@ export async function GET(request: Request) {
         (item) => item.normalized.coaching_signal.available,
       ).length,
       analysts,
+      validation_queue: validationQueue,
     })
   })
 }
