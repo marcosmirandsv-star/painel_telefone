@@ -4430,12 +4430,8 @@ function ChatModuleDashboard({
     }
   }, [teams, chatAnalystForm.teamId])
 
-  const activePeriodForQualitativeSummary =
-    periods.find((period) => `${period.year}-${period.monthNumber}` === selectedPeriodKey) ??
-    periods[0]
-
   useEffect(() => {
-    if (!isManagementUser || chatActiveTab !== 'podium' || !activePeriodForQualitativeSummary) return
+    if (!isManagementUser || chatActiveTab !== 'podium') return
 
     let cancelled = false
 
@@ -4454,13 +4450,14 @@ function ChatModuleDashboard({
           return
         }
 
-        const period = activePeriodForQualitativeSummary
-        const end = new Date(Date.UTC(period.year, period.monthNumber, 0))
-          .toISOString()
-          .slice(0, 10)
+        const [yearText, monthText] = chat2PeriodKey.split('-')
+        const now = new Date()
+        const year = Number(yearText) || now.getFullYear()
+        const monthNumber = Number(monthText) || now.getMonth() + 1
+        const period = getChatMonthPeriod(year, monthNumber)
         const params = new URLSearchParams({
           start: period.start,
-          end,
+          end: period.end,
         })
         if (selectedTeamId !== 'all') params.set('team_id', selectedTeamId)
 
@@ -4489,7 +4486,7 @@ function ChatModuleDashboard({
     return () => {
       cancelled = true
     }
-  }, [isManagementUser, chatActiveTab, activePeriodForQualitativeSummary, selectedTeamId, clickDeskQualitativeSummaryRefresh])
+  }, [isManagementUser, chatActiveTab, chat2PeriodKey, selectedTeamId, clickDeskQualitativeSummaryRefresh])
 
   if (!isManagementUser) {
     return (
@@ -6026,8 +6023,8 @@ function ChatModuleDashboard({
                 ))}
               </select>
             </Field>
-            <Field label={chatActiveTab === 'prototype' || chatActiveTab === 'overview' ? 'Período ClickDesk' : 'Período'}>
-              {chatActiveTab === 'prototype' || chatActiveTab === 'overview' ? (
+            <Field label={chatActiveTab === 'prototype' || chatActiveTab === 'overview' || chatActiveTab === 'podium' ? 'Período ClickDesk' : 'Período'}>
+              {chatActiveTab === 'prototype' || chatActiveTab === 'overview' || chatActiveTab === 'podium' ? (
                 <select className="form-input" value={chat2PeriodKey} onChange={(event) => setChat2PeriodKey(event.target.value)}>
                   {chat2Periods.map((period) => (
                     <option key={period.key} value={period.key}>
@@ -7324,25 +7321,6 @@ function ChatModuleDashboard({
           </span>
         </div>
 
-        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
-            <p className="text-sm font-semibold">Sentimento</p>
-            <p className="mt-2 text-sm leading-6 text-slate-400">Comparar sentimento inicial e final da conversa.</p>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
-            <p className="text-sm font-semibold">Causa provável</p>
-            <p className="mt-2 text-sm leading-6 text-slate-400">Separar motivo da nota de simples correlação com o indicador.</p>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
-            <p className="text-sm font-semibold">Influência humana</p>
-            <p className="mt-2 text-sm leading-6 text-slate-400">Identificar o que o atendimento humano melhorou, piorou ou não controlava.</p>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
-            <p className="text-sm font-semibold">Evidências</p>
-            <p className="mt-2 text-sm leading-6 text-slate-400">Usar sinais da conversa para sustentar feedbacks e ações de gestão.</p>
-          </div>
-        </div>
-
         <div className="mt-5 rounded-xl border border-white/10 bg-slate-950/30 p-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -7363,59 +7341,68 @@ function ChatModuleDashboard({
             </div>
           ) : (
             <>
-              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-                <div className="rounded-lg bg-slate-900 p-4">
-                  <p className="text-xs text-slate-500">Tickets analisados</p>
-                  <strong className="mt-2 block text-2xl tabular-nums">
-                    {formatChatCount(clickDeskQualitativeSummary?.totals?.analyzed ?? 0)}
-                    {' / '}
-                    {formatChatCount(clickDeskQualitativeSummary?.totals?.evaluated ?? 0)}
-                  </strong>
-                  <span className="mt-1 block text-xs text-slate-500">
-                    {formatChatPercent(clickDeskQualitativeSummary?.coverage?.evaluated_percentage ?? 0)} da base avaliada
-                  </span>
+              {(clickDeskQualitativeSummary?.totals?.evaluated ?? 0) > 0 ? (
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                  <div className="rounded-lg bg-slate-900 p-4">
+                    <p className="text-xs text-slate-500">Tickets analisados</p>
+                    <strong className="mt-2 block text-2xl tabular-nums">
+                      {formatChatCount(clickDeskQualitativeSummary?.totals?.analyzed ?? 0)}
+                      {' / '}
+                      {formatChatCount(clickDeskQualitativeSummary?.totals?.evaluated ?? 0)}
+                    </strong>
+                    <span className="mt-1 block text-xs text-slate-500">
+                      {formatChatPercent(clickDeskQualitativeSummary?.coverage?.evaluated_percentage ?? 0)} da base avaliada
+                    </span>
+                  </div>
+                  <div className="rounded-lg bg-slate-900 p-4">
+                    <p className="text-xs text-slate-500">Negativas analisadas</p>
+                    <strong className="mt-2 block text-2xl tabular-nums text-amber-100">
+                      {formatChatCount(clickDeskQualitativeSummary?.totals?.analyzed_negative ?? 0)}
+                      {' / '}
+                      {formatChatCount(clickDeskQualitativeSummary?.totals?.negative ?? 0)}
+                    </strong>
+                    <span className="mt-1 block text-xs text-slate-500">
+                      cobertura {formatChatPercent(clickDeskQualitativeSummary?.coverage?.negative_percentage ?? 0)}
+                    </span>
+                  </div>
+                  <div className="rounded-lg bg-slate-900 p-4">
+                    <p className="text-xs text-slate-500">Positivas analisadas</p>
+                    <strong className="mt-2 block text-2xl tabular-nums text-emerald-200">
+                      {formatChatCount(clickDeskQualitativeSummary?.totals?.analyzed_positive ?? 0)}
+                      {' / '}
+                      {formatChatCount(clickDeskQualitativeSummary?.totals?.positive ?? 0)}
+                    </strong>
+                    <span className="mt-1 block text-xs text-slate-500">
+                      cobertura {formatChatPercent(clickDeskQualitativeSummary?.coverage?.positive_percentage ?? 0)}
+                    </span>
+                  </div>
+                  <div className="rounded-lg bg-slate-900 p-4">
+                    <p className="text-xs text-slate-500">Aprovadas pela gestão</p>
+                    <strong className="mt-2 block text-2xl tabular-nums text-emerald-200">
+                      {formatChatCount(clickDeskQualitativeSummary?.totals?.approved ?? 0)}
+                    </strong>
+                    <span className="mt-1 block text-xs text-slate-500">
+                      {formatChatCount(clickDeskQualitativeSummary?.coaching_signals ?? 0)} com sinal para feedback
+                    </span>
+                  </div>
+                  <div className="rounded-lg bg-slate-900 p-4">
+                    <p className="text-xs text-slate-500">Aguardando validação</p>
+                    <strong className="mt-2 block text-2xl tabular-nums text-amber-100">
+                      {formatChatCount(clickDeskQualitativeSummary?.totals?.pending ?? 0)}
+                    </strong>
+                    <span className="mt-1 block text-xs text-slate-500">
+                      {formatChatCount(clickDeskQualitativeSummary?.totals?.rejected ?? 0)} descartada(s)
+                    </span>
+                  </div>
                 </div>
-                <div className="rounded-lg bg-slate-900 p-4">
-                  <p className="text-xs text-slate-500">Negativas analisadas</p>
-                  <strong className="mt-2 block text-2xl tabular-nums text-amber-100">
-                    {formatChatCount(clickDeskQualitativeSummary?.totals?.analyzed_negative ?? 0)}
-                    {' / '}
-                    {formatChatCount(clickDeskQualitativeSummary?.totals?.negative ?? 0)}
-                  </strong>
-                  <span className="mt-1 block text-xs text-slate-500">
-                    cobertura {formatChatPercent(clickDeskQualitativeSummary?.coverage?.negative_percentage ?? 0)}
-                  </span>
+              ) : (
+                <div className="mt-5 rounded-lg border border-dashed border-violet-300/20 bg-violet-300/5 p-4">
+                  <strong className="text-slate-100">Nenhuma análise qualitativa iniciada nesta competência.</strong>
+                  <p className="mt-2 text-sm leading-6 text-slate-400">
+                    Os indicadores objetivos continuam válidos. Use o laboratório abaixo apenas quando quiser validar um transcript real antes de ampliar a automação.
+                  </p>
                 </div>
-                <div className="rounded-lg bg-slate-900 p-4">
-                  <p className="text-xs text-slate-500">Positivas analisadas</p>
-                  <strong className="mt-2 block text-2xl tabular-nums text-emerald-200">
-                    {formatChatCount(clickDeskQualitativeSummary?.totals?.analyzed_positive ?? 0)}
-                    {' / '}
-                    {formatChatCount(clickDeskQualitativeSummary?.totals?.positive ?? 0)}
-                  </strong>
-                  <span className="mt-1 block text-xs text-slate-500">
-                    cobertura {formatChatPercent(clickDeskQualitativeSummary?.coverage?.positive_percentage ?? 0)}
-                  </span>
-                </div>
-                <div className="rounded-lg bg-slate-900 p-4">
-                  <p className="text-xs text-slate-500">Aprovadas pela gestão</p>
-                  <strong className="mt-2 block text-2xl tabular-nums text-emerald-200">
-                    {formatChatCount(clickDeskQualitativeSummary?.totals?.approved ?? 0)}
-                  </strong>
-                  <span className="mt-1 block text-xs text-slate-500">
-                    {formatChatCount(clickDeskQualitativeSummary?.coaching_signals ?? 0)} com sinal para feedback
-                  </span>
-                </div>
-                <div className="rounded-lg bg-slate-900 p-4">
-                  <p className="text-xs text-slate-500">Aguardando validação</p>
-                  <strong className="mt-2 block text-2xl tabular-nums text-amber-100">
-                    {formatChatCount(clickDeskQualitativeSummary?.totals?.pending ?? 0)}
-                  </strong>
-                  <span className="mt-1 block text-xs text-slate-500">
-                    {formatChatCount(clickDeskQualitativeSummary?.totals?.rejected ?? 0)} descartada(s)
-                  </span>
-                </div>
-              </div>
+              )}
 
               {(clickDeskQualitativeSummary?.pending_reviews?.length ?? 0) > 0 && (
                 <div className="mt-5 rounded-lg border border-violet-400/15 bg-violet-400/5 p-4">
@@ -7581,14 +7568,14 @@ function ChatModuleDashboard({
                     </div>
                   </div>
                 </div>
-              ) : (
+              ) : (clickDeskQualitativeSummary?.totals?.evaluated ?? 0) > 0 ? (
                 <div className="mt-5 rounded-lg border border-dashed border-white/15 bg-slate-900/40 p-4">
                   <p className="font-medium text-slate-200">Os padrões começam na primeira análise aprovada.</p>
                   <p className="mt-1 text-sm leading-6 text-slate-500">
                     Analise conversas reais e aprove as leituras que fizerem sentido. Até lá, esta área permanece vazia em vez de transformar uma hipótese da IA em padrão da operação.
                   </p>
                 </div>
-              )}
+              ) : null}
 
               {(clickDeskQualitativeSummary?.analysts?.length ?? 0) > 0 && (
                 <div className="mt-5">
