@@ -13,6 +13,7 @@ import {
   type ChatPerformanceDiagnostic,
 } from '@/lib/chat-diagnostic'
 
+// Homologação: mantém a IA qualitativa bloqueada no portal até a validação da leitura de transcript.
 const QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS = false
 
 type Goal = {
