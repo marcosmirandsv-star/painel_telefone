@@ -3603,6 +3603,8 @@ function ChatModuleDashboard({
   const [chatManagerNotes, setChatManagerNotes] = useState('')
   const [chatFeedbackDraft, setChatFeedbackDraft] = useState('')
   const [chatAiSaving, setChatAiSaving] = useState(false)
+  const [chatReportQualitativePreparing, setChatReportQualitativePreparing] = useState(false)
+  const [chatReportQualitativeStatus, setChatReportQualitativeStatus] = useState('')
   const [selectedChatReportMetricId, setSelectedChatReportMetricId] = useState('')
   const [chatActiveTab, setChatActiveTab] = useState<'overview' | 'prototype' | 'podium' | 'analysis' | 'reports' | 'import' | 'settings'>('overview')
   const [chatToolsOpen, setChatToolsOpen] = useState(false)
@@ -5006,6 +5008,104 @@ function ChatModuleDashboard({
       await onImportComplete()
     } catch (error) {
       setChatExportMessage(getErrorMessage(error))
+    }
+  }
+
+  async function handlePrepareChatQualitativeSample() {
+    if (!selectedChatReportMetric) {
+      setChatReportQualitativeStatus('Selecione um analista antes de preparar a leitura qualitativa.')
+      return
+    }
+
+    setChatReportQualitativePreparing(true)
+    setChatReportQualitativeStatus('Preparando amostra qualitativa...')
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        setChatReportQualitativeStatus('Sua sessão expirou. Entre novamente.')
+        return
+      }
+
+      const metric = selectedChatReportMetric
+      const start = `${metric.year}-${String(metric.month_number).padStart(2, '0')}-01`
+      const end = new Date(Date.UTC(metric.year, metric.month_number, 0))
+        .toISOString()
+        .slice(0, 10)
+      const params = new URLSearchParams({
+        start,
+        end,
+        analyst_id: metric.analyst_id,
+      })
+
+      const sampleResponse = await fetch(
+        `/api/clickdesk/evaluated-sample?${params.toString()}`,
+        {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: 'no-store',
+        },
+      )
+      const sample = (await sampleResponse.json()) as ClickDeskEvaluatedSampleResponse
+
+      if (!sampleResponse.ok) {
+        throw new Error(
+          sample.erro || sample.error || 'Não foi possível montar a amostra qualitativa.',
+        )
+      }
+
+      const sampleTickets = [
+        ...(sample.negative ?? []),
+        ...(sample.positive ?? []),
+      ]
+
+      if (!sampleTickets.length) {
+        setChatReportQualitativeStatus('Este analista ainda não possui avaliações elegíveis para a amostra.')
+        return
+      }
+
+      let completed = 0
+      let cached = 0
+      let failed = 0
+
+      for (const ticket of sampleTickets) {
+        try {
+          const response = await fetch('/api/clickdesk/qualitative', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ ticket_id: ticket.ticket_id }),
+          })
+          const result = (await response.json()) as ClickDeskQualitativeResponse
+
+          if (!response.ok || result.error) {
+            failed += 1
+            continue
+          }
+
+          completed += 1
+          if (result.cached) cached += 1
+        } catch {
+          failed += 1
+        }
+      }
+
+      const negativeCount = sample.negative?.length ?? 0
+      const positiveCount = sample.positive?.length ?? 0
+      const reusedText = cached > 0 ? ` · ${cached} reaproveitada(s) do cache` : ''
+      const failedText = failed > 0 ? ` · ${failed} não concluída(s)` : ''
+
+      setChatReportQualitativeStatus(
+        `Leitura preparada: ${completed} de ${sampleTickets.length} tickets (${negativeCount} negativos + ${positiveCount} positivos)${reusedText}${failedText}.`,
+      )
+    } catch (error) {
+      setChatReportQualitativeStatus(getErrorMessage(error))
+    } finally {
+      setChatReportQualitativePreparing(false)
     }
   }
 
@@ -7863,6 +7963,7 @@ function ChatModuleDashboard({
                 onChange={(event) => {
                   setSelectedChatReportMetricId(event.target.value)
                   setChatFeedbackDraft('')
+                  setChatReportQualitativeStatus('')
                 }}
               >
                 {visibleMetrics.map((metric) => (
@@ -7912,17 +8013,21 @@ function ChatModuleDashboard({
           <EmptyState text="Selecione um analista com dados para gerar o relatório." />
         )}
 
-        <div className="mt-5 grid gap-4 lg:grid-cols-3">
+        <div className="mt-5 grid gap-4 lg:grid-cols-4">
           <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
             <p className="font-semibold text-slate-100">1. Conferir</p>
             <p className="mt-2">Verifique período, analista, CSAT, avaliações, volume e posição no pódio.</p>
           </div>
           <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
-            <p className="font-semibold text-slate-100">2. Revisar feedback</p>
-            <p className="mt-2">Use suas observações como contexto e ajuste o texto final antes de exportar.</p>
+            <p className="font-semibold text-slate-100">2. Entender a amostra</p>
+            <p className="mt-2">Prepare até 3 negativas e 5 positivas para levar evidências reais da conversa ao feedback.</p>
           </div>
           <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
-            <p className="font-semibold text-slate-100">3. Exportar</p>
+            <p className="font-semibold text-slate-100">3. Revisar feedback</p>
+            <p className="mt-2">Combine indicadores, evidências qualitativas e suas observações antes do texto final.</p>
+          </div>
+          <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
+            <p className="font-semibold text-slate-100">4. Exportar</p>
             <p className="mt-2">O arquivo individual será gerado para envio ao colaborador no fechamento mensal.</p>
           </div>
         </div>
@@ -7938,6 +8043,28 @@ function ChatModuleDashboard({
           </Field>
 
 
+          <div className="rounded-xl border border-violet-400/15 bg-violet-400/5 p-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">Leitura qualitativa opcional</p>
+                <p className="mt-1 text-sm text-slate-300">
+                  Prepare a amostra antes do feedback para que a IA use causas, influência humana e evidências já validadas.
+                </p>
+                {chatReportQualitativeStatus && (
+                  <p className="mt-2 text-xs leading-5 text-slate-400">{chatReportQualitativeStatus}</p>
+                )}
+              </div>
+              <button
+                className="btn-secondary shrink-0 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!selectedChatReportMetric || chatReportQualitativePreparing}
+                type="button"
+                onClick={() => void handlePrepareChatQualitativeSample()}
+              >
+                {chatReportQualitativePreparing ? 'Preparando leitura...' : 'Preparar leitura qualitativa'}
+              </button>
+            </div>
+          </div>
+
           <div className="grid gap-3 lg:grid-cols-[auto_auto_auto_1fr] lg:items-start">
             <button
               className="btn-secondary disabled:cursor-not-allowed disabled:opacity-60"
@@ -7945,7 +8072,7 @@ function ChatModuleDashboard({
               type="button"
               onClick={handleGenerateChatFeedbackDraft}
             >
-              4. Gerar base factual
+              Gerar base factual
             </button>
             <button
               className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
@@ -7968,7 +8095,7 @@ function ChatModuleDashboard({
             </p>
           </div>
 
-          <Field label="5. Texto final do feedback">
+          <Field label="Texto final do feedback">
             <textarea
               className="form-input min-h-56"
               value={chatFeedbackDraft}
