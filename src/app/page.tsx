@@ -3378,7 +3378,11 @@ function ChatModuleDashboard({
         return
       }
 
-      const month = `${chat2SelectedPeriod.year}-${String(chat2SelectedPeriod.monthNumber).padStart(2, '0')}`
+      const closureYear =
+        chatActiveTab === 'reports' && selectedPeriod ? selectedPeriod.year : chat2SelectedPeriod.year
+      const closureMonthNumber =
+        chatActiveTab === 'reports' && selectedPeriod ? selectedPeriod.monthNumber : chat2SelectedPeriod.monthNumber
+      const month = `${closureYear}-${String(closureMonthNumber).padStart(2, '0')}`
       const params = new URLSearchParams({
         mes: month,
         canal: 'chat',
@@ -3443,7 +3447,11 @@ function ChatModuleDashboard({
         return
       }
 
-      const month = `${chat2SelectedPeriod.year}-${String(chat2SelectedPeriod.monthNumber).padStart(2, '0')}`
+      const closureYear =
+        chatActiveTab === 'reports' && selectedPeriod ? selectedPeriod.year : chat2SelectedPeriod.year
+      const closureMonthNumber =
+        chatActiveTab === 'reports' && selectedPeriod ? selectedPeriod.monthNumber : chat2SelectedPeriod.monthNumber
+      const month = `${closureYear}-${String(closureMonthNumber).padStart(2, '0')}`
       const params = new URLSearchParams({
         mes: month,
         canal: 'chat',
@@ -6181,196 +6189,9 @@ function ChatModuleDashboard({
             </div>
           </section>
 
-          <section className="panel">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Inteligência de experiência</p>
-                <h3 className="mt-2 text-2xl font-bold">Da nota para a causa</h3>
-                <p className="section-subtitle">
-                  Esta área antecipa o diferencial do Chat 2.0, mas não atribui sentimento ou causa enquanto a base atual não fornecer a conversa completa.
-                </p>
-              </div>
-              <span className="rounded-md border border-cyan-400/20 bg-cyan-400/5 px-3 py-2 text-sm font-semibold text-cyan-200">
-                Preparado para ClickDesk
-              </span>
-            </div>
 
-            <div className="mt-5 grid gap-4 lg:grid-cols-3">
-              <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
-                <p className="text-sm font-semibold">O que sabemos hoje</p>
-                <p className="mt-3 text-sm leading-6 text-slate-300">
-                  {chat2SelectedLiveHuman
-                    ? formatChatCount(chat2LivePositive) + ' avaliações positivas e ' + formatChatCount(chat2LiveNegative) + ' negativas em ' + formatChatCount(chat2SelectedLiveHuman.count) + ' atendimentos humanos no período.'
-                    : chat2SelectedMetric
-                      ? formatChatCount(chat2SelectedMetric.positive_reviews) + ' avaliações positivas e ' + formatChatCount(chat2SelectedMetric.negative_reviews) + ' negativas no período.'
-                      : 'Ainda não há leitura humana disponível para este recorte.'}
-                </p>
-                <p className="mt-3 text-xs leading-5 text-slate-500">
-                  Isto é satisfação registrada pelo cliente, não análise de sentimento da conversa.
-                </p>
-              </div>
 
-              <div className="rounded-xl border border-dashed border-white/15 bg-slate-950/30 p-5">
-                <p className="text-sm font-semibold">Com o ClickDesk</p>
-                <p className="mt-3 text-sm leading-6 text-slate-300">
-                  A IA analisará a interação para identificar sentimento inicial e final, causa provável da nota, influência do atendimento humano, controlabilidade e evidências para feedback.
-                </p>
-              </div>
 
-              <div className="rounded-xl border border-dashed border-white/15 bg-slate-950/30 p-5">
-                <p className="text-sm font-semibold">Jornada IA → humano</p>
-                <p className="mt-3 text-sm leading-6 text-slate-300">
-                  Nesta homologação, os atendimentos classificados pelo ClickDesk como human, com área ERP/Fiscal e responsável identificado, já compõem a jornada IA → humano. O transcript fica reservado para a análise qualitativa posterior.
-                </p>
-              </div>
-            </div>
-          </section>
-
-          <section className="panel">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Modelo de atualização</p>
-            <h3 className="mt-2 text-2xl font-bold">Sincronização D-1</h3>
-            <p className="section-subtitle">
-              No ClickDesk, o plano é consolidar diariamente o dia anterior, revalidar dias recentes para capturar avaliações tardias e só então disponibilizar os indicadores e análises de IA.
-            </p>
-            <div className="mt-5 grid gap-3 md:grid-cols-4">
-              {[
-                ['D-1', 'Buscar conversas e avaliações do dia anterior'],
-                ['Revisão', 'Reconsultar dias recentes para avaliações tardias'],
-                ['IA', 'Analisar sentimento, causa e contribuição do atendimento humano'],
-                ['Painel', 'Publicar a visão consolidada para gestão e analista'],
-              ].map(([label, detail]) => (
-                <div key={label} className="rounded-lg bg-slate-900 p-4">
-                  <strong className="text-cyan-200">{label}</strong>
-                  <p className="mt-2 text-sm leading-6 text-slate-300">{detail}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="panel">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
-                  Fechamento oficial ClickDesk
-                </p>
-                <h3 className="mt-2 text-2xl font-bold">Fotografia imutável da competência</h3>
-                <p className="section-subtitle">
-                  A prévia usa a base persistida. Depois do encerramento do mês e da revalidação do último dia,
-                  a gestão pode preservar o resultado oficial sem depender de recálculo futuro.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={clickDeskClosureLoading}
-                  onClick={() => void handleLoadClickDeskClosurePreview()}
-                >
-                  {clickDeskClosureLoading ? 'Conferindo...' : 'Conferir prévia'}
-                </button>
-                <button
-                  type="button"
-                  className="btn-primary"
-                  disabled={
-                    clickDeskClosureLoading ||
-                    !clickDeskClosurePreview?.fechamento?.pronto ||
-                    !clickDeskClosurePreview?.conferencia ||
-                    Boolean(clickDeskOfficialClosure?.fechamento_id)
-                  }
-                  onClick={() => void handleApproveClickDeskClosure()}
-                >
-                  {clickDeskOfficialClosure?.fechamento_id
-                    ? 'Competência fechada'
-                    : 'Aprovar fechamento oficial'}
-                </button>
-              </div>
-            </div>
-
-            {clickDeskClosureMessage && (
-              <div className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-sm text-amber-100">
-                {clickDeskClosureMessage}
-              </div>
-            )}
-
-            {!clickDeskClosurePreview && !clickDeskClosureMessage && (
-              <div className="mt-5 rounded-xl border border-dashed border-white/15 bg-slate-950/30 p-5 text-sm text-slate-300">
-                Use “Conferir prévia” para validar a competência selecionada e a equipe atual antes do fechamento.
-              </div>
-            )}
-
-            {clickDeskClosurePreview && (
-              <div className="mt-5 space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <MetricCard
-                    label="Operação humana"
-                    value={formatChatCount(clickDeskClosurePreview.operacao?.attendances ?? 0)}
-                  />
-                  <MetricCard
-                    label="Performance · analistas"
-                    value={formatChatCount(clickDeskClosurePreview.performance?.attendances ?? 0)}
-                  />
-                  <MetricCard
-                    label="CSAT · analistas"
-                    value={
-                      clickDeskClosurePreview.performance?.csat == null
-                        ? '—'
-                        : formatChatPercent(clickDeskClosurePreview.performance.csat)
-                    }
-                  />
-                  <MetricCard
-                    label="Apoio de gestão"
-                    value={formatChatCount(clickDeskClosurePreview.apoio_gestao?.attendances ?? 0)}
-                  />
-                </div>
-
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
-                    <p className="text-sm font-semibold">Qualidade da base</p>
-                    <div className="mt-3 grid gap-2 text-sm text-slate-300">
-                      <span>
-                        Sem identidade: <strong>{formatChatCount(clickDeskClosurePreview.qualidade_dados?.unmapped_attendances ?? 0)}</strong>
-                      </span>
-                      <span>
-                        Fallback temporal: <strong>{formatChatCount(clickDeskClosurePreview.qualidade_dados?.fallback_timestamp_attendances ?? 0)}</strong>
-                      </span>
-                      <span>
-                        Sem equipe: <strong>{formatChatCount(clickDeskClosurePreview.qualidade_dados?.missing_team_attendances ?? 0)}</strong>
-                      </span>
-                      <span>
-                        Cadastro/meta incompleto: <strong>{formatChatCount(clickDeskClosurePreview.qualidade_dados?.analyst_metadata_issues ?? 0)}</strong>
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
-                    <p className="text-sm font-semibold">Status do fechamento</p>
-                    {clickDeskOfficialClosure?.fechamento_id ? (
-                      <div className="mt-3 rounded-lg border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-100">
-                        Fechamento oficial preservado. ID {clickDeskOfficialClosure.fechamento_id.slice(0, 8)}…
-                      </div>
-                    ) : clickDeskClosurePreview.fechamento?.pronto ? (
-                      <div className="mt-3 rounded-lg border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-100">
-                        Competência pronta para aprovação oficial.
-                      </div>
-                    ) : (
-                      <div className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-sm text-amber-100">
-                        <strong>Ainda não pode fechar.</strong>
-                        <ul className="mt-2 list-disc space-y-1 pl-5">
-                          {(clickDeskClosurePreview.fechamento?.pendencias ?? []).map((item) => (
-                            <li key={item}>{item}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <p className="text-xs text-slate-500">
-                  Snapshot: {clickDeskClosurePreview.analistas?.length ?? 0} analista(s) com resultado congelável · meta de avaliações 25% · meta de CSAT preservada por analista.
-                </p>
-              </div>
-            )}
-          </section>
         </div>
       )}
 
@@ -6723,6 +6544,165 @@ function ChatModuleDashboard({
               <p className="mt-3 text-sm leading-6 text-slate-300">{card.text}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className={chatActiveTab === 'reports' ? 'panel' : 'hidden'}>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
+              Fechamento oficial ClickDesk
+            </p>
+            <h3 className="mt-2 text-2xl font-bold">Fotografia imutável da competência</h3>
+            <p className="section-subtitle">
+              A prévia usa a base persistida. Depois do encerramento do mês e da revalidação do último dia,
+              a gestão pode preservar o resultado oficial sem depender de recálculo futuro.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={clickDeskClosureLoading}
+              onClick={() => void handleLoadClickDeskClosurePreview()}
+            >
+              {clickDeskClosureLoading ? 'Conferindo...' : 'Conferir prévia'}
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={
+                clickDeskClosureLoading ||
+                !clickDeskClosurePreview?.fechamento?.pronto ||
+                !clickDeskClosurePreview?.conferencia ||
+                Boolean(clickDeskOfficialClosure?.fechamento_id)
+              }
+              onClick={() => void handleApproveClickDeskClosure()}
+            >
+              {clickDeskOfficialClosure?.fechamento_id
+                ? 'Competência fechada'
+                : 'Aprovar fechamento oficial'}
+            </button>
+          </div>
+        </div>
+
+        {clickDeskClosureMessage && (
+          <div className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-sm text-amber-100">
+            {clickDeskClosureMessage}
+          </div>
+        )}
+
+        {!clickDeskClosurePreview && !clickDeskClosureMessage && (
+          <div className="mt-5 rounded-xl border border-dashed border-white/15 bg-slate-950/30 p-5 text-sm text-slate-300">
+            Use “Conferir prévia” para validar a competência selecionada e a equipe atual antes do fechamento.
+          </div>
+        )}
+
+        {clickDeskClosurePreview && (
+          <div className="mt-5 space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <MetricCard
+                label="Operação humana"
+                value={formatChatCount(clickDeskClosurePreview.operacao?.attendances ?? 0)}
+              />
+              <MetricCard
+                label="Performance · analistas"
+                value={formatChatCount(clickDeskClosurePreview.performance?.attendances ?? 0)}
+              />
+              <MetricCard
+                label="CSAT · analistas"
+                value={
+                  clickDeskClosurePreview.performance?.csat == null
+                    ? '—'
+                    : formatChatPercent(clickDeskClosurePreview.performance.csat)
+                }
+              />
+              <MetricCard
+                label="Apoio de gestão"
+                value={formatChatCount(clickDeskClosurePreview.apoio_gestao?.attendances ?? 0)}
+              />
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+                <p className="text-sm font-semibold">Qualidade da base</p>
+                <div className="mt-3 grid gap-2 text-sm text-slate-300">
+                  <span>
+                    Sem identidade: <strong>{formatChatCount(clickDeskClosurePreview.qualidade_dados?.unmapped_attendances ?? 0)}</strong>
+                  </span>
+                  <span>
+                    Fallback temporal: <strong>{formatChatCount(clickDeskClosurePreview.qualidade_dados?.fallback_timestamp_attendances ?? 0)}</strong>
+                  </span>
+                  <span>
+                    Sem equipe: <strong>{formatChatCount(clickDeskClosurePreview.qualidade_dados?.missing_team_attendances ?? 0)}</strong>
+                  </span>
+                  <span>
+                    Cadastro/meta incompleto: <strong>{formatChatCount(clickDeskClosurePreview.qualidade_dados?.analyst_metadata_issues ?? 0)}</strong>
+                  </span>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+                <p className="text-sm font-semibold">Status do fechamento</p>
+                {clickDeskOfficialClosure?.fechamento_id ? (
+                  <div className="mt-3 rounded-lg border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-100">
+                    Fechamento oficial preservado. ID {clickDeskOfficialClosure.fechamento_id.slice(0, 8)}…
+                  </div>
+                ) : clickDeskClosurePreview.fechamento?.pronto ? (
+                  <div className="mt-3 rounded-lg border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-100">
+                    Competência pronta para aprovação oficial.
+                  </div>
+                ) : (
+                  <div className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-sm text-amber-100">
+                    <strong>Ainda não pode fechar.</strong>
+                    <ul className="mt-2 list-disc space-y-1 pl-5">
+                      {(clickDeskClosurePreview.fechamento?.pendencias ?? []).map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Snapshot: {clickDeskClosurePreview.analistas?.length ?? 0} analista(s) com resultado congelável · meta de avaliações 25% · meta de CSAT preservada por analista.
+            </p>
+          </div>
+        )}
+      </section>
+
+      <section className={chatActiveTab === 'podium' ? 'panel' : 'hidden'}>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-violet-200">Próxima camada · IA qualitativa</p>
+            <h2 className="mt-2 text-2xl font-bold">Da métrica para a causa</h2>
+            <p className="section-subtitle">
+              Esta etapa será ativada depois da reorganização visual. O objetivo é ler o transcript completo sem misturar hipótese com fato calculado.
+            </p>
+          </div>
+          <span className="rounded-md border border-violet-400/20 bg-violet-400/5 px-3 py-2 text-sm font-semibold text-violet-200">
+            Planejada · ainda não ativa
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
+            <p className="text-sm font-semibold">Sentimento</p>
+            <p className="mt-2 text-sm leading-6 text-slate-400">Comparar sentimento inicial e final da conversa.</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
+            <p className="text-sm font-semibold">Causa provável</p>
+            <p className="mt-2 text-sm leading-6 text-slate-400">Separar motivo da nota de simples correlação com o indicador.</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
+            <p className="text-sm font-semibold">Influência humana</p>
+            <p className="mt-2 text-sm leading-6 text-slate-400">Identificar o que o atendimento humano melhorou, piorou ou não controlava.</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
+            <p className="text-sm font-semibold">Evidências</p>
+            <p className="mt-2 text-sm leading-6 text-slate-400">Usar trechos e sinais da conversa para sustentar feedbacks e ações de gestão.</p>
+          </div>
         </div>
       </section>
 
