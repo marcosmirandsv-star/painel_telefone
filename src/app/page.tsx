@@ -4708,7 +4708,9 @@ function ChatModuleDashboard({
   })
   const clickDeskReportPeriodMatches =
     clickDeskPersistedMetrics?.period?.start === chatReportPeriod.start &&
-    clickDeskPersistedMetrics?.period?.end === chatReportPeriod.end
+    Boolean(clickDeskPersistedMetrics?.period?.end) &&
+    String(clickDeskPersistedMetrics?.period?.end) >= chatReportPeriod.start &&
+    String(clickDeskPersistedMetrics?.period?.end) <= chatReportPeriod.end
   const clickDeskReportHasOfficialSnapshot =
     Boolean(clickDeskOfficialClosure?.fechamento_id) &&
     clickDeskOfficialClosure?.mes === chatReportMonthKey
@@ -6363,7 +6365,19 @@ function ChatModuleDashboard({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Equipe">
-              <select className="form-input" value={selectedTeamId} onChange={(event) => setSelectedTeamId(event.target.value)}>
+              <select
+                className="form-input"
+                value={selectedTeamId}
+                onChange={(event) => {
+                  setSelectedTeamId(event.target.value)
+                  if (chatActiveTab === 'reports') {
+                    setSelectedChatReportMetricId('')
+                    setChatFeedbackDraft('')
+                    setChatManagerNotes('')
+                    setChatReportQualitativeStatus('')
+                  }
+                }}
+              >
                 <option value="all">Todas as equipes</option>
                 {teams.map((team) => (
                   <option key={team.id} value={team.id}>
