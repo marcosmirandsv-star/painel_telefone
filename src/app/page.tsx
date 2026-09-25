@@ -6547,130 +6547,6 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <section className={chatActiveTab === 'reports' ? 'panel' : 'hidden'}>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
-              Fechamento oficial ClickDesk
-            </p>
-            <h3 className="mt-2 text-2xl font-bold">Fotografia imutável da competência</h3>
-            <p className="section-subtitle">
-              A prévia usa a base persistida. Depois do encerramento do mês e da revalidação do último dia,
-              a gestão pode preservar o resultado oficial sem depender de recálculo futuro.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              className="secondary-button"
-              disabled={clickDeskClosureLoading}
-              onClick={() => void handleLoadClickDeskClosurePreview()}
-            >
-              {clickDeskClosureLoading ? 'Conferindo...' : 'Conferir prévia'}
-            </button>
-            <button
-              type="button"
-              className="btn-primary"
-              disabled={
-                clickDeskClosureLoading ||
-                !clickDeskClosurePreview?.fechamento?.pronto ||
-                !clickDeskClosurePreview?.conferencia ||
-                Boolean(clickDeskOfficialClosure?.fechamento_id)
-              }
-              onClick={() => void handleApproveClickDeskClosure()}
-            >
-              {clickDeskOfficialClosure?.fechamento_id
-                ? 'Competência fechada'
-                : 'Aprovar fechamento oficial'}
-            </button>
-          </div>
-        </div>
-
-        {clickDeskClosureMessage && (
-          <div className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-sm text-amber-100">
-            {clickDeskClosureMessage}
-          </div>
-        )}
-
-        {!clickDeskClosurePreview && !clickDeskClosureMessage && (
-          <div className="mt-5 rounded-xl border border-dashed border-white/15 bg-slate-950/30 p-5 text-sm text-slate-300">
-            Use “Conferir prévia” para validar a competência selecionada e a equipe atual antes do fechamento.
-          </div>
-        )}
-
-        {clickDeskClosurePreview && (
-          <div className="mt-5 space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <MetricCard
-                label="Operação humana"
-                value={formatChatCount(clickDeskClosurePreview.operacao?.attendances ?? 0)}
-              />
-              <MetricCard
-                label="Performance · analistas"
-                value={formatChatCount(clickDeskClosurePreview.performance?.attendances ?? 0)}
-              />
-              <MetricCard
-                label="CSAT · analistas"
-                value={
-                  clickDeskClosurePreview.performance?.csat == null
-                    ? '—'
-                    : formatChatPercent(clickDeskClosurePreview.performance.csat)
-                }
-              />
-              <MetricCard
-                label="Apoio de gestão"
-                value={formatChatCount(clickDeskClosurePreview.apoio_gestao?.attendances ?? 0)}
-              />
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
-                <p className="text-sm font-semibold">Qualidade da base</p>
-                <div className="mt-3 grid gap-2 text-sm text-slate-300">
-                  <span>
-                    Sem identidade: <strong>{formatChatCount(clickDeskClosurePreview.qualidade_dados?.unmapped_attendances ?? 0)}</strong>
-                  </span>
-                  <span>
-                    Fallback temporal: <strong>{formatChatCount(clickDeskClosurePreview.qualidade_dados?.fallback_timestamp_attendances ?? 0)}</strong>
-                  </span>
-                  <span>
-                    Sem equipe: <strong>{formatChatCount(clickDeskClosurePreview.qualidade_dados?.missing_team_attendances ?? 0)}</strong>
-                  </span>
-                  <span>
-                    Cadastro/meta incompleto: <strong>{formatChatCount(clickDeskClosurePreview.qualidade_dados?.analyst_metadata_issues ?? 0)}</strong>
-                  </span>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
-                <p className="text-sm font-semibold">Status do fechamento</p>
-                {clickDeskOfficialClosure?.fechamento_id ? (
-                  <div className="mt-3 rounded-lg border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-100">
-                    Fechamento oficial preservado. ID {clickDeskOfficialClosure.fechamento_id.slice(0, 8)}…
-                  </div>
-                ) : clickDeskClosurePreview.fechamento?.pronto ? (
-                  <div className="mt-3 rounded-lg border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-100">
-                    Competência pronta para aprovação oficial.
-                  </div>
-                ) : (
-                  <div className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-sm text-amber-100">
-                    <strong>Ainda não pode fechar.</strong>
-                    <ul className="mt-2 list-disc space-y-1 pl-5">
-                      {(clickDeskClosurePreview.fechamento?.pendencias ?? []).map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-500">
-              Snapshot: {clickDeskClosurePreview.analistas?.length ?? 0} analista(s) com resultado congelável · meta de avaliações 25% · meta de CSAT preservada por analista.
-            </p>
-          </div>
-        )}
-      </section>
 
       <section className={chatActiveTab === 'podium' ? 'panel' : 'hidden'}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -7230,6 +7106,132 @@ function ChatModuleDashboard({
         {chatExportMessage && <p className="mt-4 rounded-md bg-slate-900/70 px-4 py-3 text-sm text-slate-200">{chatExportMessage}</p>}
       </section>
       
+      <section className={chatActiveTab === 'reports' ? 'panel' : 'hidden'}>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
+              Fechamento oficial ClickDesk
+            </p>
+            <h3 className="mt-2 text-2xl font-bold">Aprovação final da competência</h3>
+            <p className="section-subtitle">
+              A prévia usa a base persistida. Depois do encerramento do mês e da revalidação do último dia,
+              a gestão pode preservar o resultado oficial sem depender de recálculo futuro.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              className="secondary-button"
+              disabled={clickDeskClosureLoading}
+              onClick={() => void handleLoadClickDeskClosurePreview()}
+            >
+              {clickDeskClosureLoading ? 'Conferindo...' : 'Conferir prévia'}
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={
+                clickDeskClosureLoading ||
+                !clickDeskClosurePreview?.fechamento?.pronto ||
+                !clickDeskClosurePreview?.conferencia ||
+                Boolean(clickDeskOfficialClosure?.fechamento_id)
+              }
+              onClick={() => void handleApproveClickDeskClosure()}
+            >
+              {clickDeskOfficialClosure?.fechamento_id
+                ? 'Competência fechada'
+                : 'Aprovar fechamento oficial'}
+            </button>
+          </div>
+        </div>
+
+        {clickDeskClosureMessage && (
+          <div className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-sm text-amber-100">
+            {clickDeskClosureMessage}
+          </div>
+        )}
+
+        {!clickDeskClosurePreview && !clickDeskClosureMessage && (
+          <div className="mt-5 rounded-xl border border-dashed border-white/15 bg-slate-950/30 p-5 text-sm text-slate-300">
+            Use “Conferir prévia” para validar a competência selecionada e a equipe atual antes do fechamento.
+          </div>
+        )}
+
+        {clickDeskClosurePreview && (
+          <div className="mt-5 space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <MetricCard
+                label="Operação humana"
+                value={formatChatCount(clickDeskClosurePreview.operacao?.attendances ?? 0)}
+              />
+              <MetricCard
+                label="Performance · analistas"
+                value={formatChatCount(clickDeskClosurePreview.performance?.attendances ?? 0)}
+              />
+              <MetricCard
+                label="CSAT · analistas"
+                value={
+                  clickDeskClosurePreview.performance?.csat == null
+                    ? '—'
+                    : formatChatPercent(clickDeskClosurePreview.performance.csat)
+                }
+              />
+              <MetricCard
+                label="Apoio de gestão"
+                value={formatChatCount(clickDeskClosurePreview.apoio_gestao?.attendances ?? 0)}
+              />
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+                <p className="text-sm font-semibold">Qualidade da base</p>
+                <div className="mt-3 grid gap-2 text-sm text-slate-300">
+                  <span>
+                    Sem identidade: <strong>{formatChatCount(clickDeskClosurePreview.qualidade_dados?.unmapped_attendances ?? 0)}</strong>
+                  </span>
+                  <span>
+                    Fallback temporal: <strong>{formatChatCount(clickDeskClosurePreview.qualidade_dados?.fallback_timestamp_attendances ?? 0)}</strong>
+                  </span>
+                  <span>
+                    Sem equipe: <strong>{formatChatCount(clickDeskClosurePreview.qualidade_dados?.missing_team_attendances ?? 0)}</strong>
+                  </span>
+                  <span>
+                    Cadastro/meta incompleto: <strong>{formatChatCount(clickDeskClosurePreview.qualidade_dados?.analyst_metadata_issues ?? 0)}</strong>
+                  </span>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+                <p className="text-sm font-semibold">Status do fechamento</p>
+                {clickDeskOfficialClosure?.fechamento_id ? (
+                  <div className="mt-3 rounded-lg border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-100">
+                    Fechamento oficial preservado. ID {clickDeskOfficialClosure.fechamento_id.slice(0, 8)}…
+                  </div>
+                ) : clickDeskClosurePreview.fechamento?.pronto ? (
+                  <div className="mt-3 rounded-lg border border-emerald-400/20 bg-emerald-400/5 px-4 py-3 text-sm text-emerald-100">
+                    Competência pronta para aprovação oficial.
+                  </div>
+                ) : (
+                  <div className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-sm text-amber-100">
+                    <strong>Ainda não pode fechar.</strong>
+                    <ul className="mt-2 list-disc space-y-1 pl-5">
+                      {(clickDeskClosurePreview.fechamento?.pendencias ?? []).map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Snapshot: {clickDeskClosurePreview.analistas?.length ?? 0} analista(s) com resultado congelável · meta de avaliações 25% · meta de CSAT preservada por analista.
+            </p>
+          </div>
+        )}
+      </section>
+
+
       <section className={chatActiveTab === 'settings' ? 'panel' : 'hidden'}>
         <div className="flex flex-col gap-6 xl:flex-row">
           <div className="xl:w-2/5">
