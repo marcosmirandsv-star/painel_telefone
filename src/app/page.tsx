@@ -13843,15 +13843,21 @@ async function exportChatIndividualReport({
     podiumPosition > 0
       ? `${podiumPosition}º lugar no pódio`
       : 'Fora do pódio nesta competência'
-  const status =
+  const rawStatus =
     metric.status ||
     (Number(metric.csat) >= csatGoal && Number(metric.review_percentage) >= reviewGoal
       ? 'Meta Superada'
       : 'Em acompanhamento')
+  const status =
+    rawStatus === 'Meta Superada'
+      ? 'Dentro das metas'
+      : rawStatus === 'Critico'
+        ? 'Requer atenção'
+        : rawStatus
   const statusColor =
-    status === 'Meta Superada'
+    rawStatus === 'Meta Superada'
       ? '#059669'
-      : status === 'Critico'
+      : rawStatus === 'Critico'
         ? '#dc2626'
         : '#d97706'
   const csatText =
@@ -13862,6 +13868,14 @@ async function exportChatIndividualReport({
     reviewGap >= 0
       ? `${formatDelta(reviewGap, ' p.p.')} acima da referência de ${reviewGoal}%.`
       : `${formatDelta(Math.abs(reviewGap), ' p.p.').replace('+', '')} abaixo da referência de ${reviewGoal}%.`
+  const positiveReviewsText =
+    Number(metric.positive_reviews) === 1
+      ? '1 avaliação positiva'
+      : `${formatChatCount(metric.positive_reviews)} avaliações positivas`
+  const negativeReviewsText =
+    Number(metric.negative_reviews) === 1
+      ? '1 avaliação negativa'
+      : `${formatChatCount(metric.negative_reviews)} avaliações negativas`
   const finalFeedback =
     feedbackText.trim() ||
     buildChatFeedbackText({ metric, podiumPosition, managerNotes })
@@ -14288,7 +14302,7 @@ async function exportChatIndividualReport({
           <div class="kpi-card">
             <span>Avaliações recebidas</span>
             <strong>${formatChatCount(metric.reviews)}</strong>
-            <em>${formatChatCount(metric.positive_reviews)} positivas · ${formatChatCount(metric.negative_reviews)} negativas</em>
+            <em>${escapeHtml(positiveReviewsText)} · ${escapeHtml(negativeReviewsText)}</em>
           </div>
           <div class="kpi-card">
             <span>Atendimentos</span>
@@ -14306,7 +14320,7 @@ async function exportChatIndividualReport({
             <div class="reading-card">
               <span>Qualidade percebida</span>
               <strong>CSAT de ${formatPercent(metric.csat)}</strong>
-              <p>${escapeHtml(csatText)} Foram registradas ${formatChatCount(metric.positive_reviews)} avaliação(ões) positiva(s) e ${formatChatCount(metric.negative_reviews)} negativa(s).</p>
+              <p>${escapeHtml(csatText)} Foram registradas ${escapeHtml(positiveReviewsText)} e ${escapeHtml(negativeReviewsText)}.</p>
             </div>
             <div class="reading-card">
               <span>Participação dos clientes</span>
