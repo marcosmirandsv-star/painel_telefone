@@ -7443,7 +7443,7 @@ function ChatModuleDashboard({
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">Cobertura da leitura qualitativa</p>
               <h3 className="mt-2 text-xl font-bold">Quanto da experiência já foi realmente lido?</h3>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-                Os padrões abaixo descrevem apenas os tickets já analisados. Quanto maior a cobertura, mais segura fica a leitura gerencial.
+                A cobertura conta tudo que a IA já leu. Os padrões gerenciais, porém, usam somente análises aprovadas pela gestão.
               </p>
             </div>
             {clickDeskQualitativeSummaryLoading && (
@@ -7457,7 +7457,7 @@ function ChatModuleDashboard({
             </div>
           ) : (
             <>
-              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
                 <div className="rounded-lg bg-slate-900 p-4">
                   <p className="text-xs text-slate-500">Tickets analisados</p>
                   <strong className="mt-2 block text-2xl tabular-nums">
@@ -7492,13 +7492,106 @@ function ChatModuleDashboard({
                   </span>
                 </div>
                 <div className="rounded-lg bg-slate-900 p-4">
-                  <p className="text-xs text-slate-500">Sinais para feedback</p>
-                  <strong className="mt-2 block text-2xl tabular-nums text-cyan-200">
-                    {formatChatCount(clickDeskQualitativeSummary?.coaching_signals ?? 0)}
+                  <p className="text-xs text-slate-500">Aprovadas pela gestão</p>
+                  <strong className="mt-2 block text-2xl tabular-nums text-emerald-200">
+                    {formatChatCount(clickDeskQualitativeSummary?.totals?.approved ?? 0)}
                   </strong>
-                  <span className="mt-1 block text-xs text-slate-500">com comportamento observável</span>
+                  <span className="mt-1 block text-xs text-slate-500">
+                    {formatChatCount(clickDeskQualitativeSummary?.coaching_signals ?? 0)} com sinal para feedback
+                  </span>
+                </div>
+                <div className="rounded-lg bg-slate-900 p-4">
+                  <p className="text-xs text-slate-500">Aguardando validação</p>
+                  <strong className="mt-2 block text-2xl tabular-nums text-amber-100">
+                    {formatChatCount(clickDeskQualitativeSummary?.totals?.pending ?? 0)}
+                  </strong>
+                  <span className="mt-1 block text-xs text-slate-500">
+                    {formatChatCount(clickDeskQualitativeSummary?.totals?.rejected ?? 0)} descartada(s)
+                  </span>
                 </div>
               </div>
+
+              {(clickDeskQualitativeSummary?.pending_reviews?.length ?? 0) > 0 && (
+                <div className="mt-5 rounded-lg border border-violet-400/15 bg-violet-400/5 p-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">Validação humana</p>
+                      <h4 className="mt-1 font-semibold text-slate-100">Leituras aguardando sua conferência</h4>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Aprove somente quando causa, influência e evidências fizerem sentido diante do atendimento.
+                      </p>
+                    </div>
+                    <span className="text-xs text-slate-500">
+                      {clickDeskQualitativeSummary?.totals?.pending ?? 0} pendente(s)
+                    </span>
+                  </div>
+
+                  <div className="mt-3 space-y-3">
+                    {clickDeskQualitativeSummary?.pending_reviews?.map((item) => {
+                      const validating = clickDeskQualitativeValidationTicketId === item.ticket_id
+                      return (
+                        <div
+                          key={item.ticket_id}
+                          className="rounded-lg border border-white/10 bg-slate-950/40 p-4"
+                        >
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                            <div>
+                              <strong className="text-sm text-slate-100">{item.analyst_name}</strong>
+                              <p className="mt-1 text-xs text-slate-500">
+                                Ticket #{item.ticket_id} · {item.satisfaction_label === 'negative' ? 'avaliação negativa' : 'avaliação positiva'}
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                className="small-button"
+                                disabled={validating}
+                                onClick={() => void handleValidateClickDeskQualitative(item.ticket_id, 'approved')}
+                              >
+                                {validating ? 'Salvando...' : 'Aprovar leitura'}
+                              </button>
+                              <button
+                                type="button"
+                                className="danger-button"
+                                disabled={validating}
+                                onClick={() => void handleValidateClickDeskQualitative(item.ticket_id, 'rejected')}
+                              >
+                                Descartar
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                            <div className="rounded-lg bg-slate-900/70 p-3">
+                              <p className="text-xs text-slate-500">Causa provável</p>
+                              <strong className="mt-1 block text-sm">
+                                {formatQualitativeLabel(item.cause.category)}
+                                {' · '}
+                                confiança {formatQualitativeLabel(item.cause.confidence)}
+                              </strong>
+                              <p className="mt-2 text-xs leading-5 text-slate-400">{item.cause.summary}</p>
+                            </div>
+                            <div className="rounded-lg bg-slate-900/70 p-3">
+                              <p className="text-xs text-slate-500">Influência humana</p>
+                              <strong className="mt-1 block text-sm">
+                                {formatQualitativeLabel(item.human_influence.classification)}
+                              </strong>
+                              <p className="mt-2 text-xs leading-5 text-slate-400">{item.human_influence.summary}</p>
+                            </div>
+                            <div className="rounded-lg bg-slate-900/70 p-3">
+                              <p className="text-xs text-slate-500">Controlabilidade</p>
+                              <strong className="mt-1 block text-sm">
+                                {formatQualitativeLabel(item.controllability.classification)}
+                              </strong>
+                              <p className="mt-2 text-xs leading-5 text-slate-400">{item.controllability.summary}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
 
               {(clickDeskQualitativeSummary?.validation_queue?.length ?? 0) > 0 && (
                 <div className="mt-5 rounded-lg border border-amber-300/15 bg-amber-300/5 p-4">
@@ -7546,10 +7639,10 @@ function ChatModuleDashboard({
                 </div>
               )}
 
-              {(clickDeskQualitativeSummary?.totals?.analyzed ?? 0) > 0 ? (
+              {(clickDeskQualitativeSummary?.totals?.approved ?? 0) > 0 ? (
                 <div className="mt-5 grid gap-4 xl:grid-cols-3">
                   <div className="rounded-lg border border-white/10 bg-slate-900/60 p-4">
-                    <p className="text-sm font-semibold">Causas encontradas na amostra</p>
+                    <p className="text-sm font-semibold">Causas validadas na amostra</p>
                     <div className="mt-3 space-y-2">
                       {(clickDeskQualitativeSummary?.causes ?? []).slice(0, 5).map((item) => (
                         <div key={item.key} className="flex items-center justify-between gap-3 text-sm">
@@ -7584,9 +7677,9 @@ function ChatModuleDashboard({
                 </div>
               ) : (
                 <div className="mt-5 rounded-lg border border-dashed border-white/15 bg-slate-900/40 p-4">
-                  <p className="font-medium text-slate-200">A consolidação começa no primeiro ticket analisado.</p>
+                  <p className="font-medium text-slate-200">Os padrões começam na primeira análise aprovada.</p>
                   <p className="mt-1 text-sm leading-6 text-slate-500">
-                    Use o painel individual ou o laboratório abaixo para validar conversas reais. Até lá, esta área permanece vazia em vez de inferir causas pelos indicadores.
+                    Analise conversas reais e aprove as leituras que fizerem sentido. Até lá, esta área permanece vazia em vez de transformar uma hipótese da IA em padrão da operação.
                   </p>
                 </div>
               )}
