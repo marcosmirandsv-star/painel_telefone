@@ -7648,7 +7648,7 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <section className={chatActiveTab === 'podium' ? 'panel' : 'hidden'}>
+      <section id="chat-qualitative-validation" className={chatActiveTab === 'podium' ? 'panel' : 'hidden'}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Gestão e ações</p>
@@ -7794,6 +7794,37 @@ function ChatModuleDashboard({
           </span>
         </div>
 
+        {chatQualitativeFocusAnalystId && (
+          <div className="mt-4 flex flex-col gap-3 rounded-lg border border-violet-400/20 bg-violet-400/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">Validação focada</p>
+              <strong className="mt-1 block text-slate-100">
+                {analysts.find((item) => item.id === chatQualitativeFocusAnalystId)?.name ?? 'Analista selecionado'}
+              </strong>
+              <p className="mt-1 text-xs text-slate-500">A fila abaixo mostra somente tickets deste analista enquanto o foco estiver ativo.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="small-button" onClick={() => setChatQualitativeFocusAnalystId('')}>
+                Mostrar toda a equipe
+              </button>
+              <button
+                type="button"
+                className="small-button"
+                onClick={() => {
+                  setChatActiveTab('reports')
+                  window.setTimeout(() => {
+                    document
+                      .getElementById('chat-report-individual')
+                      ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }, 80)
+                }}
+              >
+                Voltar ao relatório
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="mt-5 rounded-xl border border-white/10 bg-slate-950/30 p-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -7877,7 +7908,9 @@ function ChatModuleDashboard({
                 </div>
               )}
 
-              {(clickDeskQualitativeSummary?.pending_reviews?.length ?? 0) > 0 && (
+              {(clickDeskQualitativeSummary?.pending_reviews ?? []).filter(
+                (item) => !chatQualitativeFocusAnalystId || item.analyst_id === chatQualitativeFocusAnalystId,
+              ).length > 0 && (
                 <div className="mt-5 rounded-lg border border-violet-400/15 bg-violet-400/5 p-4">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                     <div>
@@ -7888,12 +7921,20 @@ function ChatModuleDashboard({
                       </p>
                     </div>
                     <span className="text-xs text-slate-500">
-                      {clickDeskQualitativeSummary?.totals?.pending ?? 0} pendente(s)
+                      {(clickDeskQualitativeSummary?.pending_reviews ?? []).filter(
+                        (item) => !chatQualitativeFocusAnalystId || item.analyst_id === chatQualitativeFocusAnalystId,
+                      ).length} pendente(s)
                     </span>
                   </div>
 
                   <div className="mt-3 space-y-3">
-                    {clickDeskQualitativeSummary?.pending_reviews?.map((item) => {
+                    {(clickDeskQualitativeSummary?.pending_reviews ?? [])
+                      .filter(
+                        (item) =>
+                          !chatQualitativeFocusAnalystId ||
+                          item.analyst_id === chatQualitativeFocusAnalystId,
+                      )
+                      .map((item) => {
                       const validating = clickDeskQualitativeValidationTicketId === item.ticket_id
                       return (
                         <div
@@ -7959,7 +8000,9 @@ function ChatModuleDashboard({
                 </div>
               )}
 
-              {(clickDeskQualitativeSummary?.validation_queue?.length ?? 0) > 0 && (
+              {(clickDeskQualitativeSummary?.validation_queue ?? []).filter(
+                (item) => !chatQualitativeFocusAnalystId || item.analyst_id === chatQualitativeFocusAnalystId,
+              ).length > 0 && (
                 <div className="mt-5 rounded-lg border border-amber-300/15 bg-amber-300/5 p-4">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                     <div>
@@ -7970,12 +8013,20 @@ function ChatModuleDashboard({
                       </p>
                     </div>
                     <span className="text-xs text-slate-500">
-                      {clickDeskQualitativeSummary?.validation_queue?.length ?? 0} pendente(s) exibida(s)
+                      {(clickDeskQualitativeSummary?.validation_queue ?? []).filter(
+                        (item) => !chatQualitativeFocusAnalystId || item.analyst_id === chatQualitativeFocusAnalystId,
+                      ).length} pendente(s) exibida(s)
                     </span>
                   </div>
 
                   <div className="mt-3 space-y-2">
-                    {clickDeskQualitativeSummary?.validation_queue?.map((item) => (
+                    {(clickDeskQualitativeSummary?.validation_queue ?? [])
+                      .filter(
+                        (item) =>
+                          !chatQualitativeFocusAnalystId ||
+                          item.analyst_id === chatQualitativeFocusAnalystId,
+                      )
+                      .map((item) => (
                       <div
                         key={item.ticket_id}
                         className="grid gap-3 rounded-lg border border-white/10 bg-slate-950/40 px-3 py-3 md:grid-cols-[1fr_auto_auto] md:items-center"
