@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:integrations": "node --experimental-transform-types --test tests/integrations.test.mts tests/integration-keys.test.mts tests/chat-diagnostic.test.mts",
+    "test:integrations": "node --experimental-transform-types --test tests/integrations.test.mts tests/integration-keys.test.mts tests/chat-diagnostic.test.mts tests/clickdesk-qualitative.test.mts",
     "test:schedule": "node --experimental-transform-types --test tests/schedule-engine.test.mts"
   },
   "dependencies": {
