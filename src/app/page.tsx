@@ -5579,8 +5579,8 @@ function ChatModuleDashboard({
             </div>
 
             {chat2ProductivityRows.length > 0 ? (
-              <div className="mt-5 overflow-hidden rounded-xl border border-white/10 bg-slate-950/30">
-                <div className="grid grid-cols-[minmax(220px,1.6fr)_repeat(4,minmax(110px,0.7fr))] gap-3 border-b border-white/10 px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+              <div className="mt-5 overflow-x-auto rounded-xl border border-white/10 bg-slate-950/30">
+                <div className="grid min-w-[780px] grid-cols-[minmax(220px,1.6fr)_repeat(4,minmax(110px,0.7fr))] gap-3 border-b border-white/10 px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
                   <span>Analista</span>
                   <span className="text-right">Atendimentos</span>
                   <span className="text-right">Vs. média</span>
@@ -5599,7 +5599,7 @@ function ChatModuleDashboard({
                         key={analystKey}
                         type="button"
                         onClick={() => setChat2LiveAnalystKey(analystKey)}
-                        className={`grid w-full grid-cols-[minmax(220px,1.6fr)_repeat(4,minmax(110px,0.7fr))] items-center gap-3 px-4 py-3 text-left text-sm transition ${
+                        className={`grid min-w-[780px] w-full grid-cols-[minmax(220px,1.6fr)_repeat(4,minmax(110px,0.7fr))] items-center gap-3 px-4 py-3 text-left text-sm transition ${
                           selected ? 'bg-cyan-300/10' : 'hover:bg-white/[0.03]'
                         }`}
                       >
@@ -5709,7 +5709,7 @@ function ChatModuleDashboard({
                   <MetricCard label="Atendimentos na competência" value={formatChatCount(chat2LiveAttendances)} />
                   <MetricCard label="Atendimentos hoje" value={formatChatCount(chat2TodayAttendances)} />
                   <MetricCard
-                    label="CSAT · prévia"
+                    label="CSAT atual"
                     value={chat2LiveCandidateCsat === null ? '—' : formatChatPercent(chat2LiveCandidateCsat)}
                   />
                   <MetricCard label="Avaliações positivas" value={formatChatCount(chat2LivePositive)} tone="success" />
@@ -5719,7 +5719,7 @@ function ChatModuleDashboard({
                     tone={chat2LiveNegative > 0 ? 'warning' : 'success'}
                   />
                   <MetricCard
-                    label="% avaliações · prévia"
+                    label="% avaliações atual"
                     value={chat2LiveCandidateReviewPercentage === null ? '—' : formatChatPercent(chat2LiveCandidateReviewPercentage)}
                   />
                 </div>
@@ -5908,7 +5908,7 @@ function ChatModuleDashboard({
 
                 <div className="mt-4 rounded-lg border border-cyan-400/15 bg-cyan-400/5 px-4 py-3 text-xs leading-5 text-slate-400">
                   Base do período: {formatChatCount(chat2LiveAttendances)} jornadas IA → humano confirmadas.
-                  CSAT e % de avaliações seguem como prévia de homologação até o fechamento da regra oficial.
+                  Os indicadores permanecem vivos durante a competência e são preservados no fechamento oficial.
                 </div>
               </>
             ) : chat2SelectedMetric ? (
@@ -7114,8 +7114,7 @@ function ChatModuleDashboard({
             </p>
             <h3 className="mt-2 text-2xl font-bold">Aprovação final da competência</h3>
             <p className="section-subtitle">
-              A prévia usa a base persistida. Depois do encerramento do mês e da revalidação do último dia,
-              a gestão pode preservar o resultado oficial sem depender de recálculo futuro.
+              Depois de revisar leitura, pódio, ranking e relatórios individuais, confira a base persistida e preserve o resultado oficial da competência.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
