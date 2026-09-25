@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+import { createClient } from '@supabase/supabase-js'
 import {
   ApiError,
   authorizeClickDeskSessionClient,
@@ -16,6 +18,7 @@ const CLICKDESK_BASE_URL = 'https://api.desk.click.app/api/v1'
 
 type QualitativeRequest = {
   ticket_id?: string
+  force?: boolean
 }
 
 function validTicketId(value: string) {
@@ -261,20 +264,42 @@ async function generateWithGemini(prompt: string) {
 
 export async function POST(request: Request) {
   return handle(async () => {
-    const { environment } = getServerSupabaseConfig()
+    const { environment, url, serviceRoleKey } = getServerSupabaseConfig()
     if (environment !== 'homologacao') {
       throw new ApiError(404, 'IA qualitativa disponível somente na homologação.')
     }
 
     const access = await authorizeClickDeskSessionClient(request)
-    if (!access.isManagement) {
-      throw new ApiError(403, 'A análise qualitativa está disponível somente para a gestão.')
-    }
-
     const body = (await request.json()) as QualitativeRequest
     const ticketId = body.ticket_id?.trim() ?? ''
     if (!validTicketId(ticketId)) {
       throw new ApiError(400, 'ticket_id inválido.')
+    }
+
+    if (!body.force) {
+      const cached = await access.admin
+        .from('clickdesk_qualitative_analyses')
+        .select(
+          'clickdesk_ticket_id,analyst_id,occurred_date,area,satisfaction_label,analysis,model,transcript_characters,updated_at',
+        )
+        .eq('clickdesk_ticket_id', ticketId)
+        .maybeSingle()
+
+      if (!cached.error && cached.data) {
+        return json({
+          source: 'clickdesk_qualitative_cache',
+          cached: true,
+          ticket_id: cached.data.clickdesk_ticket_id,
+          analyst_id: cached.data.analyst_id,
+          occurred_date: cached.data.occurred_date,
+          area: cached.data.area,
+          satisfaction_label: cached.data.satisfaction_label,
+          transcript_characters_analyzed: cached.data.transcript_characters,
+          model: cached.data.model,
+          analyzed_at: cached.data.updated_at,
+          analysis: normalizeQualitativeAnalysis(cached.data.analysis),
+        })
+      }
     }
 
     const persisted = await access.admin
@@ -291,6 +316,13 @@ export async function POST(request: Request) {
     }
     if (!persisted.data) {
       throw new ApiError(404, 'Atendimento não encontrado na base persistida do Chat.')
+    }
+
+    if (
+      !access.isManagement &&
+      persisted.data.analyst_id !== access.chatAnalystId
+    ) {
+      throw new ApiError(404, 'Atendimento não encontrado na sua base individual.')
     }
 
     const apiKey = process.env.CLICKDESK_API_KEY?.trim()
@@ -321,6 +353,7 @@ export async function POST(request: Request) {
       )
     }
 
+    const transcriptHash = createHash('sha256').update(transcript).digest('hex')
     const result = await generateWithGemini(
       buildQualitativePrompt({
         transcript,
@@ -330,8 +363,42 @@ export async function POST(request: Request) {
       }),
     )
 
+    let cached = false
+    if (serviceRoleKey && persisted.data.analyst_id) {
+      const cacheAdmin = createClient(url, serviceRoleKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      })
+      const stored = await cacheAdmin
+        .from('clickdesk_qualitative_analyses')
+        .upsert(
+          {
+            clickdesk_ticket_id: ticketId,
+            analyst_id: persisted.data.analyst_id,
+            occurred_date: persisted.data.occurred_date,
+            area: persisted.data.area,
+            satisfaction_label: persisted.data.satisfaction_label,
+            analysis: result.analysis,
+            model: result.model,
+            transcript_hash: transcriptHash,
+            transcript_characters: transcript.length,
+            created_by: access.userId,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'clickdesk_ticket_id' },
+        )
+
+      cached = !stored.error
+      if (stored.error) {
+        console.warn(
+          'Qualitative cache unavailable:',
+          sanitizeProviderMessage(stored.error.message),
+        )
+      }
+    }
+
     return json({
       source: 'clickdesk_transcript_gemini',
+      cached,
       ticket_id: ticketId,
       analyst_id: persisted.data.analyst_id,
       occurred_date: persisted.data.occurred_date,
@@ -339,6 +406,7 @@ export async function POST(request: Request) {
       satisfaction_label: persisted.data.satisfaction_label,
       transcript_characters_analyzed: transcript.length,
       model: result.model,
+      analyzed_at: new Date().toISOString(),
       analysis: result.analysis,
     })
   })
