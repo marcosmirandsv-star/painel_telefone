@@ -13,6 +13,11 @@ create table if not exists public.clickdesk_qualitative_analyses (
   transcript_hash text,
   transcript_characters integer not null default 0 check (transcript_characters >= 0),
   created_by uuid references auth.users(id) on delete set null,
+  validation_status text not null default 'pending'
+    check (validation_status in ('pending','approved','rejected')),
+  validated_by uuid references auth.users(id) on delete set null,
+  validated_at timestamptz,
+  validation_notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -50,3 +55,9 @@ create index if not exists clickdesk_qualitative_analyses_analyst_date_idx
 
 create index if not exists clickdesk_qualitative_analyses_created_by_idx
   on public.clickdesk_qualitative_analyses (created_by);
+
+create index if not exists clickdesk_qualitative_analyses_validation_status_idx
+  on public.clickdesk_qualitative_analyses (validation_status);
+
+create index if not exists clickdesk_qualitative_analyses_validated_by_idx
+  on public.clickdesk_qualitative_analyses (validated_by);
