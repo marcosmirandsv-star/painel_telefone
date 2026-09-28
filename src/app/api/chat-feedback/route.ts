@@ -417,14 +417,11 @@ async function generateWithGemini(prompt: string, style: ChatFeedbackRequest['fe
   const models = Array.from(
     new Set(
       [
+        'gemini-3.8-flash',
         configuredModel,
         'gemini-3.6-flash',
         'gemini-3.5-flash',
         'gemini-3.5-flash-lite',
-        'gemini-2.5-flash',
-        'gemini-2.5-flash-lite',
-        'gemini-2.0-flash',
-        'gemini-1.5-flash',
       ].filter(Boolean) as string[],
     ),
   )
@@ -453,7 +450,9 @@ async function generateWithGemini(prompt: string, style: ChatFeedbackRequest['fe
         ],
         generationConfig: {
           maxOutputTokens: 4096,
-          temperature: 0.65,
+          thinkingConfig: {
+            thinkingLevel: 'low',
+          },
         },
       }),
     })
@@ -464,7 +463,12 @@ async function generateWithGemini(prompt: string, style: ChatFeedbackRequest['fe
       const message = data?.error?.message || data?.message || 'Não foi possível gerar feedback com Gemini.'
       errors.push(`${model}: HTTP ${response.status} / ${code} - ${sanitizeProviderMessage(message)}`)
 
-      if (response.status === 404 || /not found|model/i.test(message)) {
+      if (
+        response.status === 404 ||
+        response.status === 429 ||
+        response.status === 503 ||
+        /not found|model|high demand|temporar|overloaded|quota/i.test(message)
+      ) {
         continue
       }
 
