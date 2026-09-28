@@ -187,6 +187,10 @@ ${input.transcript}
 `
 }
 
+async function wait(milliseconds: number) {
+  await new Promise((resolve) => setTimeout(resolve, milliseconds))
+}
+
 async function generateWithGemini(prompt: string) {
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY
   if (!apiKey) return null
@@ -205,74 +209,99 @@ async function generateWithGemini(prompt: string) {
   const errors: string[] = []
 
   for (const model of models) {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey,
-        },
-        body: JSON.stringify({
-          systemInstruction: {
-            parts: [
-              {
-                text: 'Analise atendimento de forma conservadora. Evidência insuficiente deve resultar em unclear, nunca em invenção.',
-              },
-            ],
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey,
           },
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: {
-            maxOutputTokens: 1800,
-            responseMimeType: 'application/json',
-            thinkingConfig: {
-              thinkingLevel: 'low',
+          body: JSON.stringify({
+            systemInstruction: {
+              parts: [
+                {
+                  text: 'Analise atendimento de forma conservadora. Evidência insuficiente deve resultar em unclear, nunca em invenção.',
+                },
+              ],
             },
-          },
-        }),
-      },
-    )
-
-    const data = await response.json()
-
-    if (!response.ok) {
-      const message =
-        data?.error?.message ||
-        data?.message ||
-        `HTTP ${response.status}`
-      errors.push(`${model}: ${sanitizeProviderMessage(String(message))}`)
-      if (
-        response.status === 404 ||
-        response.status === 429 ||
-        response.status === 503 ||
-        /model|not found|high demand|temporar|overloaded|quota/i.test(String(message))
-      ) {
-        continue
-      }
-      throw new Error(
-        `Gemini ${model}: ${sanitizeProviderMessage(String(message)).slice(0, 260)}`,
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: {
+              maxOutputTokens: 1800,
+              responseMimeType: 'application/json',
+              thinkingConfig: {
+                thinkingLevel: 'low',
+              },
+            },
+          }),
+        },
       )
-    }
 
-    const text = extractGeminiText(data)
-    if (!text) {
-      errors.push(`${model}: resposta vazia`)
-      continue
-    }
+      const data = await response.json().catch(() => null)
 
-    try {
-      return {
-        provider: 'gemini-direct',
-        model,
-        analysis: normalizeQualitativeAnalysis(parseJsonResponse(text)),
+      if (!response.ok) {
+        const message =
+          data?.error?.message ||
+          data?.message ||
+          `HTTP ${response.status}`
+        const cleanMessage = sanitizeProviderMessage(String(message))
+        errors.push(`${model} tentativa ${attempt}: ${cleanMessage}`)
+
+        const temporary =
+          response.status === 429 ||
+          response.status === 503 ||
+          /high demand|temporar|overloaded|quota|resource exhausted/i.test(String(message))
+
+        if (temporary && attempt < 2) {
+          await wait(attempt === 1 ? 900 : 1800)
+          continue
+        }
+
+        if (
+          temporary ||
+          response.status === 404 ||
+          /model|not found/i.test(String(message))
+        ) {
+          break
+        }
+
+        throw new Error(
+          `Gemini ${model}: ${cleanMessage.slice(0, 260)}`,
+        )
       }
-    } catch (error) {
-      errors.push(`${model}: JSON inválido - ${getErrorText(error).slice(0, 120)}`)
+
+      const text = extractGeminiText(data)
+      if (!text) {
+        errors.push(`${model} tentativa ${attempt}: resposta vazia`)
+        if (attempt < 2) {
+          await wait(700)
+          continue
+        }
+        break
+      }
+
+      try {
+        return {
+          provider: 'gemini-direct',
+          model,
+          analysis: normalizeQualitativeAnalysis(parseJsonResponse(text)),
+        }
+      } catch (error) {
+        errors.push(
+          `${model} tentativa ${attempt}: JSON inválido - ${getErrorText(error).slice(0, 120)}`,
+        )
+        if (attempt < 2) {
+          await wait(700)
+          continue
+        }
+        break
+      }
     }
   }
 
   throw new Error(
-    `Gemini não devolveu uma análise válida. ${errors.join(' | ').slice(0, 500)}`,
+    `Gemini não devolveu uma análise válida. ${errors.join(' | ').slice(0, 700)}`,
   )
 }
 
@@ -390,12 +419,17 @@ async function generateQualitativeAnalysis(prompt: string) {
   }
 
   const reason = errors.length
-    ? errors.join(' | ').slice(0, 650)
+    ? errors.join(' | ').slice(0, 900)
     : 'nenhum provedor de IA está disponível no ambiente'
+
+  console.warn(
+    'IA qualitativa temporariamente indisponível:',
+    sanitizeProviderMessage(reason),
+  )
 
   throw new ApiError(
     503,
-    `IA qualitativa indisponível: ${sanitizeProviderMessage(reason)}.`,
+    'A IA está temporariamente indisponível por alta demanda. Aguarde alguns instantes e tente analisar este ticket novamente.',
   )
 }
 
