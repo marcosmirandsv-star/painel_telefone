@@ -8234,6 +8234,61 @@ function ChatModuleDashboard({
                 </div>
               </div>
 
+              {clickDeskQualitativeResult.ticket_id && (
+                <div className="flex flex-col gap-3 rounded-lg border border-white/10 bg-slate-950/30 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-100">
+                      {clickDeskQualitativeResult.validation_status === 'approved'
+                        ? 'Leitura aprovada pela gestão'
+                        : clickDeskQualitativeResult.validation_status === 'rejected'
+                          ? 'Leitura descartada da consolidação'
+                          : 'Esta leitura aguarda sua validação'}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Somente leituras aprovadas entram nos padrões da operação e no relatório individual.
+                    </p>
+                  </div>
+
+                  {clickDeskQualitativeResult.validation_status !== 'approved' &&
+                    clickDeskQualitativeResult.validation_status !== 'rejected' && (
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          className="small-button"
+                          disabled={
+                            clickDeskQualitativeValidationTicketId === clickDeskQualitativeResult.ticket_id
+                          }
+                          onClick={() =>
+                            void handleValidateClickDeskQualitative(
+                              clickDeskQualitativeResult.ticket_id ?? '',
+                              'approved',
+                            )
+                          }
+                        >
+                          {clickDeskQualitativeValidationTicketId === clickDeskQualitativeResult.ticket_id
+                            ? 'Salvando...'
+                            : 'Aprovar leitura'}
+                        </button>
+                        <button
+                          type="button"
+                          className="danger-button"
+                          disabled={
+                            clickDeskQualitativeValidationTicketId === clickDeskQualitativeResult.ticket_id
+                          }
+                          onClick={() =>
+                            void handleValidateClickDeskQualitative(
+                              clickDeskQualitativeResult.ticket_id ?? '',
+                              'rejected',
+                            )
+                          }
+                        >
+                          Descartar
+                        </button>
+                      </div>
+                    )}
+                </div>
+              )}
+
               <p className="text-xs text-slate-500">
                 Ticket {clickDeskQualitativeResult.ticket_id} · {formatChatCount(clickDeskQualitativeResult.transcript_characters_analyzed ?? 0)} caracteres analisados · modelo {clickDeskQualitativeResult.model ?? 'não informado'}.
               </p>
