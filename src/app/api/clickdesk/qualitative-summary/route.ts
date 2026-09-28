@@ -204,10 +204,27 @@ export async function GET(request: Request) {
       coaching_signal: item.normalized.coaching_signal,
     }))
 
-    const validationQueue = evaluated
+    const negativeValidationQueue = evaluated
       .filter(
         (item) =>
           item.satisfaction_label === 'negative' &&
+          !analyzedTicketIds.has(item.clickdesk_ticket_id),
+      )
+      .slice(0, 5)
+      .map((item) => ({
+        ticket_id: item.clickdesk_ticket_id,
+        analyst_id: item.analyst_id,
+        analyst_name: item.assignee_name,
+        occurred_date: item.occurred_date,
+        occurred_at: item.occurred_at,
+        area: item.area,
+        satisfaction_label: item.satisfaction_label,
+      }))
+
+    const positiveValidationQueue = evaluated
+      .filter(
+        (item) =>
+          item.satisfaction_label === 'positive' &&
           !analyzedTicketIds.has(item.clickdesk_ticket_id),
       )
       .slice(0, 5)
@@ -261,7 +278,8 @@ export async function GET(request: Request) {
       ).length,
       analysts,
       pending_reviews: pendingReviews,
-      validation_queue: validationQueue,
+      validation_queue: negativeValidationQueue,
+      positive_validation_queue: positiveValidationQueue,
     })
   })
 }
