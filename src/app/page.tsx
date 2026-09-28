@@ -2559,7 +2559,7 @@ function QualitativeAnalysisCard({
           </strong>
         </div>
         <div className="rounded-lg bg-slate-950/45 p-3">
-          <span className="text-xs text-slate-500">Causa provável</span>
+          <span className="text-xs text-slate-500">Contexto principal observado</span>
           <strong className="mt-1 block text-sm">
             {formatQualitativeLabel(result.analysis.primary_cause.category)}
           </strong>
@@ -2587,7 +2587,7 @@ function QualitativeAnalysisCard({
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
-            Por que essa avaliação pode ter acontecido?
+            O que estava acontecendo neste atendimento?
           </p>
           <p className="mt-2 text-sm leading-6 text-slate-300">
             {result.analysis.primary_cause.summary}
@@ -7973,7 +7973,7 @@ function ChatModuleDashboard({
 
                           <div className="mt-3 grid gap-3 lg:grid-cols-3">
                             <div className="rounded-lg bg-slate-900/70 p-3">
-                              <p className="text-xs text-slate-500">Causa provável</p>
+                              <p className="text-xs text-slate-500">Contexto principal observado</p>
                               <strong className="mt-1 block text-sm">
                                 {formatQualitativeLabel(item.cause.category)}
                                 {' · '}
@@ -8062,7 +8062,7 @@ function ChatModuleDashboard({
               {(clickDeskQualitativeSummary?.totals?.approved ?? 0) > 0 ? (
                 <div className="mt-5 grid gap-4 xl:grid-cols-3">
                   <div className="rounded-lg border border-white/10 bg-slate-900/60 p-4">
-                    <p className="text-sm font-semibold">Causas validadas na amostra</p>
+                    <p className="text-sm font-semibold">Contextos validados na amostra</p>
                     <div className="mt-3 space-y-2">
                       {(clickDeskQualitativeSummary?.causes ?? []).slice(0, 5).map((item) => (
                         <div key={item.key} className="flex items-center justify-between gap-3 text-sm">
@@ -8188,7 +8188,7 @@ function ChatModuleDashboard({
 
               <div className="grid gap-4 lg:grid-cols-2">
                 <div className="rounded-lg bg-slate-950/45 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">Causa provável</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">Contexto principal observado</p>
                   <p className="mt-2 text-sm font-semibold">
                     {formatQualitativeLabel(clickDeskQualitativeResult.analysis.primary_cause.category)}
                     {' · '}
