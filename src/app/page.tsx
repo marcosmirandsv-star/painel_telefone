@@ -627,6 +627,15 @@ type ClickDeskQualitativeSummary = {
     area: string
     satisfaction_label: string | null
   }[]
+  positive_validation_queue?: {
+    ticket_id: string
+    analyst_id: string | null
+    analyst_name: string
+    occurred_date: string
+    occurred_at: string
+    area: string
+    satisfaction_label: string | null
+  }[]
   error?: string
 }
 
@@ -8004,58 +8013,139 @@ function ChatModuleDashboard({
                 </div>
               )}
 
-              {(clickDeskQualitativeSummary?.validation_queue ?? []).filter(
+              {[
+                ...(clickDeskQualitativeSummary?.validation_queue ?? []),
+                ...(clickDeskQualitativeSummary?.positive_validation_queue ?? []),
+              ].filter(
                 (item) => !chatQualitativeFocusAnalystId || item.analyst_id === chatQualitativeFocusAnalystId,
               ).length > 0 && (
-                <div className="mt-5 rounded-lg border border-amber-300/15 bg-amber-300/5 p-4">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-100">Fila de validação</p>
-                      <h4 className="mt-1 font-semibold text-slate-100">Negativas ainda não analisadas</h4>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Até 5 casos reais do filtro atual para validar a leitura da IA antes de ampliar a automação.
-                      </p>
-                    </div>
-                    <span className="text-xs text-slate-500">
-                      {(clickDeskQualitativeSummary?.validation_queue ?? []).filter(
-                        (item) => !chatQualitativeFocusAnalystId || item.analyst_id === chatQualitativeFocusAnalystId,
-                      ).length} pendente(s) exibida(s)
-                    </span>
+                <div className="mt-5 rounded-lg border border-white/10 bg-slate-900/45 p-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">
+                      Amostras para análise
+                    </p>
+                    <h4 className="mt-1 font-semibold text-slate-100">
+                      O que precisa ser entendido e o que merece ser reconhecido
+                    </h4>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      Negativas ajudam a investigar atritos e contexto. Positivas ajudam a identificar práticas que vale reconhecer e repetir.
+                    </p>
                   </div>
 
-                  <div className="mt-3 space-y-2">
-                    {(clickDeskQualitativeSummary?.validation_queue ?? [])
-                      .filter(
-                        (item) =>
-                          !chatQualitativeFocusAnalystId ||
-                          item.analyst_id === chatQualitativeFocusAnalystId,
-                      )
-                      .map((item) => (
-                      <div
-                        key={item.ticket_id}
-                        className="grid gap-3 rounded-lg border border-white/10 bg-slate-950/40 px-3 py-3 md:grid-cols-[1fr_auto_auto] md:items-center"
-                      >
+                  <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                    <div className="rounded-lg border border-amber-300/15 bg-amber-300/5 p-3">
+                      <div className="flex items-end justify-between gap-3">
                         <div>
-                          <strong className="text-sm text-slate-100">{item.analyst_name}</strong>
-                          <p className="mt-1 text-xs text-slate-500">
-                            Ticket #{item.ticket_id} · {formatDate(item.occurred_date)} · {item.area}
+                          <p className="text-xs font-semibold uppercase tracking-[0.1em] text-amber-100">
+                            Negativas
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-slate-100">
+                            Ainda não analisadas
                           </p>
                         </div>
-                        <span className="rounded-md bg-amber-300/10 px-2 py-1 text-xs font-semibold text-amber-100">
-                          Negativa
+                        <span className="text-xs text-slate-500">
+                          {(clickDeskQualitativeSummary?.validation_queue ?? []).filter(
+                            (item) => !chatQualitativeFocusAnalystId || item.analyst_id === chatQualitativeFocusAnalystId,
+                          ).length} exibida(s)
                         </span>
-                        <button
-                          type="button"
-                          className="small-button"
-                          disabled={clickDeskQualitativeLoading}
-                          onClick={() => void runManagementQualitativeAnalysis(item.ticket_id)}
-                        >
-                          {clickDeskQualitativeLoading && clickDeskQualitativeTicketId === item.ticket_id
-                            ? 'Analisando...'
-                            : 'Analisar agora'}
-                        </button>
                       </div>
-                    ))}
+
+                      <div className="mt-3 space-y-2">
+                        {(clickDeskQualitativeSummary?.validation_queue ?? [])
+                          .filter(
+                            (item) =>
+                              !chatQualitativeFocusAnalystId ||
+                              item.analyst_id === chatQualitativeFocusAnalystId,
+                          )
+                          .map((item) => (
+                            <div
+                              key={item.ticket_id}
+                              className="grid gap-2 rounded-lg border border-white/10 bg-slate-950/40 px-3 py-3 sm:grid-cols-[1fr_auto] sm:items-center"
+                            >
+                              <div>
+                                <strong className="text-sm text-slate-100">{item.analyst_name}</strong>
+                                <p className="mt-1 text-xs text-slate-500">
+                                  Ticket #{item.ticket_id} · {formatDate(item.occurred_date)} · {item.area}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                className="small-button"
+                                disabled={clickDeskQualitativeLoading}
+                                onClick={() => void runManagementQualitativeAnalysis(item.ticket_id)}
+                              >
+                                {clickDeskQualitativeLoading && clickDeskQualitativeTicketId === item.ticket_id
+                                  ? 'Analisando...'
+                                  : 'Analisar'}
+                              </button>
+                            </div>
+                          ))}
+                        {(clickDeskQualitativeSummary?.validation_queue ?? []).filter(
+                          (item) => !chatQualitativeFocusAnalystId || item.analyst_id === chatQualitativeFocusAnalystId,
+                        ).length === 0 && (
+                          <p className="rounded-lg border border-dashed border-white/10 px-3 py-3 text-xs text-slate-500">
+                            Nenhuma negativa pendente neste filtro.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-emerald-400/15 bg-emerald-400/5 p-3">
+                      <div className="flex items-end justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.1em] text-emerald-200">
+                            Positivas
+                          </p>
+                          <p className="mt-1 text-sm font-semibold text-slate-100">
+                            Ainda não analisadas
+                          </p>
+                        </div>
+                        <span className="text-xs text-slate-500">
+                          {(clickDeskQualitativeSummary?.positive_validation_queue ?? []).filter(
+                            (item) => !chatQualitativeFocusAnalystId || item.analyst_id === chatQualitativeFocusAnalystId,
+                          ).length} exibida(s)
+                        </span>
+                      </div>
+
+                      <div className="mt-3 space-y-2">
+                        {(clickDeskQualitativeSummary?.positive_validation_queue ?? [])
+                          .filter(
+                            (item) =>
+                              !chatQualitativeFocusAnalystId ||
+                              item.analyst_id === chatQualitativeFocusAnalystId,
+                          )
+                          .map((item) => (
+                            <div
+                              key={item.ticket_id}
+                              className="grid gap-2 rounded-lg border border-white/10 bg-slate-950/40 px-3 py-3 sm:grid-cols-[1fr_auto] sm:items-center"
+                            >
+                              <div>
+                                <strong className="text-sm text-slate-100">{item.analyst_name}</strong>
+                                <p className="mt-1 text-xs text-slate-500">
+                                  Ticket #{item.ticket_id} · {formatDate(item.occurred_date)} · {item.area}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                className="small-button"
+                                disabled={clickDeskQualitativeLoading}
+                                onClick={() => void runManagementQualitativeAnalysis(item.ticket_id)}
+                              >
+                                {clickDeskQualitativeLoading && clickDeskQualitativeTicketId === item.ticket_id
+                                  ? 'Analisando...'
+                                  : 'Analisar'}
+                              </button>
+                            </div>
+                          ))}
+                        {(clickDeskQualitativeSummary?.positive_validation_queue ?? []).filter(
+                          (item) => !chatQualitativeFocusAnalystId || item.analyst_id === chatQualitativeFocusAnalystId,
+                        ).length === 0 && (
+                          <p className="rounded-lg border border-dashed border-white/10 px-3 py-3 text-xs text-slate-500">
+                            Nenhuma positiva pendente neste filtro.
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
