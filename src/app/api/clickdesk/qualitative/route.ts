@@ -1,3 +1,4 @@
+import { getVercelOidcToken } from '@vercel/oidc'
 import { createHash } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 import {
@@ -269,9 +270,17 @@ async function generateWithGemini(prompt: string) {
 }
 
 async function generateWithVercelGateway(prompt: string) {
-  const authToken =
+  let authToken =
     process.env.AI_GATEWAY_API_KEY?.trim() ||
     process.env.VERCEL_OIDC_TOKEN?.trim()
+
+  if (!authToken) {
+    try {
+      authToken = (await getVercelOidcToken())?.trim()
+    } catch {
+      authToken = undefined
+    }
+  }
 
   if (!authToken) return null
 
