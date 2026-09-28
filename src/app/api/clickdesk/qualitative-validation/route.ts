@@ -1,4 +1,3 @@
-import { createClient } from '@supabase/supabase-js'
 import {
   ApiError,
   authorizeClickDeskSessionClient,
@@ -22,7 +21,7 @@ function validTicketId(value: string) {
 
 export async function POST(request: Request) {
   return handle(async () => {
-    const { environment, url, serviceRoleKey } = getServerSupabaseConfig()
+    const { environment } = getServerSupabaseConfig()
     if (environment !== 'homologacao') {
       throw new ApiError(404, 'Validação qualitativa disponível somente na homologação.')
     }
@@ -42,10 +41,6 @@ export async function POST(request: Request) {
     if (status !== 'approved' && status !== 'rejected') {
       throw new ApiError(400, 'status deve ser approved ou rejected.')
     }
-    if (!serviceRoleKey) {
-      throw new ApiError(503, 'Chave de serviço da homologação indisponível.')
-    }
-
     const existing = await access.admin
       .from('clickdesk_qualitative_analyses')
       .select('clickdesk_ticket_id,analysis,validation_status')
@@ -59,11 +54,8 @@ export async function POST(request: Request) {
       throw new ApiError(404, 'Análise qualitativa não encontrada.')
     }
 
-    const admin = createClient(url, serviceRoleKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    })
     const validatedAt = new Date().toISOString()
-    const update = await admin
+    const update = await access.admin
       .from('clickdesk_qualitative_analyses')
       .update({
         validation_status: status,
