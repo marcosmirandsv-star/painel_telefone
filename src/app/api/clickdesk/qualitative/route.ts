@@ -1,6 +1,5 @@
 import { getVercelOidcToken } from '@vercel/oidc'
 import { createHash } from 'node:crypto'
-import { createClient } from '@supabase/supabase-js'
 import {
   ApiError,
   authorizeClickDeskSessionClient,
@@ -402,7 +401,7 @@ async function generateQualitativeAnalysis(prompt: string) {
 
 export async function POST(request: Request) {
   return handle(async () => {
-    const { environment, url, serviceRoleKey } = getServerSupabaseConfig()
+    const { environment } = getServerSupabaseConfig()
     if (environment !== 'homologacao') {
       throw new ApiError(404, 'IA qualitativa disponível somente na homologação.')
     }
@@ -503,42 +502,41 @@ export async function POST(request: Request) {
       }),
     )
 
-    let cached = false
-    if (serviceRoleKey && persisted.data.analyst_id) {
-      const cacheAdmin = createClient(url, serviceRoleKey, {
-        auth: { persistSession: false, autoRefreshToken: false },
-      })
-      const stored = await cacheAdmin
-        .from('clickdesk_qualitative_analyses')
-        .upsert(
-          {
-            clickdesk_ticket_id: ticketId,
-            analyst_id: persisted.data.analyst_id,
-            occurred_date: persisted.data.occurred_date,
-            area: persisted.data.area,
-            satisfaction_label: persisted.data.satisfaction_label,
-            analysis: result.analysis,
-            model: result.model,
-            transcript_hash: transcriptHash,
-            transcript_characters: transcript.length,
-            created_by: access.userId,
-            validation_status: 'pending',
-            validated_by: null,
-            validated_at: null,
-            validation_notes: null,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: 'clickdesk_ticket_id' },
-        )
-
-      cached = !stored.error
-      if (stored.error) {
-        console.warn(
-          'Qualitative cache unavailable:',
-          sanitizeProviderMessage(stored.error.message),
-        )
-      }
+    if (!persisted.data.analyst_id) {
+      throw new ApiError(422, 'Atendimento sem vínculo de analista para salvar a análise.')
     }
+
+    const stored = await access.admin
+      .from('clickdesk_qualitative_analyses')
+      .upsert(
+        {
+          clickdesk_ticket_id: ticketId,
+          analyst_id: persisted.data.analyst_id,
+          occurred_date: persisted.data.occurred_date,
+          area: persisted.data.area,
+          satisfaction_label: persisted.data.satisfaction_label,
+          analysis: result.analysis,
+          model: result.model,
+          transcript_hash: transcriptHash,
+          transcript_characters: transcript.length,
+          created_by: access.userId,
+          validation_status: 'pending',
+          validated_by: null,
+          validated_at: null,
+          validation_notes: null,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'clickdesk_ticket_id' },
+      )
+
+    if (stored.error) {
+      throw new ApiError(
+        503,
+        `A análise foi gerada, mas não pôde ser salva para validação: ${sanitizeProviderMessage(stored.error.message).slice(0, 220)}`,
+      )
+    }
+
+    const cached = true
 
     return json({
       source: `clickdesk_transcript_${result.provider}`,
