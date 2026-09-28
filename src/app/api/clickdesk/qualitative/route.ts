@@ -196,11 +196,10 @@ async function generateWithGemini(prompt: string) {
   const models = Array.from(
     new Set(
       [
+        'gemini-3.8-flash',
         configuredModel,
         'gemini-3.6-flash',
         'gemini-3.5-flash',
-        'gemini-2.5-flash',
-        'gemini-2.5-flash-lite',
       ].filter(Boolean) as string[],
     ),
   )
@@ -226,8 +225,10 @@ async function generateWithGemini(prompt: string) {
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: {
             maxOutputTokens: 1800,
-            temperature: 0.15,
             responseMimeType: 'application/json',
+            thinkingConfig: {
+              thinkingLevel: 'low',
+            },
           },
         }),
       },
@@ -241,7 +242,14 @@ async function generateWithGemini(prompt: string) {
         data?.message ||
         `HTTP ${response.status}`
       errors.push(`${model}: ${sanitizeProviderMessage(String(message))}`)
-      if (response.status === 404 || /model|not found/i.test(String(message))) continue
+      if (
+        response.status === 404 ||
+        response.status === 429 ||
+        response.status === 503 ||
+        /model|not found|high demand|temporar|overloaded|quota/i.test(String(message))
+      ) {
+        continue
+      }
       throw new Error(
         `Gemini ${model}: ${sanitizeProviderMessage(String(message)).slice(0, 260)}`,
       )
