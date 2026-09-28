@@ -133,6 +133,11 @@ export function normalizeQualitativeAnalysis(value: unknown): ClickDeskQualitati
   )
     ? (controllability.classification as QualitativeControllability)
     : 'unclear'
+  const coachingSupportedByControl =
+    controllabilityClassification === 'analyst' ||
+    controllabilityClassification === 'mixed'
+  const coachingAvailable =
+    coaching.available === true && coachingSupportedByControl
 
   return {
     initial_sentiment: initialSentiment,
@@ -158,13 +163,13 @@ export function normalizeQualitativeAnalysis(value: unknown): ClickDeskQualitati
       ),
     },
     coaching_signal: {
-      available: coaching.available === true,
-      summary: shortText(
-        coaching.summary,
-        coaching.available === true
-          ? 'Há um ponto observável para trabalhar em feedback.'
-          : 'Sem evidência suficiente para orientar comportamento individual.',
-      ),
+      available: coachingAvailable,
+      summary: coachingAvailable
+        ? shortText(
+            coaching.summary,
+            'Há um ponto observável sob controle do analista para trabalhar em feedback.',
+          )
+        : 'Sem evidência suficiente de um comportamento sob controle do analista para orientar feedback individual.',
     },
     evidence_summary: stringArray(source.evidence_summary, 3, 350),
     limitations: stringArray(source.limitations, 5, 350),
