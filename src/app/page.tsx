@@ -5656,21 +5656,11 @@ function ChatModuleDashboard({
 
     if (result.error || !result.data?.length) return undefined
 
-    const findings = result.data
-      .map((item) => ({
-        satisfactionLabel: item.satisfaction_label,
-        occurredDate: item.occurred_date,
-        analysis: normalizeQualitativeAnalysis(item.analysis),
-      }))
-      .filter(
-        (
-          item,
-        ): item is {
-          satisfactionLabel: string | null
-          occurredDate: string | null
-          analysis: NonNullable<ClickDeskQualitativeResponse['analysis']>
-        } => Boolean(item.analysis),
-      )
+    const findings = result.data.map((item) => ({
+      satisfactionLabel: item.satisfaction_label,
+      occurredDate: item.occurred_date,
+      analysis: normalizeQualitativeAnalysis(item.analysis),
+    }))
 
     return {
       analyzedCount: findings.length,
