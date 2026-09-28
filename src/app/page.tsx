@@ -12,6 +12,7 @@ import {
   buildChatPerformanceDiagnostic,
   type ChatPerformanceDiagnostic,
 } from '@/lib/chat-diagnostic'
+import { normalizeQualitativeAnalysis } from '@/lib/clickdesk-qualitative'
 
 // Homologação: mantém a IA qualitativa bloqueada no portal até a validação da leitura de transcript.
 const QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS = false
@@ -2568,7 +2569,7 @@ function QualitativeAnalysisCard({
           </span>
         </div>
         <div className="rounded-lg bg-slate-950/45 p-3">
-          <span className="text-xs text-slate-500">Influência humana</span>
+          <span className="text-xs text-slate-500">Influência do atendimento humano</span>
           <strong className="mt-1 block text-sm">
             {formatQualitativeLabel(result.analysis.human_influence.classification)}
           </strong>
@@ -2577,7 +2578,7 @@ function QualitativeAnalysisCard({
           </span>
         </div>
         <div className="rounded-lg bg-slate-950/45 p-3">
-          <span className="text-xs text-slate-500">Controlabilidade</span>
+          <span className="text-xs text-slate-500">Onde estava o controle?</span>
           <strong className="mt-1 block text-sm">
             {formatQualitativeLabel(result.analysis.controllability.classification)}
           </strong>
@@ -2626,7 +2627,7 @@ function QualitativeAnalysisCard({
       </div>
 
       <div className="mt-4 rounded-lg border border-white/10 bg-slate-950/30 px-3 py-3 text-sm">
-        <span className="text-slate-500">Ponto para feedback: </span>
+        <span className="text-slate-500">Ponto acionável para feedback: </span>
         <strong className={result.analysis.coaching_signal.available ? 'text-cyan-200' : 'text-slate-300'}>
           {result.analysis.coaching_signal.summary}
         </strong>
@@ -5650,7 +5651,7 @@ function ChatModuleDashboard({
       .map((item) => ({
         satisfactionLabel: item.satisfaction_label,
         occurredDate: item.occurred_date,
-        analysis: item.analysis as ClickDeskQualitativeResponse['analysis'],
+        analysis: normalizeQualitativeAnalysis(item.analysis),
       }))
       .filter(
         (
@@ -7889,7 +7890,7 @@ function ChatModuleDashboard({
                       {formatChatCount(clickDeskQualitativeSummary?.totals?.approved ?? 0)}
                     </strong>
                     <span className="mt-1 block text-xs text-slate-500">
-                      {formatChatCount(clickDeskQualitativeSummary?.coaching_signals ?? 0)} com sinal para feedback
+                      {formatChatCount(clickDeskQualitativeSummary?.coaching_signals ?? 0)} com ponto acionável
                     </span>
                   </div>
                   <div className="rounded-lg bg-slate-900 p-4">
@@ -7982,14 +7983,14 @@ function ChatModuleDashboard({
                               <p className="mt-2 text-xs leading-5 text-slate-400">{item.cause.summary}</p>
                             </div>
                             <div className="rounded-lg bg-slate-900/70 p-3">
-                              <p className="text-xs text-slate-500">Influência humana</p>
+                              <p className="text-xs text-slate-500">Influência do atendimento humano</p>
                               <strong className="mt-1 block text-sm">
                                 {formatQualitativeLabel(item.human_influence.classification)}
                               </strong>
                               <p className="mt-2 text-xs leading-5 text-slate-400">{item.human_influence.summary}</p>
                             </div>
                             <div className="rounded-lg bg-slate-900/70 p-3">
-                              <p className="text-xs text-slate-500">Controlabilidade</p>
+                              <p className="text-xs text-slate-500">Onde estava o controle?</p>
                               <strong className="mt-1 block text-sm">
                                 {formatQualitativeLabel(item.controllability.classification)}
                               </strong>
@@ -8085,6 +8086,9 @@ function ChatModuleDashboard({
                   </div>
                   <div className="rounded-lg border border-white/10 bg-slate-900/60 p-4">
                     <p className="text-sm font-semibold">Onde estava o controle?</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      Indica quem tinha condições reais de influenciar ou resolver o contexto: analista, empresa, cliente, fator externo ou combinação deles.
+                    </p>
                     <div className="mt-3 space-y-2">
                       {(clickDeskQualitativeSummary?.controllability ?? []).slice(0, 5).map((item) => (
                         <div key={item.key} className="flex items-center justify-between gap-3 text-sm">
@@ -8177,11 +8181,11 @@ function ChatModuleDashboard({
                   <strong className="mt-1 block">{formatQualitativeLabel(clickDeskQualitativeResult.analysis.final_sentiment)}</strong>
                 </div>
                 <div className="rounded-lg bg-slate-950/45 p-4">
-                  <p className="text-xs text-slate-500">Influência humana</p>
+                  <p className="text-xs text-slate-500">Influência do atendimento humano</p>
                   <strong className="mt-1 block">{formatQualitativeLabel(clickDeskQualitativeResult.analysis.human_influence.classification)}</strong>
                 </div>
                 <div className="rounded-lg bg-slate-950/45 p-4">
-                  <p className="text-xs text-slate-500">Controlabilidade</p>
+                  <p className="text-xs text-slate-500">Onde estava o controle?</p>
                   <strong className="mt-1 block">{formatQualitativeLabel(clickDeskQualitativeResult.analysis.controllability.classification)}</strong>
                 </div>
               </div>
