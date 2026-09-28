@@ -1,3 +1,4 @@
+import { getVercelOidcToken } from '@vercel/oidc'
 import { NextResponse } from 'next/server'
 import { normalizeQualitativeAnalysis } from '@/lib/clickdesk-qualitative'
 
@@ -477,12 +478,20 @@ async function generateWithGemini(prompt: string, style: ChatFeedbackRequest['fe
 }
 
 async function generateWithVercelGateway(prompt: string) {
-  const token =
+  let token =
     process.env.AI_GATEWAY_API_KEY?.trim() ||
     process.env.VERCEL_OIDC_TOKEN?.trim()
 
   if (!token) {
-    throw new Error('Vercel AI Gateway sem credencial disponível no deploy.')
+    try {
+      token = (await getVercelOidcToken())?.trim()
+    } catch {
+      token = undefined
+    }
+  }
+
+  if (!token) {
+    throw new Error('Vercel AI Gateway sem credencial OIDC disponível no deploy.')
   }
 
   const model =
