@@ -198,11 +198,11 @@ async function generateWithGemini(prompt: string) {
   const models = Array.from(
     new Set(
       [
-        'gemini-3.8-flash',
         configuredModel,
+        'gemini-3.5-flash-lite',
+        'gemini-3.8-flash',
         'gemini-3.7-flash',
         'gemini-3.6-flash',
-        'gemini-3.5-flash-lite',
         'gemini-3.5-flash',
       ].filter(Boolean) as string[],
     ),
@@ -303,6 +303,120 @@ async function generateWithGemini(prompt: string) {
 
   throw new Error(
     `Gemini não devolveu uma análise válida. ${errors.join(' | ').slice(0, 700)}`,
+  )
+}
+
+async function generateWithGemma(prompt: string) {
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY
+  if (!apiKey) return null
+
+  const configuredModel = process.env.CLICKDESK_QUALITATIVE_GEMMA_MODEL?.trim()
+  const models = Array.from(
+    new Set(
+      [
+        configuredModel,
+        'gemma-4-26b-a4b-it',
+        'gemma-4-31b-it',
+      ].filter(Boolean) as string[],
+    ),
+  )
+  const errors: string[] = []
+
+  for (const model of models) {
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey,
+          },
+          body: JSON.stringify({
+            contents: [
+              {
+                role: 'user',
+                parts: [
+                  {
+                    text:
+                      'Responda somente JSON válido, sem Markdown. Quando a evidência for insuficiente, use unclear e não invente.\n\n' +
+                      prompt,
+                  },
+                ],
+              },
+            ],
+            generationConfig: {
+              maxOutputTokens: 1800,
+              temperature: 0.1,
+            },
+          }),
+        },
+      )
+
+      const data = await response.json().catch(() => null)
+
+      if (!response.ok) {
+        const message =
+          data?.error?.message ||
+          data?.message ||
+          `HTTP ${response.status}`
+        const cleanMessage = sanitizeProviderMessage(String(message))
+        errors.push(`${model} tentativa ${attempt}: ${cleanMessage}`)
+
+        const temporary =
+          response.status === 429 ||
+          response.status === 503 ||
+          /high demand|temporar|overloaded|quota|resource exhausted/i.test(String(message))
+
+        if (temporary && attempt < 2) {
+          await wait(900)
+          continue
+        }
+
+        if (
+          temporary ||
+          response.status === 404 ||
+          /model|not found/i.test(String(message))
+        ) {
+          break
+        }
+
+        throw new Error(
+          `Gemma ${model}: ${cleanMessage.slice(0, 260)}`,
+        )
+      }
+
+      const text = extractGeminiText(data)
+      if (!text) {
+        errors.push(`${model} tentativa ${attempt}: resposta vazia`)
+        if (attempt < 2) {
+          await wait(700)
+          continue
+        }
+        break
+      }
+
+      try {
+        return {
+          provider: 'google-gemma',
+          model,
+          analysis: normalizeQualitativeAnalysis(parseJsonResponse(text)),
+        }
+      } catch (error) {
+        errors.push(
+          `${model} tentativa ${attempt}: JSON inválido - ${getErrorText(error).slice(0, 120)}`,
+        )
+        if (attempt < 2) {
+          await wait(700)
+          continue
+        }
+        break
+      }
+    }
+  }
+
+  throw new Error(
+    `Gemma não devolveu uma análise válida. ${errors.join(' | ').slice(0, 700)}`,
   )
 }
 
@@ -471,6 +585,13 @@ async function generateQualitativeAnalysis(prompt: string) {
   try {
     const directGemini = await generateWithGemini(prompt)
     if (directGemini) return directGemini
+  } catch (error) {
+    errors.push(getErrorText(error))
+  }
+
+  try {
+    const gemma = await generateWithGemma(prompt)
+    if (gemma) return gemma
   } catch (error) {
     errors.push(getErrorText(error))
   }
