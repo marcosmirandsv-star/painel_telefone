@@ -585,12 +585,20 @@ type ClickDeskQualitativeSummary = {
   controllability?: { key: string; count: number }[]
   sentiment_change?: { key: string; count: number }[]
   coaching_signals?: number
+  analyst_takeaways?: { key: string; count: number }[]
   analysts?: {
     analyst_id: string
     analyst_name: string
+    evaluated: number
+    evaluated_positive: number
+    evaluated_negative: number
     analyzed: number
-    positive: number
-    negative: number
+    analyzed_positive: number
+    analyzed_negative: number
+    coverage_percentage: number
+    approved: number
+    pending: number
+    rejected: number
     coaching_signals: number
     top_causes: { key: string; count: number }[]
   }[]
@@ -599,24 +607,7 @@ type ClickDeskQualitativeSummary = {
     analyst_id: string
     analyst_name: string
     satisfaction_label: string | null
-    cause: {
-      category: string
-      summary: string
-      confidence: string
-    }
-    human_influence: {
-      classification: string
-      summary: string
-      confidence: string
-    }
-    controllability: {
-      classification: string
-      summary: string
-    }
-    coaching_signal: {
-      available: boolean
-      summary: string
-    }
+    analysis: NonNullable<ClickDeskQualitativeResponse['analysis']>
   }[]
   validation_queue?: {
     ticket_id: string
@@ -3716,6 +3707,7 @@ function ChatModuleDashboard({
   const [clickDeskQualitativeTicketId, setClickDeskQualitativeTicketId] = useState('')
   const [clickDeskQualitativeLoading, setClickDeskQualitativeLoading] = useState(false)
   const [clickDeskQualitativeResult, setClickDeskQualitativeResult] = useState<ClickDeskQualitativeResponse | null>(null)
+  const [clickDeskQualitativeResultSource, setClickDeskQualitativeResultSource] = useState<'queue' | 'manual'>('queue')
   const [clickDeskQualitativeSummary, setClickDeskQualitativeSummary] = useState<ClickDeskQualitativeSummary | null>(null)
   const [clickDeskQualitativeSummaryLoading, setClickDeskQualitativeSummaryLoading] = useState(false)
   const [clickDeskQualitativeSummaryRefresh, setClickDeskQualitativeSummaryRefresh] = useState(0)
@@ -4199,7 +4191,7 @@ function ChatModuleDashboard({
     }
   }
 
-  async function runManagementQualitativeAnalysis(ticketId: string) {
+  async function runManagementQualitativeAnalysis(ticketId: string, source: 'queue' | 'manual' = 'queue') {
     const normalizedTicketId = ticketId.trim()
     if (!normalizedTicketId) {
       setClickDeskQualitativeResult({ error: 'Informe um ticket persistido para validar a análise.' })
@@ -4207,6 +4199,7 @@ function ChatModuleDashboard({
     }
 
     setClickDeskQualitativeTicketId(normalizedTicketId)
+    setClickDeskQualitativeResultSource(source)
     setClickDeskQualitativeLoading(true)
     setClickDeskQualitativeResult(null)
 
@@ -4239,9 +4232,6 @@ function ChatModuleDashboard({
       }
 
       setClickDeskQualitativeResult(data)
-      if (response.ok && !data.error) {
-        setClickDeskQualitativeSummaryRefresh((current) => current + 1)
-      }
     } catch {
       setClickDeskQualitativeResult({ error: getQualitativeUserError('', 503) })
     } finally {
@@ -4250,7 +4240,7 @@ function ChatModuleDashboard({
   }
 
   async function handleAnalyzeClickDeskQualitative() {
-    await runManagementQualitativeAnalysis(clickDeskQualitativeTicketId)
+    await runManagementQualitativeAnalysis(clickDeskQualitativeTicketId, 'manual')
   }
 
   async function handleValidateClickDeskQualitative(
@@ -8032,7 +8022,7 @@ function ChatModuleDashboard({
                                 type="button"
                                 className="small-button"
                                 disabled={clickDeskQualitativeLoading}
-                                onClick={() => void runManagementQualitativeAnalysis(item.ticket_id)}
+                                onClick={() => void runManagementQualitativeAnalysis(item.ticket_id, 'queue')}
                               >
                                 {clickDeskQualitativeLoading && clickDeskQualitativeTicketId === item.ticket_id
                                   ? 'Analisando...'
@@ -8089,7 +8079,7 @@ function ChatModuleDashboard({
                                 type="button"
                                 className="small-button"
                                 disabled={clickDeskQualitativeLoading}
-                                onClick={() => void runManagementQualitativeAnalysis(item.ticket_id)}
+                                onClick={() => void runManagementQualitativeAnalysis(item.ticket_id, 'queue')}
                               >
                                 {clickDeskQualitativeLoading && clickDeskQualitativeTicketId === item.ticket_id
                                   ? 'Analisando...'
