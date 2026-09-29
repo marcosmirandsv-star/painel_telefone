@@ -403,38 +403,103 @@ async function generateWithVercelGateway(prompt: string) {
   )
 }
 
+async function generateWithGitHubModels(prompt: string) {
+  const token =
+    process.env.GITHUB_MODELS_TOKEN?.trim() ||
+    process.env.GITHUB_TOKEN?.trim()
+
+  if (!token) return null
+
+  const model =
+    process.env.CLICKDESK_QUALITATIVE_GITHUB_MODEL?.trim() ||
+    process.env.GITHUB_MODELS_MODEL?.trim() ||
+    'openai/gpt-4.1'
+
+  const response = await fetch(
+    'https://models.github.ai/inference/chat/completions',
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Analise atendimento de forma conservadora. Evidência insuficiente deve resultar em unclear, nunca em invenção. Responda somente JSON válido.',
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        temperature: 0.15,
+        max_tokens: 1800,
+      }),
+    },
+  )
+
+  const data = await response.json().catch(() => null)
+
+  if (!response.ok) {
+    const message =
+      data?.error?.message ||
+      data?.message ||
+      `HTTP ${response.status}`
+    throw new Error(
+      `GitHub Models ${model}: ${sanitizeProviderMessage(String(message)).slice(0, 260)}`,
+    )
+  }
+
+  const text = extractGatewayText(data)
+  if (!text) {
+    throw new Error(`GitHub Models ${model}: resposta vazia`)
+  }
+
+  try {
+    return {
+      provider: 'github-models',
+      model,
+      analysis: normalizeQualitativeAnalysis(parseJsonResponse(text)),
+    }
+  } catch (error) {
+    throw new Error(
+      `GitHub Models ${model}: JSON inválido - ${getErrorText(error).slice(0, 120)}`,
+    )
+  }
+}
+
 async function generateQualitativeAnalysis(prompt: string) {
   const errors: string[] = []
-  const hasDirectGemini = Boolean(
-    process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY,
-  )
-  let directFailure = ''
 
   try {
     const directGemini = await generateWithGemini(prompt)
     if (directGemini) return directGemini
   } catch (error) {
-    directFailure = getErrorText(error)
-    errors.push(directFailure)
+    errors.push(getErrorText(error))
   }
 
-  const directFailureIsTemporary =
-    hasDirectGemini &&
-    /high demand|temporar|overloaded|resource exhausted|quota|HTTP 429|HTTP 503/i.test(
-      directFailure,
-    )
+  try {
+    const githubModels = await generateWithGitHubModels(prompt)
+    if (githubModels) return githubModels
+  } catch (error) {
+    errors.push(getErrorText(error))
+  }
 
-  if (!directFailureIsTemporary) {
-    try {
-      const gateway = await generateWithVercelGateway(prompt)
-      if (gateway) return gateway
-    } catch (error) {
-      errors.push(getErrorText(error))
-    }
+  try {
+    const gateway = await generateWithVercelGateway(prompt)
+    if (gateway) return gateway
+  } catch (error) {
+    errors.push(getErrorText(error))
   }
 
   const reason = errors.length
-    ? errors.join(' | ').slice(0, 900)
+    ? errors.join(' | ').slice(0, 1200)
     : 'nenhum provedor de IA está disponível no ambiente'
 
   console.warn(
@@ -444,7 +509,7 @@ async function generateQualitativeAnalysis(prompt: string) {
 
   throw new ApiError(
     503,
-    'A IA está temporariamente ocupada. O ticket não foi alterado; aguarde alguns instantes e tente a análise novamente.',
+    'A IA qualitativa está temporariamente indisponível. O ticket não foi alterado e pode ser analisado novamente.',
   )
 }
 
