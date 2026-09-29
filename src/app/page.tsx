@@ -2511,7 +2511,22 @@ function QualitativeAnalysisCard({
   if (result.error) {
     return (
       <div className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-sm text-amber-100">
-        {result.error}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <strong className="block text-amber-50">Análise não concluída</strong>
+            <p className="mt-1 leading-5">{result.error}</p>
+          </div>
+          {onReanalyze && (
+            <button
+              type="button"
+              className="small-button self-start sm:self-auto"
+              disabled={reanalyzing}
+              onClick={onReanalyze}
+            >
+              {reanalyzing ? 'Tentando novamente...' : 'Tentar novamente'}
+            </button>
+          )}
+        </div>
       </div>
     )
   }
@@ -2889,10 +2904,13 @@ function ChatAnalystPortal({
         body: JSON.stringify({ ticket_id: ticketId, force }),
       })
       const data = (await response.json()) as ClickDeskQualitativeResponse
-      data.error = data.error || data.erro
+      const rawQualitativeError = data.error || data.erro
+      data.error = rawQualitativeError
+        ? getQualitativeUserError(rawQualitativeError, response.status)
+        : undefined
 
       if (!response.ok && !data.error) {
-        data.error = 'Não foi possível analisar qualitativamente este atendimento.'
+        data.error = getQualitativeUserError('', response.status)
       }
 
       setQualitativeByTicket((current) => ({ ...current, [ticketId]: data }))
@@ -2912,10 +2930,10 @@ function ChatAnalystPortal({
             : current,
         )
       }
-    } catch (error) {
+    } catch {
       setQualitativeByTicket((current) => ({
         ...current,
-        [ticketId]: { error: getErrorMessage(error) },
+        [ticketId]: { error: getQualitativeUserError('', 503) },
       }))
     } finally {
       setQualitativeLoadingTicketId('')
@@ -4262,18 +4280,21 @@ function ChatModuleDashboard({
         body: JSON.stringify({ ticket_id: normalizedTicketId }),
       })
       const data = (await response.json()) as ClickDeskQualitativeResponse
-      data.error = data.error || data.erro
+      const rawQualitativeError = data.error || data.erro
+      data.error = rawQualitativeError
+        ? getQualitativeUserError(rawQualitativeError, response.status)
+        : undefined
 
       if (!response.ok && !data.error) {
-        data.error = 'Não foi possível analisar qualitativamente este atendimento.'
+        data.error = getQualitativeUserError('', response.status)
       }
 
       setClickDeskQualitativeResult(data)
       if (response.ok && !data.error) {
         setClickDeskQualitativeSummaryRefresh((current) => current + 1)
       }
-    } catch (error) {
-      setClickDeskQualitativeResult({ error: getErrorMessage(error) })
+    } catch {
+      setClickDeskQualitativeResult({ error: getQualitativeUserError('', 503) })
     } finally {
       setClickDeskQualitativeLoading(false)
     }
@@ -8245,7 +8266,16 @@ function ChatModuleDashboard({
 
           {clickDeskQualitativeResult?.error && (
             <div className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-sm text-amber-100">
-              {clickDeskQualitativeResult.error}
+              <strong className="block text-amber-50">Análise não concluída</strong>
+              <p className="mt-1 leading-5">{clickDeskQualitativeResult.error}</p>
+              <button
+                type="button"
+                className="small-button mt-3"
+                disabled={clickDeskQualitativeLoading}
+                onClick={() => void handleAnalyzeClickDeskQualitative()}
+              >
+                {clickDeskQualitativeLoading ? 'Tentando novamente...' : 'Tentar novamente'}
+              </button>
             </div>
           )}
 
@@ -16131,6 +16161,30 @@ function getErrorMessage(error: unknown) {
   }
 
   return 'Não foi possível concluir a ação. Tente novamente.'
+}
+
+function getQualitativeUserError(message?: string, status?: number) {
+  const normalized = message?.trim() ?? ''
+
+  if (
+    status === 401 ||
+    status === 403 ||
+    status === 404 ||
+    status === 422
+  ) {
+    return normalized || 'Não foi possível analisar qualitativamente este atendimento.'
+  }
+
+  if (
+    (status !== undefined && status >= 500) ||
+    /gemini|ai gateway|github models|high demand|credit card|quota|provider|temporar|overloaded|resource exhausted|http 429|http 503/i.test(
+      normalized,
+    )
+  ) {
+    return 'A IA qualitativa está temporariamente indisponível. O ticket não foi alterado e pode ser analisado novamente.'
+  }
+
+  return normalized || 'Não foi possível analisar qualitativamente este atendimento.'
 }
 
 function getSupabaseMessage(message: string) {
