@@ -4285,6 +4285,10 @@ function ChatModuleDashboard({
       }
 
       setClickDeskQualitativeResult(data)
+
+      if (response.ok && !data.error && data.analysis) {
+        setClickDeskQualitativeSummaryRefresh((current) => current + 1)
+      }
     } catch {
       setClickDeskQualitativeResult({ error: getQualitativeUserError('', 503) })
     } finally {
@@ -7917,7 +7921,7 @@ function ChatModuleDashboard({
                       {formatChatCount(clickDeskQualitativeSummary?.totals?.pending ?? 0)}
                     </strong>
                     <span className="mt-1 block text-xs text-slate-500">
-                      {formatChatCount(clickDeskQualitativeSummary?.totals?.rejected ?? 0)} descartada(s)
+                      {formatChatCount(clickDeskQualitativeSummary?.totals?.rejected ?? 0)} descartada(s) da consolidação
                     </span>
                   </div>
                 </div>
@@ -8334,13 +8338,55 @@ function ChatModuleDashboard({
           )}
         </div>
 
-        <details className="mt-5 rounded-xl border border-white/10 bg-slate-950/25 p-4">
+
+      </section>
+
+      <section className={chatActiveTab === 'reports' ? 'panel' : 'hidden'}>
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Leitura para fechamento</p>
+            <p className="mt-1 text-xs text-slate-500">Fonte: {chatReportSourceLabel}</p>
+            <h2 className="mt-2 text-2xl font-bold">{chatReportClosureReading}</h2>
+          </div>
+          <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">
+            {chatReportEligibleCount} {chatReportEligibleCount === 1 ? 'elegível' : 'elegíveis'} de {chatReportCalculationMetrics.length}
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-3">
+          <div className="rounded-lg bg-slate-900 p-4">
+            <p className="text-sm text-slate-400">Destaque do período</p>
+            <p className="mt-2 text-lg font-bold">{chatReportTopHighlight ? getChatAnalystName(chatReportTopHighlight) : 'Aguardando dados'}</p>
+            <p className="mt-1 text-sm text-slate-300">
+              {chatReportTopHighlight ? `CSAT ${formatChatPercent(chatReportTopHighlight.csat)} | ${formatChatPercent(chatReportTopHighlight.review_percentage)} avaliações | ${formatChatCount(chatReportTopHighlight.total_tickets)} atendimentos` : 'Selecione uma competência com dados para liberar a leitura.'}
+            </p>
+          </div>
+          <div className="rounded-lg bg-slate-900 p-4">
+            <p className="text-sm text-slate-400">Principal ponto de atenção</p>
+            <p className="mt-2 text-lg font-bold">{chatReportAttentionHighlight ? getChatAnalystName(chatReportAttentionHighlight) : 'Sem prioridade aberta'}</p>
+            <p className="mt-1 text-sm text-slate-300">{chatReportAttentionText}</p>
+          </div>
+          <div className="rounded-lg bg-slate-900 p-4">
+            <p className="text-sm text-slate-400">Referência mínima de volume</p>
+            <p className="mt-2 text-lg font-bold tabular-nums">{formatChatCount(chatReportVolumeReference)} atendimentos</p>
+            <p className="mt-1 text-sm text-slate-300">
+              Para cumprir o critério de volume neste período, é necessário atingir pelo menos essa quantidade de atendimentos.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className={chatActiveTab === 'analysis' ? 'panel' : 'hidden'}>
+        <details className="rounded-xl border border-white/10 bg-slate-950/25 p-4">
           <summary className="cursor-pointer list-none">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <strong className="text-sm text-slate-200">Analisar ticket específico</strong>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">
+                  Consulta qualitativa
+                </p>
+                <strong className="mt-1 block text-sm text-slate-200">Analisar ticket específico</strong>
                 <p className="mt-1 text-xs leading-5 text-slate-500">
-                  Use somente quando o ticket que você quer investigar não aparecer nas amostras acima.
+                  Use quando precisar investigar um ticket fora das amostras gerenciais. O resultado continua sujeito à mesma validação humana.
                 </p>
               </div>
               <span className="text-xs font-semibold text-violet-200">Abrir</span>
@@ -8396,41 +8442,6 @@ function ChatModuleDashboard({
             </>
           )}
         </details>
-      </section>
-
-      <section className={chatActiveTab === 'reports' ? 'panel' : 'hidden'}>
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Leitura para fechamento</p>
-            <p className="mt-1 text-xs text-slate-500">Fonte: {chatReportSourceLabel}</p>
-            <h2 className="mt-2 text-2xl font-bold">{chatReportClosureReading}</h2>
-          </div>
-          <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">
-            {chatReportEligibleCount} {chatReportEligibleCount === 1 ? 'elegível' : 'elegíveis'} de {chatReportCalculationMetrics.length}
-          </span>
-        </div>
-
-        <div className="mt-5 grid gap-4 lg:grid-cols-3">
-          <div className="rounded-lg bg-slate-900 p-4">
-            <p className="text-sm text-slate-400">Destaque do período</p>
-            <p className="mt-2 text-lg font-bold">{chatReportTopHighlight ? getChatAnalystName(chatReportTopHighlight) : 'Aguardando dados'}</p>
-            <p className="mt-1 text-sm text-slate-300">
-              {chatReportTopHighlight ? `CSAT ${formatChatPercent(chatReportTopHighlight.csat)} | ${formatChatPercent(chatReportTopHighlight.review_percentage)} avaliações | ${formatChatCount(chatReportTopHighlight.total_tickets)} atendimentos` : 'Selecione uma competência com dados para liberar a leitura.'}
-            </p>
-          </div>
-          <div className="rounded-lg bg-slate-900 p-4">
-            <p className="text-sm text-slate-400">Principal ponto de atenção</p>
-            <p className="mt-2 text-lg font-bold">{chatReportAttentionHighlight ? getChatAnalystName(chatReportAttentionHighlight) : 'Sem prioridade aberta'}</p>
-            <p className="mt-1 text-sm text-slate-300">{chatReportAttentionText}</p>
-          </div>
-          <div className="rounded-lg bg-slate-900 p-4">
-            <p className="text-sm text-slate-400">Referência mínima de volume</p>
-            <p className="mt-2 text-lg font-bold tabular-nums">{formatChatCount(chatReportVolumeReference)} atendimentos</p>
-            <p className="mt-1 text-sm text-slate-300">
-              Para cumprir o critério de volume neste período, é necessário atingir pelo menos essa quantidade de atendimentos.
-            </p>
-          </div>
-        </div>
       </section>
 
       <section className={chatActiveTab === 'analysis' ? 'panel' : 'hidden'}>
