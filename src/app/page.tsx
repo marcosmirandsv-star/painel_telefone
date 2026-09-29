@@ -673,6 +673,11 @@ type ClickDeskQualitativeResponse = {
       available: boolean
       summary: string
     }
+    analyst_takeaway: {
+      kind: 'maintain' | 'develop' | 'context' | 'none'
+      summary: string
+      confidence: string
+    }
     evidence_summary: string[]
     limitations: string[]
   }
@@ -2535,6 +2540,15 @@ function QualitativeAnalysisCard({
 
   if (!result.analysis) return null
 
+  const analystTakeawayLabel =
+    result.analysis.analyst_takeaway.kind === 'maintain'
+      ? 'O que vale manter'
+      : result.analysis.analyst_takeaway.kind === 'develop'
+        ? 'O que você pode desenvolver'
+        : result.analysis.analyst_takeaway.kind === 'context'
+          ? 'O que é importante contextualizar'
+          : 'O que esta conversa permite concluir'
+
   return (
     <div className="mt-3 rounded-xl border border-violet-400/15 bg-violet-400/5 p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -2582,40 +2596,42 @@ function QualitativeAnalysisCard({
         )}
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-lg bg-slate-950/45 p-3">
-          <span className="text-xs text-slate-500">Sentimento</span>
-          <strong className="mt-1 block text-sm">
-            {formatQualitativeLabel(result.analysis.initial_sentiment)}
-            {' → '}
-            {formatQualitativeLabel(result.analysis.final_sentiment)}
-          </strong>
+      {audience === 'management' && (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-lg bg-slate-950/45 p-3">
+            <span className="text-xs text-slate-500">Sentimento</span>
+            <strong className="mt-1 block text-sm">
+              {formatQualitativeLabel(result.analysis.initial_sentiment)}
+              {' → '}
+              {formatQualitativeLabel(result.analysis.final_sentiment)}
+            </strong>
+          </div>
+          <div className="rounded-lg bg-slate-950/45 p-3">
+            <span className="text-xs text-slate-500">Contexto principal observado</span>
+            <strong className="mt-1 block text-sm">
+              {formatQualitativeLabel(result.analysis.primary_cause.category)}
+            </strong>
+            <span className="mt-1 block text-xs text-slate-500">
+              confiança {formatQualitativeLabel(result.analysis.primary_cause.confidence)}
+            </span>
+          </div>
+          <div className="rounded-lg bg-slate-950/45 p-3">
+            <span className="text-xs text-slate-500">Influência do atendimento humano</span>
+            <strong className="mt-1 block text-sm">
+              {formatQualitativeLabel(result.analysis.human_influence.classification)}
+            </strong>
+            <span className="mt-1 block text-xs text-slate-500">
+              confiança {formatQualitativeLabel(result.analysis.human_influence.confidence)}
+            </span>
+          </div>
+          <div className="rounded-lg bg-slate-950/45 p-3">
+            <span className="text-xs text-slate-500">Onde estava o controle?</span>
+            <strong className="mt-1 block text-sm">
+              {formatQualitativeLabel(result.analysis.controllability.classification)}
+            </strong>
+          </div>
         </div>
-        <div className="rounded-lg bg-slate-950/45 p-3">
-          <span className="text-xs text-slate-500">Contexto principal observado</span>
-          <strong className="mt-1 block text-sm">
-            {formatQualitativeLabel(result.analysis.primary_cause.category)}
-          </strong>
-          <span className="mt-1 block text-xs text-slate-500">
-            confiança {formatQualitativeLabel(result.analysis.primary_cause.confidence)}
-          </span>
-        </div>
-        <div className="rounded-lg bg-slate-950/45 p-3">
-          <span className="text-xs text-slate-500">Influência do atendimento humano</span>
-          <strong className="mt-1 block text-sm">
-            {formatQualitativeLabel(result.analysis.human_influence.classification)}
-          </strong>
-          <span className="mt-1 block text-xs text-slate-500">
-            confiança {formatQualitativeLabel(result.analysis.human_influence.confidence)}
-          </span>
-        </div>
-        <div className="rounded-lg bg-slate-950/45 p-3">
-          <span className="text-xs text-slate-500">Onde estava o controle?</span>
-          <strong className="mt-1 block text-sm">
-            {formatQualitativeLabel(result.analysis.controllability.classification)}
-          </strong>
-        </div>
-      </div>
+      )}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <div>
@@ -2625,12 +2641,25 @@ function QualitativeAnalysisCard({
           <p className="mt-2 text-sm leading-6 text-slate-300">
             {result.analysis.primary_cause.summary}
           </p>
-          <p className="mt-3 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
-            Influência do atendimento humano
-          </p>
-          <p className="mt-2 text-sm leading-6 text-slate-300">
-            {result.analysis.human_influence.summary}
-          </p>
+          {audience === 'management' ? (
+            <>
+              <p className="mt-3 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
+                Influência do atendimento humano
+              </p>
+              <p className="mt-2 text-sm leading-6 text-slate-300">
+                {result.analysis.human_influence.summary}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="mt-3 text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
+                O que estava sob seu controle?
+              </p>
+              <p className="mt-2 text-sm leading-6 text-slate-300">
+                {result.analysis.controllability.summary}
+              </p>
+            </>
+          )}
         </div>
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
@@ -2659,12 +2688,34 @@ function QualitativeAnalysisCard({
       </div>
 
       <div className="mt-4 rounded-lg border border-white/10 bg-slate-950/30 px-3 py-3 text-sm">
-        <span className="text-slate-500">
-          {audience === 'analyst' ? 'O que você pode levar daqui: ' : 'Ponto acionável para feedback: '}
-        </span>
-        <strong className={result.analysis.coaching_signal.available ? 'text-cyan-200' : 'text-slate-300'}>
-          {result.analysis.coaching_signal.summary}
-        </strong>
+        {audience === 'analyst' ? (
+          <>
+            <span className="text-slate-500">{analystTakeawayLabel}: </span>
+            <strong
+              className={
+                result.analysis.analyst_takeaway.kind === 'maintain'
+                  ? 'text-emerald-200'
+                  : result.analysis.analyst_takeaway.kind === 'develop'
+                    ? 'text-cyan-200'
+                    : result.analysis.analyst_takeaway.kind === 'context'
+                      ? 'text-violet-200'
+                      : 'text-slate-300'
+              }
+            >
+              {result.analysis.analyst_takeaway.summary}
+            </strong>
+            <span className="mt-1 block text-xs text-slate-500">
+              confiança {formatQualitativeLabel(result.analysis.analyst_takeaway.confidence)}
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="text-slate-500">Ponto acionável para feedback: </span>
+            <strong className={result.analysis.coaching_signal.available ? 'text-cyan-200' : 'text-slate-300'}>
+              {result.analysis.coaching_signal.summary}
+            </strong>
+          </>
+        )}
       </div>
     </div>
   )
