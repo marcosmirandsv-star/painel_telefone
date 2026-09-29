@@ -91,6 +91,16 @@ A validação de acesso da análise gerencial também usa a sessão do próprio 
 
 Para o primeiro acesso, a homologação possui uma allowlist de e-mails/perfis e um gatilho de criação de perfil. O usuário cria sua própria senha pelo botão “Primeiro acesso na homologação”; não são copiadas senhas nem hashes da produção.
 
+## Congelamento funcional do Chat 2.0
+
+Em 29/09/2026 a arquitetura funcional do Chat 2.0 foi congelada antes da revisão visual corporativa.
+
+Referência oficial:
+
+- `docs/chat-2.0-architecture-freeze.md`
+
+A revisão visual pode reorganizar shell, sidebar, cabeçalho, hierarquia e densidade, mas não deve alterar regras, cálculos, governança qualitativa, sincronizações ou permissões sem aprovação explícita.
+
 ## Critério de promoção para produção
 
 Antes de `homologacao -> main`, conferir no mínimo:
