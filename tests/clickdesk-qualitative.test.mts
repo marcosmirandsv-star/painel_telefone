@@ -86,3 +86,60 @@ test('normalização preserva classificações válidas e limita evidências', (
   assert.equal(result.controllability.classification, 'mixed')
   assert.equal(result.evidence_summary.length, 3)
 })
+
+
+test('aprendizado do analista contextualiza fatores fora do controle sem criar culpa individual', () => {
+  const result = normalizeQualitativeAnalysis({
+    initial_sentiment: 'neutral',
+    final_sentiment: 'negative',
+    primary_cause: {
+      category: 'process',
+      summary: 'A conversa aponta uma limitação do processo interno.',
+      confidence: 'high',
+    },
+    human_influence: {
+      classification: 'neutral',
+      summary: 'Não há evidência de que a atuação humana tenha piorado o caso.',
+      confidence: 'medium',
+    },
+    controllability: {
+      classification: 'company',
+      summary: 'O fator principal dependia de processo interno da empresa.',
+    },
+    coaching_signal: {
+      available: false,
+      summary: '',
+    },
+  })
+
+  assert.equal(result.analyst_takeaway.kind, 'context')
+  assert.match(result.analyst_takeaway.summary, /processo interno/i)
+})
+
+test('aprendizado do analista preserva uma força observável mesmo sem coaching gerencial', () => {
+  const result = normalizeQualitativeAnalysis({
+    initial_sentiment: 'negative',
+    final_sentiment: 'positive',
+    primary_cause: {
+      category: 'customer_expectation',
+      summary: 'A expectativa inicial do cliente não estava alinhada ao fluxo.',
+      confidence: 'medium',
+    },
+    human_influence: {
+      classification: 'improved',
+      summary: 'A orientação do analista tornou os próximos passos mais claros.',
+      confidence: 'high',
+    },
+    controllability: {
+      classification: 'analyst',
+      summary: 'A clareza da orientação estava sob controle do analista.',
+    },
+    coaching_signal: {
+      available: false,
+      summary: '',
+    },
+  })
+
+  assert.equal(result.analyst_takeaway.kind, 'maintain')
+  assert.match(result.analyst_takeaway.summary, /próximos passos/i)
+})
