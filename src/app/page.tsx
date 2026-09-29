@@ -2233,9 +2233,9 @@ export default function Home() {
                 ? 'Operação, produtividade, gestão, fechamento e leitura qualitativa com dados do ClickDesk.'
                 : 'Metas, lançamentos, performance, pódio, relatórios e acompanhamento da operação de telefone.'}
             </p>
-            <p className="mt-3 text-sm text-slate-400">
-              Perfil: <strong>{getRoleLabel(userRole)}</strong>
-              {!isManagementUser && (
+            {!isManagementUser && (
+              <p className="mt-3 text-sm text-slate-400">
+                Perfil: <strong>{getRoleLabel(userRole)}</strong>
                 <span>
                   {' '}| Acesso individual:
                   {currentProfileAnalyst && (
@@ -2246,8 +2246,8 @@ export default function Home() {
                     <> <strong>{profileChatAnalyst.name}</strong> · Chat</>
                   )}
                 </span>
-              )}
-            </p>
+              </p>
+            )}
             {!isManagementUser && !hasPhoneAnalystAccess && !hasChatAnalystAccess && (
               <p className="mt-2 text-sm text-amber-200">
                 Perfil de analista sem vínculo com Telefone ou Chat. Peça à gestão para revisar o usuário.
@@ -2290,7 +2290,7 @@ export default function Home() {
         </header>
 
         {activeModule === 'phone' && (
-          <nav className="mt-6 flex flex-wrap gap-2">
+          <nav className="workspace-navigation context-navigation mt-4 flex flex-wrap gap-2" aria-label="Áreas do módulo Telefone">
           <TabButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')}>
             Dashboard
           </TabButton>
