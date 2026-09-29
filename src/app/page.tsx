@@ -2782,10 +2782,8 @@ function ChatAnalystPortal({
   const [selectedRoutineDate, setSelectedRoutineDate] = useState<string | null>(null)
   const [dailyTickets, setDailyTickets] = useState<ClickDeskDailyTicketResponse | null>(null)
   const [dailyTicketsLoading, setDailyTicketsLoading] = useState(false)
-  const [evaluatedSample, setEvaluatedSample] = useState<ClickDeskEvaluatedSampleResponse | null>(null)
   const [qualitativeByTicket, setQualitativeByTicket] = useState<Record<string, ClickDeskQualitativeResponse>>({})
   const [qualitativeLoadingTicketId, setQualitativeLoadingTicketId] = useState('')
-  const [qualitativeSampleLoading, setQualitativeSampleLoading] = useState(false)
 
   const now = new Date()
   const year = now.getFullYear()
@@ -2837,13 +2835,7 @@ function ChatAnalystPortal({
         const historyParams = new URLSearchParams({
           analyst_id: ownAnalystId,
         })
-        const sampleParams = new URLSearchParams({
-          start: monthStart,
-          end: monthEnd,
-          analyst_id: ownAnalystId,
-        })
-
-        const [metricResponse, historyResponse, sampleResponse] = await Promise.all([
+        const [metricResponse, historyResponse] = await Promise.all([
           fetch(`/api/clickdesk/metrics?${metricParams.toString()}`, {
             headers,
             cache: 'no-store',
@@ -2852,16 +2844,11 @@ function ChatAnalystPortal({
             headers,
             cache: 'no-store',
           }),
-          fetch(`/api/clickdesk/evaluated-sample?${sampleParams.toString()}`, {
-            headers,
-            cache: 'no-store',
-          }),
         ])
 
-        const [metricData, historyData, sampleData] = await Promise.all([
+        const [metricData, historyData] = await Promise.all([
           metricResponse.json() as Promise<ClickDeskPersistedMetrics>,
           historyResponse.json() as Promise<ClickDeskAnalystHistory>,
-          sampleResponse.json() as Promise<ClickDeskEvaluatedSampleResponse>,
         ])
 
         if (!metricResponse.ok) {
@@ -2872,15 +2859,9 @@ function ChatAnalystPortal({
           historyData.erro =
             historyData.erro || 'Não foi possível carregar seu histórico do Chat.'
         }
-        if (!sampleResponse.ok) {
-          sampleData.erro =
-            sampleData.erro || sampleData.error || 'Não foi possível carregar sua amostra de avaliações.'
-        }
-
         if (!cancelled) {
           setMetrics(metricData)
           setHistory(historyData)
-          setEvaluatedSample(sampleData)
         }
       } catch (error) {
         if (!cancelled) {
@@ -2936,46 +2917,12 @@ function ChatAnalystPortal({
 
       setQualitativeByTicket((current) => ({ ...current, [ticketId]: data }))
 
-      if (response.ok) {
-        setEvaluatedSample((current) =>
-          current
-            ? {
-                ...current,
-                negative: current.negative?.map((item) =>
-                  item.ticket_id === ticketId ? { ...item, has_analysis: true } : item,
-                ),
-                positive: current.positive?.map((item) =>
-                  item.ticket_id === ticketId ? { ...item, has_analysis: true } : item,
-                ),
-              }
-            : current,
-        )
-      }
     } catch {
       setQualitativeByTicket((current) => ({
         ...current,
         [ticketId]: { error: getQualitativeUserError('', 503) },
       }))
     } finally {
-      setQualitativeLoadingTicketId('')
-    }
-  }
-
-  async function analyzeQualitativeSample() {
-    const tickets = [
-      ...(evaluatedSample?.negative ?? []),
-      ...(evaluatedSample?.positive ?? []),
-    ]
-
-    if (!tickets.length) return
-
-    setQualitativeSampleLoading(true)
-    try {
-      for (const ticket of tickets) {
-        await analyzeQualitativeTicket(ticket.ticket_id)
-      }
-    } finally {
-      setQualitativeSampleLoading(false)
       setQualitativeLoadingTicketId('')
     }
   }
@@ -3341,105 +3288,6 @@ function ChatAnalystPortal({
               </div>
             )}
 
-            <div id="minhas-avaliacoes" className="mt-5 scroll-mt-24 rounded-xl border border-violet-400/15 bg-violet-400/5 p-5">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-violet-200">
-                    Entenda suas avaliações · IA qualitativa
-                  </p>
-                  <strong className="mt-2 block text-xl text-slate-100">
-                    O número mostra o resultado. Agora você pode investigar o porquê.
-                  </strong>
-                  <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-400">
-                    O painel separa uma amostra distribuída ao longo da competência: até 3 avaliações negativas para investigar pontos de atenção e até 5 positivas para identificar o que funcionou. A análise usa o transcript do ClickDesk e não trata hipótese como fato.
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <div className="grid grid-cols-2 gap-2 text-center">
-                    <div className="rounded-lg bg-slate-950/40 px-3 py-2">
-                      <span className="block text-xs text-slate-500">Negativas no mês</span>
-                      <strong className="mt-1 block text-lg text-amber-100">
-                        {formatChatCount(evaluatedSample?.totals?.negative ?? accumulated?.negative_reviews ?? 0)}
-                      </strong>
-                    </div>
-                    <div className="rounded-lg bg-slate-950/40 px-3 py-2">
-                      <span className="block text-xs text-slate-500">Positivas no mês</span>
-                      <strong className="mt-1 block text-lg text-emerald-200">
-                        {formatChatCount(evaluatedSample?.totals?.positive ?? accumulated?.positive_reviews ?? 0)}
-                      </strong>
-                    </div>
-                  </div>
-                  {QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS ? (
-                    <button
-                      type="button"
-                      className="btn-primary w-full"
-                      disabled={
-                        qualitativeSampleLoading ||
-                        ((evaluatedSample?.negative?.length ?? 0) + (evaluatedSample?.positive?.length ?? 0) === 0)
-                      }
-                      onClick={() => void analyzeQualitativeSample()}
-                    >
-                      {qualitativeSampleLoading ? 'Analisando amostra...' : 'Analisar amostra do mês'}
-                    </button>
-                  ) : (
-                    <span className="block rounded-md border border-violet-300/20 bg-violet-300/5 px-3 py-2 text-center text-xs font-semibold text-violet-100">
-                      IA qualitativa · em preparação
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {!QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS ? (
-                <div className="mt-5 rounded-xl border border-violet-300/15 bg-slate-950/35 p-4">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <strong className="text-slate-100">Análise qualitativa em preparação</strong>
-                      <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-400">
-                        A amostra de avaliações já está identificada, mas a leitura do transcript por IA permanece temporariamente desativada no acesso individual até concluir a validação técnica e gerencial.
-                      </p>
-                    </div>
-                    <span className="self-start rounded-md bg-violet-400/10 px-2 py-1 text-[11px] font-semibold text-violet-200">
-                      Estrutura preservada
-                    </span>
-                  </div>
-                </div>
-              ) : evaluatedSample?.erro ? (
-                <p className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-sm text-amber-100">
-                  {evaluatedSample.erro}
-                </p>
-              ) : (
-                <div className="mt-5 grid gap-4 xl:grid-cols-2">
-                  <QualitativeSampleTicketList
-                    title="Negativas para entender"
-                    audience="analyst"
-                    allowForceReanalysis={false}
-                    subtitle="Até 3 tickets distribuídos ao longo do mês. Se houver menos, o painel mostra todos."
-                    tickets={evaluatedSample?.negative ?? []}
-                    tone="negative"
-                    results={qualitativeByTicket}
-                    loadingTicketId={qualitativeLoadingTicketId}
-                    onAnalyze={(ticketId, force) => void analyzeQualitativeTicket(ticketId, force)}
-                  />
-                  <QualitativeSampleTicketList
-                    title="Positivas para aprender"
-                    audience="analyst"
-                    allowForceReanalysis={false}
-                    subtitle="Até 5 tickets distribuídos ao longo do mês para reconhecer padrões que vale repetir."
-                    tickets={evaluatedSample?.positive ?? []}
-                    tone="positive"
-                    results={qualitativeByTicket}
-                    loadingTicketId={qualitativeLoadingTicketId}
-                    onAnalyze={(ticketId, force) => void analyzeQualitativeTicket(ticketId, force)}
-                  />
-                </div>
-              )}
-
-              <p className="mt-4 text-xs leading-5 text-slate-500">
-                {QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS
-                  ? 'A amostra é apenas um atalho. Na rotina diária, qualquer ticket avaliado também pode ser analisado individualmente. A leitura da IA não altera seu CSAT, suas metas ou o resultado do atendimento; somente leituras validadas entram na consolidação gerencial.'
-                  : 'Enquanto a IA qualitativa não é liberada, os números e avaliações continuam disponíveis para acompanhamento objetivo.'}
-              </p>
-            </div>
           </>
         )}
       </section>
@@ -3455,9 +3303,17 @@ function ChatAnalystPortal({
               A visão foi compactada. Clique em um dia para ver os seus tickets persistidos no ClickDesk.
             </p>
           </div>
-          <span className="self-start rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-xs text-slate-400">
-            {activeRoutineDays.length} {activeRoutineDays.length === 1 ? 'dia com atividade' : 'dias com atividade'}
-          </span>
+          <div className="flex flex-wrap gap-2 self-start">
+            <span className="rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-xs text-slate-400">
+              {activeRoutineDays.length} {activeRoutineDays.length === 1 ? 'dia com atividade' : 'dias com atividade'}
+            </span>
+            <span className="rounded-md border border-amber-300/15 bg-amber-300/5 px-3 py-2 text-xs text-amber-100">
+              {formatChatCount(accumulated?.negative_reviews ?? 0)} negativas no mês
+            </span>
+            <span className="rounded-md border border-emerald-400/15 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-200">
+              {formatChatCount(accumulated?.positive_reviews ?? 0)} positivas no mês
+            </span>
+          </div>
         </div>
 
         {activeRoutineDays.length ? (
