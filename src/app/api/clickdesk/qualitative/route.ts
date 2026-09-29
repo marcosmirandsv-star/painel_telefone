@@ -136,7 +136,14 @@ REGRAS OBRIGATÓRIAS
 - Não deduza intenção, personalidade, capacidade, esforço ou estado emocional interno do atendente.
 - "Sentimento" significa apenas o tom observável da interação, não diagnóstico psicológico.
 - Em controllability, use analyst somente quando houver ação concreta sob controle do analista; company para sistema/processo interno; external para fatores de fora; customer para decisão/condição do cliente; mixed quando houver mais de um fator demonstrável.
-- coaching_signal.available deve ser true somente quando houver comportamento observável que possa ser trabalhado em feedback.
+- coaching_signal.available deve ser true somente quando houver comportamento observável que possa ser trabalhado em feedback gerencial.
+- analyst_takeaway é independente de coaching_signal e responde ao que a própria pessoa pode aprender com este atendimento.
+- analyst_takeaway.kind = maintain quando houver comportamento observável adequado que valha repetir, mesmo que ele não seja a causa principal da avaliação.
+- analyst_takeaway.kind = develop somente quando houver comportamento observável sob controle do analista que possa ser aprimorado.
+- analyst_takeaway.kind = context quando o principal aprendizado for reconhecer que o fator relevante estava fora do controle direto do analista.
+- analyst_takeaway.kind = none somente quando o transcript realmente não oferecer evidência segura para manter, desenvolver ou contextualizar.
+- O summary de analyst_takeaway deve ser específico ao que aparece na conversa; não use uma frase genérica repetida em todos os tickets.
+- Uma avaliação positiva ou negativa, sozinha, nunca define o analyst_takeaway.
 - evidence_summary deve ter no máximo 3 itens, em paráfrase curta. Não copie dados pessoais nem trechos longos.
 - limitations deve registrar o que não pode ser concluído com segurança.
 - Não reproduza e-mail, telefone, CPF, CNPJ, IDs ou outros identificadores.
@@ -149,6 +156,8 @@ primary_cause.confidence: low | medium | high
 human_influence.classification: improved | worsened | neutral | unclear
 human_influence.confidence: low | medium | high
 controllability.classification: analyst | company | customer | external | mixed | unclear
+analyst_takeaway.kind: maintain | develop | context | none
+analyst_takeaway.confidence: low | medium | high
 
 FORMATO EXATO
 {
@@ -171,6 +180,11 @@ FORMATO EXATO
   "coaching_signal": {
     "available": false,
     "summary": ""
+  },
+  "analyst_takeaway": {
+    "kind": "none",
+    "summary": "",
+    "confidence": "low"
   },
   "evidence_summary": [],
   "limitations": []
