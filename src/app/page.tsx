@@ -6667,7 +6667,7 @@ function ChatModuleDashboard({
             <div>
               <p className="workspace-eyebrow">Ferramentas · conferência da base</p>
               <h2 className="mt-2 text-2xl font-bold">Auditar os números antes da gestão</h2>
-              <p className="section-subtitle">Comparação detalhada entre analistas, volume, qualidade, participação nas avaliações e conferência dos dados importados.</p>
+              <p className="section-subtitle">Comparação detalhada entre analistas, volume, qualidade, participação nas avaliações, conferência dos dados e consulta excepcional de tickets.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <button
@@ -6695,7 +6695,7 @@ function ChatModuleDashboard({
         <section className="panel workspace-section-intro">
           <p className="workspace-eyebrow">Gestão e ações</p>
           <h2 className="mt-2 text-2xl font-bold">Onde agir e o que acompanhar?</h2>
-          <p className="section-subtitle">Diagnóstico gerencial, prioridades, pontos de atenção e ações para o próximo ciclo, com a camada qualitativa de IA em validação controlada por evidências.</p>
+          <p className="section-subtitle">Diagnóstico gerencial, prioridades, pontos de atenção e ações para o próximo ciclo, com leitura qualitativa apoiada por IA e validação humana.</p>
         </section>
       )}
 
@@ -7515,8 +7515,8 @@ function ChatModuleDashboard({
         </div>
       </section>
       <div className={chatActiveTab === 'overview' ? 'metric-zone grid gap-4 sm:grid-cols-2 xl:grid-cols-6' : 'hidden'}>
-        <MetricCard label="Atendimentos" value={formatChatCount(chat2ProductivityTickets)} />
-        <MetricCard label="Hoje na base" value={formatChatCount(chat2OperationTodayTickets)} />
+        <MetricCard label="Atendimentos na competência" value={formatChatCount(chat2ProductivityTickets)} />
+        <MetricCard label="Atendimentos hoje" value={formatChatCount(chat2OperationTodayTickets)} />
         <MetricCard
           label="CSAT do time"
           value={chat2ProductivityCsat === null ? '—' : formatChatPercent(chat2ProductivityCsat)}
@@ -8867,7 +8867,7 @@ function ChatModuleDashboard({
           </div>
           <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
             <p className="font-semibold text-slate-100">2. Entender a amostra</p>
-            <p className="mt-2">Prepare até 3 negativas e 5 positivas e valide as leituras antes de levá-las ao feedback.</p>
+            <p className="mt-2">Prepare até 5 negativas e 5 positivas distribuídas pelo período e valide as leituras antes de levá-las ao feedback.</p>
           </div>
           <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
             <p className="font-semibold text-slate-100">3. Revisar feedback</p>
