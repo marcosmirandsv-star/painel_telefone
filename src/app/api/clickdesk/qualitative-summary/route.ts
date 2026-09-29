@@ -56,6 +56,61 @@ function percentage(part: number, total: number) {
   return total > 0 ? Math.round((part / total) * 10000) / 100 : 0
 }
 
+function pickDistributedAcrossDates(items: AttendanceRow[], limit: number) {
+  if (items.length <= limit) {
+    return [...items].sort((a, b) => a.occurred_at.localeCompare(b.occurred_at))
+  }
+
+  const sorted = [...items].sort((a, b) => a.occurred_at.localeCompare(b.occurred_at))
+  const byDate = new Map<string, AttendanceRow[]>()
+
+  for (const item of sorted) {
+    const bucket = byDate.get(item.occurred_date) ?? []
+    bucket.push(item)
+    byDate.set(item.occurred_date, bucket)
+  }
+
+  const dates = Array.from(byDate.keys()).sort()
+  const selected: AttendanceRow[] = []
+  const selectedIds = new Set<string>()
+
+  const add = (item?: AttendanceRow) => {
+    if (!item || selectedIds.has(item.clickdesk_ticket_id)) return
+    selected.push(item)
+    selectedIds.add(item.clickdesk_ticket_id)
+  }
+
+  if (dates.length >= limit) {
+    for (let index = 0; index < limit; index += 1) {
+      const position = Math.round((index * (dates.length - 1)) / (limit - 1))
+      const bucket = byDate.get(dates[position]) ?? []
+      add(bucket[Math.floor((bucket.length - 1) / 2)])
+    }
+  } else {
+    for (const date of dates) {
+      const bucket = byDate.get(date) ?? []
+      add(bucket[Math.floor((bucket.length - 1) / 2)])
+    }
+  }
+
+  if (selected.length < limit) {
+    const remaining = sorted.filter((item) => !selectedIds.has(item.clickdesk_ticket_id))
+    const missing = limit - selected.length
+
+    for (let index = 0; index < missing; index += 1) {
+      const position =
+        missing <= 1
+          ? Math.floor((remaining.length - 1) / 2)
+          : Math.round((index * (remaining.length - 1)) / (missing - 1))
+      add(remaining[position])
+    }
+  }
+
+  return selected
+    .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
+    .slice(0, limit)
+}
+
 export async function GET(request: Request) {
   return handle(async () => {
     const { environment } = getServerSupabaseConfig()
@@ -257,14 +312,14 @@ export async function GET(request: Request) {
       analysis: item.normalized,
     }))
 
-    const negativeValidationQueue = evaluated
-      .filter(
+    const negativeValidationQueue = pickDistributedAcrossDates(
+      evaluated.filter(
         (item) =>
           item.satisfaction_label === 'negative' &&
           !analyzedTicketIds.has(item.clickdesk_ticket_id),
-      )
-      .slice(0, 5)
-      .map((item) => ({
+      ),
+      5,
+    ).map((item) => ({
         ticket_id: item.clickdesk_ticket_id,
         analyst_id: item.analyst_id,
         analyst_name: item.assignee_name,
@@ -274,14 +329,14 @@ export async function GET(request: Request) {
         satisfaction_label: item.satisfaction_label,
       }))
 
-    const positiveValidationQueue = evaluated
-      .filter(
+    const positiveValidationQueue = pickDistributedAcrossDates(
+      evaluated.filter(
         (item) =>
           item.satisfaction_label === 'positive' &&
           !analyzedTicketIds.has(item.clickdesk_ticket_id),
-      )
-      .slice(0, 5)
-      .map((item) => ({
+      ),
+      5,
+    ).map((item) => ({
         ticket_id: item.clickdesk_ticket_id,
         analyst_id: item.analyst_id,
         analyst_name: item.assignee_name,
@@ -335,6 +390,11 @@ export async function GET(request: Request) {
       analysts,
       pending_reviews: pendingReviews,
       validation_queue: negativeValidationQueue,
+      sample_rule: {
+        negative_limit: 5,
+        positive_limit: 5,
+        strategy: 'distributed_across_dates',
+      },
       positive_validation_queue: positiveValidationQueue,
     })
   })
