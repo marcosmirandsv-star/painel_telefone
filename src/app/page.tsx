@@ -3248,7 +3248,7 @@ function ChatAnalystPortal({
                     {formatChatCount(accumulated?.attendances ?? 0)}
                   </strong>
                   <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-3 text-sm">
-                    <span className="text-slate-500">Hoje na base</span>
+                    <span className="text-slate-500">Atendimentos hoje</span>
                     <strong className="tabular-nums text-slate-200">
                       {formatChatCount(today?.attendances ?? 0)}
                     </strong>
