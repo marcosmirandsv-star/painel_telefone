@@ -2709,6 +2709,59 @@ function QualitativeAnalysisCard({
   )
 }
 
+function QualitativeValidationActions({
+  ticketId,
+  status,
+  validating,
+  onValidate,
+}: {
+  ticketId: string
+  status?: 'pending' | 'approved' | 'rejected'
+  validating: boolean
+  onValidate: (ticketId: string, status: 'approved' | 'rejected') => void
+}) {
+  if (status === 'approved' || status === 'rejected') {
+    return (
+      <div className="mt-3 rounded-lg border border-white/10 bg-slate-950/30 px-3 py-3 text-sm">
+        <strong className={status === 'approved' ? 'text-emerald-200' : 'text-rose-200'}>
+          {status === 'approved'
+            ? 'Leitura aprovada para consolidação'
+            : 'Leitura descartada da consolidação'}
+        </strong>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mt-3 flex flex-col gap-3 rounded-lg border border-white/10 bg-slate-950/30 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <strong className="text-sm text-slate-100">Esta leitura aguarda sua validação</strong>
+        <p className="mt-1 text-xs leading-5 text-slate-500">
+          Aprove somente se contexto, influência, controle e evidências fizerem sentido diante do atendimento real.
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          className="small-button"
+          disabled={validating}
+          onClick={() => onValidate(ticketId, 'approved')}
+        >
+          {validating ? 'Salvando...' : 'Aprovar leitura'}
+        </button>
+        <button
+          type="button"
+          className="danger-button"
+          disabled={validating}
+          onClick={() => onValidate(ticketId, 'rejected')}
+        >
+          Descartar
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function QualitativeSampleTicketList({
   title,
   subtitle,
