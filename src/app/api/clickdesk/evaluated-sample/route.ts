@@ -20,22 +20,69 @@ function validUuid(value: string) {
   return /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value)
 }
 
-function pickSpread<T>(items: T[], limit: number) {
-  if (items.length <= limit) return items
-  if (limit <= 1) return [items[0]]
+type EvaluatedRow = {
+  clickdesk_ticket_id: string
+  occurred_at: string
+  occurred_date: string
+  area: string
+  satisfaction_label: string | null
+  journey_status: string | null
+  timestamp_source: string | null
+}
 
-  const picked: T[] = []
-  const used = new Set<number>()
+function pickDistributedAcrossDates(items: EvaluatedRow[], limit: number) {
+  if (items.length <= limit) {
+    return [...items].sort((a, b) => a.occurred_at.localeCompare(b.occurred_at))
+  }
 
-  for (let index = 0; index < limit; index += 1) {
-    const position = Math.round((index * (items.length - 1)) / (limit - 1))
-    if (!used.has(position)) {
-      picked.push(items[position])
-      used.add(position)
+  const sorted = [...items].sort((a, b) => a.occurred_at.localeCompare(b.occurred_at))
+  const byDate = new Map<string, EvaluatedRow[]>()
+
+  for (const item of sorted) {
+    const bucket = byDate.get(item.occurred_date) ?? []
+    bucket.push(item)
+    byDate.set(item.occurred_date, bucket)
+  }
+
+  const dates = Array.from(byDate.keys()).sort()
+  const selected: EvaluatedRow[] = []
+  const selectedIds = new Set<string>()
+
+  const add = (item?: EvaluatedRow) => {
+    if (!item || selectedIds.has(item.clickdesk_ticket_id)) return
+    selected.push(item)
+    selectedIds.add(item.clickdesk_ticket_id)
+  }
+
+  if (dates.length >= limit) {
+    for (let index = 0; index < limit; index += 1) {
+      const position = Math.round((index * (dates.length - 1)) / (limit - 1))
+      const bucket = byDate.get(dates[position]) ?? []
+      add(bucket[Math.floor((bucket.length - 1) / 2)])
+    }
+  } else {
+    for (const date of dates) {
+      const bucket = byDate.get(date) ?? []
+      add(bucket[Math.floor((bucket.length - 1) / 2)])
     }
   }
 
-  return picked
+  if (selected.length < limit) {
+    const remaining = sorted.filter((item) => !selectedIds.has(item.clickdesk_ticket_id))
+    const missing = limit - selected.length
+
+    for (let index = 0; index < missing; index += 1) {
+      const position =
+        missing <= 1
+          ? Math.floor((remaining.length - 1) / 2)
+          : Math.round((index * (remaining.length - 1)) / (missing - 1))
+      add(remaining[position])
+    }
+  }
+
+  return selected
+    .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
+    .slice(0, limit)
 }
 
 export async function GET(request: Request) {
@@ -100,13 +147,12 @@ export async function GET(request: Request) {
       throw new ApiError(503, 'Não foi possível carregar as avaliações do período.')
     }
 
-    const rows = result.data ?? []
+    const rows = (result.data ?? []) as EvaluatedRow[]
     const negatives = rows.filter((row) => row.satisfaction_label === 'negative')
     const positives = rows.filter((row) => row.satisfaction_label === 'positive')
-    const sampled = [
-      ...pickSpread(negatives, 3),
-      ...pickSpread(positives, 5),
-    ]
+    const negativeSample = pickDistributedAcrossDates(negatives, 5)
+    const positiveSample = pickDistributedAcrossDates(positives, 5)
+    const sampled = [...negativeSample, ...positiveSample]
 
     const ticketIds = sampled.map((row) => row.clickdesk_ticket_id)
     const cachedIds = new Set<string>()
@@ -145,12 +191,12 @@ export async function GET(request: Request) {
         evaluated: positives.length + negatives.length,
       },
       sample_rule: {
-        negative_limit: 3,
+        negative_limit: 5,
         positive_limit: 5,
-        strategy: 'distributed_across_period',
+        strategy: 'distributed_across_dates',
       },
-      negative: pickSpread(negatives, 3).map(serialize),
-      positive: pickSpread(positives, 5).map(serialize),
+      negative: negativeSample.map(serialize),
+      positive: positiveSample.map(serialize),
     })
   })
 }
