@@ -7851,9 +7851,9 @@ function ChatModuleDashboard({
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">Cobertura da leitura qualitativa</p>
-              <h3 className="mt-2 text-xl font-bold">Quanto da experiência já foi realmente lido?</h3>
+              <h3 className="mt-2 text-xl font-bold">Cobertura e fila qualitativa</h3>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-                A cobertura conta tudo que a IA já leu. Os padrões gerenciais, porém, usam somente análises aprovadas pela gestão.
+                Cobertura mostra o que já foi lido; consolidação usa somente análises aprovadas pela gestão.
               </p>
             </div>
             {clickDeskQualitativeSummaryLoading && (
@@ -8193,114 +8193,143 @@ function ChatModuleDashboard({
                 </div>
               )}
 
-              {(clickDeskQualitativeSummary?.totals?.approved ?? 0) > 0 ? (
-                <div className="mt-5 grid gap-4 xl:grid-cols-4">
-                  <div className="rounded-lg border border-white/10 bg-slate-900/60 p-4">
-                    <p className="text-sm font-semibold">Contextos validados na amostra</p>
-                    <div className="mt-3 space-y-2">
-                      {(clickDeskQualitativeSummary?.causes ?? []).slice(0, 5).map((item) => (
-                        <div key={item.key} className="flex items-center justify-between gap-3 text-sm">
-                          <span className="text-slate-400">{formatQualitativeLabel(item.key)}</span>
-                          <strong className="tabular-nums">{formatChatCount(item.count)}</strong>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-white/10 bg-slate-900/60 p-4">
-                    <p className="text-sm font-semibold">Influência do atendimento humano</p>
-                    <div className="mt-3 space-y-2">
-                      {(clickDeskQualitativeSummary?.human_influence ?? []).slice(0, 5).map((item) => (
-                        <div key={item.key} className="flex items-center justify-between gap-3 text-sm">
-                          <span className="text-slate-400">{formatQualitativeLabel(item.key)}</span>
-                          <strong className="tabular-nums">{formatChatCount(item.count)}</strong>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-white/10 bg-slate-900/60 p-4">
-                    <p className="text-sm font-semibold">Onde estava o controle?</p>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">
-                      Indica quem tinha condições reais de influenciar ou resolver o contexto: analista, empresa, cliente, fator externo ou combinação deles.
-                    </p>
-                    <div className="mt-3 space-y-2">
-                      {(clickDeskQualitativeSummary?.controllability ?? []).slice(0, 5).map((item) => (
-                        <div key={item.key} className="flex items-center justify-between gap-3 text-sm">
-                          <span className="text-slate-400">{formatQualitativeLabel(item.key)}</span>
-                          <strong className="tabular-nums">{formatChatCount(item.count)}</strong>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-white/10 bg-slate-900/60 p-4">
-                    <p className="text-sm font-semibold">Aprendizados validados</p>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">
-                      Resume se a leitura aprovada aponta prática para manter, desenvolver, contextualizar ou se não permite conclusão segura.
-                    </p>
-                    <div className="mt-3 space-y-2">
-                      {(clickDeskQualitativeSummary?.analyst_takeaways ?? []).slice(0, 5).map((item) => (
-                        <div key={item.key} className="flex items-center justify-between gap-3 text-sm">
-                          <span className="text-slate-400">
-                            {item.key === 'maintain'
-                              ? 'Manter'
-                              : item.key === 'develop'
-                                ? 'Desenvolver'
-                                : item.key === 'context'
-                                  ? 'Contextualizar'
-                                  : 'Sem conclusão segura'}
-                          </span>
-                          <strong className="tabular-nums">{formatChatCount(item.count)}</strong>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ) : (clickDeskQualitativeSummary?.totals?.evaluated ?? 0) > 0 ? (
-                <div className="mt-5 rounded-lg border border-dashed border-white/15 bg-slate-900/40 p-4">
-                  <p className="font-medium text-slate-200">Os padrões começam na primeira análise aprovada.</p>
-                  <p className="mt-1 text-sm leading-6 text-slate-500">
-                    Analise conversas reais e aprove as leituras que fizerem sentido. Até lá, esta área permanece vazia em vez de transformar uma hipótese da IA em padrão da operação.
-                  </p>
-                </div>
-              ) : null}
-
-              {(clickDeskQualitativeSummary?.analysts?.length ?? 0) > 0 && (
-                <div className="mt-5">
-                  <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <details className="mt-5 rounded-lg border border-white/10 bg-slate-900/35 p-4">
+                <summary className="cursor-pointer list-none">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <p className="text-sm font-semibold">Cobertura por analista</p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">Consolidação validada</p>
+                      <h4 className="mt-1 font-semibold text-slate-100">Padrões e cobertura detalhada</h4>
                       <p className="mt-1 text-xs text-slate-500">
-                        Aqui cobertura significa avaliações efetivamente analisadas, independentemente de aprovação. Padrões usam somente as aprovadas.
+                        Abra quando quiser investigar distribuição de causas, influência, controle, aprendizados e cobertura por analista.
                       </p>
                     </div>
-                  </div>
-                  <div className="mt-3 overflow-x-auto rounded-lg border border-white/10">
-                    <div className="min-w-[760px] divide-y divide-white/5">
-                      <div className="grid grid-cols-[1.5fr_repeat(5,0.72fr)] gap-3 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
-                        <span>Analista</span>
-                        <span className="text-right">Lidos</span>
-                        <span className="text-right">Cobertura</span>
-                        <span className="text-right">Aprov.</span>
-                        <span className="text-right">Pend.</span>
-                        <span className="text-right">Sinais</span>
-                      </div>
-                      {clickDeskQualitativeSummary?.analysts?.map((item) => (
-                        <div key={item.analyst_id} className="grid grid-cols-[1.5fr_repeat(5,0.72fr)] gap-3 px-4 py-3 text-sm">
-                          <strong className="text-slate-200">{item.analyst_name}</strong>
-                          <span className="text-right tabular-nums">
-                            {item.analyzed}/{item.evaluated}
-                          </span>
-                          <span className="text-right tabular-nums text-violet-200">
-                            {formatChatPercent(item.coverage_percentage)}
-                          </span>
-                          <span className="text-right tabular-nums text-emerald-200">{item.approved}</span>
-                          <span className="text-right tabular-nums text-amber-100">{item.pending}</span>
-                          <span className="text-right tabular-nums text-cyan-200">{item.coaching_signals}</span>
-                        </div>
-                      ))}
+                    <div className="flex flex-wrap gap-2">
+                      <span className="rounded-md bg-emerald-400/10 px-2 py-1 text-xs font-semibold text-emerald-200">
+                        {formatChatCount(clickDeskQualitativeSummary?.totals?.approved ?? 0)} aprovadas
+                      </span>
+                      <span className="rounded-md bg-cyan-400/10 px-2 py-1 text-xs font-semibold text-cyan-200">
+                        {formatChatCount(clickDeskQualitativeSummary?.coaching_signals ?? 0)} sinais
+                      </span>
+                      <span className="rounded-md bg-violet-400/10 px-2 py-1 text-xs font-semibold text-violet-200">
+                        Ver detalhes
+                      </span>
                     </div>
                   </div>
+                </summary>
+
+                <div className="mt-4">
+                  {(clickDeskQualitativeSummary?.totals?.approved ?? 0) > 0 ? (
+                    <div className="mt-5 grid gap-4 xl:grid-cols-4">
+                      <div className="rounded-lg border border-white/10 bg-slate-900/60 p-4">
+                        <p className="text-sm font-semibold">Contextos validados na amostra</p>
+                        <div className="mt-3 space-y-2">
+                          {(clickDeskQualitativeSummary?.causes ?? []).slice(0, 5).map((item) => (
+                            <div key={item.key} className="flex items-center justify-between gap-3 text-sm">
+                              <span className="text-slate-400">{formatQualitativeLabel(item.key)}</span>
+                              <strong className="tabular-nums">{formatChatCount(item.count)}</strong>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-white/10 bg-slate-900/60 p-4">
+                        <p className="text-sm font-semibold">Influência do atendimento humano</p>
+                        <div className="mt-3 space-y-2">
+                          {(clickDeskQualitativeSummary?.human_influence ?? []).slice(0, 5).map((item) => (
+                            <div key={item.key} className="flex items-center justify-between gap-3 text-sm">
+                              <span className="text-slate-400">{formatQualitativeLabel(item.key)}</span>
+                              <strong className="tabular-nums">{formatChatCount(item.count)}</strong>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-white/10 bg-slate-900/60 p-4">
+                        <p className="text-sm font-semibold">Onde estava o controle?</p>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                          Indica quem tinha condições reais de influenciar ou resolver o contexto: analista, empresa, cliente, fator externo ou combinação deles.
+                        </p>
+                        <div className="mt-3 space-y-2">
+                          {(clickDeskQualitativeSummary?.controllability ?? []).slice(0, 5).map((item) => (
+                            <div key={item.key} className="flex items-center justify-between gap-3 text-sm">
+                              <span className="text-slate-400">{formatQualitativeLabel(item.key)}</span>
+                              <strong className="tabular-nums">{formatChatCount(item.count)}</strong>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-white/10 bg-slate-900/60 p-4">
+                        <p className="text-sm font-semibold">Aprendizados validados</p>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">
+                          Resume se a leitura aprovada aponta prática para manter, desenvolver, contextualizar ou se não permite conclusão segura.
+                        </p>
+                        <div className="mt-3 space-y-2">
+                          {(clickDeskQualitativeSummary?.analyst_takeaways ?? []).slice(0, 5).map((item) => (
+                            <div key={item.key} className="flex items-center justify-between gap-3 text-sm">
+                              <span className="text-slate-400">
+                                {item.key === 'maintain'
+                                  ? 'Manter'
+                                  : item.key === 'develop'
+                                    ? 'Desenvolver'
+                                    : item.key === 'context'
+                                      ? 'Contextualizar'
+                                      : 'Sem conclusão segura'}
+                              </span>
+                              <strong className="tabular-nums">{formatChatCount(item.count)}</strong>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (clickDeskQualitativeSummary?.totals?.evaluated ?? 0) > 0 ? (
+                    <div className="mt-5 rounded-lg border border-dashed border-white/15 bg-slate-900/40 p-4">
+                      <p className="font-medium text-slate-200">Os padrões começam na primeira análise aprovada.</p>
+                      <p className="mt-1 text-sm leading-6 text-slate-500">
+                        Analise conversas reais e aprove as leituras que fizerem sentido. Até lá, esta área permanece vazia em vez de transformar uma hipótese da IA em padrão da operação.
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {(clickDeskQualitativeSummary?.analysts?.length ?? 0) > 0 && (
+                    <div className="mt-5">
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                        <div>
+                          <p className="text-sm font-semibold">Cobertura por analista</p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            Aqui cobertura significa avaliações efetivamente analisadas, independentemente de aprovação. Padrões usam somente as aprovadas.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-3 overflow-x-auto rounded-lg border border-white/10">
+                        <div className="min-w-[760px] divide-y divide-white/5">
+                          <div className="grid grid-cols-[1.5fr_repeat(5,0.72fr)] gap-3 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                            <span>Analista</span>
+                            <span className="text-right">Lidos</span>
+                            <span className="text-right">Cobertura</span>
+                            <span className="text-right">Aprov.</span>
+                            <span className="text-right">Pend.</span>
+                            <span className="text-right">Sinais</span>
+                          </div>
+                          {clickDeskQualitativeSummary?.analysts?.map((item) => (
+                            <div key={item.analyst_id} className="grid grid-cols-[1.5fr_repeat(5,0.72fr)] gap-3 px-4 py-3 text-sm">
+                              <strong className="text-slate-200">{item.analyst_name}</strong>
+                              <span className="text-right tabular-nums">
+                                {item.analyzed}/{item.evaluated}
+                              </span>
+                              <span className="text-right tabular-nums text-violet-200">
+                                {formatChatPercent(item.coverage_percentage)}
+                              </span>
+                              <span className="text-right tabular-nums text-emerald-200">{item.approved}</span>
+                              <span className="text-right tabular-nums text-amber-100">{item.pending}</span>
+                              <span className="text-right tabular-nums text-cyan-200">{item.coaching_signals}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                 </div>
-              )}
+              </details>
+
             </>
           )}
         </div>
