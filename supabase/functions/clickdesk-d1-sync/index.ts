@@ -440,10 +440,20 @@ Deno.serve(async (req: Request) => {
     return Response.json({ error: 'ClickDesk credentials unavailable' }, { status: 500 })
   }
 
+  let requestBody: { mode?: unknown } = {}
+  try {
+    requestBody = await req.json()
+  } catch {
+    requestBody = {}
+  }
+
   const today = businessDate(new Date().toISOString())
   if (!today) return Response.json({ error: 'Business date unavailable' }, { status: 500 })
-  const end = shiftDate(today, -1)
-  const start = shiftDate(end, -6)
+
+  const mode = requestBody.mode === 'intraday' ? 'intraday' : 'd1'
+  const end = mode === 'intraday' ? today : shiftDate(today, -1)
+  const start = mode === 'intraday' ? today : shiftDate(end, -6)
+  const windowDays = mode === 'intraday' ? 1 : 7
 
   const runInsert = await admin
     .from('clickdesk_chat_sync_runs')
@@ -640,7 +650,8 @@ Deno.serve(async (req: Request) => {
           ...operational.audit,
           version: 2,
           total_candidates: targetRows.length,
-          window_days: 7,
+          window_days: windowDays,
+          sync_mode: mode,
           start,
           end,
         },
@@ -653,6 +664,7 @@ Deno.serve(async (req: Request) => {
     return Response.json({
       ok: true,
       run_id: runId,
+      mode,
       period: { start, end },
       rows_received: rows.length,
       rows_persisted: attendanceRows.length,
@@ -672,6 +684,6 @@ Deno.serve(async (req: Request) => {
       })
       .eq('id', runId)
 
-    return Response.json({ error: 'ClickDesk D-1 sync failed' }, { status: 500 })
+    return Response.json({ error: 'ClickDesk automatic sync failed' }, { status: 500 })
   }
 })
