@@ -2704,9 +2704,6 @@ function QualitativeAnalysisCard({
             >
               {result.analysis.analyst_takeaway.summary}
             </strong>
-            <span className="mt-1 block text-xs text-slate-500">
-              confiança {formatQualitativeLabel(result.analysis.analyst_takeaway.confidence)}
-            </span>
           </>
         ) : (
           <>
