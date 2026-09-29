@@ -2835,6 +2835,7 @@ function ChatAnalystPortal({
   const [dailyTicketsLoading, setDailyTicketsLoading] = useState(false)
   const [qualitativeByTicket, setQualitativeByTicket] = useState<Record<string, ClickDeskQualitativeResponse>>({})
   const [qualitativeLoadingTicketId, setQualitativeLoadingTicketId] = useState('')
+  const [openQualitativeTicketId, setOpenQualitativeTicketId] = useState<string | null>(null)
 
   const now = new Date()
   const year = now.getFullYear()
@@ -2933,6 +2934,7 @@ function ChatAnalystPortal({
   }, [analyst?.id, monthStart, monthEnd])
 
   async function analyzeQualitativeTicket(ticketId: string, force = false) {
+    setOpenQualitativeTicketId(ticketId)
     setQualitativeLoadingTicketId(ticketId)
 
     try {
@@ -2981,6 +2983,7 @@ function ChatAnalystPortal({
   async function loadDailyTickets(date: string) {
     if (!analyst?.id) return
 
+    setOpenQualitativeTicketId(null)
     setSelectedRoutineDate(date)
     setDailyTicketsLoading(true)
 
@@ -3219,11 +3222,11 @@ function ChatAnalystPortal({
                         : `${formatDelta(Math.abs(diagnostic.csatDelta ?? 0), ' p.p.').replace('+', '')} abaixo da meta.`}
                   </p>
                   <div className="mt-4 flex flex-wrap gap-4 border-t border-white/10 pt-3 text-sm">
-                    <a className="text-slate-500 hover:text-emerald-200" href="#minhas-avaliacoes">
+                    <a className="text-slate-500 hover:text-emerald-200" href="#minha-rotina">
                       Positivas <strong className="text-slate-200">{formatChatCount(accumulated?.positive_reviews ?? 0)}</strong>
                       <span className="ml-1 text-xs">ver tickets</span>
                     </a>
-                    <a className="text-slate-500 hover:text-amber-100" href="#minhas-avaliacoes">
+                    <a className="text-slate-500 hover:text-amber-100" href="#minha-rotina">
                       Negativas <strong className="text-slate-200">{formatChatCount(accumulated?.negative_reviews ?? 0)}</strong>
                       <span className="ml-1 text-xs">entender</span>
                     </a>
@@ -3343,7 +3346,7 @@ function ChatAnalystPortal({
         )}
       </section>
 
-      <section className="panel">
+      <section id="minha-rotina" className="panel scroll-mt-24">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
@@ -3412,6 +3415,7 @@ function ChatAnalystPortal({
                 type="button"
                 className="text-sm text-slate-400 hover:text-slate-200"
                 onClick={() => {
+                  setOpenQualitativeTicketId(null)
                   setSelectedRoutineDate(null)
                   setDailyTickets(null)
                 }}
@@ -3443,6 +3447,7 @@ function ChatAnalystPortal({
 
                   const qualitativeResult = qualitativeByTicket[ticket.ticket_id]
                   const qualitativeLoading = qualitativeLoadingTicketId === ticket.ticket_id
+                  const qualitativeOpen = openQualitativeTicketId === ticket.ticket_id
                   const evaluated = ticket.satisfaction_label === 'positive' || ticket.satisfaction_label === 'negative'
 
                   return (
@@ -3471,12 +3476,22 @@ function ChatAnalystPortal({
                               type="button"
                               className="small-button"
                               disabled={qualitativeLoading}
-                              onClick={() => void analyzeQualitativeTicket(ticket.ticket_id)}
+                              onClick={() => {
+                                if (qualitativeResult?.analysis) {
+                                  setOpenQualitativeTicketId((current) =>
+                                    current === ticket.ticket_id ? null : ticket.ticket_id,
+                                  )
+                                  return
+                                }
+                                void analyzeQualitativeTicket(ticket.ticket_id)
+                              }}
                             >
                               {qualitativeLoading
                                 ? 'Analisando...'
                                 : qualitativeResult?.analysis
-                                  ? 'Ver análise'
+                                  ? qualitativeOpen
+                                    ? 'Fechar análise'
+                                    : 'Ver análise'
                                   : 'Analisar com IA'}
                             </button>
                           ) : (
@@ -3487,7 +3502,7 @@ function ChatAnalystPortal({
                         )}
                       </div>
 
-                      {QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS && qualitativeResult && (
+                      {QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS && qualitativeResult && qualitativeOpen && (
                         <QualitativeAnalysisCard
                           result={qualitativeResult}
                           reanalyzing={qualitativeLoading}
