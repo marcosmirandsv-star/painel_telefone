@@ -143,6 +143,9 @@ REGRAS OBRIGATÓRIAS
 - analyst_takeaway.kind = context quando o principal aprendizado for reconhecer que o fator relevante estava fora do controle direto do analista.
 - analyst_takeaway.kind = none somente quando o transcript realmente não oferecer evidência segura para manter, desenvolver ou contextualizar.
 - O summary de analyst_takeaway deve ser específico ao que aparece na conversa; não use uma frase genérica repetida em todos os tickets.
+- Em maintain, não apenas descreva o que o atendente fez. Transforme a evidência em uma prática repetível: diga qual comportamento vale manter, em que situação e por quê. Exemplo de forma: "Ao surgir dúvida sobre o caminho no sistema, mantenha a orientação passo a passo, porque ela reduz ambiguidade e deixa claro o próximo movimento."
+- Em develop, descreva uma ação concreta que a pessoa pode praticar; evite rótulos abstratos como "melhorar comunicação".
+- Em context, explique o fator fora do controle direto e, quando houver evidência, o que ainda cabe ao analista fazer sem assumir culpa pelo problema.
 - Uma avaliação positiva ou negativa, sozinha, nunca define o analyst_takeaway.
 - evidence_summary deve ter no máximo 3 itens, em paráfrase curta. Não copie dados pessoais nem trechos longos.
 - limitations deve registrar o que não pode ser concluído com segurança.
