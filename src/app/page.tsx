@@ -8188,7 +8188,7 @@ function ChatModuleDashboard({
               )}
 
               {(clickDeskQualitativeSummary?.totals?.approved ?? 0) > 0 ? (
-                <div className="mt-5 grid gap-4 xl:grid-cols-3">
+                <div className="mt-5 grid gap-4 xl:grid-cols-4">
                   <div className="rounded-lg border border-white/10 bg-slate-900/60 p-4">
                     <p className="text-sm font-semibold">Contextos validados na amostra</p>
                     <div className="mt-3 space-y-2">
@@ -8225,6 +8225,28 @@ function ChatModuleDashboard({
                       ))}
                     </div>
                   </div>
+                  <div className="rounded-lg border border-white/10 bg-slate-900/60 p-4">
+                    <p className="text-sm font-semibold">Aprendizados validados</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      Resume se a leitura aprovada aponta prática para manter, desenvolver, contextualizar ou se não permite conclusão segura.
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {(clickDeskQualitativeSummary?.analyst_takeaways ?? []).slice(0, 5).map((item) => (
+                        <div key={item.key} className="flex items-center justify-between gap-3 text-sm">
+                          <span className="text-slate-400">
+                            {item.key === 'maintain'
+                              ? 'Manter'
+                              : item.key === 'develop'
+                                ? 'Desenvolver'
+                                : item.key === 'context'
+                                  ? 'Contextualizar'
+                                  : 'Sem conclusão segura'}
+                          </span>
+                          <strong className="tabular-nums">{formatChatCount(item.count)}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               ) : (clickDeskQualitativeSummary?.totals?.evaluated ?? 0) > 0 ? (
                 <div className="mt-5 rounded-lg border border-dashed border-white/15 bg-slate-900/40 p-4">
@@ -8237,16 +8259,36 @@ function ChatModuleDashboard({
 
               {(clickDeskQualitativeSummary?.analysts?.length ?? 0) > 0 && (
                 <div className="mt-5">
-                  <p className="text-sm font-semibold">Cobertura por analista</p>
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold">Cobertura por analista</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Aqui cobertura significa avaliações efetivamente analisadas, independentemente de aprovação. Padrões usam somente as aprovadas.
+                      </p>
+                    </div>
+                  </div>
                   <div className="mt-3 overflow-x-auto rounded-lg border border-white/10">
-                    <div className="min-w-[640px] divide-y divide-white/5">
+                    <div className="min-w-[760px] divide-y divide-white/5">
+                      <div className="grid grid-cols-[1.5fr_repeat(5,0.72fr)] gap-3 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                        <span>Analista</span>
+                        <span className="text-right">Lidos</span>
+                        <span className="text-right">Cobertura</span>
+                        <span className="text-right">Aprov.</span>
+                        <span className="text-right">Pend.</span>
+                        <span className="text-right">Sinais</span>
+                      </div>
                       {clickDeskQualitativeSummary?.analysts?.map((item) => (
-                        <div key={item.analyst_id} className="grid grid-cols-[1.4fr_repeat(4,0.6fr)] gap-3 px-4 py-3 text-sm">
+                        <div key={item.analyst_id} className="grid grid-cols-[1.5fr_repeat(5,0.72fr)] gap-3 px-4 py-3 text-sm">
                           <strong className="text-slate-200">{item.analyst_name}</strong>
-                          <span className="text-right tabular-nums">{item.analyzed} análises</span>
-                          <span className="text-right tabular-nums text-amber-100">{item.negative} neg.</span>
-                          <span className="text-right tabular-nums text-emerald-200">{item.positive} pos.</span>
-                          <span className="text-right tabular-nums text-cyan-200">{item.coaching_signals} sinais</span>
+                          <span className="text-right tabular-nums">
+                            {item.analyzed}/{item.evaluated}
+                          </span>
+                          <span className="text-right tabular-nums text-violet-200">
+                            {formatChatPercent(item.coverage_percentage)}
+                          </span>
+                          <span className="text-right tabular-nums text-emerald-200">{item.approved}</span>
+                          <span className="text-right tabular-nums text-amber-100">{item.pending}</span>
+                          <span className="text-right tabular-nums text-cyan-200">{item.coaching_signals}</span>
                         </div>
                       ))}
                     </div>
@@ -8257,16 +8299,16 @@ function ChatModuleDashboard({
           )}
         </div>
 
-        <details className="mt-5 rounded-xl border border-violet-400/15 bg-violet-400/5 p-4">
+        <details className="mt-5 rounded-xl border border-white/10 bg-slate-950/25 p-4">
           <summary className="cursor-pointer list-none">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <strong className="text-sm text-violet-100">Laboratório de validação qualitativa</strong>
-                <p className="mt-1 text-xs leading-5 text-slate-400">
-                  Ferramenta temporária da homologação para validar um ticket por vez antes de automatizar a análise no fluxo de gestão.
+                <strong className="text-sm text-slate-200">Analisar ticket específico</strong>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  Use somente quando o ticket que você quer investigar não aparecer nas amostras acima.
                 </p>
               </div>
-              <span className="text-xs font-semibold text-violet-200">Abrir teste</span>
+              <span className="text-xs font-semibold text-violet-200">Abrir</span>
             </div>
           </summary>
 
@@ -8286,153 +8328,37 @@ function ChatModuleDashboard({
               type="button"
               onClick={() => void handleAnalyzeClickDeskQualitative()}
             >
-              {clickDeskQualitativeLoading ? 'Analisando...' : 'Analisar transcript'}
+              {clickDeskQualitativeLoading && clickDeskQualitativeResultSource === 'manual'
+                ? 'Analisando...'
+                : 'Analisar ticket'}
             </button>
           </div>
 
-          {clickDeskQualitativeResult?.error && (
-            <div className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-sm text-amber-100">
-              <strong className="block text-amber-50">Análise não concluída</strong>
-              <p className="mt-1 leading-5">{clickDeskQualitativeResult.error}</p>
-              <button
-                type="button"
-                className="small-button mt-3"
-                disabled={clickDeskQualitativeLoading}
-                onClick={() => void handleAnalyzeClickDeskQualitative()}
-              >
-                {clickDeskQualitativeLoading ? 'Tentando novamente...' : 'Tentar novamente'}
-              </button>
-            </div>
-          )}
-
-          {clickDeskQualitativeResult?.analysis && (
-            <div className="mt-5 space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-lg bg-slate-950/45 p-4">
-                  <p className="text-xs text-slate-500">Sentimento inicial</p>
-                  <strong className="mt-1 block">{formatQualitativeLabel(clickDeskQualitativeResult.analysis.initial_sentiment)}</strong>
-                </div>
-                <div className="rounded-lg bg-slate-950/45 p-4">
-                  <p className="text-xs text-slate-500">Sentimento final</p>
-                  <strong className="mt-1 block">{formatQualitativeLabel(clickDeskQualitativeResult.analysis.final_sentiment)}</strong>
-                </div>
-                <div className="rounded-lg bg-slate-950/45 p-4">
-                  <p className="text-xs text-slate-500">Influência do atendimento humano</p>
-                  <strong className="mt-1 block">{formatQualitativeLabel(clickDeskQualitativeResult.analysis.human_influence.classification)}</strong>
-                </div>
-                <div className="rounded-lg bg-slate-950/45 p-4">
-                  <p className="text-xs text-slate-500">Onde estava o controle?</p>
-                  <strong className="mt-1 block">{formatQualitativeLabel(clickDeskQualitativeResult.analysis.controllability.classification)}</strong>
-                </div>
-              </div>
-
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="rounded-lg bg-slate-950/45 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">Contexto principal observado</p>
-                  <p className="mt-2 text-sm font-semibold">
-                    {formatQualitativeLabel(clickDeskQualitativeResult.analysis.primary_cause.category)}
-                    {' · '}
-                    confiança {formatQualitativeLabel(clickDeskQualitativeResult.analysis.primary_cause.confidence)}
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-slate-400">{clickDeskQualitativeResult.analysis.primary_cause.summary}</p>
-                </div>
-                <div className="rounded-lg bg-slate-950/45 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">Influência do atendimento humano</p>
-                  <p className="mt-2 text-sm font-semibold">
-                    {formatQualitativeLabel(clickDeskQualitativeResult.analysis.human_influence.classification)}
-                    {' · '}
-                    confiança {formatQualitativeLabel(clickDeskQualitativeResult.analysis.human_influence.confidence)}
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-slate-400">{clickDeskQualitativeResult.analysis.human_influence.summary}</p>
-                </div>
-              </div>
-
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="rounded-lg bg-slate-950/45 p-4">
-                  <p className="text-sm font-semibold">Evidências resumidas</p>
-                  {clickDeskQualitativeResult.analysis.evidence_summary.length ? (
-                    <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-400">
-                      {clickDeskQualitativeResult.analysis.evidence_summary.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="mt-2 text-sm text-slate-500">Nenhuma evidência suficiente foi retornada.</p>
-                  )}
-                </div>
-                <div className="rounded-lg bg-slate-950/45 p-4">
-                  <p className="text-sm font-semibold">Limitações da leitura</p>
-                  {clickDeskQualitativeResult.analysis.limitations.length ? (
-                    <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-400">
-                      {clickDeskQualitativeResult.analysis.limitations.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="mt-2 text-sm text-slate-500">Nenhuma limitação adicional registrada.</p>
-                  )}
-                </div>
-              </div>
-
-              {clickDeskQualitativeResult.ticket_id && (
-                <div className="flex flex-col gap-3 rounded-lg border border-white/10 bg-slate-950/30 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-100">
-                      {clickDeskQualitativeResult.validation_status === 'approved'
-                        ? 'Leitura aprovada pela gestão'
-                        : clickDeskQualitativeResult.validation_status === 'rejected'
-                          ? 'Leitura descartada da consolidação'
-                          : 'Esta leitura aguarda sua validação'}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Somente leituras aprovadas entram nos padrões da operação e no relatório individual.
-                    </p>
-                  </div>
-
-                  {clickDeskQualitativeResult.validation_status !== 'approved' &&
-                    clickDeskQualitativeResult.validation_status !== 'rejected' && (
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          className="small-button"
-                          disabled={
-                            clickDeskQualitativeValidationTicketId === clickDeskQualitativeResult.ticket_id
-                          }
-                          onClick={() =>
-                            void handleValidateClickDeskQualitative(
-                              clickDeskQualitativeResult.ticket_id ?? '',
-                              'approved',
-                            )
-                          }
-                        >
-                          {clickDeskQualitativeValidationTicketId === clickDeskQualitativeResult.ticket_id
-                            ? 'Salvando...'
-                            : 'Aprovar leitura'}
-                        </button>
-                        <button
-                          type="button"
-                          className="danger-button"
-                          disabled={
-                            clickDeskQualitativeValidationTicketId === clickDeskQualitativeResult.ticket_id
-                          }
-                          onClick={() =>
-                            void handleValidateClickDeskQualitative(
-                              clickDeskQualitativeResult.ticket_id ?? '',
-                              'rejected',
-                            )
-                          }
-                        >
-                          Descartar
-                        </button>
-                      </div>
-                    )}
-                </div>
+          {clickDeskQualitativeResultSource === 'manual' && clickDeskQualitativeResult && (
+            <>
+              <QualitativeAnalysisCard
+                result={clickDeskQualitativeResult}
+                audience="management"
+                reanalyzing={clickDeskQualitativeLoading}
+                onReanalyze={
+                  clickDeskQualitativeResult.error
+                    ? () => void handleAnalyzeClickDeskQualitative()
+                    : undefined
+                }
+              />
+              {clickDeskQualitativeResult.analysis && clickDeskQualitativeResult.ticket_id && (
+                <QualitativeValidationActions
+                  ticketId={clickDeskQualitativeResult.ticket_id}
+                  status={clickDeskQualitativeResult.validation_status}
+                  validating={
+                    clickDeskQualitativeValidationTicketId === clickDeskQualitativeResult.ticket_id
+                  }
+                  onValidate={(ticketId, status) =>
+                    void handleValidateClickDeskQualitative(ticketId, status)
+                  }
+                />
               )}
-
-              <p className="text-xs text-slate-500">
-                Ticket {clickDeskQualitativeResult.ticket_id} · {formatChatCount(clickDeskQualitativeResult.transcript_characters_analyzed ?? 0)} caracteres analisados · modelo {clickDeskQualitativeResult.model ?? 'não informado'}.
-              </p>
-            </div>
+            </>
           )}
         </details>
       </section>
