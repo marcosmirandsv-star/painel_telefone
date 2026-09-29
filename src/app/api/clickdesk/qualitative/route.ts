@@ -201,7 +201,9 @@ async function generateWithGemini(prompt: string) {
       [
         'gemini-3.8-flash',
         configuredModel,
+        'gemini-3.7-flash',
         'gemini-3.6-flash',
+        'gemini-3.5-flash-lite',
         'gemini-3.5-flash',
       ].filter(Boolean) as string[],
     ),
@@ -403,19 +405,32 @@ async function generateWithVercelGateway(prompt: string) {
 
 async function generateQualitativeAnalysis(prompt: string) {
   const errors: string[] = []
+  const hasDirectGemini = Boolean(
+    process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY,
+  )
+  let directFailure = ''
 
   try {
     const directGemini = await generateWithGemini(prompt)
     if (directGemini) return directGemini
   } catch (error) {
-    errors.push(getErrorText(error))
+    directFailure = getErrorText(error)
+    errors.push(directFailure)
   }
 
-  try {
-    const gateway = await generateWithVercelGateway(prompt)
-    if (gateway) return gateway
-  } catch (error) {
-    errors.push(getErrorText(error))
+  const directFailureIsTemporary =
+    hasDirectGemini &&
+    /high demand|temporar|overloaded|resource exhausted|quota|HTTP 429|HTTP 503/i.test(
+      directFailure,
+    )
+
+  if (!directFailureIsTemporary) {
+    try {
+      const gateway = await generateWithVercelGateway(prompt)
+      if (gateway) return gateway
+    } catch (error) {
+      errors.push(getErrorText(error))
+    }
   }
 
   const reason = errors.length
@@ -429,7 +444,7 @@ async function generateQualitativeAnalysis(prompt: string) {
 
   throw new ApiError(
     503,
-    'A IA está temporariamente indisponível por alta demanda. Aguarde alguns instantes e tente analisar este ticket novamente.',
+    'A IA está temporariamente ocupada. O ticket não foi alterado; aguarde alguns instantes e tente a análise novamente.',
   )
 }
 
