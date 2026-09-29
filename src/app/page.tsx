@@ -2150,24 +2150,88 @@ export default function Home() {
           </div>
         </div>
       )}
-      <section className="mx-auto max-w-7xl">
+      <section className="mx-auto max-w-[1600px]">
         {isHomologationView && (
           <div className="homologation-banner" role="status">
             <strong>Ambiente de homologação</strong>
             <span>Versão de testes do Sistema de Performance. Alterações aqui não são produção.</span>
           </div>
         )}
+        <div className="corporate-layout">
+          <aside className="corporate-sidebar" aria-label="Módulos do sistema">
+            <div className="corporate-sidebar-brand">
+              <span className="corporate-brand-mark" aria-hidden="true">CP</span>
+              <div>
+                <span className="corporate-brand-kicker">Central</span>
+                <strong>Performance</strong>
+              </div>
+            </div>
+
+            <nav className="corporate-module-nav">
+              {(isManagementUser || hasPhoneAnalystAccess) && (
+                <button
+                  className={activeModule === 'phone' ? 'module-sidebar-button module-sidebar-button-active' : 'module-sidebar-button'}
+                  type="button"
+                  onClick={() => {
+                    setActiveModule('phone')
+                    setActiveTab('dashboard')
+                  }}
+                >
+                  <span className="module-sidebar-code" aria-hidden="true">TEL</span>
+                  <span className="module-sidebar-copy">
+                    <strong>Telefone</strong>
+                    <small>{isManagementUser ? 'Performance e gestão' : 'Meu desempenho'}</small>
+                  </span>
+                </button>
+              )}
+
+              {(isManagementUser || hasChatAnalystAccess) && (
+                <button
+                  className={activeModule === 'chat' ? 'module-sidebar-button module-sidebar-button-active' : 'module-sidebar-button'}
+                  type="button"
+                  onClick={() => setActiveModule('chat')}
+                >
+                  <span className="module-sidebar-code" aria-hidden="true">CHAT</span>
+                  <span className="module-sidebar-copy">
+                    <strong>Chat</strong>
+                    <small>{isManagementUser ? 'ClickDesk e performance' : 'Meu desempenho'}</small>
+                  </span>
+                </button>
+              )}
+
+              {isManagementUser && (
+                <Link className="module-sidebar-button" href="/escalas">
+                  <span className="module-sidebar-code" aria-hidden="true">ESC</span>
+                  <span className="module-sidebar-copy">
+                    <strong>Escalas</strong>
+                    <small>Solicitações e operação</small>
+                  </span>
+                </Link>
+              )}
+            </nav>
+
+            <div className="corporate-sidebar-profile">
+              <span>Perfil atual</span>
+              <strong>{getRoleLabel(userRole)}</strong>
+              <small>
+                {activeModule === 'chat' ? 'Módulo Chat' : 'Módulo Telefone'}
+              </small>
+            </div>
+          </aside>
+
+          <div className="corporate-workspace">
         <header className="app-header flex flex-col gap-5 border-b border-white/10 pb-6 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-300">
-              Central de Performance
+              {activeModule === 'chat' ? 'Módulo Chat' : 'Módulo Telefone'}
             </p>
             <h1 className="mt-3 text-3xl font-bold sm:text-4xl">
               Gestão de Performance de Atendimento
             </h1>
             <p className="mt-3 max-w-3xl text-slate-300">
-              Painel interno para acompanhar metas, analistas, lançamentos semanais,
-              performance da equipe e próximas análises com IA.
+              {activeModule === 'chat'
+                ? 'Operação, produtividade, gestão, fechamento e leitura qualitativa com dados do ClickDesk.'
+                : 'Metas, lançamentos, performance, pódio, relatórios e acompanhamento da operação de telefone.'}
             </p>
             <p className="mt-3 text-sm text-slate-400">
               Perfil: <strong>{getRoleLabel(userRole)}</strong>
@@ -2225,54 +2289,6 @@ export default function Home() {
           </div>
         </header>
 
-        <div className={`mt-6 grid gap-3 ${
-          isManagementUser ? 'md:grid-cols-3' : 'md:grid-cols-2'
-        }`}>
-          {(isManagementUser || hasPhoneAnalystAccess) && (
-            <button
-              className={activeModule === 'phone' ? 'module-card-active' : 'module-card'}
-              type="button"
-              onClick={() => {
-                setActiveModule('phone')
-                setActiveTab('dashboard')
-              }}
-            >
-              <span>Módulo telefone</span>
-              <strong>
-                {isManagementUser ? 'Performance de atendimento' : 'Meu desempenho no telefone'}
-              </strong>
-              <small>
-                {isManagementUser
-                  ? 'Dashboard, lançamentos, metas, pódio, SARE e IA preditiva.'
-                  : 'Seus indicadores, metas e evolução individual.'}
-              </small>
-            </button>
-          )}
-          {(isManagementUser || hasChatAnalystAccess) && (
-            <button
-              className={activeModule === 'chat' ? 'module-card-active' : 'module-card'}
-              type="button"
-              onClick={() => setActiveModule('chat')}
-            >
-              <span>Módulo chat</span>
-              <strong>
-                {isManagementUser ? 'Performance de atendimento via chat' : 'Meu desempenho no chat'}
-              </strong>
-              <small>
-                {isManagementUser
-                  ? 'ClickDesk, visão da operação, gestão, fechamento e histórico.'
-                  : 'Seus atendimentos ClickDesk, metas e histórico individual.'}
-              </small>
-            </button>
-          )}
-          {isManagementUser && (
-            <Link className="module-card" href="/escalas">
-              <span>Módulo escalas</span>
-              <strong>Escalas e solicitações</strong>
-              <small>Homologação: geração mensal, pessoas, sábados, publicação e alertas.</small>
-            </Link>
-          )}
-        </div>
         {activeModule === 'phone' && (
           <nav className="mt-6 flex flex-wrap gap-2">
           <TabButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')}>
@@ -2413,6 +2429,8 @@ export default function Home() {
             onCancelEdit={handleCancelGoalEdit}
           />
         )}
+          </div>
+        </div>
       </section>
     </main>
   )
