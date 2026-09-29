@@ -14,8 +14,8 @@ import {
 } from '@/lib/chat-diagnostic'
 import { normalizeQualitativeAnalysis } from '@/lib/clickdesk-qualitative'
 
-// Homologação: mantém a IA qualitativa bloqueada no portal até a validação da leitura de transcript.
-const QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS = false
+// Homologação: IA qualitativa liberada no acesso individual com governança separada da gestão.
+const QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS = true
 
 type Goal = {
   id: string
@@ -2503,10 +2503,12 @@ function QualitativeAnalysisCard({
   result,
   onReanalyze,
   reanalyzing = false,
+  audience = 'management',
 }: {
   result: ClickDeskQualitativeResponse
   onReanalyze?: () => void
   reanalyzing?: boolean
+  audience?: 'management' | 'analyst'
 }) {
   if (result.error) {
     return (
@@ -2538,7 +2540,7 @@ function QualitativeAnalysisCard({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">
-            Leitura qualitativa do atendimento
+            {audience === 'analyst' ? 'Leitura da sua avaliação' : 'Leitura qualitativa do atendimento'}
           </p>
           <p className="mt-1 text-xs text-slate-500">
             {result.cached ? 'Análise já preservada' : 'Análise gerada agora'}
@@ -2554,15 +2556,21 @@ function QualitativeAnalysisCard({
                     : 'bg-amber-300/10 text-amber-100'
               }`}
             >
-              {result.validation_status === 'approved'
-                ? 'Validada pela gestão'
-                : result.validation_status === 'rejected'
-                  ? 'Descartada da consolidação'
-                  : 'Aguardando validação da gestão'}
+              {audience === 'analyst'
+                ? result.validation_status === 'approved'
+                  ? 'Leitura validada'
+                  : result.validation_status === 'rejected'
+                    ? 'Leitura não usada na consolidação'
+                    : 'Leitura em revisão para consolidação'
+                : result.validation_status === 'approved'
+                  ? 'Validada pela gestão'
+                  : result.validation_status === 'rejected'
+                    ? 'Descartada da consolidação'
+                    : 'Aguardando validação da gestão'}
             </span>
           )}
         </div>
-        {onReanalyze && (
+        {onReanalyze && audience === 'management' && (
           <button
             type="button"
             className="text-xs font-semibold text-violet-200 hover:text-violet-100 disabled:opacity-50"
@@ -2651,7 +2659,9 @@ function QualitativeAnalysisCard({
       </div>
 
       <div className="mt-4 rounded-lg border border-white/10 bg-slate-950/30 px-3 py-3 text-sm">
-        <span className="text-slate-500">Ponto acionável para feedback: </span>
+        <span className="text-slate-500">
+          {audience === 'analyst' ? 'O que você pode levar daqui: ' : 'Ponto acionável para feedback: '}
+        </span>
         <strong className={result.analysis.coaching_signal.available ? 'text-cyan-200' : 'text-slate-300'}>
           {result.analysis.coaching_signal.summary}
         </strong>
@@ -2668,6 +2678,8 @@ function QualitativeSampleTicketList({
   results,
   loadingTicketId,
   onAnalyze,
+  audience = 'management',
+  allowForceReanalysis = true,
 }: {
   title: string
   subtitle: string
@@ -2676,6 +2688,8 @@ function QualitativeSampleTicketList({
   results: Record<string, ClickDeskQualitativeResponse>
   loadingTicketId: string
   onAnalyze: (ticketId: string, force?: boolean) => void
+  audience?: 'management' | 'analyst'
+  allowForceReanalysis?: boolean
 }) {
   return (
     <div className="rounded-xl border border-white/10 bg-slate-950/30 p-4">
@@ -2732,7 +2746,14 @@ function QualitativeSampleTicketList({
                   <QualitativeAnalysisCard
                     result={result}
                     reanalyzing={loading}
-                    onReanalyze={() => onAnalyze(ticket.ticket_id, true)}
+                    audience={audience}
+                    onReanalyze={
+                      result.error
+                        ? () => onAnalyze(ticket.ticket_id)
+                        : allowForceReanalysis
+                          ? () => onAnalyze(ticket.ticket_id, true)
+                          : undefined
+                    }
                   />
                 )}
               </div>
@@ -3390,6 +3411,8 @@ function ChatAnalystPortal({
                 <div className="mt-5 grid gap-4 xl:grid-cols-2">
                   <QualitativeSampleTicketList
                     title="Negativas para entender"
+                    audience="analyst"
+                    allowForceReanalysis={false}
                     subtitle="Até 3 tickets distribuídos ao longo do mês. Se houver menos, o painel mostra todos."
                     tickets={evaluatedSample?.negative ?? []}
                     tone="negative"
@@ -3399,6 +3422,8 @@ function ChatAnalystPortal({
                   />
                   <QualitativeSampleTicketList
                     title="Positivas para aprender"
+                    audience="analyst"
+                    allowForceReanalysis={false}
                     subtitle="Até 5 tickets distribuídos ao longo do mês para reconhecer padrões que vale repetir."
                     tickets={evaluatedSample?.positive ?? []}
                     tone="positive"
@@ -3411,7 +3436,7 @@ function ChatAnalystPortal({
 
               <p className="mt-4 text-xs leading-5 text-slate-500">
                 {QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS
-                  ? 'A amostra é apenas um atalho. Na rotina diária, qualquer ticket avaliado também pode ser analisado individualmente.'
+                  ? 'A amostra é apenas um atalho. Na rotina diária, qualquer ticket avaliado também pode ser analisado individualmente. A leitura da IA não altera seu CSAT, suas metas ou o resultado do atendimento; somente leituras validadas entram na consolidação gerencial.'
                   : 'Enquanto a IA qualitativa não é liberada, os números e avaliações continuam disponíveis para acompanhamento objetivo.'}
               </p>
             </div>
@@ -3559,7 +3584,12 @@ function ChatAnalystPortal({
                         <QualitativeAnalysisCard
                           result={qualitativeResult}
                           reanalyzing={qualitativeLoading}
-                          onReanalyze={() => void analyzeQualitativeTicket(ticket.ticket_id, true)}
+                          audience="analyst"
+                          onReanalyze={
+                            qualitativeResult.error
+                              ? () => void analyzeQualitativeTicket(ticket.ticket_id)
+                              : undefined
+                          }
                         />
                       )}
                     </div>
