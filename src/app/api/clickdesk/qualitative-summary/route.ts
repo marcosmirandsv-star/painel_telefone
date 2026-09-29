@@ -153,30 +153,74 @@ export async function GET(request: Request) {
       {
         analyst_id: string
         analyst_name: string
+        evaluated: number
+        evaluated_positive: number
+        evaluated_negative: number
         analyzed: number
-        positive: number
-        negative: number
+        analyzed_positive: number
+        analyzed_negative: number
+        approved: number
+        pending: number
+        rejected: number
         coaching_signals: number
         causes: string[]
       }
     >()
 
-    for (const item of approved) {
+    for (const item of evaluated) {
+      if (!item.analyst_id) continue
+      const current = analystAggregation.get(item.analyst_id) ?? {
+        analyst_id: item.analyst_id,
+        analyst_name: item.assignee_name || analystNames.get(item.analyst_id) || 'Analista',
+        evaluated: 0,
+        evaluated_positive: 0,
+        evaluated_negative: 0,
+        analyzed: 0,
+        analyzed_positive: 0,
+        analyzed_negative: 0,
+        approved: 0,
+        pending: 0,
+        rejected: 0,
+        coaching_signals: 0,
+        causes: [],
+      }
+      current.evaluated += 1
+      if (item.satisfaction_label === 'positive') current.evaluated_positive += 1
+      if (item.satisfaction_label === 'negative') current.evaluated_negative += 1
+      analystAggregation.set(item.analyst_id, current)
+    }
+
+    for (const item of normalized) {
       const current = analystAggregation.get(item.analyst_id) ?? {
         analyst_id: item.analyst_id,
         analyst_name: analystNames.get(item.analyst_id) ?? 'Analista',
+        evaluated: 0,
+        evaluated_positive: 0,
+        evaluated_negative: 0,
         analyzed: 0,
-        positive: 0,
-        negative: 0,
+        analyzed_positive: 0,
+        analyzed_negative: 0,
+        approved: 0,
+        pending: 0,
+        rejected: 0,
         coaching_signals: 0,
         causes: [],
       }
 
       current.analyzed += 1
-      if (item.satisfaction_label === 'positive') current.positive += 1
-      if (item.satisfaction_label === 'negative') current.negative += 1
-      if (item.normalized.coaching_signal.available) current.coaching_signals += 1
-      current.causes.push(item.normalized.primary_cause.category)
+      if (item.satisfaction_label === 'positive') current.analyzed_positive += 1
+      if (item.satisfaction_label === 'negative') current.analyzed_negative += 1
+
+      if (item.validation_status === 'approved') {
+        current.approved += 1
+        if (item.normalized.coaching_signal.available) current.coaching_signals += 1
+        current.causes.push(item.normalized.primary_cause.category)
+      } else if (item.validation_status === 'pending') {
+        current.pending += 1
+      } else if (item.validation_status === 'rejected') {
+        current.rejected += 1
+      }
+
       analystAggregation.set(item.analyst_id, current)
     }
 
@@ -184,24 +228,33 @@ export async function GET(request: Request) {
       .map((item) => ({
         analyst_id: item.analyst_id,
         analyst_name: item.analyst_name,
+        evaluated: item.evaluated,
+        evaluated_positive: item.evaluated_positive,
+        evaluated_negative: item.evaluated_negative,
         analyzed: item.analyzed,
-        positive: item.positive,
-        negative: item.negative,
+        analyzed_positive: item.analyzed_positive,
+        analyzed_negative: item.analyzed_negative,
+        coverage_percentage: percentage(item.analyzed, item.evaluated),
+        approved: item.approved,
+        pending: item.pending,
+        rejected: item.rejected,
         coaching_signals: item.coaching_signals,
         top_causes: countValues(item.causes).slice(0, 3),
       }))
-      .sort((a, b) => b.analyzed - a.analyzed || a.analyst_name.localeCompare(b.analyst_name))
+      .sort(
+        (a, b) =>
+          b.pending - a.pending ||
+          a.coverage_percentage - b.coverage_percentage ||
+          a.analyst_name.localeCompare(b.analyst_name),
+      )
 
     const analyzedTicketIds = new Set(analyses.map((item) => item.clickdesk_ticket_id))
-    const pendingReviews = pending.slice(0, 8).map((item) => ({
+    const pendingReviews = pending.slice(0, 12).map((item) => ({
       ticket_id: item.clickdesk_ticket_id,
       analyst_id: item.analyst_id,
       analyst_name: analystNames.get(item.analyst_id) ?? 'Analista',
       satisfaction_label: item.satisfaction_label,
-      cause: item.normalized.primary_cause,
-      human_influence: item.normalized.human_influence,
-      controllability: item.normalized.controllability,
-      coaching_signal: item.normalized.coaching_signal,
+      analysis: item.normalized,
     }))
 
     const negativeValidationQueue = evaluated
@@ -276,6 +329,9 @@ export async function GET(request: Request) {
       coaching_signals: approved.filter(
         (item) => item.normalized.coaching_signal.available,
       ).length,
+      analyst_takeaways: countValues(
+        approved.map((item) => item.normalized.analyst_takeaway.kind),
+      ),
       analysts,
       pending_reviews: pendingReviews,
       validation_queue: negativeValidationQueue,
