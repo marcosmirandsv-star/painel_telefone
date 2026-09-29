@@ -7743,70 +7743,76 @@ function ChatModuleDashboard({
         )}
       </section>
 
-      <section className={chatActiveTab === 'podium' ? 'panel' : 'hidden'}>
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Plano de gestão</p>
-          <h2 className="mt-2 text-2xl font-bold">O que atacar primeiro?</h2>
-          <p className="section-subtitle">
-            A leitura abaixo separa qualidade, participação e contexto operacional para evitar que indicadores diferentes recebam a mesma tratativa.
-          </p>
-        </div>
+      <details className={chatActiveTab === 'podium' ? 'panel' : 'hidden'}>
+        <summary className="cursor-pointer list-none">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Plano de gestão</p>
+              <h2 className="mt-1 text-xl font-bold">Como priorizar a atuação</h2>
+              <p className="mt-1 text-sm text-slate-400">
+                Qualidade, participação e contexto operacional separados para evitar a mesma tratativa para problemas diferentes.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-md border border-amber-300/15 bg-amber-300/5 px-3 py-2 text-xs text-amber-100">
+                Qualidade {chat2ManagementCsatAttention.length}
+              </span>
+              <span className="rounded-md border border-amber-300/15 bg-amber-300/5 px-3 py-2 text-xs text-amber-100">
+                Participação {chat2ManagementReviewAttention.length}
+              </span>
+              <span className="rounded-md border border-cyan-300/15 bg-cyan-300/5 px-3 py-2 text-xs text-cyan-100">
+                Contexto {chat2ManagementVolumeContexts.length}
+              </span>
+              <span className="rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-xs font-semibold text-slate-300">
+                Abrir orientação
+              </span>
+            </div>
+          </div>
+        </summary>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-3">
-          <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+          <div className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-200">Qualidade</p>
-            <strong className="mt-2 block text-2xl tabular-nums">{chat2ManagementCsatAttention.length}</strong>
             <p className="mt-2 text-sm leading-6 text-slate-400">
-              analista(s) abaixo da própria meta de CSAT ou ainda sem base suficiente. Priorize avaliações negativas e fatos observáveis antes do feedback.
+              {chat2ManagementCsatAttention.length} analista(s) abaixo da própria meta de CSAT ou ainda sem base suficiente. Priorize avaliações negativas e fatos observáveis antes do feedback.
             </p>
           </div>
-          <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+          <div className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-200">Participação</p>
-            <strong className="mt-2 block text-2xl tabular-nums">{chat2ManagementReviewAttention.length}</strong>
             <p className="mt-2 text-sm leading-6 text-slate-400">
-              analista(s) abaixo de 25% de avaliações ou ainda sem base. Trabalhe encerramento, confirmação da solução e convite à pesquisa.
+              {chat2ManagementReviewAttention.length} analista(s) abaixo de 25% de avaliações ou ainda sem base. Trabalhe encerramento, confirmação da solução e convite à pesquisa.
             </p>
           </div>
-          <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
+          <div className="rounded-xl border border-white/10 bg-slate-900/70 p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-300">Contexto operacional</p>
-            <strong className="mt-2 block text-2xl tabular-nums">{chat2ManagementVolumeContexts.length}</strong>
             <p className="mt-2 text-sm leading-6 text-slate-400">
-              analista(s) com volume pelo menos 20% abaixo da média da própria área, quando já existe base mínima. Antes de qualquer cobrança, valide disponibilidade, ausências, apoio a outras demandas e duração dos atendimentos.
+              {chat2ManagementVolumeContexts.length} analista(s) com volume pelo menos 20% abaixo da média da própria área. Antes de qualquer cobrança, valide disponibilidade, ausências, apoio a outras demandas e duração dos atendimentos.
             </p>
           </div>
         </div>
 
-        <div className="mt-5 rounded-xl border border-cyan-400/15 bg-cyan-400/5 p-5">
+        <div className="mt-4 rounded-xl border border-cyan-400/15 bg-cyan-400/5 p-4">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-300">Sequência recomendada</p>
-          <div className="mt-3 grid gap-3 md:grid-cols-3">
-            <div className="rounded-lg bg-slate-950/40 p-4">
-              <strong className="text-slate-100">1. Validar o fato</strong>
-              <p className="mt-2 text-sm leading-6 text-slate-400">Confira o indicador e, quando houver CSAT baixo, leia as avaliações negativas antes de concluir a causa.</p>
-            </div>
-            <div className="rounded-lg bg-slate-950/40 p-4">
-              <strong className="text-slate-100">2. Separar causa de contexto</strong>
-              <p className="mt-2 text-sm leading-6 text-slate-400">Volume baixo pede contexto operacional. Qualidade e participação pedem ações diferentes.</p>
-            </div>
-            <div className="rounded-lg bg-slate-950/40 p-4">
-              <strong className="text-slate-100">3. Combinar uma ação observável</strong>
-              <p className="mt-2 text-sm leading-6 text-slate-400">Feche o 1:1 com uma mudança concreta e um indicador para acompanhar no próximo recorte.</p>
-            </div>
-          </div>
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            <strong>1. Validar o fato.</strong> Confira indicador e avaliações. {' '}
+            <strong>2. Separar causa de contexto.</strong> Volume, qualidade e participação pedem leituras diferentes. {' '}
+            <strong>3. Combinar uma ação observável.</strong> Feche o 1:1 com comportamento concreto e indicador para acompanhar.
+          </p>
         </div>
-      </section>
+      </details>
 
 
       <section className={chatActiveTab === 'podium' ? 'panel' : 'hidden'}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-violet-200">IA qualitativa · em validação</p>
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-violet-200">IA qualitativa · governança ativa</p>
             <h2 className="mt-2 text-2xl font-bold">Da métrica para a causa</h2>
             <p className="section-subtitle">
-              A leitura qualitativa já funciona por ticket. Esta visão consolida somente atendimentos efetivamente analisados e sempre informa a cobertura da amostra antes de mostrar padrões.
+              A leitura qualitativa funciona por ticket e consolida somente o que foi aprovado pela gestão. A cobertura continua explícita para evitar generalizações.
             </p>
           </div>
           <span className="rounded-md border border-violet-400/20 bg-violet-400/5 px-3 py-2 text-sm font-semibold text-violet-200">
-            Homologação · evidência controlada
+            Homologação · validação humana
           </span>
         </div>
 
