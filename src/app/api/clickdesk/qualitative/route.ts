@@ -518,6 +518,10 @@ export async function POST(request: Request) {
       throw new ApiError(400, 'ticket_id inválido.')
     }
 
+    if (body.force && !access.isManagement) {
+      throw new ApiError(403, 'A reanálise forçada é restrita à gestão.')
+    }
+
     if (!body.force) {
       const cached = await access.admin
         .from('clickdesk_qualitative_analyses')
