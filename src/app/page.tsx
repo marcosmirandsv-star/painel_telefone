@@ -7927,13 +7927,13 @@ function ChatModuleDashboard({
               {(clickDeskQualitativeSummary?.pending_reviews ?? []).filter(
                 (item) => !chatQualitativeFocusAnalystId || item.analyst_id === chatQualitativeFocusAnalystId,
               ).length > 0 && (
-                <div className="mt-5 rounded-lg border border-violet-400/15 bg-violet-400/5 p-4">
+                <div id="qualitative-pending-reviews" className="mt-5 rounded-lg border border-violet-400/15 bg-violet-400/5 p-4 scroll-mt-24">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">Validação humana</p>
                       <h4 className="mt-1 font-semibold text-slate-100">Leituras aguardando sua conferência</h4>
                       <p className="mt-1 text-xs text-slate-500">
-                        Aprove somente quando causa, influência e evidências fizerem sentido diante do atendimento.
+                        O ticket já foi analisado. Confira a leitura completa antes de decidir se ela entra ou não na consolidação gerencial.
                       </p>
                     </div>
                     <span className="text-xs text-slate-500">
@@ -7943,7 +7943,7 @@ function ChatModuleDashboard({
                     </span>
                   </div>
 
-                  <div className="mt-3 space-y-3">
+                  <div className="mt-3 space-y-4">
                     {(clickDeskQualitativeSummary?.pending_reviews ?? [])
                       .filter(
                         (item) =>
@@ -7951,67 +7951,41 @@ function ChatModuleDashboard({
                           item.analyst_id === chatQualitativeFocusAnalystId,
                       )
                       .map((item) => {
-                      const validating = clickDeskQualitativeValidationTicketId === item.ticket_id
-                      return (
-                        <div
-                          key={item.ticket_id}
-                          className="rounded-lg border border-white/10 bg-slate-950/40 p-4"
-                        >
-                          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        const validating = clickDeskQualitativeValidationTicketId === item.ticket_id
+                        return (
+                          <div
+                            key={item.ticket_id}
+                            className="rounded-lg border border-white/10 bg-slate-950/40 p-4"
+                          >
                             <div>
                               <strong className="text-sm text-slate-100">{item.analyst_name}</strong>
                               <p className="mt-1 text-xs text-slate-500">
                                 Ticket #{item.ticket_id} · {item.satisfaction_label === 'negative' ? 'avaliação negativa' : 'avaliação positiva'}
                               </p>
                             </div>
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                className="small-button"
-                                disabled={validating}
-                                onClick={() => void handleValidateClickDeskQualitative(item.ticket_id, 'approved')}
-                              >
-                                {validating ? 'Salvando...' : 'Aprovar leitura'}
-                              </button>
-                              <button
-                                type="button"
-                                className="danger-button"
-                                disabled={validating}
-                                onClick={() => void handleValidateClickDeskQualitative(item.ticket_id, 'rejected')}
-                              >
-                                Descartar
-                              </button>
-                            </div>
-                          </div>
 
-                          <div className="mt-3 grid gap-3 lg:grid-cols-3">
-                            <div className="rounded-lg bg-slate-900/70 p-3">
-                              <p className="text-xs text-slate-500">Contexto principal observado</p>
-                              <strong className="mt-1 block text-sm">
-                                {formatQualitativeLabel(item.cause.category)}
-                                {' · '}
-                                confiança {formatQualitativeLabel(item.cause.confidence)}
-                              </strong>
-                              <p className="mt-2 text-xs leading-5 text-slate-400">{item.cause.summary}</p>
-                            </div>
-                            <div className="rounded-lg bg-slate-900/70 p-3">
-                              <p className="text-xs text-slate-500">Influência do atendimento humano</p>
-                              <strong className="mt-1 block text-sm">
-                                {formatQualitativeLabel(item.human_influence.classification)}
-                              </strong>
-                              <p className="mt-2 text-xs leading-5 text-slate-400">{item.human_influence.summary}</p>
-                            </div>
-                            <div className="rounded-lg bg-slate-900/70 p-3">
-                              <p className="text-xs text-slate-500">Onde estava o controle?</p>
-                              <strong className="mt-1 block text-sm">
-                                {formatQualitativeLabel(item.controllability.classification)}
-                              </strong>
-                              <p className="mt-2 text-xs leading-5 text-slate-400">{item.controllability.summary}</p>
-                            </div>
+                            <QualitativeAnalysisCard
+                              result={{
+                                ticket_id: item.ticket_id,
+                                satisfaction_label: item.satisfaction_label,
+                                validation_status: 'pending',
+                                analysis: item.analysis,
+                                cached: true,
+                              }}
+                              audience="management"
+                            />
+
+                            <QualitativeValidationActions
+                              ticketId={item.ticket_id}
+                              status="pending"
+                              validating={validating}
+                              onValidate={(ticketId, status) =>
+                                void handleValidateClickDeskQualitative(ticketId, status)
+                              }
+                            />
                           </div>
-                        </div>
-                      )
-                    })}
+                        )
+                      })}
                   </div>
                 </div>
               )}
