@@ -8053,8 +8053,38 @@ function ChatModuleDashboard({
                               >
                                 {clickDeskQualitativeLoading && clickDeskQualitativeTicketId === item.ticket_id
                                   ? 'Analisando...'
-                                  : 'Analisar'}
+                                  : clickDeskQualitativeResultSource === 'queue' &&
+                                      clickDeskQualitativeResult?.ticket_id === item.ticket_id &&
+                                      clickDeskQualitativeResult?.analysis
+                                    ? 'Leitura pronta'
+                                    : 'Analisar'}
                               </button>
+
+                              {clickDeskQualitativeResultSource === 'queue' &&
+                                clickDeskQualitativeResult?.ticket_id === item.ticket_id && (
+                                  <div className="sm:col-span-2">
+                                    <QualitativeAnalysisCard
+                                      result={clickDeskQualitativeResult}
+                                      audience="management"
+                                      reanalyzing={clickDeskQualitativeLoading}
+                                      onReanalyze={
+                                        clickDeskQualitativeResult.error
+                                          ? () => void runManagementQualitativeAnalysis(item.ticket_id, 'queue')
+                                          : undefined
+                                      }
+                                    />
+                                    {clickDeskQualitativeResult.analysis && (
+                                      <QualitativeValidationActions
+                                        ticketId={item.ticket_id}
+                                        status={clickDeskQualitativeResult.validation_status}
+                                        validating={clickDeskQualitativeValidationTicketId === item.ticket_id}
+                                        onValidate={(ticketId, status) =>
+                                          void handleValidateClickDeskQualitative(ticketId, status)
+                                        }
+                                      />
+                                    )}
+                                  </div>
+                                )}
                             </div>
                           ))}
                         {(clickDeskQualitativeSummary?.validation_queue ?? []).filter(
@@ -8110,8 +8140,38 @@ function ChatModuleDashboard({
                               >
                                 {clickDeskQualitativeLoading && clickDeskQualitativeTicketId === item.ticket_id
                                   ? 'Analisando...'
-                                  : 'Analisar'}
+                                  : clickDeskQualitativeResultSource === 'queue' &&
+                                      clickDeskQualitativeResult?.ticket_id === item.ticket_id &&
+                                      clickDeskQualitativeResult?.analysis
+                                    ? 'Leitura pronta'
+                                    : 'Analisar'}
                               </button>
+
+                              {clickDeskQualitativeResultSource === 'queue' &&
+                                clickDeskQualitativeResult?.ticket_id === item.ticket_id && (
+                                  <div className="sm:col-span-2">
+                                    <QualitativeAnalysisCard
+                                      result={clickDeskQualitativeResult}
+                                      audience="management"
+                                      reanalyzing={clickDeskQualitativeLoading}
+                                      onReanalyze={
+                                        clickDeskQualitativeResult.error
+                                          ? () => void runManagementQualitativeAnalysis(item.ticket_id, 'queue')
+                                          : undefined
+                                      }
+                                    />
+                                    {clickDeskQualitativeResult.analysis && (
+                                      <QualitativeValidationActions
+                                        ticketId={item.ticket_id}
+                                        status={clickDeskQualitativeResult.validation_status}
+                                        validating={clickDeskQualitativeValidationTicketId === item.ticket_id}
+                                        onValidate={(ticketId, status) =>
+                                          void handleValidateClickDeskQualitative(ticketId, status)
+                                        }
+                                      />
+                                    )}
+                                  </div>
+                                )}
                             </div>
                           ))}
                         {(clickDeskQualitativeSummary?.positive_validation_queue ?? []).filter(
