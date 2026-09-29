@@ -1551,6 +1551,257 @@ button:disabled {
   border-color: var(--ui-border);
 }
 
+.corporate-layout {
+  display: grid;
+  grid-template-columns: 224px minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.corporate-sidebar {
+  position: sticky;
+  top: 18px;
+  display: flex;
+  min-height: calc(100vh - 36px);
+  flex-direction: column;
+  gap: 18px;
+  border: 1px solid var(--ui-border);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(13, 23, 40, 0.98), rgba(7, 17, 31, 0.98));
+  padding: 16px;
+  box-shadow: var(--ui-shadow);
+}
+
+.corporate-sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 52px;
+  border-bottom: 1px solid var(--ui-border);
+  padding: 0 4px 14px;
+}
+
+.corporate-brand-mark {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border: 1px solid rgba(103, 232, 249, 0.28);
+  border-radius: 10px;
+  background: rgba(34, 211, 238, 0.1);
+  color: #a5f3fc;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.corporate-sidebar-brand > div {
+  min-width: 0;
+}
+
+.corporate-brand-kicker {
+  display: block;
+  color: var(--ui-text-muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.corporate-sidebar-brand strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--ui-text);
+  font-size: 0.96rem;
+  font-weight: 800;
+}
+
+.corporate-module-nav {
+  display: grid;
+  gap: 8px;
+}
+
+.module-sidebar-button {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  padding: 10px;
+  color: var(--ui-text-muted);
+  text-align: left;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.module-sidebar-button:hover {
+  border-color: var(--ui-border);
+  background: rgba(148, 163, 184, 0.07);
+  color: var(--ui-text);
+  transform: translateX(2px);
+}
+
+.module-sidebar-button-active {
+  border-color: rgba(103, 232, 249, 0.34);
+  background: linear-gradient(90deg, rgba(34, 211, 238, 0.14), rgba(34, 211, 238, 0.04));
+  color: #ecfeff;
+}
+
+.module-sidebar-code {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ui-border);
+  border-radius: 9px;
+  background: rgba(2, 6, 23, 0.28);
+  color: #94a3b8;
+  font-size: 0.59rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.module-sidebar-button-active .module-sidebar-code {
+  border-color: rgba(103, 232, 249, 0.3);
+  background: rgba(34, 211, 238, 0.12);
+  color: #a5f3fc;
+}
+
+.module-sidebar-copy {
+  min-width: 0;
+}
+
+.module-sidebar-copy strong,
+.module-sidebar-copy small {
+  display: block;
+}
+
+.module-sidebar-copy strong {
+  color: inherit;
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.module-sidebar-copy small {
+  margin-top: 2px;
+  overflow: hidden;
+  color: #718096;
+  font-size: 0.69rem;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.module-sidebar-button-active .module-sidebar-copy small {
+  color: #a8c7d1;
+}
+
+.corporate-sidebar-profile {
+  margin-top: auto;
+  border-top: 1px solid var(--ui-border);
+  padding: 14px 4px 2px;
+}
+
+.corporate-sidebar-profile span,
+.corporate-sidebar-profile strong,
+.corporate-sidebar-profile small {
+  display: block;
+}
+
+.corporate-sidebar-profile span {
+  color: #64748b;
+  font-size: 0.66rem;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.corporate-sidebar-profile strong {
+  margin-top: 5px;
+  color: var(--ui-text);
+  font-size: 0.86rem;
+}
+
+.corporate-sidebar-profile small {
+  margin-top: 3px;
+  color: var(--ui-text-muted);
+  font-size: 0.7rem;
+}
+
+.corporate-workspace {
+  min-width: 0;
+}
+
+.corporate-workspace > .app-header {
+  margin-bottom: 18px;
+  padding: 4px 2px 20px;
+}
+
+@media (max-width: 1050px) {
+  .corporate-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .corporate-sidebar {
+    position: static;
+    min-height: 0;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    overflow-x: auto;
+    padding: 10px;
+  }
+
+  .corporate-sidebar-brand {
+    min-width: max-content;
+    border-right: 1px solid var(--ui-border);
+    border-bottom: 0;
+    padding: 0 14px 0 2px;
+  }
+
+  .corporate-module-nav {
+    display: flex;
+    flex: 1 0 auto;
+    gap: 8px;
+  }
+
+  .module-sidebar-button {
+    min-width: 168px;
+  }
+
+  .corporate-sidebar-profile {
+    display: none;
+  }
+}
+
+@media (max-width: 680px) {
+  .corporate-sidebar-brand {
+    display: none;
+  }
+
+  .module-sidebar-button {
+    min-width: 142px;
+    grid-template-columns: 34px minmax(0, 1fr);
+    padding: 8px;
+  }
+
+  .module-sidebar-code {
+    min-height: 32px;
+    font-size: 0.54rem;
+  }
+
+  .module-sidebar-copy small {
+    display: none;
+  }
+}
+
 .homologation-banner {
   display: flex;
   flex-wrap: wrap;
@@ -1808,8 +2059,41 @@ button:disabled {
   .app-shell .metric-zone,
   .app-shell .module-card,
   .app-shell .module-card-active,
-  .app-shell .workspace-navigation {
+  .app-shell .workspace-navigation,
+  .corporate-sidebar {
     background: rgba(255, 255, 255, 0.96);
+  }
+
+  .corporate-brand-mark,
+  .module-sidebar-button-active .module-sidebar-code {
+    border-color: rgba(8, 145, 178, 0.24);
+    background: #ecfeff;
+    color: #0e7490;
+  }
+
+  .module-sidebar-button {
+    color: #475569;
+  }
+
+  .module-sidebar-button:hover {
+    background: #f8fafc;
+    color: #0f172a;
+  }
+
+  .module-sidebar-button-active {
+    border-color: rgba(8, 145, 178, 0.28);
+    background: linear-gradient(90deg, #ecfeff, #ffffff);
+    color: #0f172a;
+  }
+
+  .module-sidebar-code {
+    background: #f8fafc;
+    color: #64748b;
+  }
+
+  .module-sidebar-copy small,
+  .module-sidebar-button-active .module-sidebar-copy small {
+    color: #64748b;
   }
 
   .app-shell .metric-zone.context-zone {
