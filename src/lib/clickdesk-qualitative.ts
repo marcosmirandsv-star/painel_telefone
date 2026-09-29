@@ -9,6 +9,12 @@ export type QualitativeControllability =
   | 'mixed'
   | 'unclear'
 
+export type QualitativeAnalystTakeaway =
+  | 'maintain'
+  | 'develop'
+  | 'context'
+  | 'none'
+
 export type QualitativeCauseCategory =
   | 'system_or_product'
   | 'process'
@@ -41,6 +47,11 @@ export type ClickDeskQualitativeAnalysis = {
     available: boolean
     summary: string
   }
+  analyst_takeaway: {
+    kind: QualitativeAnalystTakeaway
+    summary: string
+    confidence: QualitativeConfidence
+  }
   evidence_summary: string[]
   limitations: string[]
 }
@@ -66,6 +77,12 @@ const CONTROLLABILITY = new Set<QualitativeControllability>([
   'external',
   'mixed',
   'unclear',
+])
+const TAKEAWAY = new Set<QualitativeAnalystTakeaway>([
+  'maintain',
+  'develop',
+  'context',
+  'none',
 ])
 const CAUSE = new Set<QualitativeCauseCategory>([
   'system_or_product',
@@ -105,6 +122,7 @@ export function normalizeQualitativeAnalysis(value: unknown): ClickDeskQualitati
   const influence = record(source.human_influence)
   const controllability = record(source.controllability)
   const coaching = record(source.coaching_signal)
+  const takeaway = record(source.analyst_takeaway)
 
   const initialSentiment = SENTIMENT.has(source.initial_sentiment as QualitativeSentiment)
     ? (source.initial_sentiment as QualitativeSentiment)
@@ -139,6 +157,55 @@ export function normalizeQualitativeAnalysis(value: unknown): ClickDeskQualitati
   const coachingAvailable =
     coaching.available === true && coachingSupportedByControl
 
+  const explicitTakeawayKind = TAKEAWAY.has(
+    takeaway.kind as QualitativeAnalystTakeaway,
+  )
+    ? (takeaway.kind as QualitativeAnalystTakeaway)
+    : null
+  const derivedTakeawayKind: QualitativeAnalystTakeaway =
+    coachingAvailable
+      ? 'develop'
+      : influenceClassification === 'improved'
+        ? 'maintain'
+        : influenceClassification === 'worsened' && coachingSupportedByControl
+          ? 'develop'
+          : ['company', 'customer', 'external'].includes(controllabilityClassification)
+            ? 'context'
+            : 'none'
+  const takeawayKind = explicitTakeawayKind ?? derivedTakeawayKind
+  const takeawayConfidence = CONFIDENCE.has(
+    takeaway.confidence as QualitativeConfidence,
+  )
+    ? (takeaway.confidence as QualitativeConfidence)
+    : takeawayKind === 'context'
+      ? causeConfidence
+      : takeawayKind === 'maintain' || takeawayKind === 'develop'
+        ? influenceConfidence
+        : 'low'
+
+  const fallbackTakeawaySummary =
+    takeawayKind === 'maintain'
+      ? shortText(
+          influence.summary,
+          'Há uma atuação observável que vale manter, mas a conversa não permite atribuir sozinha o resultado da avaliação a esse comportamento.',
+        )
+      : takeawayKind === 'develop'
+        ? coachingAvailable
+          ? shortText(
+              coaching.summary,
+              'Há um comportamento observável sob seu controle que pode ser desenvolvido.',
+            )
+          : shortText(
+              influence.summary,
+              'Há um ponto observável sob seu controle que pode ser desenvolvido.',
+            )
+        : takeawayKind === 'context'
+          ? shortText(
+              controllability.summary,
+              'O principal ponto observado estava fora do seu controle direto. O aprendizado aqui é separar contexto operacional de responsabilidade individual.',
+            )
+          : 'Esta conversa não traz evidência suficiente para indicar algo específico a manter ou desenvolver. Isso evita transformar hipótese em orientação pessoal.'
+
   return {
     initial_sentiment: initialSentiment,
     final_sentiment: finalSentiment,
@@ -170,6 +237,14 @@ export function normalizeQualitativeAnalysis(value: unknown): ClickDeskQualitati
             'Há um ponto observável sob controle do analista para trabalhar em feedback.',
           )
         : 'Sem evidência suficiente de um comportamento sob controle do analista para orientar feedback individual.',
+    },
+    analyst_takeaway: {
+      kind: takeawayKind,
+      summary: shortText(
+        takeaway.summary,
+        fallbackTakeawaySummary,
+      ),
+      confidence: takeawayConfidence,
     },
     evidence_summary: stringArray(source.evidence_summary, 3, 350),
     limitations: stringArray(source.limitations, 5, 350),
