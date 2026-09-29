@@ -37,7 +37,7 @@ alter table public.clickdesk_qualitative_analyses
 
 alter table public.clickdesk_qualitative_analyses enable row level security;
 
-grant select on public.clickdesk_qualitative_analyses to authenticated;
+grant select, insert, update on public.clickdesk_qualitative_analyses to authenticated;
 grant select, insert, update, delete on public.clickdesk_qualitative_analyses to service_role;
 
 drop policy if exists "management can read qualitative analyses"
@@ -45,6 +45,8 @@ drop policy if exists "management can read qualitative analyses"
 drop policy if exists "analysts can read own qualitative analyses"
   on public.clickdesk_qualitative_analyses;
 drop policy if exists "authorized users can read qualitative analyses"
+  on public.clickdesk_qualitative_analyses;
+drop policy if exists "analysts can insert own qualitative analyses"
   on public.clickdesk_qualitative_analyses;
 
 create policy "authorized users can read qualitative analyses"
@@ -58,8 +60,29 @@ using (
     where p.id = (select auth.uid())
       and (
         lower(p.role::text) in ('master', 'coordenadora', 'coordinator')
-        or p.chat_analyst_id = analyst_id
+        or (
+          lower(p.role::text) in ('analista', 'analyst')
+          and p.chat_analyst_id = public.clickdesk_qualitative_analyses.analyst_id
+        )
       )
+  )
+);
+
+create policy "analysts can insert own qualitative analyses"
+on public.clickdesk_qualitative_analyses
+for insert
+to authenticated
+with check (
+  validation_status = 'pending'
+  and validated_by is null
+  and validated_at is null
+  and created_by = (select auth.uid())
+  and exists (
+    select 1
+    from public.profiles p
+    where p.id = (select auth.uid())
+      and lower(p.role::text) in ('analista', 'analyst')
+      and p.chat_analyst_id = public.clickdesk_qualitative_analyses.analyst_id
   )
 );
 
