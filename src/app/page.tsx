@@ -8005,7 +8005,7 @@ function ChatModuleDashboard({
                       O que precisa ser entendido e o que merece ser reconhecido
                     </h4>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
-                      Negativas ajudam a investigar atritos e contexto. Positivas ajudam a identificar práticas que vale reconhecer e repetir.
+                      Negativas ajudam a investigar atritos e contexto. Positivas ajudam a identificar práticas que vale reconhecer e repetir. A fila distribui os tickets ao longo do período para evitar concentrar a leitura em um único dia.
                     </p>
                   </div>
 
