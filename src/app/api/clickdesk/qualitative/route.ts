@@ -1,4 +1,3 @@
-import { getVercelOidcToken } from '@vercel/oidc'
 import { createHash } from 'node:crypto'
 import {
   ApiError,
@@ -308,17 +307,9 @@ async function generateWithGemini(prompt: string) {
 }
 
 async function generateWithVercelGateway(prompt: string) {
-  let authToken =
+  const authToken =
     process.env.AI_GATEWAY_API_KEY?.trim() ||
     process.env.VERCEL_OIDC_TOKEN?.trim()
-
-  if (!authToken) {
-    try {
-      authToken = (await getVercelOidcToken())?.trim()
-    } catch {
-      authToken = undefined
-    }
-  }
 
   if (!authToken) return null
 
