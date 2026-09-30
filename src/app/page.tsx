@@ -7686,7 +7686,7 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <section id="chat-qualitative-validation" className={chatActiveTab === 'podium' ? 'workspace-content-section' : 'hidden'}>
+      <section id="chat-management-priorities" className={chatActiveTab === 'podium' ? 'workspace-content-section' : 'hidden'}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Gestão e ações</p>
@@ -7825,6 +7825,7 @@ function ChatModuleDashboard({
 
 
       <details
+        id="chat-qualitative-validation"
         className={chatActiveTab === 'podium' ? 'workspace-collapsible' : 'hidden'}
         open={chatQualitativeFocusAnalystId ? true : undefined}
       >
