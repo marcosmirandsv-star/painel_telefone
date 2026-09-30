@@ -1,7 +1,7 @@
 -- Bootstrap seguro da sincronização automática ClickDesk em homologação.
 -- O primeiro sync manual copia as credenciais já configuradas no servidor para o Vault,
--- gera um token interno, mantém a revalidação D-1 às 06:10 BRT
--- e agenda sincronizações intradiárias de hora em hora, das 09:00 às 19:00 BRT.
+-- gera um token interno e agenda sincronizações intradiárias
+-- de hora em hora, das 09:00 às 19:00 BRT.
 
 begin;
 
@@ -47,7 +47,7 @@ begin
     perform vault.create_secret(
       trim(p_api_key),
       'clickdesk_api_key',
-      'Credencial ClickDesk para sincronização D-1 da homologação',
+      'Credencial ClickDesk para sincronização automática da homologação',
       null
     );
   else
@@ -55,7 +55,7 @@ begin
       v_id,
       trim(p_api_key),
       'clickdesk_api_key',
-      'Credencial ClickDesk para sincronização D-1 da homologação',
+      'Credencial ClickDesk para sincronização automática da homologação',
       null
     );
   end if;
@@ -70,7 +70,7 @@ begin
     perform vault.create_secret(
       trim(p_account_id),
       'clickdesk_account_id',
-      'Conta ClickDesk para sincronização D-1 da homologação',
+      'Conta ClickDesk para sincronização automática da homologação',
       null
     );
   else
@@ -78,7 +78,7 @@ begin
       v_id,
       trim(p_account_id),
       'clickdesk_account_id',
-      'Conta ClickDesk para sincronização D-1 da homologação',
+      'Conta ClickDesk para sincronização automática da homologação',
       null
     );
   end if;
@@ -98,7 +98,7 @@ begin
     );
   end if;
 
-  -- Remove a grade intradiária anterior e qualquer versão prévia da grade de 45 minutos.
+  -- Remove grades antigas antes de recriar a sincronização horária.
   for v_job_id in
     select jobid
     from cron.job
@@ -110,32 +110,12 @@ begin
       'clickdesk-chat-intraday-45-b',
       'clickdesk-chat-intraday-45-c',
       'clickdesk-chat-intraday-45-d',
-      'clickdesk-chat-intraday-hourly'
+      'clickdesk-chat-intraday-hourly',
+      'clickdesk-chat-d1-sync'
     )
   loop
     perform cron.unschedule(v_job_id);
   end loop;
-
-  select cron.schedule(
-    'clickdesk-chat-d1-sync',
-    '10 9 * * *',
-    $cron$
-      select net.http_post(
-        url := 'https://vvtorcvchnqhcredhorv.supabase.co/functions/v1/clickdesk-d1-sync',
-        headers := jsonb_build_object(
-          'Content-Type', 'application/json',
-          'Authorization', 'Bearer ' || (
-            select decrypted_secret
-            from vault.decrypted_secrets
-            where name = 'clickdesk_cron_token'
-            limit 1
-          )
-        ),
-        body := jsonb_build_object('trigger', 'cron', 'mode', 'd1', 'requested_at', now()),
-        timeout_milliseconds := 120000
-      );
-    $cron$
-  ) into v_job_id;
 
   perform cron.schedule(
     'clickdesk-chat-intraday-hourly',
@@ -160,10 +140,7 @@ begin
 
   return jsonb_build_object(
     'ready', true,
-    'job_name', 'clickdesk-chat-d1-sync',
-    'job_id', v_job_id,
-    'schedule_utc', '10 9 * * *',
-    'schedule_brt', '06:10',
+    'job_name', 'clickdesk-chat-intraday-hourly',
     'intraday_interval_minutes', 60,
     'intraday_window_brt', '09:00-19:00',
     'intraday_utc', jsonb_build_array('0 12-22 * * *')
