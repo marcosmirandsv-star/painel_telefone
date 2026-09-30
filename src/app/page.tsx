@@ -999,6 +999,7 @@ export default function Home() {
   const [activeModule, setActiveModule] = useState<AppModule>('phone')
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard')
   const [chatActiveTab, setChatActiveTab] = useState<ChatActiveTab>('overview')
+  const [expandedSidebarModule, setExpandedSidebarModule] = useState<AppModule | null>(null)
   const [individualForm, setIndividualForm] = useState(initialIndividualForm)
   const [teamForm, setTeamForm] = useState(initialTeamForm)
   const [analystForm, setAnalystForm] = useState(initialAnalystForm)
@@ -2175,10 +2176,15 @@ export default function Home() {
                   <button
                     className={activeModule === 'phone' ? 'module-sidebar-button module-sidebar-button-active' : 'module-sidebar-button'}
                     type="button"
-                    aria-expanded={activeModule === 'phone'}
+                    aria-expanded={expandedSidebarModule === 'phone'}
                     onClick={() => {
-                      setActiveModule('phone')
-                      setActiveTab('dashboard')
+                      if (activeModule !== 'phone') {
+                        setActiveModule('phone')
+                        setActiveTab('dashboard')
+                        setExpandedSidebarModule('phone')
+                        return
+                      }
+                      setExpandedSidebarModule((current) => (current === 'phone' ? null : 'phone'))
                     }}
                   >
                     <span className="module-sidebar-code" aria-hidden="true">TEL</span>
@@ -2188,7 +2194,7 @@ export default function Home() {
                     </span>
                   </button>
 
-                  {activeModule === 'phone' && (
+                  {expandedSidebarModule === 'phone' && (
                     <div className="module-sidebar-subnav" aria-label="Submenus do Telefone">
                       <button
                         className={activeTab === 'dashboard' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
@@ -2249,10 +2255,15 @@ export default function Home() {
                   <button
                     className={activeModule === 'chat' ? 'module-sidebar-button module-sidebar-button-active' : 'module-sidebar-button'}
                     type="button"
-                    aria-expanded={activeModule === 'chat'}
+                    aria-expanded={expandedSidebarModule === 'chat'}
                     onClick={() => {
-                      setActiveModule('chat')
-                      if (isManagementUser) setChatActiveTab('overview')
+                      if (activeModule !== 'chat') {
+                        setActiveModule('chat')
+                        if (isManagementUser) setChatActiveTab('overview')
+                        setExpandedSidebarModule('chat')
+                        return
+                      }
+                      setExpandedSidebarModule((current) => (current === 'chat' ? null : 'chat'))
                     }}
                   >
                     <span className="module-sidebar-code" aria-hidden="true">CHAT</span>
@@ -2262,7 +2273,7 @@ export default function Home() {
                     </span>
                   </button>
 
-                  {activeModule === 'chat' && isManagementUser && (
+                  {expandedSidebarModule === 'chat' && isManagementUser && (
                     <div className="module-sidebar-subnav" aria-label="Submenus do Chat">
                       <button
                         className={chatActiveTab === 'overview' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
