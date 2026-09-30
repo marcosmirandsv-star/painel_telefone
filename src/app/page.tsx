@@ -2274,21 +2274,21 @@ export default function Home() {
                       <button
                         className={chatActiveTab === 'prototype' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
                         type="button"
-                        onClick={() => onChatActiveTabChange('prototype')}
+                        onClick={() => setChatActiveTab('prototype')}
                       >
                         Equipe e produtividade
                       </button>
                       <button
                         className={chatActiveTab === 'podium' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
                         type="button"
-                        onClick={() => onChatActiveTabChange('podium')}
+                        onClick={() => setChatActiveTab('podium')}
                       >
                         Gestão e ações
                       </button>
                       <button
                         className={chatActiveTab === 'reports' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
                         type="button"
-                        onClick={() => onChatActiveTabChange('reports')}
+                        onClick={() => setChatActiveTab('reports')}
                       >
                         Fechamento mensal
                       </button>
