@@ -510,6 +510,11 @@ type ClickDeskPersistedMetrics = {
     unmatched_rows: number
     finished_at: string | null
   } | null
+  sync_schedule?: {
+    interval_minutes: number
+    window_brt: string
+    next_sync_at: string
+  }
   date_basis?: {
     sources: Record<string, number>
     status: 'needs_validation' | 'validated'
@@ -3111,9 +3116,13 @@ function ChatAnalystPortal({
     }
 
     void loadOwnChatData()
+    const refreshTimer = window.setInterval(() => {
+      void loadOwnChatData()
+    }, 60 * 60 * 1000)
 
     return () => {
       cancelled = true
+      window.clearInterval(refreshTimer)
     }
   }, [analyst?.id, monthStart, monthEnd])
 
@@ -3288,11 +3297,13 @@ function ChatAnalystPortal({
                 <p className="mt-1 text-sm text-slate-400">
                   {displayMonthLabel} · ClickDesk
                 </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  {metrics?.latest_sync?.finished_at
-                    ? `Última atualização: ${formatDateTime(metrics.latest_sync.finished_at)}`
-                    : 'Última atualização ainda não informada'}
-                </p>
+                <div className="mt-2">
+                  <ClickDeskSyncStatus
+                    latestSyncAt={metrics?.latest_sync?.finished_at}
+                    schedule={metrics?.sync_schedule}
+                    compact
+                  />
+                </div>
               </div>
             </div>
 
@@ -6261,7 +6272,7 @@ function ChatModuleDashboard({
         },
         selectedTeamId,
       )
-    }, 45 * 60 * 1000)
+    }, 60 * 60 * 1000)
 
     return () => window.clearInterval(refreshTimer)
   }, [
@@ -6899,6 +6910,13 @@ function ChatModuleDashboard({
             </Field>
           </div>
         </div>
+
+        <div className="mt-4 border-t border-white/10 pt-4">
+          <ClickDeskSyncStatus
+            latestSyncAt={clickDeskPersistedMetrics?.latest_sync?.finished_at}
+            schedule={clickDeskPersistedMetrics?.sync_schedule}
+          />
+        </div>
       </section>
 
 
@@ -6917,11 +6935,7 @@ function ChatModuleDashboard({
               <span className="inline-flex rounded-md border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-sm font-semibold text-cyan-100">
                 ClickDesk · base viva
               </span>
-              <p className="mt-2 text-xs text-slate-500">
-                {clickDeskPersistedMetrics?.latest_sync?.finished_at
-                  ? `Dados atualizados em ${formatDateTime(clickDeskPersistedMetrics.latest_sync.finished_at)} · ciclo automático de 45 min`
-                  : 'Última atualização ainda não informada · ciclo automático de 45 min'}
-              </p>
+
             </div>
           </div>
         </section>
@@ -13898,6 +13912,70 @@ function getGoalImpactText(goal: Goal) {
 
   return 'Parametro operacional usado nos calculos e leituras do painel.'
 }
+function ClickDeskSyncStatus({
+  latestSyncAt,
+  schedule,
+  compact = false,
+}: {
+  latestSyncAt?: string | null
+  schedule?: ClickDeskPersistedMetrics['sync_schedule']
+  compact?: boolean
+}) {
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  const nextSyncAt = schedule?.next_sync_at ? new Date(schedule.next_sync_at) : null
+  const nextSyncTime =
+    nextSyncAt && !Number.isNaN(nextSyncAt.getTime())
+      ? new Intl.DateTimeFormat('pt-BR', {
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: 'America/Sao_Paulo',
+        }).format(nextSyncAt)
+      : null
+  const remainingMs = nextSyncAt ? Math.max(0, nextSyncAt.getTime() - now) : null
+  const remainingSeconds = remainingMs === null ? null : Math.floor(remainingMs / 1000)
+  const hours = remainingSeconds === null ? 0 : Math.floor(remainingSeconds / 3600)
+  const minutes = remainingSeconds === null ? 0 : Math.floor((remainingSeconds % 3600) / 60)
+  const seconds = remainingSeconds === null ? 0 : remainingSeconds % 60
+  const countdown =
+    remainingSeconds === null
+      ? 'aguardando agenda'
+      : hours > 0
+        ? `${hours}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`
+        : `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+
+  if (compact) {
+    return (
+      <p className="text-xs leading-5 text-slate-500">
+        Última sincronização: <strong className="font-semibold text-slate-300">{latestSyncAt ? formatDateTime(latestSyncAt) : 'não informada'}</strong>
+        {' '}· próxima {nextSyncTime ? `às ${nextSyncTime}` : 'não informada'}
+        {' '}· <span className="tabular-nums text-cyan-200">{countdown}</span>
+      </p>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Sincronização ClickDesk</p>
+        <p className="mt-1 text-sm text-slate-300">
+          Última: <strong>{latestSyncAt ? formatDateTime(latestSyncAt) : 'não informada'}</strong>
+          {' '}· ciclo de {schedule?.interval_minutes ?? 60} minutos
+        </p>
+      </div>
+      <div className="rounded-lg border border-cyan-300/20 bg-cyan-300/5 px-4 py-2 text-right">
+        <span className="block text-xs text-slate-500">{nextSyncTime ? `Próxima às ${nextSyncTime}` : 'Próxima sincronização'}</span>
+        <strong className="mt-1 block text-lg tabular-nums text-cyan-200">{countdown}</strong>
+      </div>
+    </div>
+  )
+}
+
 function MetricCard({
   label,
   value,
