@@ -9752,6 +9752,7 @@ function DashboardView({
 }) {
   const [periodFilter, setPeriodFilter] = useState<PeriodFilter>(() => createPeriodFilter('month'))
   const [managementSection, setManagementSection] = useState<'area' | 'people'>('area')
+  const [managementSubsection, setManagementSubsection] = useState<'overview' | 'diagnostic' | 'projection'>('overview')
   const [phonePodiumRanking, setPhonePodiumRanking] = useState<PhonePodiumRankingRow[]>([])
   const [phoneManualPodium, setPhoneManualPodium] = useState<PhonePodiumManual[]>([])
   const [phoneManualPodiumDraft, setPhoneManualPodiumDraft] = useState<Record<number, string>>({})
@@ -10508,26 +10509,61 @@ function DashboardView({
       </section>
 
       {!isAnalystDashboard && (
-        <nav className="workspace-filter-panel workspace-switcher" aria-label="Visão do dashboard">
+        <nav className="workspace-filter-panel workspace-switcher" aria-label="Submenus do Dashboard do Telefone">
           <div>
-            <p className="workspace-eyebrow">Visão da gestão</p>
+            <p className="workspace-eyebrow">Dashboard · Telefone</p>
             <h2 className="section-title mt-2">
-              {managementSection === 'area' ? 'Operação' : 'Pessoas'}
+              {managementSection === 'people'
+                ? 'Pessoas'
+                : managementSubsection === 'diagnostic'
+                  ? 'Diagnóstico'
+                  : managementSubsection === 'projection'
+                    ? 'Projeção'
+                    : 'Visão geral'}
             </h2>
             <p className="section-subtitle">
-              {managementSection === 'area'
-                ? 'Resultado consolidado, tendências, riscos e decisões da operação.'
-                : 'Desempenho individual, elegibilidade, volume, ranking e acompanhamento do time.'}
+              {managementSection === 'people'
+                ? 'Desempenho individual, elegibilidade, volume, ranking e acompanhamento do time.'
+                : managementSubsection === 'diagnostic'
+                  ? 'Riscos, causas prováveis, impacto no resultado e próximas ações.'
+                  : managementSubsection === 'projection'
+                    ? 'Tendência dos indicadores até o fechamento do período.'
+                    : 'Resumo executivo da operação e evolução dos principais indicadores.'}
             </p>
           </div>
-          <div className="workspace-switcher-row" role="group" aria-label="Alternar entre operação e pessoas">
+          <div className="workspace-switcher-row" role="group" aria-label="Navegar pelas visões do Dashboard">
             <button
-              className={managementSection === 'area' ? 'workspace-switcher-button workspace-switcher-button-active' : 'workspace-switcher-button'}
+              className={managementSection === 'area' && managementSubsection === 'overview' ? 'workspace-switcher-button workspace-switcher-button-active' : 'workspace-switcher-button'}
               type="button"
-              aria-pressed={managementSection === 'area'}
-              onClick={() => setManagementSection('area')}
+              aria-pressed={managementSection === 'area' && managementSubsection === 'overview'}
+              onClick={() => {
+                setManagementSection('area')
+                setManagementSubsection('overview')
+              }}
             >
-              Operação
+              Visão geral
+            </button>
+            <button
+              className={managementSection === 'area' && managementSubsection === 'diagnostic' ? 'workspace-switcher-button workspace-switcher-button-active' : 'workspace-switcher-button'}
+              type="button"
+              aria-pressed={managementSection === 'area' && managementSubsection === 'diagnostic'}
+              onClick={() => {
+                setManagementSection('area')
+                setManagementSubsection('diagnostic')
+              }}
+            >
+              Diagnóstico
+            </button>
+            <button
+              className={managementSection === 'area' && managementSubsection === 'projection' ? 'workspace-switcher-button workspace-switcher-button-active' : 'workspace-switcher-button'}
+              type="button"
+              aria-pressed={managementSection === 'area' && managementSubsection === 'projection'}
+              onClick={() => {
+                setManagementSection('area')
+                setManagementSubsection('projection')
+              }}
+            >
+              Projeção
             </button>
             <button
               className={managementSection === 'people' ? 'workspace-switcher-button workspace-switcher-button-active' : 'workspace-switcher-button'}
@@ -10614,21 +10650,16 @@ function DashboardView({
         </section>
       )}
 
-      {isManagementView && managementSection === 'area' && (
-        <details className="workspace-collapsible">
-          <summary className="cursor-pointer list-none">
-            <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Diagnóstico reservado</p>
-                <h2 className="section-title mt-2">Impacto no CSAT do telefone</h2>
-                <p className="section-subtitle">Comparação gerencial entre o N1 e o resultado geral da operação.</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">Gestão</span>
-                <span className="rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-xs font-semibold text-slate-300">Abrir diagnóstico</span>
-              </div>
+      {isManagementView && managementSection === 'area' && managementSubsection === 'diagnostic' && (
+        <section className="workspace-content-section workspace-content-section-divided">
+          <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Diagnóstico reservado</p>
+              <h2 className="section-title mt-2">Impacto no CSAT do telefone</h2>
+              <p className="section-subtitle">Comparação gerencial entre o N1 e o resultado geral da operação.</p>
             </div>
-          </summary>
+            <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">Gestão</span>
+          </div>
 
           {overallPhoneCsat === null ? (
             <div className="mt-5 rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
@@ -10661,7 +10692,7 @@ function DashboardView({
               </div>
             </>
           )}
-        </details>
+        </section>
       )}
 
       {(isAnalystDashboard || managementSection === 'people') && <CriteriaLegend
@@ -10673,21 +10704,12 @@ function DashboardView({
         ]}
       />}
 
-      {!isAnalystDashboard && managementSection === 'area' && <details className="workspace-collapsible">
-        <summary className="cursor-pointer list-none">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <p className="workspace-eyebrow">Projeção</p>
-              <h2 className="section-title mt-2">Projeção do fechamento</h2>
-              <p className="section-subtitle">
-                Tendência de CSAT, performance, avaliações e risco sem alterar os resultados já apurados.
-              </p>
-            </div>
-            <span className="rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-xs font-semibold text-slate-300">
-              Abrir projeção
-            </span>
-          </div>
-        </summary>
+      {!isAnalystDashboard && managementSection === 'area' && managementSubsection === 'projection' && <section className="workspace-content-section workspace-content-section-divided">
+        <p className="workspace-eyebrow">Projeção</p>
+        <h2 className="section-title mt-2">Projeção do fechamento</h2>
+        <p className="section-subtitle">
+          Tendência de CSAT, performance, avaliações e risco sem alterar os resultados já apurados.
+        </p>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-4">
           <PredictiveCard
@@ -10737,9 +10759,9 @@ function DashboardView({
             </p>
           </div>
         </div>
-      </details>}
+      </section>}
 
-      {!isAnalystDashboard && managementSection === 'area' && <section className="workspace-content-section workspace-content-section-divided">
+      {!isAnalystDashboard && managementSection === 'area' && managementSubsection === 'diagnostic' && <section className="workspace-content-section workspace-content-section-divided">
         <div className="flex flex-col gap-6 xl:flex-row xl:items-stretch">
           <div className="xl:w-2/5">
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
@@ -10998,7 +11020,7 @@ function DashboardView({
         </>
       )}
 
-      {!isAnalystDashboard && managementSection === 'area' && (
+      {!isAnalystDashboard && managementSection === 'area' && managementSubsection === 'overview' && (
         <section className="workspace-content-section workspace-content-section-divided">
           <p className="workspace-eyebrow">Operação</p>
           <h2 className="section-title mt-2">Variações recentes</h2>
