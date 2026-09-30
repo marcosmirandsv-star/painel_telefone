@@ -2015,6 +2015,26 @@ button:disabled {
   padding-top: 28px;
 }
 
+.workspace-collapsible {
+  margin-top: 22px;
+  border-top: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
+  padding: 16px 2px;
+}
+
+.workspace-collapsible > summary {
+  border-radius: 10px;
+  padding: 2px 0;
+}
+
+.workspace-collapsible[open] {
+  padding-bottom: 20px;
+}
+
+.workspace-collapsible[open] > summary {
+  margin-bottom: 4px;
+}
+
 .metric-strip {
   margin-top: 18px;
   border-top: 1px solid var(--ui-border);
@@ -2091,6 +2111,11 @@ button:disabled {
 
   .workspace-content-section-divided {
     padding-top: 22px;
+  }
+
+  .workspace-collapsible {
+    margin-top: 18px;
+    padding-block: 14px;
   }
 
   .metric-strip {
