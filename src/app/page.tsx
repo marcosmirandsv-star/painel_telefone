@@ -7695,20 +7695,20 @@ function ChatModuleDashboard({
               Fila construída com a base viva do ClickDesk. Qualidade e participação definem prioridade; somente diferenças relevantes de volume aparecem como contexto operacional a validar, nunca como falha automática.
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
-            <div className="rounded-lg bg-slate-950/45 px-3 py-2">
+          <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-white/10 bg-slate-950/30 text-center sm:grid-cols-4 sm:divide-x sm:divide-white/10">
+            <div className="px-3 py-3">
               <span className="block text-xs text-slate-500">Prioridades</span>
               <strong className="mt-1 block text-lg tabular-nums text-amber-200">{chat2ManagementPriorities.length}</strong>
             </div>
-            <div className="rounded-lg bg-slate-950/45 px-3 py-2">
+            <div className="px-3 py-3">
               <span className="block text-xs text-slate-500">Dentro das metas</span>
               <strong className="mt-1 block text-lg tabular-nums text-emerald-300">{chat2ManagementHealthy.length}</strong>
             </div>
-            <div className="rounded-lg bg-slate-950/45 px-3 py-2">
+            <div className="px-3 py-3">
               <span className="block text-xs text-slate-500">Contexto de volume</span>
               <strong className="mt-1 block text-lg tabular-nums text-cyan-200">{chat2ManagementVolumeContexts.length}</strong>
             </div>
-            <div className="rounded-lg bg-slate-950/45 px-3 py-2">
+            <div className="px-3 py-3">
               <span className="block text-xs text-slate-500">Negativas</span>
               <strong className="mt-1 block text-lg tabular-nums text-rose-200">{chat2ManagementNegativeReviews}</strong>
             </div>
@@ -7716,9 +7716,9 @@ function ChatModuleDashboard({
         </div>
 
         {chat2ManagementPriorities.length > 0 ? (
-          <div className="mt-5 space-y-3">
+          <div className="mt-5 divide-y divide-white/5 overflow-hidden rounded-xl border border-white/10 bg-slate-950/25">
             {chat2ManagementPriorities.map((item, index) => (
-              <div key={`${item.area}::${item.assignee_name}`} className="rounded-xl border border-white/10 bg-slate-950/30 p-4">
+              <div key={`${item.area}::${item.assignee_name}`} className="p-4">
                 <div className="grid gap-4 xl:grid-cols-[auto_1.15fr_1.4fr_1.15fr_auto] xl:items-center">
                   <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-300/10 text-sm font-bold text-amber-200">
                     {index + 1}
@@ -7824,19 +7824,29 @@ function ChatModuleDashboard({
       </details>
 
 
-      <section className={chatActiveTab === 'podium' ? 'workspace-content-section workspace-content-section-divided' : 'hidden'}>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <p className="workspace-eyebrow text-violet-200">IA qualitativa · governança ativa</p>
-            <h2 className="mt-2 text-2xl font-bold">Da métrica para a causa</h2>
-            <p className="section-subtitle">
-              A leitura qualitativa funciona por ticket e consolida somente o que foi aprovado pela gestão. A cobertura continua explícita para evitar generalizações.
-            </p>
+      <details
+        className={chatActiveTab === 'podium' ? 'workspace-collapsible' : 'hidden'}
+        open={chatQualitativeFocusAnalystId ? true : undefined}
+      >
+        <summary className="cursor-pointer list-none">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="workspace-eyebrow text-violet-200">IA qualitativa · governança ativa</p>
+              <h2 className="mt-2 text-xl font-bold">Da métrica para a causa</h2>
+              <p className="section-subtitle">
+                Abra quando precisar validar leituras, investigar causas e consolidar apenas evidências aprovadas pela gestão.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-md border border-violet-400/20 bg-violet-400/5 px-3 py-2 text-xs font-semibold text-violet-200">
+                Homologação · validação humana
+              </span>
+              <span className="rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-xs font-semibold text-slate-300">
+                Abrir governança qualitativa
+              </span>
+            </div>
           </div>
-          <span className="rounded-md border border-violet-400/20 bg-violet-400/5 px-3 py-2 text-sm font-semibold text-violet-200">
-            Homologação · validação humana
-          </span>
-        </div>
+        </summary>
 
         {chatQualitativeFocusAnalystId && (
           <div className="mt-4 flex flex-col gap-3 rounded-lg border border-violet-400/20 bg-violet-400/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -8357,7 +8367,7 @@ function ChatModuleDashboard({
         </div>
 
 
-      </section>
+      </details>
 
       <section className={chatActiveTab === 'reports' ? 'workspace-content-section' : 'hidden'}>
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -8371,25 +8381,23 @@ function ChatModuleDashboard({
           </span>
         </div>
 
-        <div className="mt-5 grid gap-4 lg:grid-cols-3">
-          <div className="rounded-lg bg-slate-900 p-4">
-            <p className="text-sm text-slate-400">Destaque do período</p>
+        <div className="mt-5 grid overflow-hidden rounded-xl border border-white/10 bg-slate-950/25 lg:grid-cols-3 lg:divide-x lg:divide-white/10">
+          <div className="p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Destaque do período</p>
             <p className="mt-2 text-lg font-bold">{chatReportTopHighlight ? getChatAnalystName(chatReportTopHighlight) : 'Aguardando dados'}</p>
-            <p className="mt-1 text-sm text-slate-300">
-              {chatReportTopHighlight ? `CSAT ${formatChatPercent(chatReportTopHighlight.csat)} | ${formatChatPercent(chatReportTopHighlight.review_percentage)} avaliações | ${formatChatCount(chatReportTopHighlight.total_tickets)} atendimentos` : 'Selecione uma competência com dados para liberar a leitura.'}
+            <p className="mt-1 text-sm text-slate-400">
+              {chatReportTopHighlight ? `CSAT ${formatChatPercent(chatReportTopHighlight.csat)} · ${formatChatPercent(chatReportTopHighlight.review_percentage)} avaliações · ${formatChatCount(chatReportTopHighlight.total_tickets)} atendimentos` : 'Selecione uma competência com dados para liberar a leitura.'}
             </p>
           </div>
-          <div className="rounded-lg bg-slate-900 p-4">
-            <p className="text-sm text-slate-400">Principal ponto de atenção</p>
+          <div className="border-t border-white/10 p-4 lg:border-t-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Ponto de atenção</p>
             <p className="mt-2 text-lg font-bold">{chatReportAttentionHighlight ? getChatAnalystName(chatReportAttentionHighlight) : 'Sem prioridade aberta'}</p>
-            <p className="mt-1 text-sm text-slate-300">{chatReportAttentionText}</p>
+            <p className="mt-1 text-sm text-slate-400">{chatReportAttentionText}</p>
           </div>
-          <div className="rounded-lg bg-slate-900 p-4">
-            <p className="text-sm text-slate-400">Referência mínima de volume</p>
+          <div className="border-t border-white/10 p-4 lg:border-t-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Referência de volume</p>
             <p className="mt-2 text-lg font-bold tabular-nums">{formatChatCount(chatReportVolumeReference)} atendimentos</p>
-            <p className="mt-1 text-sm text-slate-300">
-              Para cumprir o critério de volume neste período, é necessário atingir pelo menos essa quantidade de atendimentos.
-            </p>
+            <p className="mt-1 text-sm text-slate-400">Mínimo usado no critério de volume desta competência.</p>
           </div>
         </div>
       </section>
@@ -8617,18 +8625,26 @@ function ChatModuleDashboard({
       </section>
 
       <div className={chatActiveTab === 'reports' ? 'grid gap-6 xl:grid-cols-2' : 'hidden'}>
-        <section className="panel xl:col-span-2">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <h2 className="section-title">Ranking mensal do chat</h2>
-              <p className="section-subtitle">
-                Lista final do período, do primeiro ao último. Critérios: CSAT mínimo 90%, avaliações a partir de 25% e volume acima da média do período.
-              </p>
+        <details className="workspace-collapsible xl:col-span-2">
+          <summary className="cursor-pointer list-none">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="workspace-eyebrow">Ranking detalhado</p>
+                <h2 className="mt-1 text-xl font-bold">Ranking mensal do chat</h2>
+                <p className="section-subtitle">
+                  Abra para conferir posição, elegibilidade, critérios e exceções operacionais sem carregar toda a tabela na leitura principal do fechamento.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-200">
+                  Referência: {formatChatCount(chatReportVolumeReference)}
+                </span>
+                <span className="rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-xs font-semibold text-slate-300">
+                  Abrir ranking
+                </span>
+              </div>
             </div>
-            <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">
-              Referência mínima: {formatChatCount(chatReportVolumeReference)} atendimentos
-            </span>
-          </div>
+          </summary>
 
           {chatReportExclusions.length > 0 && (
             <div className="mt-4 rounded-lg border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-sm text-amber-100">
@@ -8717,7 +8733,7 @@ function ChatModuleDashboard({
 
             {!chatReportRanking.length && <EmptyState text="Nenhum dado de chat encontrado neste período." />}
           </div>
-        </section>
+        </details>
 
       </div>
 
@@ -8879,22 +8895,22 @@ function ChatModuleDashboard({
           <EmptyState text="Selecione um analista com dados para gerar o relatório." />
         )}
 
-        <div className="mt-5 grid gap-4 lg:grid-cols-4">
-          <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
-            <p className="font-semibold text-slate-100">1. Conferir</p>
-            <p className="mt-2">Verifique período, analista, CSAT, avaliações, volume e posição no pódio.</p>
+        <div className="mt-5 grid overflow-hidden rounded-xl border border-white/10 bg-slate-950/25 md:grid-cols-4 md:divide-x md:divide-white/10">
+          <div className="p-3 text-sm text-slate-400">
+            <strong className="block text-slate-100">1. Conferir</strong>
+            <span className="mt-1 block text-xs leading-5">Indicadores, volume e pódio.</span>
           </div>
-          <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
-            <p className="font-semibold text-slate-100">2. Entender a amostra</p>
-            <p className="mt-2">Prepare até 5 negativas e 5 positivas distribuídas pelo período e valide as leituras antes de levá-las ao feedback.</p>
+          <div className="border-t border-white/10 p-3 text-sm text-slate-400 md:border-t-0">
+            <strong className="block text-slate-100">2. Validar amostra</strong>
+            <span className="mt-1 block text-xs leading-5">Até 5 negativas + 5 positivas.</span>
           </div>
-          <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
-            <p className="font-semibold text-slate-100">3. Revisar feedback</p>
-            <p className="mt-2">Combine indicadores, evidências qualitativas e suas observações antes do texto final.</p>
+          <div className="border-t border-white/10 p-3 text-sm text-slate-400 md:border-t-0">
+            <strong className="block text-slate-100">3. Revisar feedback</strong>
+            <span className="mt-1 block text-xs leading-5">Dados, evidências e contexto do gestor.</span>
           </div>
-          <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
-            <p className="font-semibold text-slate-100">4. Exportar</p>
-            <p className="mt-2">O arquivo individual será gerado para envio ao colaborador no fechamento mensal.</p>
+          <div className="border-t border-white/10 p-3 text-sm text-slate-400 md:border-t-0">
+            <strong className="block text-slate-100">4. Exportar</strong>
+            <span className="mt-1 block text-xs leading-5">Documento individual do fechamento.</span>
           </div>
         </div>
 
