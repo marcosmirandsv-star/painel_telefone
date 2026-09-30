@@ -10082,8 +10082,8 @@ function DashboardView({
   }
 
   return (
-    <div className="mt-8 space-y-7">
-      <section className="panel">
+    <div className="phone-workspace mt-6 space-y-7">
+      <section className="workspace-filter-panel">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h2 className="section-title">Periodo de análise</h2>
@@ -10133,7 +10133,7 @@ function DashboardView({
       </section>
 
       {!isAnalystDashboard && (
-        <nav className="panel workspace-switcher" aria-label="Visão do dashboard">
+        <nav className="workspace-filter-panel workspace-switcher" aria-label="Visão do dashboard">
           <div>
             <p className="workspace-eyebrow">Visão da gestão</p>
             <h2 className="section-title mt-2">
@@ -10168,7 +10168,7 @@ function DashboardView({
 
       {isAnalystDashboard ? (
         <>
-          <section className="metric-zone">
+          <section className="workspace-metric-section">
             <div className="metric-zone-heading">
               <div>
                 <p className="workspace-eyebrow">Minha performance</p>
@@ -10185,7 +10185,7 @@ function DashboardView({
             </div>
           </section>
 
-          <section className="metric-zone context-zone">
+          <section className="workspace-metric-section workspace-metric-section-context">
             <div className="metric-zone-heading">
               <div>
                 <p className="workspace-eyebrow">Nosso resultado</p>
@@ -10204,7 +10204,7 @@ function DashboardView({
           </section>
         </>
       ) : managementSection === 'area' ? (
-        <section className="metric-zone">
+        <section className="workspace-metric-section">
           <div className="metric-zone-heading">
             <div>
               <p className="workspace-eyebrow">Operação</p>
@@ -10221,7 +10221,7 @@ function DashboardView({
           </div>
         </section>
       ) : (
-        <section className="metric-zone">
+        <section className="workspace-metric-section">
           <div className="metric-zone-heading">
             <div>
               <p className="workspace-eyebrow">Pessoas</p>
@@ -10240,7 +10240,7 @@ function DashboardView({
       )}
 
       {isManagementView && managementSection === 'area' && (
-        <section className="panel border border-cyan-400/20">
+        <section className="workspace-content-section workspace-content-section-divided">
           <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Diagnóstico reservado</p>
