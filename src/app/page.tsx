@@ -11362,8 +11362,8 @@ function ReportsView({
   }
 
   return (
-    <div className="mt-8 space-y-7">
-      <section className="panel">
+    <div className="phone-reports-workspace mt-6 space-y-7">
+      <section className="workspace-filter-panel">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h2 className="section-title">Relatórios e IA analitica</h2>
@@ -11425,17 +11425,17 @@ function ReportsView({
         </div>
       </section>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="metric-strip grid gap-3 md:grid-cols-4">
         <MetricCard label="Analista" value={selectedAnalyst?.name ?? 'Sem analista'} />
         <MetricCard label="CSAT do período" value={`${formatPercent(analystResult?.averageCsat ?? 0)}`} />
         <MetricCard label="Variação vs período anterior" value={formatDelta(csatDelta, '%')} />
         <MetricCard label="Performance equipe" value={formatPercent(teamPerformance)} />
       </div>
 
-      <section className="panel no-print">
+      <section className="workspace-content-section no-print">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="eyebrow">Inteligência de gestão</p>
+            <p className="workspace-eyebrow">Inteligência de gestão</p>
             <h2 className="section-title">Leitura do supervisor para o analista</h2>
             <p className="section-subtitle">
               Diagnóstico e ações sugeridas para apoiar acompanhamento individual antes do fechamento.
@@ -11469,10 +11469,11 @@ function ReportsView({
 
 
 
-      <section className="panel no-print">
+      <section className="workspace-content-section workspace-content-section-divided no-print">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h2 className="section-title">Prontidão do relatório</h2>
+            <p className="workspace-eyebrow">Validação</p>
+            <h2 className="section-title mt-2">Prontidão do relatório</h2>
             <p className="section-subtitle">
               Confira se o relatório deste período já tem base suficiente antes de exportar.
             </p>
@@ -11685,10 +11686,11 @@ function ReportsView({
         )}
       </section>
 
-      <section className="panel">
+      <section className="workspace-content-section workspace-content-section-divided">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h2 className="section-title">Camadas de IA e plano de ação</h2>
+            <p className="workspace-eyebrow">Apoio à liderança</p>
+            <h2 className="section-title mt-2">Camadas de IA e plano de ação</h2>
             <p className="section-subtitle">
               Leitura automatica para apoiar feedback, acompanhamento e decisao da lideranca.
             </p>
