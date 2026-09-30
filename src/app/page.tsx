@@ -12428,6 +12428,7 @@ function EntriesView({
     )
   }, [individualMetrics, teamMetrics])
   const [selectedChecklistPeriod, setSelectedChecklistPeriod] = useState('')
+  const [entriesSection, setEntriesSection] = useState<'checklist' | 'individual' | 'team' | 'history'>('checklist')
   const checklistPeriod =
     launchPeriods.find((period) => period.key === selectedChecklistPeriod) ?? launchPeriods[0] ?? null
   const positiveReviews = toNumber(individualForm.positiveReviews)
@@ -12474,7 +12475,49 @@ function EntriesView({
 
   return (
     <div className="phone-entries-workspace mt-6 space-y-7">
-      <section className="workspace-content-section">
+      <nav className="workspace-filter-panel workspace-switcher" aria-label="Áreas de lançamentos">
+        <div>
+          <p className="workspace-eyebrow">Lançamentos · Telefone</p>
+          <h2 className="section-title mt-2">
+            {entriesSection === 'checklist'
+              ? 'Conferência semanal'
+              : entriesSection === 'individual'
+                ? 'Lançamento individual'
+                : entriesSection === 'team'
+                  ? 'Performance da equipe'
+                  : 'Histórico'}
+          </h2>
+          <p className="section-subtitle">
+            {entriesSection === 'checklist'
+              ? 'Confira se a semana está completa antes do fechamento.'
+              : entriesSection === 'individual'
+                ? 'Registre os indicadores de um analista para o período.'
+                : entriesSection === 'team'
+                  ? 'Registre os números consolidados da operação.'
+                  : 'Consulte, filtre e revise os lançamentos já salvos.'}
+          </p>
+        </div>
+        <div className="workspace-switcher-row" role="group" aria-label="Navegar em lançamentos">
+          {([
+            ['checklist', 'Conferência'],
+            ['individual', 'Individual'],
+            ['team', 'Equipe'],
+            ['history', 'Histórico'],
+          ] as const).map(([value, label]) => (
+            <button
+              key={value}
+              className={entriesSection === value ? 'workspace-switcher-button workspace-switcher-button-active' : 'workspace-switcher-button'}
+              type="button"
+              aria-pressed={entriesSection === value}
+              onClick={() => setEntriesSection(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      <section className={entriesSection === 'checklist' ? 'workspace-content-section' : 'hidden'}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="workspace-eyebrow">Conferência</p>
@@ -12523,7 +12566,7 @@ function EntriesView({
             <p className="mt-2 text-2xl font-bold">{checklistIndividualMetrics.length}/{analysts.length}</p>
           </div>
           <div className="rounded-lg bg-slate-900 p-4">
-            <p className="text-sm text-slate-400">Performance equipe</p>
+            <p className="text-sm text-slate-400">Performance da equipe</p>
             <p className={`mt-2 text-xl font-bold ${checklistTeamMetric ? 'text-emerald-300' : 'text-amber-200'}`}>
               {checklistTeamMetric ? 'Registrada' : 'Pendente'}
             </p>
@@ -12536,7 +12579,7 @@ function EntriesView({
                 : pendingAnalysts.length
                   ? `Faltam ${pendingAnalysts.length} analista(s).`
                   : checklistTeamMetric
-                    ? 'Conferir historico e evidencias.'
+                    ? 'Conferir histórico e evidências.'
                     : 'Registrar performance da equipe.'}
             </p>
           </div>
@@ -12544,7 +12587,7 @@ function EntriesView({
 
         {checklistStart && checklistEnd && (
           <div className="mt-5 rounded-lg bg-slate-900 p-4">
-            <p className="text-sm text-slate-400">Pendencias por analista</p>
+            <p className="text-sm text-slate-400">Pendências por analista</p>
             {pendingAnalysts.length ? (
               <div className="mt-3 flex flex-wrap gap-2">
                 {pendingAnalysts.map((analyst) => (
@@ -12554,15 +12597,15 @@ function EntriesView({
                 ))}
               </div>
             ) : (
-              <p className="mt-3 text-sm text-emerald-300">Todos os analistas ativos ja possuem lançamento neste período.</p>
+              <p className="mt-3 text-sm text-emerald-300">Todos os analistas ativos já possuem lançamento neste período.</p>
             )}
           </div>
         )}
       </section>
 
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <section className="panel form-workspace-card">
+      <div className={entriesSection === 'individual' || entriesSection === 'team' ? 'grid gap-6' : 'hidden'}>
+        <section className={entriesSection === 'individual' ? 'panel form-workspace-card' : 'hidden'}>
         <p className="workspace-eyebrow">Pessoa</p>
         <h2 className="section-title mt-2">Lançamento individual</h2>
         <p className="section-subtitle">
@@ -12590,21 +12633,21 @@ function EntriesView({
           <div className="rounded-md bg-slate-900 p-3 text-sm text-slate-300">
             Meta individual: <strong>{selectedAnalyst?.csat_goal ?? 0}%</strong>
             <span className="mx-2 text-slate-600">|</span>
-            Minimo para pódio: <strong>{podiumCsatGoal}%</strong>
+            Mínimo para pódio: <strong>{podiumCsatGoal}%</strong>
           </div>
 
           {(individualDateInvalid || individualDuplicate || individualReviewsInvalid) && (
             <div className="rounded-md border border-amber-300/30 bg-amber-300/10 p-3 text-sm text-amber-100">
-              {individualDateInvalid && <p>A data final nao pode ser menor que a data inicial.</p>}
+              {individualDateInvalid && <p>A data final não pode ser menor que a data inicial.</p>}
               {individualDuplicate && <p>Já existe lançamento para este analista neste período.</p>}
               {individualReviewsInvalid && (
-                <p>O total de avaliações nao pode ser maior que o total de atendimentos.</p>
+                <p>O total de avaliações não pode ser maior que o total de atendimentos.</p>
               )}
             </div>
           )}
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Inicio da semana">
+            <Field label="Início da semana">
               <input
                 className="form-input"
                 type="date"
@@ -12694,7 +12737,7 @@ function EntriesView({
             />
           </Field>
 
-          <Field label="Evidencia do 55PBX (print ou PDF)">
+          <Field label="Evidência do 55PBX (print ou PDF)">
             <input
               accept="image/png,image/jpeg,image/webp,application/pdf"
               className="form-input"
@@ -12728,35 +12771,35 @@ function EntriesView({
                 onIndividualChange({ ...initialIndividualForm, analystId: analysts[0]?.id || '' })
               }
             >
-              Limpar formulario
+              Limpar formulário
             </button>
           </div>
         </form>
         </section>
 
-        <section className="panel form-workspace-card">
+        <section className={entriesSection === 'team' ? 'panel form-workspace-card' : 'hidden'}>
         <p className="workspace-eyebrow">Operação</p>
         <h2 className="section-title mt-2">Performance da equipe</h2>
         <p className="section-subtitle">
-          Formula atual: ligações atendidas / total processado x 100.
+          Fórmula atual: ligações atendidas / total processado x 100.
         </p>
 
         <form className="mt-5 grid gap-4" onSubmit={onTeamSubmit}>
           {(teamDateInvalid || teamDuplicate || teamAnsweredInvalid || teamTotalMismatch) && (
             <div className="rounded-md border border-amber-300/30 bg-amber-300/10 p-3 text-sm text-amber-100">
-              {teamDateInvalid && <p>A data final nao pode ser menor que a data inicial.</p>}
+              {teamDateInvalid && <p>A data final não pode ser menor que a data inicial.</p>}
               {teamDuplicate && <p>Já existe performance da equipe neste período.</p>}
               {teamAnsweredInvalid && (
-                <p>Ligações atendidas nao pode ser maior que o total processado.</p>
+                <p>Ligações atendidas não pode ser maior que o total processado.</p>
               )}
               {teamTotalMismatch && (
-                <p>Conferencia: atendidas + abandonadas esta diferente do total processado.</p>
+                <p>Conferência: atendidas + abandonadas está diferente do total processado.</p>
               )}
             </div>
           )}
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Inicio da semana">
+            <Field label="Início da semana">
               <input
                 className="form-input"
                 type="date"
@@ -12839,7 +12882,7 @@ function EntriesView({
             />
           </Field>
 
-          <Field label="Evidencia do 55PBX (print ou PDF)">
+          <Field label="Evidência do 55PBX (print ou PDF)">
             <input
               accept="image/png,image/jpeg,image/webp,application/pdf"
               className="form-input"
@@ -12869,21 +12912,21 @@ function EntriesView({
               type="button"
               onClick={() => onTeamChange(initialTeamForm)}
             >
-              Limpar formulario
+              Limpar formulário
             </button>
           </div>
         </form>
         </section>
       </div>
 
-      <EntriesHistory
+      {entriesSection === 'history' && <EntriesHistory
         individualMetrics={individualMetrics}
         teamMetrics={teamMetrics}
         saving={saving}
         onDeleteIndividualMetric={onDeleteIndividualMetric}
         onDeleteTeamMetric={onDeleteTeamMetric}
         onUpdateTeamOverallCsat={onUpdateTeamOverallCsat}
-      />
+      />}
     </div>
   )
 }
@@ -13007,7 +13050,7 @@ function EntriesHistory({
       </div>
 
       <div className="mt-5 grid gap-4 lg:grid-cols-4">
-        <Field label="Tipo de historico">
+        <Field label="Tipo de histórico">
           <select
             className="form-input"
             value={historyType}
@@ -13077,7 +13120,7 @@ function EntriesHistory({
           <p className="mt-2 text-2xl font-bold">{totalIndividualReviews}/{totalIndividualTickets}</p>
         </div>
         <div className="rounded-lg bg-slate-900 p-4">
-          <p className="text-sm text-slate-400">Performance equipe</p>
+          <p className="text-sm text-slate-400">Performance da equipe</p>
           <p className="mt-2 text-2xl font-bold tabular-nums">{formatPercent(averageTeamPerformance)}</p>
         </div>
       </div>
@@ -13117,7 +13160,7 @@ function EntriesHistory({
                 <div className="border-t border-white/10 p-5">
                   {showIndividual && (
                     <div>
-                      <h3 className="font-semibold">Lancamentos individuais</h3>
+                      <h3 className="font-semibold">Lançamentos individuais</h3>
                       <div className="mt-3 overflow-x-auto">
               <table className="min-w-full text-left text-sm">
                 <thead className="text-slate-400">
@@ -13127,8 +13170,8 @@ function EntriesHistory({
                     <th className="pb-3 pr-4 font-medium">CSAT</th>
                     <th className="pb-3 pr-4 font-medium">Avaliações</th>
                     <th className="pb-3 pr-4 font-medium">Atendimentos</th>
-                    <th className="pb-3 pr-4 font-medium">Evidencia</th>
-                    <th className="pb-3 font-medium">Acao</th>
+                    <th className="pb-3 pr-4 font-medium">Evidência</th>
+                    <th className="pb-3 font-medium">Ação</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
@@ -13176,8 +13219,8 @@ function EntriesHistory({
                     <th className="pb-3 pr-4 font-medium">Atendidas</th>
                     <th className="pb-3 pr-4 font-medium">Processadas</th>
                     <th className="pb-3 pr-4 font-medium">CSAT geral N1 + N2</th>
-                    <th className="pb-3 pr-4 font-medium">Evidencia</th>
-                    <th className="pb-3 font-medium">Acao</th>
+                    <th className="pb-3 pr-4 font-medium">Evidência</th>
+                    <th className="pb-3 font-medium">Ação</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
