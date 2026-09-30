@@ -2189,7 +2189,10 @@ export default function Home() {
                   >
                     <span className="module-sidebar-code" aria-hidden="true">TEL</span>
                     <span className="module-sidebar-copy">
-                      <strong>Telefone</strong>
+                      <strong className="module-sidebar-title-row">
+                        <span>Telefone</span>
+                        <span className={expandedSidebarModule === 'phone' ? 'module-sidebar-chevron module-sidebar-chevron-open' : 'module-sidebar-chevron'} aria-hidden="true">⌄</span>
+                      </strong>
                       <small>{isManagementUser ? 'Performance e gestão' : 'Meu desempenho'}</small>
                     </span>
                   </button>
@@ -2268,7 +2271,10 @@ export default function Home() {
                   >
                     <span className="module-sidebar-code" aria-hidden="true">CHAT</span>
                     <span className="module-sidebar-copy">
-                      <strong>Chat</strong>
+                      <strong className="module-sidebar-title-row">
+                        <span>Chat</span>
+                        <span className={expandedSidebarModule === 'chat' ? 'module-sidebar-chevron module-sidebar-chevron-open' : 'module-sidebar-chevron'} aria-hidden="true">⌄</span>
+                      </strong>
                       <small>{isManagementUser ? 'ClickDesk e performance' : 'Meu desempenho'}</small>
                     </span>
                   </button>
