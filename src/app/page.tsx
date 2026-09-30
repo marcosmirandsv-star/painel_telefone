@@ -13422,14 +13422,75 @@ function AnalystsView({
   onDeleteAnalyst: (analyst: Analyst) => void
   onRemoveAnalystPhoto: (analyst: Analyst) => void
 }) {
+  const [analystSection, setAnalystSection] = useState<'team' | 'form'>('team')
+  const activeCount = analysts.filter((analyst) => analyst.active).length
+  const inactiveCount = analysts.length - activeCount
+  const withPhotoCount = analysts.filter((analyst) => Boolean(getAnalystPhoto(analyst.name, analyst.photo_url))).length
+
+  function handleEditAnalyst(analyst: Analyst) {
+    onEditAnalyst(analyst)
+    setAnalystSection('form')
+  }
+
   return (
-    <div className="mt-8 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-      <section className="panel">
+    <div className="mt-8 space-y-6">
+      <nav className="workspace-filter-panel workspace-switcher" aria-label="Áreas de analistas">
+        <div>
+          <p className="workspace-eyebrow">Analistas · Telefone</p>
+          <h2 className="section-title mt-2">{analystSection === 'team' ? 'Equipe cadastrada' : editingAnalystId ? 'Editar analista' : 'Incluir analista'}</h2>
+          <p className="section-subtitle">
+            {analystSection === 'team'
+              ? 'Consulte status, metas individuais, fotos e ações de cadastro.'
+              : 'Cadastre ou atualize os dados individuais sem alterar o histórico de performance.'}
+          </p>
+        </div>
+        <div className="workspace-switcher-row" role="group" aria-label="Navegar em analistas">
+          <button
+            className={analystSection === 'team' ? 'workspace-switcher-button workspace-switcher-button-active' : 'workspace-switcher-button'}
+            type="button"
+            aria-pressed={analystSection === 'team'}
+            onClick={() => setAnalystSection('team')}
+          >
+            Equipe
+          </button>
+          <button
+            className={analystSection === 'form' ? 'workspace-switcher-button workspace-switcher-button-active' : 'workspace-switcher-button'}
+            type="button"
+            aria-pressed={analystSection === 'form'}
+            onClick={() => setAnalystSection('form')}
+          >
+            Cadastro
+          </button>
+        </div>
+      </nav>
+
+      {analystSection === 'team' && (
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/10 bg-white/10 md:grid-cols-4">
+          <div className="bg-slate-950/80 p-4 text-center">
+            <span className="text-xs text-slate-500">Total</span>
+            <strong className="mt-1 block text-xl tabular-nums">{analysts.length}</strong>
+          </div>
+          <div className="bg-slate-950/80 p-4 text-center">
+            <span className="text-xs text-slate-500">Ativos</span>
+            <strong className="mt-1 block text-xl tabular-nums text-emerald-300">{activeCount}</strong>
+          </div>
+          <div className="bg-slate-950/80 p-4 text-center">
+            <span className="text-xs text-slate-500">Inativos</span>
+            <strong className="mt-1 block text-xl tabular-nums text-slate-300">{inactiveCount}</strong>
+          </div>
+          <div className="bg-slate-950/80 p-4 text-center">
+            <span className="text-xs text-slate-500">Com foto</span>
+            <strong className="mt-1 block text-xl tabular-nums text-cyan-200">{withPhotoCount}</strong>
+          </div>
+        </div>
+      )}
+
+      <section className={analystSection === 'form' ? 'panel' : 'hidden'}>
         <h2 className="section-title">
           {editingAnalystId ? 'Editar analista' : 'Incluir analista'}
         </h2>
         <p className="section-subtitle">
-          Defina o nome e a meta de CSAT individual conforme o perfil da empresa.
+          Defina o nome, a meta individual de CSAT e a foto do analista.
         </p>
 
         <form className="mt-5 grid gap-4" onSubmit={onAnalystSubmit}>
@@ -13475,7 +13536,14 @@ function AnalystsView({
             </button>
 
             {editingAnalystId && (
-              <button className="secondary-button" type="button" onClick={onCancelEdit}>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => {
+                  onCancelEdit()
+                  setAnalystSection('team')
+                }}
+              >
                 Cancelar
               </button>
             )}
@@ -13483,10 +13551,10 @@ function AnalystsView({
         </form>
       </section>
 
-      <section className="panel">
+      <section className={analystSection === 'team' ? 'panel' : 'hidden'}>
         <h2 className="section-title">Analistas cadastrados</h2>
         <p className="section-subtitle">
-          Inative para preservar histórico. Exclua apenas cadastros criados por engano.
+          Inative para preservar o histórico. Exclua apenas cadastros criados por engano.
         </p>
 
         <div className="mt-5 overflow-x-auto">
@@ -13519,7 +13587,7 @@ function AnalystsView({
                       <button
                         className="small-button"
                         type="button"
-                        onClick={() => onEditAnalyst(analyst)}
+                        onClick={() => handleEditAnalyst(analyst)}
                       >
                         Editar
                       </button>
