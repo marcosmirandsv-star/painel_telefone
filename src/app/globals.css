@@ -2062,6 +2062,14 @@ button:disabled {
   margin-bottom: 2px;
 }
 
+.form-workspace-card {
+  box-shadow: none !important;
+}
+
+.form-workspace-card .section-subtitle {
+  max-width: 620px;
+}
+
 .metric-strip {
   margin-top: 18px;
   border-top: 1px solid var(--ui-border);
