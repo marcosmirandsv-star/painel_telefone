@@ -17,6 +17,7 @@ export default function IntegrationsPage() {
   const [busy, setBusy] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
   const [message, setMessage] = useState('Verificando seu acesso…')
+  const [section, setSection] = useState<'closure' | 'integrations'>('closure')
   useEffect(() => {
     let active = true
     async function load() {
@@ -50,11 +51,48 @@ export default function IntegrationsPage() {
     } catch (error) { setPreview(null); setConfirmed(false); setMessage(error instanceof Error ? error.message : 'Falha na consulta.') }
     finally { setBusy(false) }
   }
-  return <main className="mx-auto max-w-5xl space-y-6 p-6 text-slate-100">
-    <Link href="/" className="text-cyan-300 underline">Voltar ao painel</Link>
-    <h1 className="text-3xl font-bold">Fechamentos</h1>
-    <p>Confira os indicadores de telefone e chat e preserve os resultados mensais aprovados pela gestão.</p>
-    <details className="rounded-xl border border-slate-700 p-4">
+  return <main className="mx-auto max-w-6xl space-y-6 p-6 text-slate-100">
+    <div className="flex flex-col gap-4 border-b border-white/10 pb-5 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <Link href="/" className="text-sm font-semibold text-cyan-300 hover:text-cyan-200">← Voltar ao painel</Link>
+        <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-300">Gestão · Fechamentos</p>
+        <h1 className="mt-2 text-3xl font-bold">Fechamentos oficiais</h1>
+        <p className="mt-2 max-w-3xl text-slate-300">Confira os indicadores antes de preservar o resultado mensal como referência oficial.</p>
+      </div>
+      <span className="rounded-md border border-white/10 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-300">Homologação</span>
+    </div>
+
+    <nav className="workspace-filter-panel workspace-switcher" aria-label="Áreas de fechamentos">
+      <div>
+        <p className="workspace-eyebrow">Fechamentos</p>
+        <h2 className="section-title mt-2">{section === 'closure' ? 'Conferência mensal' : 'Integrações e API'}</h2>
+        <p className="section-subtitle">
+          {section === 'closure'
+            ? 'Consulte os dados atuais, confira e preserve o fechamento aprovado.'
+            : 'Gerencie chaves de leitura para sistemas autorizados.'}
+        </p>
+      </div>
+      <div className="workspace-switcher-row" role="group" aria-label="Navegar em fechamentos">
+        <button
+          className={section === 'closure' ? 'workspace-switcher-button workspace-switcher-button-active' : 'workspace-switcher-button'}
+          type="button"
+          aria-pressed={section === 'closure'}
+          onClick={() => setSection('closure')}
+        >
+          Fechamento
+        </button>
+        <button
+          className={section === 'integrations' ? 'workspace-switcher-button workspace-switcher-button-active' : 'workspace-switcher-button'}
+          type="button"
+          aria-pressed={section === 'integrations'}
+          onClick={() => setSection('integrations')}
+        >
+          Integrações
+        </button>
+      </div>
+    </nav>
+
+    {section === 'closure' && <details className="rounded-xl border border-slate-700 p-4">
       <summary className="cursor-pointer font-semibold">Como usar esta área</summary>
       <ol className="mt-3 list-decimal space-y-2 pl-5 text-slate-300">
         <li>Escolha o mês e o canal. No chat, escolha também a equipe.</li>
@@ -63,33 +101,37 @@ export default function IntegrationsPage() {
         <li><strong>Ver fechamento oficial</strong> recupera uma cópia já aprovada para o mesmo mês, canal e equipe.</li>
       </ol>
       <p className="mt-3 text-slate-300">Aqui você usa seu login de gestão do painel.</p>
-    </details>
-    <p role="status" aria-live="polite">{message}</p>
-    {authorized && <>
-      <fieldset disabled={busy} className="flex flex-wrap gap-4 rounded-xl border border-slate-700 p-4">
-        <legend>Período para conferência</legend>
-        <label>Mês <input aria-label="Mês" type="month" min="2000-01" max="2099-12" className="rounded bg-slate-800 p-2" value={month} onChange={e => { setMonth(e.target.value); clear() }} /></label>
-        <label>Canal <select className="rounded bg-slate-800 p-2" value={channel} onChange={e => { setChannel(e.target.value); setTeam('all'); clear() }}><option value="telefone">Telefone</option><option value="chat">Chat</option></select></label>
-        {channel === 'chat' && <label>Equipe <select className="rounded bg-slate-800 p-2" value={team} onChange={e => { setTeam(e.target.value); clear() }}><option value="all">Todas as equipes</option>{teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>}
-        <button disabled={!month || busy} className="rounded bg-cyan-800 px-4 py-2 disabled:opacity-50" onClick={() => consult()}>Conferir dados atuais</button>
-        <button disabled={!month || busy} className="rounded border px-4 py-2 disabled:opacity-50" onClick={() => consult(false, true)}>Ver fechamento oficial</button>
+    </details>}
+
+    <p role="status" aria-live="polite" className={message ? 'rounded-lg border border-white/10 bg-slate-900/60 px-4 py-3 text-sm text-slate-300' : 'hidden'}>{message}</p>
+
+    {section === 'closure' && authorized && <>
+      <fieldset disabled={busy} className="grid gap-4 rounded-xl border border-white/10 bg-slate-950/35 p-5 md:grid-cols-2 xl:grid-cols-4">
+        <legend className="px-2 text-sm font-semibold text-cyan-200">Período para conferência</legend>
+        <label>Mês <input aria-label="Mês" type="month" min="2000-01" max="2099-12" className="form-input mt-2" value={month} onChange={e => { setMonth(e.target.value); clear() }} /></label>
+        <label>Canal <select className="form-input mt-2" value={channel} onChange={e => { setChannel(e.target.value); setTeam('all'); clear() }}><option value="telefone">Telefone</option><option value="chat">Chat</option></select></label>
+        {channel === 'chat' && <label>Equipe <select className="form-input mt-2" value={team} onChange={e => { setTeam(e.target.value); clear() }}><option value="all">Todas as equipes</option>{teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>}
+        <button disabled={!month || busy} className="primary-button self-end disabled:opacity-50" onClick={() => consult()}>Conferir dados atuais</button>
+        <button disabled={!month || busy} className="secondary-button self-end disabled:opacity-50" onClick={() => consult(false, true)}>Ver fechamento oficial</button>
       </fieldset>
       <p className="text-sm text-slate-300">No telefone, semanas que cruzam o mês entram integralmente, como no painel. No chat, as exclusões manuais são respeitadas. O fechamento é preservado por mês, canal e equipe selecionada; fechar todas as equipes não cria fechamentos individuais.</p>
-      {preview && <section className="space-y-4 rounded-xl border border-slate-700 p-4">
+      {preview && <section className="space-y-4 rounded-xl border border-white/10 bg-slate-950/35 p-5">
         <h2 className="text-xl font-semibold">{preview.status === 'fechado' ? 'Fechamento oficial' : 'Dados atuais — ainda não aprovados'}</h2>
         {!preview.tem_dados && <p>Não há registros considerados para este período.</p>}
-        <dl className="grid gap-3 sm:grid-cols-2">{Object.entries(preview.indicadores).map(([key, value]) => <div key={key} className="rounded bg-slate-800 p-3"><dt>{key.replaceAll('_', ' ')}</dt><dd className="text-xl font-bold">{value === null ? 'Sem base para cálculo' : value.toLocaleString('pt-BR')}</dd></div>)}</dl>
+        <dl className="grid gap-px overflow-hidden rounded-lg border border-white/10 bg-white/10 sm:grid-cols-2 lg:grid-cols-3">{Object.entries(preview.indicadores).map(([key, value]) => <div key={key} className="bg-slate-950/85 p-4"><dt className="text-xs text-slate-500">{key.replaceAll('_', ' ')}</dt><dd className="mt-2 text-xl font-bold tabular-nums">{value === null ? 'Sem base' : value.toLocaleString('pt-BR')}</dd></div>)}</dl>
         {preview.conferencia && preview.tem_dados && <>
           <label className="block"><input type="checkbox" checked={confirmed} disabled={busy} onChange={e => setConfirmed(e.target.checked)} /> Conferi os indicadores e quero preservar este resultado como fechamento oficial. Não será possível substituí-lo nesta versão.</label>
-          <button className="rounded bg-cyan-700 px-4 py-2 disabled:opacity-50" disabled={!confirmed || busy} onClick={() => consult(true)}>{busy ? 'Processando…' : 'Aprovar fechamento'}</button>
+          <button className="primary-button disabled:opacity-50" disabled={!confirmed || busy} onClick={() => consult(true)}>{busy ? 'Processando…' : 'Aprovar fechamento'}</button>
         </>}
       </section>}
     </>}
-    <details className="rounded-xl border border-slate-700 p-4 text-sm text-slate-300">
-      <summary className="cursor-pointer font-semibold">Integrações com outros sistemas</summary>
-      <p className="mt-3">Outras plataformas autorizadas podem consultar os indicadores atuais ou os fechamentos oficiais pela API. O perfil Master pode gerar e revogar uma chave própria para cada sistema nesta área. Essa chave não é necessária para usar a tela de fechamentos.</p>
-      <p className="mt-2">Conferir ou aprovar um fechamento não envia os dados automaticamente a outras equipes.</p>
-      {authorized && isMaster && <KeyManager />}
-    </details>
+    {section === 'integrations' && (
+      <section className="rounded-xl border border-white/10 bg-slate-950/35 p-5 text-sm text-slate-300">
+        <h2 className="text-xl font-semibold text-white">Integrações com outros sistemas</h2>
+        <p className="mt-3">Plataformas autorizadas podem consultar indicadores atuais ou fechamentos oficiais pela API. O perfil Master pode gerar e revogar uma chave própria para cada sistema.</p>
+        <p className="mt-2">Essas chaves são somente para leitura e não são necessárias para usar a tela de fechamentos.</p>
+        {authorized && isMaster ? <KeyManager /> : authorized ? <p className="mt-4 text-slate-400">A gestão de chaves é exclusiva do perfil Master.</p> : null}
+      </section>
+    )}
   </main>
 }
