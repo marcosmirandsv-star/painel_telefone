@@ -202,12 +202,6 @@ function businessDate(timestamp: string) {
     : null
 }
 
-function shiftDate(date: string, days: number) {
-  const value = new Date(`${date}T12:00:00Z`)
-  value.setUTCDate(value.getUTCDate() + days)
-  return value.toISOString().slice(0, 10)
-}
-
 function readMessageTimestamp(source: Record<string, unknown>) {
   for (const key of [
     'created_at',
@@ -450,10 +444,24 @@ Deno.serve(async (req: Request) => {
   const today = businessDate(new Date().toISOString())
   if (!today) return Response.json({ error: 'Business date unavailable' }, { status: 500 })
 
-  const mode = requestBody.mode === 'intraday' ? 'intraday' : 'd1'
-  const end = mode === 'intraday' ? today : shiftDate(today, -1)
-  const start = mode === 'intraday' ? today : shiftDate(end, -6)
-  const windowDays = mode === 'intraday' ? 1 : 7
+  const requestedMode =
+    typeof requestBody.mode === 'string' && requestBody.mode.trim()
+      ? requestBody.mode.trim()
+      : 'intraday'
+
+  if (requestedMode !== 'intraday') {
+    return Response.json(
+      {
+        error: 'Modo D-1 desativado. A sincronização automática opera somente em ciclo intradiário.',
+      },
+      { status: 400 },
+    )
+  }
+
+  const mode = 'intraday' as const
+  const start = today
+  const end = today
+  const windowDays = 1
 
   const runInsert = await admin
     .from('clickdesk_chat_sync_runs')
