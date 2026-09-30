@@ -10090,13 +10090,13 @@ function DashboardView({
       ].filter((driver): driver is NonNullable<typeof driver> => driver !== null)
   const predictiveAction =
     !hasPeriodData
-      ? 'Aguardar novos lançamentos para liberar previsao.'
+      ? 'Aguardar novos lançamentos para liberar previsão.'
       : predictiveRiskDrivers.length > 0
         ? `Alerta acionado por: ${predictiveRiskDrivers.map((driver) => driver.label.toLowerCase()).join(', ')}. Veja o diagnóstico e as ações logo abaixo.`
         : 'Nenhum alerta acionado. Manter a rotina atual e preservar a consistência até o fechamento.'
   const executiveNextAction =
     !hasPeriodData
-      ? 'Conferir se os lançamentos da semana/mes ja foram feitos.'
+      ? 'Conferir se os lançamentos da semana/mês já foram feitos.'
       : attentionCount
         ? 'Abrir feedback MIMO dos analistas em atenção, combinar uma ação objetiva por critério e conferir o resultado no próximo lançamento.'
         : periodTeamPerformance < teamPerformanceGoal
@@ -10247,8 +10247,8 @@ function DashboardView({
     ? !analystResult.eligible
       ? `Para projetar entrada no pódio, primeiro regularize: ${analystResult.reasons.join(', ') || 'critérios pendentes'}.`
       : periodFilter.mode === 'month'
-        ? `Se mantiver este ritmo até o fechamento, a tendência atual é terminar em ${analystRankingPosition ? `${analystRankingPosition}o lugar` : 'posição calculada'}; a posição muda conforme os novos lançamentos do time.`
-        : `Neste recorte, a posição atual e ${analystRankingPosition ? `${analystRankingPosition}o lugar` : 'calculada pelo ranking'}; no mensal, ela será recalculada com todos os lançamentos.`
+        ? `Se mantiver este ritmo até o fechamento, a tendência atual é terminar em ${analystRankingPosition ? `${analystRankingPosition}º lugar` : 'posição calculada'}; a posição muda conforme os novos lançamentos do time.`
+        : `Neste recorte, a posição atual é ${analystRankingPosition ? `${analystRankingPosition}º lugar` : 'calculada pelo ranking'}; no mensal, ela será recalculada com todos os lançamentos.`
     : 'Aguardando lançamento para calcular posição e tendência.'
   const podiumAverageFromSecureRanking = phonePodiumRanking.find((item) => Number(item.team_average_tickets) > 0)?.team_average_tickets
   const podiumAverageSource = phonePodiumRanking.length
@@ -10297,7 +10297,7 @@ function DashboardView({
     ? analystResult.eligible
       ? 'Você já cumpre os critérios objetivos. Agora o foco é preservar qualidade, avaliações e volume até o fechamento.'
       : 'Para entrar no pódio, priorize os critérios abaixo que ainda estão pendentes neste recorte.'
-    : 'Sem lançamento no período para calcular distancia ate o pódio.'
+    : 'Sem lançamento no período para calcular distância até o pódio.'
   const analystActionPlan = analystResult
     ? [
         {
@@ -10305,7 +10305,7 @@ function DashboardView({
           title: analystCsatGap > 0 ? `Recuperar ${formatDelta(analystCsatGap, ' p.p.').replace('+', '')} de CSAT` : 'Proteger o CSAT atual',
           text:
             analystCsatGap > 0
-              ? 'Nos próximos atendimentos, confirme o problema antes de orientar, valide se a solução ficou clara e encerre perguntando se ainda ficou alguma duvida. A meta é reduzir motivos de avaliação negativa antes do próximo fechamento.'
+              ? 'Nos próximos atendimentos, confirme o problema antes de orientar, valide se a solução ficou clara e encerre perguntando se ainda ficou alguma dúvida. A meta é reduzir motivos de avaliação negativa antes do próximo fechamento.'
               : 'Seu CSAT está acima da referência. Mantenha o mesmo padrão de abertura, diagnóstico e fechamento para evitar queda de qualidade no restante do período.',
         },
         {
@@ -10965,7 +10965,7 @@ function DashboardView({
           <section className="workspace-content-section workspace-content-section-divided">
             <p className="workspace-eyebrow">Minha evolução</p>
             <h2 className="section-title mt-2">Minha evolução recente</h2>
-            <p className="section-subtitle">Somente indicadores individuais dentro de ${periodLabel}.</p>
+            <p className="section-subtitle">{`Somente indicadores individuais dentro de ${periodLabel}.`}</p>
 
             <div className="mt-6 grid gap-6 md:grid-cols-2">
               <TrendLineChart
@@ -11024,7 +11024,7 @@ function DashboardView({
         <section className="workspace-content-section workspace-content-section-divided">
           <p className="workspace-eyebrow">Operação</p>
           <h2 className="section-title mt-2">Variações recentes</h2>
-          <p className="section-subtitle">Evolução calculada dentro de ${periodLabel}.</p>
+          <p className="section-subtitle">{`Evolução calculada dentro de ${periodLabel}.`}</p>
 
           <div className="mt-6 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             <TrendLineChart
@@ -11127,7 +11127,7 @@ function DashboardView({
                 <div>
                   <p className="text-sm text-slate-400">O que falta para o pódio?</p>
                   <h3 className="mt-2 text-2xl font-bold text-cyan-300">
-                    {analystDataLoading ? 'Calculando critérios' : analystResult?.eligible ? 'Você esta dentro dos critérios' : 'Distancia ate o pódio'}
+                    {analystDataLoading ? 'Calculando critérios' : analystResult?.eligible ? 'Você está dentro dos critérios' : 'Distância até o pódio'}
                   </h3>
                 </div>
                 <p className="max-w-2xl text-sm leading-6 text-slate-400">
@@ -11314,7 +11314,7 @@ function DashboardView({
               </table>
 
               {!periodPodium.length && (
-                <EmptyState text="Ainda nao ha lançamentos individuais no período selecionado." />
+                <EmptyState text="Ainda não há lançamentos individuais no período selecionado." />
               )}
             </div>
           </>
