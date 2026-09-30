@@ -871,6 +871,7 @@ type PeriodFilter = {
 }
 
 type AppModule = 'phone' | 'chat'
+type ChatActiveTab = 'overview' | 'prototype' | 'podium' | 'analysis' | 'reports' | 'import' | 'settings'
 
 type ChatFeedbackStyle = 'coach' | 'sare' | 'mimo'
 type FeedbackGoal = 'recognition' | 'courseCorrection' | 'maintenance' | 'development'
@@ -997,6 +998,7 @@ export default function Home() {
   const [chatPodiumExclusions, setChatPodiumExclusions] = useState<ChatPodiumExclusion[]>([])
   const [activeModule, setActiveModule] = useState<AppModule>('phone')
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard')
+  const [chatActiveTab, setChatActiveTab] = useState<ChatActiveTab>('overview')
   const [individualForm, setIndividualForm] = useState(initialIndividualForm)
   const [teamForm, setTeamForm] = useState(initialTeamForm)
   const [analystForm, setAnalystForm] = useState(initialAnalystForm)
@@ -2167,46 +2169,170 @@ export default function Home() {
               </div>
             </div>
 
-            <nav className="corporate-module-nav">
+            <nav className="corporate-module-nav" aria-label="Menu principal">
               {(isManagementUser || hasPhoneAnalystAccess) && (
-                <button
-                  className={activeModule === 'phone' ? 'module-sidebar-button module-sidebar-button-active' : 'module-sidebar-button'}
-                  type="button"
-                  onClick={() => {
-                    setActiveModule('phone')
-                    setActiveTab('dashboard')
-                  }}
-                >
-                  <span className="module-sidebar-code" aria-hidden="true">TEL</span>
-                  <span className="module-sidebar-copy">
-                    <strong>Telefone</strong>
-                    <small>{isManagementUser ? 'Performance e gestão' : 'Meu desempenho'}</small>
-                  </span>
-                </button>
+                <div className="module-sidebar-group">
+                  <button
+                    className={activeModule === 'phone' ? 'module-sidebar-button module-sidebar-button-active' : 'module-sidebar-button'}
+                    type="button"
+                    aria-expanded={activeModule === 'phone'}
+                    onClick={() => {
+                      setActiveModule('phone')
+                      setActiveTab('dashboard')
+                    }}
+                  >
+                    <span className="module-sidebar-code" aria-hidden="true">TEL</span>
+                    <span className="module-sidebar-copy">
+                      <strong>Telefone</strong>
+                      <small>{isManagementUser ? 'Performance e gestão' : 'Meu desempenho'}</small>
+                    </span>
+                  </button>
+
+                  {activeModule === 'phone' && (
+                    <div className="module-sidebar-subnav" aria-label="Submenus do Telefone">
+                      <button
+                        className={activeTab === 'dashboard' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
+                        type="button"
+                        onClick={() => setActiveTab('dashboard')}
+                      >
+                        Dashboard
+                      </button>
+                      {isManagementUser && (
+                        <>
+                          <button
+                            className={activeTab === 'reports' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
+                            type="button"
+                            onClick={() => setActiveTab('reports')}
+                          >
+                            Relatórios
+                          </button>
+                          <button
+                            className={activeTab === 'entries' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
+                            type="button"
+                            onClick={() => setActiveTab('entries')}
+                          >
+                            Lançamentos
+                          </button>
+                          <button
+                            className={activeTab === 'analysts' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
+                            type="button"
+                            onClick={() => setActiveTab('analysts')}
+                          >
+                            Analistas
+                          </button>
+                          <button
+                            className={activeTab === 'goals' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
+                            type="button"
+                            onClick={() => setActiveTab('goals')}
+                          >
+                            Metas
+                          </button>
+                          <button
+                            className={activeTab === 'users' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
+                            type="button"
+                            onClick={() => setActiveTab('users')}
+                          >
+                            Usuários
+                          </button>
+                          <Link className="module-sidebar-subitem module-sidebar-subitem-link" href="/integracoes">
+                            Fechamentos
+                          </Link>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
               )}
 
               {(isManagementUser || hasChatAnalystAccess) && (
-                <button
-                  className={activeModule === 'chat' ? 'module-sidebar-button module-sidebar-button-active' : 'module-sidebar-button'}
-                  type="button"
-                  onClick={() => setActiveModule('chat')}
-                >
-                  <span className="module-sidebar-code" aria-hidden="true">CHAT</span>
-                  <span className="module-sidebar-copy">
-                    <strong>Chat</strong>
-                    <small>{isManagementUser ? 'ClickDesk e performance' : 'Meu desempenho'}</small>
-                  </span>
-                </button>
+                <div className="module-sidebar-group">
+                  <button
+                    className={activeModule === 'chat' ? 'module-sidebar-button module-sidebar-button-active' : 'module-sidebar-button'}
+                    type="button"
+                    aria-expanded={activeModule === 'chat'}
+                    onClick={() => {
+                      setActiveModule('chat')
+                      if (isManagementUser) setChatActiveTab('overview')
+                    }}
+                  >
+                    <span className="module-sidebar-code" aria-hidden="true">CHAT</span>
+                    <span className="module-sidebar-copy">
+                      <strong>Chat</strong>
+                      <small>{isManagementUser ? 'ClickDesk e performance' : 'Meu desempenho'}</small>
+                    </span>
+                  </button>
+
+                  {activeModule === 'chat' && isManagementUser && (
+                    <div className="module-sidebar-subnav" aria-label="Submenus do Chat">
+                      <button
+                        className={chatActiveTab === 'overview' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
+                        type="button"
+                        onClick={() => setChatActiveTab('overview')}
+                      >
+                        Visão da operação
+                      </button>
+                      <button
+                        className={chatActiveTab === 'prototype' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
+                        type="button"
+                        onClick={() => onChatActiveTabChange('prototype')}
+                      >
+                        Equipe e produtividade
+                      </button>
+                      <button
+                        className={chatActiveTab === 'podium' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
+                        type="button"
+                        onClick={() => onChatActiveTabChange('podium')}
+                      >
+                        Gestão e ações
+                      </button>
+                      <button
+                        className={chatActiveTab === 'reports' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
+                        type="button"
+                        onClick={() => onChatActiveTabChange('reports')}
+                      >
+                        Fechamento mensal
+                      </button>
+
+                      <span className="module-sidebar-subgroup-label">Ferramentas</span>
+                      <button
+                        className={chatActiveTab === 'analysis' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
+                        type="button"
+                        onClick={() => setChatActiveTab('analysis')}
+                      >
+                        Conferência da base
+                      </button>
+                      <button
+                        className={chatActiveTab === 'import' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
+                        type="button"
+                        onClick={() => setChatActiveTab('import')}
+                      >
+                        Importação
+                      </button>
+                      <button
+                        className={chatActiveTab === 'settings' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
+                        type="button"
+                        onClick={() => setChatActiveTab('settings')}
+                      >
+                        Cadastros
+                      </button>
+                      <Link className="module-sidebar-subitem module-sidebar-subitem-link" href="/integracoes">
+                        Fechamentos oficiais
+                      </Link>
+                    </div>
+                  )}
+                </div>
               )}
 
               {isManagementUser && (
-                <Link className="module-sidebar-button" href="/escalas">
-                  <span className="module-sidebar-code" aria-hidden="true">ESC</span>
-                  <span className="module-sidebar-copy">
-                    <strong>Escalas</strong>
-                    <small>Solicitações e operação</small>
-                  </span>
-                </Link>
+                <div className="module-sidebar-group">
+                  <Link className="module-sidebar-button" href="/escalas">
+                    <span className="module-sidebar-code" aria-hidden="true">ESC</span>
+                    <span className="module-sidebar-copy">
+                      <strong>Escalas</strong>
+                      <small>Solicitações e operação</small>
+                    </span>
+                  </Link>
+                </div>
               )}
             </nav>
 
@@ -2230,7 +2356,15 @@ export default function Home() {
             </h1>
             <p className="mt-3 max-w-3xl text-slate-300">
               {activeModule === 'chat'
-                ? 'Operação, produtividade, gestão, fechamento e leitura qualitativa com dados do ClickDesk.'
+                ? chatActiveTab === 'overview'
+                  ? 'Visão consolidada da operação com dados do ClickDesk.'
+                  : chatActiveTab === 'prototype'
+                    ? 'Desempenho coletivo e leitura individual da equipe.'
+                    : chatActiveTab === 'podium'
+                      ? 'Prioridades de gestão, ações e acompanhamento.'
+                      : chatActiveTab === 'reports'
+                        ? 'Fechamento mensal, ranking e relatórios individuais.'
+                        : 'Ferramentas de conferência, importação e cadastros do Chat.'
                 : 'Metas, lançamentos, performance, pódio, relatórios e acompanhamento da operação de telefone.'}
             </p>
             {!isManagementUser && (
@@ -2289,35 +2423,7 @@ export default function Home() {
           </div>
         </header>
 
-        {activeModule === 'phone' && (
-          <nav className="workspace-navigation context-navigation mt-4 flex flex-wrap gap-2" aria-label="Áreas do módulo Telefone">
-          <TabButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')}>
-            Dashboard
-          </TabButton>
-          {isManagementUser && (
-            <TabButton active={activeTab === 'reports'} onClick={() => setActiveTab('reports')}>
-              Relatórios
-            </TabButton>
-          )}
-          {isManagementUser && (
-            <>
-              <TabButton active={activeTab === 'entries'} onClick={() => setActiveTab('entries')}>
-                Lançamentos
-              </TabButton>
-              <TabButton active={activeTab === 'analysts'} onClick={() => setActiveTab('analysts')}>
-                Analistas
-              </TabButton>
-              <TabButton active={activeTab === 'goals'} onClick={() => setActiveTab('goals')}>
-                Metas
-              </TabButton>
-              <TabButton active={activeTab === 'users'} onClick={() => setActiveTab('users')}>
-                Usuários
-              </TabButton>
-              <Link className="tab-button" href="/integracoes">Fechamentos</Link>
-            </>
-          )}
-          </nav>
-        )}
+
 
         {message && <Feedback message={message} />}
 
@@ -2330,6 +2436,8 @@ export default function Home() {
             manualPodium={chatPodiumManual}
             podiumExclusions={chatPodiumExclusions}
             loading={loading}
+            chatActiveTab={chatActiveTab}
+            onChatActiveTabChange={setChatActiveTab}
             onImportComplete={loadData}
           />
         )}
@@ -3705,6 +3813,8 @@ function ChatModuleDashboard({
   manualPodium,
   podiumExclusions,
   loading,
+  chatActiveTab,
+  onChatActiveTabChange,
   onImportComplete,
 }: {
   role: UserRole
@@ -3714,6 +3824,8 @@ function ChatModuleDashboard({
   manualPodium: ChatPodiumManual[]
   podiumExclusions: ChatPodiumExclusion[]
   loading: boolean
+  chatActiveTab: ChatActiveTab
+  onChatActiveTabChange: (tab: ChatActiveTab) => void
   onImportComplete: () => Promise<void>
 }) {
   const isManagementUser = role !== 'analyst'
@@ -3754,8 +3866,6 @@ function ChatModuleDashboard({
   const [chatReportQualitativePreparing, setChatReportQualitativePreparing] = useState(false)
   const [chatReportQualitativeStatus, setChatReportQualitativeStatus] = useState('')
   const [selectedChatReportMetricId, setSelectedChatReportMetricId] = useState('')
-  const [chatActiveTab, setChatActiveTab] = useState<'overview' | 'prototype' | 'podium' | 'analysis' | 'reports' | 'import' | 'settings'>('overview')
-  const [chatToolsOpen, setChatToolsOpen] = useState(false)
   const [chat2AnalystId, setChat2AnalystId] = useState('')
   const [chat2LiveAnalystKey, setChat2LiveAnalystKey] = useState('')
   const [chat2PeriodKey, setChat2PeriodKey] = useState('')
@@ -6753,80 +6863,7 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <nav className="chat-navigation workspace-navigation" aria-label="Áreas do módulo Chat">
-        <div className="tab-row">
-          <TabButton active={chatActiveTab === 'overview'} onClick={() => setChatActiveTab('overview')}>
-            Visão da operação
-          </TabButton>
-          <TabButton active={chatActiveTab === 'prototype'} onClick={() => setChatActiveTab('prototype')}>
-            Equipe e produtividade
-          </TabButton>
-          <TabButton active={chatActiveTab === 'podium'} onClick={() => setChatActiveTab('podium')}>
-            Gestão e ações
-          </TabButton>
-          <TabButton active={chatActiveTab === 'reports'} onClick={() => setChatActiveTab('reports')}>
-            Fechamento mensal
-          </TabButton>
-        </div>
-        <div className="chat-tools-menu">
-          <button
-            aria-expanded={chatToolsOpen}
-            aria-haspopup="menu"
-            className={chatActiveTab === 'analysis' || chatActiveTab === 'import' || chatActiveTab === 'settings' ? 'chat-tools-trigger chat-tools-trigger-active' : 'chat-tools-trigger'}
-            onClick={() => setChatToolsOpen((open) => !open)}
-            type="button"
-          >
-            Ferramentas
-            <span aria-hidden="true" className={chatToolsOpen ? 'chat-tools-chevron chat-tools-chevron-open' : 'chat-tools-chevron'}>⌄</span>
-          </button>
-          {chatToolsOpen && (
-            <div className="chat-tools-dropdown" role="menu">
-              <button
-                className={chatActiveTab === 'analysis' ? 'chat-tools-option chat-tools-option-active' : 'chat-tools-option'}
-                onClick={() => {
-                  setChatActiveTab('analysis')
-                  setChatToolsOpen(false)
-                }}
-                role="menuitem"
-                type="button"
-              >
-                <strong>Conferência da base</strong>
-                <span>Conferir volume, qualidade, avaliações e consistência dos dados</span>
-              </button>
-              <button
-                className={chatActiveTab === 'import' ? 'chat-tools-option chat-tools-option-active' : 'chat-tools-option'}
-                onClick={() => {
-                  setChatActiveTab('import')
-                  setChatToolsOpen(false)
-                }}
-                role="menuitem"
-                type="button"
-              >
-                <strong>Importação</strong>
-                <span>Atualizar a base mensal e o histórico operacional</span>
-              </button>
-              <button
-                className={chatActiveTab === 'settings' ? 'chat-tools-option chat-tools-option-active' : 'chat-tools-option'}
-                onClick={() => {
-                  setChatActiveTab('settings')
-                  setChatToolsOpen(false)
-                }}
-                role="menuitem"
-                type="button"
-              >
-                <strong>Cadastros</strong>
-                <span>Gerenciar analistas, metas e fotos</span>
-              </button>
-              {isManagementUser && (
-                <Link className="chat-tools-option" href="/integracoes" role="menuitem">
-                  <strong>Fechamentos oficiais</strong>
-                  <span>Conferir e preservar os resultados aprovados</span>
-                </Link>
-              )}
-            </div>
-          )}
-        </div>
-      </nav>
+
 
       {chatActiveTab === 'overview' && (
         <section className="workspace-page-heading">
@@ -8107,7 +8144,7 @@ function ChatModuleDashboard({
                     className="small-button"
                     onClick={() => {
                       setChat2LiveAnalystKey(`${item.area}::${item.assignee_name}`)
-                      setChatActiveTab('prototype')
+                      onChatActiveTabChange('prototype')
                     }}
                   >
                     Abrir analista
@@ -8224,7 +8261,7 @@ function ChatModuleDashboard({
                 type="button"
                 className="small-button"
                 onClick={() => {
-                  setChatActiveTab('reports')
+                  onChatActiveTabChange('reports')
                   window.setTimeout(() => {
                     document
                       .getElementById('chat-report-individual')
@@ -9311,7 +9348,7 @@ function ChatModuleDashboard({
                   onClick={() => {
                     if (!selectedChatReportMetric) return
                     setChatQualitativeFocusAnalystId(selectedChatReportMetric.analyst_id)
-                    setChatActiveTab('podium')
+                    onChatActiveTabChange('podium')
                     window.setTimeout(() => {
                       document
                         .getElementById('chat-qualitative-validation')
