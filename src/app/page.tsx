@@ -4604,18 +4604,80 @@ function ChatModuleDashboard({
   }
 
   const selectedPeriod = periods.find((period) => `${period.year}-${period.monthNumber}` === selectedPeriodKey) ?? periods[0]
-  const visibleMetrics = metrics.filter((metric) => {
+  const legacyVisibleMetrics = metrics.filter((metric) => {
     const matchesTeam = selectedTeamId === 'all' || metric.team_id === selectedTeamId
     const matchesPeriod = selectedPeriod
       ? metric.year === selectedPeriod.year && metric.month_number === selectedPeriod.monthNumber
       : true
     return matchesTeam && matchesPeriod
   })
+  const [chatAuditYearText, chatAuditMonthText] = chat2PeriodKey.split('-')
+  const chatAuditNow = new Date()
+  const chatAuditYear = Number(chatAuditYearText) || chatAuditNow.getFullYear()
+  const chatAuditMonthNumber = Number(chatAuditMonthText) || chatAuditNow.getMonth() + 1
+  const chatAuditPeriod = getChatMonthPeriod(chatAuditYear, chatAuditMonthNumber)
+  const clickDeskAuditMetrics: ChatMonthlyMetric[] = (clickDeskPersistedMetrics?.by_analyst ?? [])
+    .filter((item) => {
+      if (!item.analyst_id) return false
+      return selectedTeamId === 'all' || item.team_id === selectedTeamId
+    })
+    .map((item) => {
+      const analystId = item.analyst_id as string
+      const analystProfile = analysts.find((analyst) => analyst.id === analystId)
+      const teamId = analystProfile?.team_id ?? item.team_id ?? ''
+      const teamName = teams.find((team) => team.id === teamId)?.name ?? item.area ?? 'Equipe'
+      const csatGoal = Number(analystProfile?.csat_goal ?? 90)
+      const reviewGoal = 25
+      const csat = Number(item.csat ?? 0)
+      const reviewPercentage = Number(item.review_percentage ?? 0)
+
+      return {
+        id: `clickdesk:audit:${chatAuditPeriod.start}:${analystId}`,
+        team_id: teamId,
+        analyst_id: analystId,
+        month_label: chatAuditPeriod.label,
+        year: chatAuditYear,
+        month_number: chatAuditMonthNumber,
+        period_start: chatAuditPeriod.start,
+        period_end: chatAuditPeriod.end,
+        csat,
+        review_percentage: reviewPercentage,
+        sending_percentage: round(Math.max(0, 100 - reviewPercentage)),
+        total_tickets: Number(item.attendances ?? 0),
+        inactive_tickets: 0,
+        valid_tickets: Number(item.attendances ?? 0),
+        reviews: Number(item.reviews ?? 0),
+        positive_reviews: Number(item.positive_reviews ?? 0),
+        negative_reviews: Number(item.negative_reviews ?? 0),
+        csat_goal: csatGoal,
+        csat_delta: round(csat - csatGoal),
+        general_review_goal: reviewGoal,
+        status:
+          csat >= csatGoal && reviewPercentage >= reviewGoal
+            ? 'Meta Superada'
+            : csat < csatGoal && reviewPercentage < reviewGoal
+              ? 'Critico'
+              : 'Em acompanhamento',
+        chat_analysts: {
+          name: analystProfile?.name ?? item.assignee_name,
+          csat_goal: csatGoal,
+          photo_url: analystProfile?.photo_url ?? null,
+        },
+        chat_teams: { name: teamName },
+      }
+    })
+  const visibleMetrics =
+    chatActiveTab === 'analysis' && clickDeskAuditMetrics.length > 0
+      ? clickDeskAuditMetrics
+      : legacyVisibleMetrics
   const activePodiumExclusions = podiumExclusions.filter((exclusion) => {
     const matchesTeam = selectedTeamId === 'all' || exclusion.team_id === selectedTeamId
-    const matchesPeriod = selectedPeriod
-      ? exclusion.year === selectedPeriod.year && exclusion.month_number === selectedPeriod.monthNumber
-      : true
+    const matchesPeriod =
+      chatActiveTab === 'analysis'
+        ? exclusion.year === chatAuditYear && exclusion.month_number === chatAuditMonthNumber
+        : selectedPeriod
+          ? exclusion.year === selectedPeriod.year && exclusion.month_number === selectedPeriod.monthNumber
+          : true
 
     return matchesTeam && matchesPeriod
   })
@@ -6516,12 +6578,12 @@ function ChatModuleDashboard({
               label={
                 chatActiveTab === 'reports'
                   ? 'Período do relatório'
-                  : chatActiveTab === 'prototype' || chatActiveTab === 'overview' || chatActiveTab === 'podium'
+                  : chatActiveTab === 'prototype' || chatActiveTab === 'overview' || chatActiveTab === 'podium' || chatActiveTab === 'analysis'
                     ? 'Período ClickDesk'
                     : 'Período'
               }
             >
-              {chatActiveTab === 'prototype' || chatActiveTab === 'overview' || chatActiveTab === 'podium' || chatActiveTab === 'reports' ? (
+              {chatActiveTab === 'prototype' || chatActiveTab === 'overview' || chatActiveTab === 'podium' || chatActiveTab === 'analysis' || chatActiveTab === 'reports' ? (
                 <select
                   className="form-input"
                   value={chat2PeriodKey}
@@ -6594,7 +6656,7 @@ function ChatModuleDashboard({
                 type="button"
               >
                 <strong>Conferência da base</strong>
-                <span>Auditar comparação, volume, qualidade e dados importados</span>
+                <span>Conferir volume, qualidade, avaliações e consistência dos dados</span>
               </button>
               <button
                 className={chatActiveTab === 'import' ? 'chat-tools-option chat-tools-option-active' : 'chat-tools-option'}
@@ -6684,8 +6746,8 @@ function ChatModuleDashboard({
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <p className="workspace-eyebrow">Ferramentas · conferência da base</p>
-              <h2 className="mt-2 text-2xl font-bold">Auditar os números antes da gestão</h2>
-              <p className="section-subtitle">Comparação detalhada entre analistas, volume, qualidade, participação nas avaliações, conferência dos dados e consulta excepcional de tickets.</p>
+              <h2 className="mt-2 text-2xl font-bold">Conferência e auditoria da base</h2>
+              <p className="section-subtitle">Compare analistas, volume, qualidade e participação nas avaliações, valide a consistência dos dados e consulte tickets específicos quando necessário.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <button
