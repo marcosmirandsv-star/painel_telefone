@@ -8,6 +8,7 @@ import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 import { normalizeQualitativeAnalysis } from '@/lib/clickdesk-qualitative'
 import {
   buildOperation360Analysis,
+  buildOperation360Synthesis,
   calculateOperation360Totals,
   operation360Percentage,
   type Operation360AnalysisRow,
@@ -186,6 +187,19 @@ export async function GET(request: Request) {
     const analyzedNegative = negativeRows.filter((row) => analyzedIds.has(row.clickdesk_ticket_id)).length
     const analyzedPositive = positiveRows.filter((row) => analyzedIds.has(row.clickdesk_ticket_id)).length
 
+    const preliminaryPatterns = buildOperation360Analysis(normalizedAnalyses, 'analyzed')
+    const validatedPatterns = buildOperation360Analysis(normalizedAnalyses, 'approved')
+    const preliminarySynthesis = buildOperation360Synthesis({
+      negativeTotal: totals.negative,
+      positiveTotal: totals.positive,
+      analysis: preliminaryPatterns,
+    })
+    const validatedSynthesis = buildOperation360Synthesis({
+      negativeTotal: totals.negative,
+      positiveTotal: totals.positive,
+      analysis: validatedPatterns,
+    })
+
     return json({
       source: 'clickdesk_operation_360',
       period: { start: filters.start, end: filters.end },
@@ -211,8 +225,10 @@ export async function GET(request: Request) {
           approved_percentage: operation360Percentage(approvedPositive, totals.positive),
         },
       },
-      preliminary_patterns: buildOperation360Analysis(normalizedAnalyses, 'analyzed'),
-      validated_patterns: buildOperation360Analysis(normalizedAnalyses, 'approved'),
+      preliminary_patterns: preliminaryPatterns,
+      preliminary_synthesis: preliminarySynthesis,
+      validated_patterns: validatedPatterns,
+      validated_synthesis: validatedSynthesis,
       analysis_status: {
         pending: analyses.filter((row) => row.validation_status === 'pending').length,
         approved: analyses.filter((row) => row.validation_status === 'approved').length,
