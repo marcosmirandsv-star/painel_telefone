@@ -88,12 +88,12 @@ Agrupa funções de apoio, não de gestão cotidiana:
 
 A base persistida é atualizada automaticamente em homologação:
 
-- 06:10 BRT: reconciliação D-1 e revalidação recente;
-- 09:00 BRT: sincronização intradiária;
-- 13:00 BRT: sincronização intradiária;
-- 17:30 BRT: sincronização intradiária.
+- ciclo de 60 minutos;
+- janela operacional: 09:00–19:00 BRT;
+- cada execução automática trabalha somente com o dia corrente;
+- a rotina D-1 foi desativada em 30/09/2026 e não faz mais parte da arquitetura ativa.
 
-As leituras intradiárias usam o próprio dia. A rotina D-1 não deve ser confundida com a atualização do dia corrente.
+O endpoint legado da Edge Function conserva o nome técnico `clickdesk-d1-sync` apenas por compatibilidade com o agendamento já instalado. Chamadas automáticas aceitam somente o modo `intraday`; qualquer tentativa de executar o modo D-1 deve ser recusada.
 
 ### Zendesk
 Permanece como fonte histórica/legada quando aplicável.
