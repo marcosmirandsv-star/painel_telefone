@@ -635,6 +635,99 @@ type ClickDeskQualitativeSummary = {
   error?: string
 }
 
+type ClickDeskOperation360Pattern = {
+  key: string
+  count: number
+  percentage: number
+  ticket_ids: string[]
+  examples: string[]
+}
+
+type ClickDeskOperation360PatternGroup = {
+  analyzed: number
+  causes: ClickDeskOperation360Pattern[]
+  controllability: ClickDeskOperation360Pattern[]
+  human_influence: ClickDeskOperation360Pattern[]
+  takeaways: ClickDeskOperation360Pattern[]
+}
+
+type ClickDeskOperation360 = {
+  source?: string
+  period?: { start: string; end: string }
+  scope?: { team_id: string | null }
+  totals?: {
+    attendances: number
+    evaluated: number
+    positive: number
+    negative: number
+    csat: number | null
+    review_percentage: number | null
+  }
+  coverage?: {
+    analyzed: number
+    approved: number
+    analyzed_percentage: number
+    approved_percentage: number
+    negative: {
+      analyzed: number
+      approved: number
+      total: number
+      analyzed_percentage: number
+      approved_percentage: number
+    }
+    positive: {
+      analyzed: number
+      approved: number
+      total: number
+      analyzed_percentage: number
+      approved_percentage: number
+    }
+  }
+  preliminary_patterns?: {
+    status: string
+    total: number
+    negative: ClickDeskOperation360PatternGroup
+    positive: ClickDeskOperation360PatternGroup
+  }
+  validated_patterns?: {
+    status: string
+    total: number
+    negative: ClickDeskOperation360PatternGroup
+    positive: ClickDeskOperation360PatternGroup
+  }
+  analysis_status?: {
+    pending: number
+    approved: number
+    rejected: number
+  }
+  queues?: {
+    negative_unanalyzed: {
+      ticket_id: string
+      analyst_id: string | null
+      analyst_name: string
+      area: string
+      occurred_date: string
+      occurred_at: string
+      satisfaction_label: string | null
+    }[]
+    positive_unanalyzed: {
+      ticket_id: string
+      analyst_id: string | null
+      analyst_name: string
+      area: string
+      occurred_date: string
+      occurred_at: string
+      satisfaction_label: string | null
+    }[]
+  }
+  interpretation_rule?: {
+    message: string
+    causality: string
+  }
+  erro?: string
+  error?: string
+}
+
 type ClickDeskQualitativeResponse = {
   source?: string
   ticket_id?: string
@@ -876,7 +969,7 @@ type PeriodFilter = {
 }
 
 type AppModule = 'phone' | 'chat'
-type ChatActiveTab = 'overview' | 'prototype' | 'podium' | 'analysis' | 'reports' | 'import' | 'settings'
+type ChatActiveTab = 'overview' | 'operation360' | 'prototype' | 'podium' | 'analysis' | 'reports' | 'import' | 'settings'
 
 type ChatFeedbackStyle = 'coach' | 'sare' | 'mimo'
 type FeedbackGoal = 'recognition' | 'courseCorrection' | 'maintenance' | 'development'
@@ -2294,6 +2387,13 @@ export default function Home() {
                         Visão da operação
                       </button>
                       <button
+                        className={chatActiveTab === 'operation360' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
+                        type="button"
+                        onClick={() => setChatActiveTab('operation360')}
+                      >
+                        Análise 360º
+                      </button>
+                      <button
                         className={chatActiveTab === 'prototype' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
                         type="button"
                         onClick={() => setChatActiveTab('prototype')}
@@ -2380,7 +2480,9 @@ export default function Home() {
               {activeModule === 'chat'
                 ? chatActiveTab === 'overview'
                   ? 'Visão consolidada da operação com dados do ClickDesk.'
-                  : chatActiveTab === 'prototype'
+                  : chatActiveTab === 'operation360'
+                    ? 'Diagnóstico qualitativo da operação: por que o CSAT está nesse nível e quais padrões se repetem.'
+                    : chatActiveTab === 'prototype'
                     ? 'Desempenho coletivo e leitura individual da equipe.'
                     : chatActiveTab === 'podium'
                       ? 'Prioridades de gestão, ações e acompanhamento.'
@@ -3921,6 +4023,12 @@ function ChatModuleDashboard({
   const [clickDeskQualitativeSummaryLoading, setClickDeskQualitativeSummaryLoading] = useState(false)
   const [clickDeskQualitativeSummaryRefresh, setClickDeskQualitativeSummaryRefresh] = useState(0)
   const [clickDeskQualitativeValidationTicketId, setClickDeskQualitativeValidationTicketId] = useState('')
+  const [clickDeskOperation360, setClickDeskOperation360] = useState<ClickDeskOperation360 | null>(null)
+  const [clickDeskOperation360Loading, setClickDeskOperation360Loading] = useState(false)
+  const [clickDeskOperation360Refresh, setClickDeskOperation360Refresh] = useState(0)
+  const [clickDeskOperation360Analyzing, setClickDeskOperation360Analyzing] = useState<'negative' | 'positive' | ''>('')
+  const [clickDeskOperation360Progress, setClickDeskOperation360Progress] = useState('')
+  const [clickDeskOperation360Message, setClickDeskOperation360Message] = useState('')
   const [chatQualitativeFocusAnalystId, setChatQualitativeFocusAnalystId] = useState('')
   const [manualPodiumDraft, setManualPodiumDraft] = useState<Record<number, string>>({})
   const [chatPodiumMessage, setChatPodiumMessage] = useState('')
@@ -6872,12 +6980,12 @@ function ChatModuleDashboard({
               label={
                 chatActiveTab === 'reports'
                   ? 'Período do relatório'
-                  : chatActiveTab === 'prototype' || chatActiveTab === 'overview' || chatActiveTab === 'podium' || chatActiveTab === 'analysis'
+                  : chatActiveTab === 'prototype' || chatActiveTab === 'overview' || chatActiveTab === 'operation360' || chatActiveTab === 'podium' || chatActiveTab === 'analysis'
                     ? 'Período ClickDesk'
                     : 'Período'
               }
             >
-              {chatActiveTab === 'prototype' || chatActiveTab === 'overview' || chatActiveTab === 'podium' || chatActiveTab === 'analysis' || chatActiveTab === 'reports' ? (
+              {chatActiveTab === 'prototype' || chatActiveTab === 'overview' || chatActiveTab === 'operation360' || chatActiveTab === 'podium' || chatActiveTab === 'analysis' || chatActiveTab === 'reports' ? (
                 <select
                   className="form-input"
                   value={chat2PeriodKey}
@@ -6935,8 +7043,31 @@ function ChatModuleDashboard({
               <span className="inline-flex rounded-md border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-sm font-semibold text-cyan-100">
                 ClickDesk · base viva
               </span>
-
+              <button
+                type="button"
+                className="secondary-button mt-3"
+                onClick={() => onChatActiveTabChange('operation360')}
+              >
+                Entender o CSAT com IA
+              </button>
             </div>
+          </div>
+        </section>
+      )}
+
+      {chatActiveTab === 'operation360' && (
+        <section className="workspace-page-heading">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="workspace-eyebrow">Análise 360º da operação</p>
+              <h2 className="mt-2 text-2xl font-bold">Por que o CSAT está nesse nível?</h2>
+              <p className="section-subtitle">
+                A IA cruza as avaliações do período, procura padrões nas negativas e identifica práticas recorrentes nas positivas. A leitura é da operação, não um julgamento individual do analista.
+              </p>
+            </div>
+            <span className="inline-flex rounded-md border border-violet-300/20 bg-violet-300/5 px-3 py-2 text-sm font-semibold text-violet-100">
+              Exclusivo da gestão
+            </span>
           </div>
         </section>
       )}
