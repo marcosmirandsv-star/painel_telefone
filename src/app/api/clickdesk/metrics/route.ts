@@ -9,28 +9,20 @@ const CLICKDESK_SYNC_START_UTC_HOUR = 12
 const CLICKDESK_SYNC_END_UTC_HOUR = 22
 
 function getNextClickDeskSyncAt(now = new Date()) {
-  const next = new Date(now)
-  next.setUTCSeconds(0, 0)
-
-  const currentHour = next.getUTCHours()
-  const currentMinute = next.getUTCMinutes()
-
-  if (
-    currentHour < CLICKDESK_SYNC_START_UTC_HOUR ||
-    (currentHour === CLICKDESK_SYNC_START_UTC_HOUR && currentMinute === 0)
+  for (
+    let hour = CLICKDESK_SYNC_START_UTC_HOUR;
+    hour <= CLICKDESK_SYNC_END_UTC_HOUR;
+    hour += 1
   ) {
-    next.setUTCHours(CLICKDESK_SYNC_START_UTC_HOUR, 0, 0, 0)
-    return next.toISOString()
+    const candidate = new Date(now)
+    candidate.setUTCHours(hour, 0, 0, 0)
+    if (candidate.getTime() > now.getTime()) return candidate.toISOString()
   }
 
-  if (currentHour < CLICKDESK_SYNC_END_UTC_HOUR) {
-    next.setUTCHours(currentHour + 1, 0, 0, 0)
-    return next.toISOString()
-  }
-
-  next.setUTCDate(next.getUTCDate() + 1)
-  next.setUTCHours(CLICKDESK_SYNC_START_UTC_HOUR, 0, 0, 0)
-  return next.toISOString()
+  const nextDay = new Date(now)
+  nextDay.setUTCDate(nextDay.getUTCDate() + 1)
+  nextDay.setUTCHours(CLICKDESK_SYNC_START_UTC_HOUR, 0, 0, 0)
+  return nextDay.toISOString()
 }
 
 type DailyMetricRow = {
