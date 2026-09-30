@@ -520,13 +520,91 @@ Deno.serve(async (req: Request) => {
         (!row.updatedAt || (businessDate(row.updatedAt) ?? today) >= start),
     )
 
-    const operational = await resolveOperationalRows(
-      targetCandidates,
-      apiKey,
-      accountId,
-      start,
-      end,
-    )
+    let operational: {
+      rows: OperationalRow[]
+      audit: {
+        rule: string
+        first_assignee_message: number
+        first_human_role_message: number
+        fallback: number
+        validated: boolean
+        reused_existing_timestamp?: number
+        new_timestamp_lookups?: number
+      }
+    }
+
+    if (mode === 'intraday' && targetCandidates.length > 0) {
+      const existingByTicket = new Map<
+        string,
+        { occurred_at: string; occurred_date: string; timestamp_source: string | null }
+      >()
+
+      for (let index = 0; index < targetCandidates.length; index += 200) {
+        const ids = targetCandidates.slice(index, index + 200).map((row) => row.id)
+        const existingResult = await admin
+          .from('clickdesk_chat_attendances')
+          .select('clickdesk_ticket_id,occurred_at,occurred_date,timestamp_source')
+          .in('clickdesk_ticket_id', ids)
+
+        if (existingResult.error) throw new Error(existingResult.error.message)
+
+        for (const item of existingResult.data ?? []) {
+          if (!item.clickdesk_ticket_id || !item.occurred_at || !item.occurred_date) continue
+          existingByTicket.set(item.clickdesk_ticket_id, {
+            occurred_at: item.occurred_at,
+            occurred_date: item.occurred_date,
+            timestamp_source: item.timestamp_source,
+          })
+        }
+      }
+
+      const reusedRows: OperationalRow[] = []
+      const newCandidates: TicketRow[] = []
+
+      for (const row of targetCandidates) {
+        const existing = existingByTicket.get(row.id)
+        if (
+          existing &&
+          existing.occurred_date >= start &&
+          existing.occurred_date <= end
+        ) {
+          reusedRows.push({
+            ...row,
+            operationalTimestamp: existing.occurred_at,
+            operationalTimestampSource: existing.timestamp_source || 'persisted_timestamp',
+            occurredDate: existing.occurred_date,
+          })
+        } else {
+          newCandidates.push(row)
+        }
+      }
+
+      const resolved = await resolveOperationalRows(
+        newCandidates,
+        apiKey,
+        accountId,
+        start,
+        end,
+      )
+
+      operational = {
+        rows: [...reusedRows, ...resolved.rows],
+        audit: {
+          ...resolved.audit,
+          reused_existing_timestamp: reusedRows.length,
+          new_timestamp_lookups: newCandidates.length,
+        },
+      }
+    } else {
+      operational = await resolveOperationalRows(
+        targetCandidates,
+        apiKey,
+        accountId,
+        start,
+        end,
+      )
+    }
+
     const targetRows = operational.rows
 
     const identities = new Map<
@@ -565,7 +643,7 @@ Deno.serve(async (req: Request) => {
         area_key: identity.areaKey,
         area_name: identity.areaName,
         analyst_id: analyst?.id ?? null,
-        team_id: areaLink?.team_id ?? null,
+        team_id: analyst?.team_id ?? areaLink?.team_id ?? null,
         person_role: personRole,
         link_source: linkSource,
         confirmed: false,
@@ -603,7 +681,7 @@ Deno.serve(async (req: Request) => {
         assignee_name: assigneeName,
         assignee_key: assigneeKey,
         analyst_id: analyst?.id ?? null,
-        team_id: areaLink?.team_id ?? linked?.team_id ?? analyst?.team_id ?? null,
+        team_id: analyst?.team_id ?? linked?.team_id ?? areaLink?.team_id ?? null,
         identity_role: linked?.person_role ?? 'unmapped',
         satisfaction_label: row.satisfaction,
         timestamp_source: row.operationalTimestampSource,
