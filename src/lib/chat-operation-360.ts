@@ -1,15 +1,20 @@
-import { normalizeQualitativeAnalysis } from '@/lib/clickdesk-qualitative'
-
 export type Operation360Attendance = {
   clickdesk_ticket_id: string
   satisfaction_label: string | null
+}
+
+export type Operation360NormalizedAnalysis = {
+  primary_cause: { category: string; summary: string }
+  controllability: { classification: string; summary: string }
+  human_influence: { classification: string; summary: string }
+  analyst_takeaway: { kind: string; summary: string }
 }
 
 export type Operation360AnalysisRow = {
   clickdesk_ticket_id: string
   satisfaction_label: string | null
   validation_status: 'pending' | 'approved' | 'rejected'
-  analysis: unknown
+  analysis: Operation360NormalizedAnalysis
 }
 
 export type Operation360Pattern = {
@@ -92,7 +97,7 @@ export function buildOperation360Analysis(
   const normalized = eligible.map((row) => ({
     ticket_id: row.clickdesk_ticket_id,
     satisfaction_label: row.satisfaction_label,
-    analysis: normalizeQualitativeAnalysis(row.analysis),
+    analysis: row.analysis,
   }))
 
   const summarize = (satisfaction: 'positive' | 'negative') => {
