@@ -13853,17 +13853,73 @@ function GoalsView({
   onEditGoal: (goal: Goal) => void
   onCancelEdit: () => void
 }) {
+  const [goalSection, setGoalSection] = useState<'goals' | 'impact'>('goals')
+  const activeGoals = goals.filter((goal) => goal.active).length
+  const inactiveGoals = goals.length - activeGoals
+
+  function handleEditGoal(goal: Goal) {
+    onEditGoal(goal)
+    setGoalSection('goals')
+  }
+
   return (
     <div className="mt-8 space-y-6">
-      <section className="panel">
+      <nav className="workspace-filter-panel workspace-switcher" aria-label="Áreas de metas">
+        <div>
+          <p className="workspace-eyebrow">Metas · Telefone</p>
+          <h2 className="section-title mt-2">{goalSection === 'goals' ? 'Metas configuradas' : 'Impacto no sistema'}</h2>
+          <p className="section-subtitle">
+            {goalSection === 'goals'
+              ? 'Consulte e ajuste as metas gerais usadas pelo módulo Telefone.'
+              : 'Veja onde cada meta interfere no dashboard, pódio e relatórios.'}
+          </p>
+        </div>
+        <div className="workspace-switcher-row" role="group" aria-label="Navegar em metas">
+          <button
+            className={goalSection === 'goals' ? 'workspace-switcher-button workspace-switcher-button-active' : 'workspace-switcher-button'}
+            type="button"
+            aria-pressed={goalSection === 'goals'}
+            onClick={() => setGoalSection('goals')}
+          >
+            Metas
+          </button>
+          <button
+            className={goalSection === 'impact' ? 'workspace-switcher-button workspace-switcher-button-active' : 'workspace-switcher-button'}
+            type="button"
+            aria-pressed={goalSection === 'impact'}
+            onClick={() => setGoalSection('impact')}
+          >
+            Impacto
+          </button>
+        </div>
+      </nav>
+
+      {goalSection === 'goals' && (
+        <div className="grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-white/10 bg-white/10">
+          <div className="bg-slate-950/80 p-4 text-center">
+            <span className="text-xs text-slate-500">Configuradas</span>
+            <strong className="mt-1 block text-xl tabular-nums">{goals.length}</strong>
+          </div>
+          <div className="bg-slate-950/80 p-4 text-center">
+            <span className="text-xs text-slate-500">Ativas</span>
+            <strong className="mt-1 block text-xl tabular-nums text-emerald-300">{activeGoals}</strong>
+          </div>
+          <div className="bg-slate-950/80 p-4 text-center">
+            <span className="text-xs text-slate-500">Inativas</span>
+            <strong className="mt-1 block text-xl tabular-nums text-slate-300">{inactiveGoals}</strong>
+          </div>
+        </div>
+      )}
+
+      <section className={goalSection === 'impact' ? 'panel' : 'hidden'}>
         <h2 className="section-title">Metas e impacto no sistema</h2>
         <p className="section-subtitle">
-          Estes parametros alimentam dashboard, pódio, relatórios SARE e leituras preditivas. O CSAT individual continua no cadastro de cada analista.
+          Estes parâmetros alimentam o dashboard, o pódio, os relatórios SARE e as leituras preditivas. O CSAT individual continua no cadastro de cada analista.
         </p>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-3">
           <GoalImpactCard
-            title="Podio mensal"
+            title="Pódio mensal"
             text="Usa CSAT mínimo para pódio, percentual mínimo de avaliações e volume de atendimentos dentro da média da equipe."
           />
           <GoalImpactCard
@@ -13872,18 +13928,18 @@ function GoalsView({
           />
           <GoalImpactCard
             title="Relatórios e IA"
-            text="As metas aparecem no SARE, nos planos de desenvolvimento e na inteligencia preditiva do dashboard."
+            text="As metas aparecem no SARE, nos planos de desenvolvimento e na inteligência preditiva do dashboard."
           />
         </div>
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+      <div className={goalSection === 'goals' ? 'grid gap-6 xl:grid-cols-[0.8fr_1.2fr]' : 'hidden'}>
         <section className="panel">
           <h2 className="section-title">
             {editingGoalId ? 'Editar meta' : 'Selecione uma meta'}
           </h2>
           <p className="section-subtitle">
-            Ajuste metas gerais da operação sem alterar codigo ou rodar query.
+            Ajuste metas gerais da operação sem alterar código ou executar consulta manual.
           </p>
 
           <form className="mt-5 grid gap-4" onSubmit={onGoalSubmit}>
@@ -13919,7 +13975,7 @@ function GoalsView({
                   onChange={(event) => onGoalChange({ ...goalForm, unit: event.target.value })}
                 >
                   <option value="percent">Percentual</option>
-                  <option value="number">Numero</option>
+                  <option value="number">Número</option>
                 </select>
               </Field>
             </div>
@@ -13962,7 +14018,7 @@ function GoalsView({
                   <th className="pb-3 pr-4 font-medium">Valor</th>
                   <th className="pb-3 pr-4 font-medium">Status</th>
                   <th className="pb-3 pr-4 font-medium">Impacto</th>
-                  <th className="pb-3 font-medium">Acao</th>
+                  <th className="pb-3 font-medium">Ação</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/10">
@@ -13980,7 +14036,7 @@ function GoalsView({
                     </td>
                     <td className="py-3 pr-4 text-slate-400">{getGoalImpactText(goal)}</td>
                     <td className="py-3">
-                      <button className="small-button" type="button" onClick={() => onEditGoal(goal)}>
+                      <button className="small-button" type="button" onClick={() => handleEditGoal(goal)}>
                         Editar
                       </button>
                     </td>
