@@ -11940,11 +11940,12 @@ function EntriesView({
 
 
   return (
-    <div className="mt-8 space-y-6">
-      <section className="panel">
+    <div className="phone-entries-workspace mt-6 space-y-7">
+      <section className="workspace-content-section">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h2 className="section-title">Fechamento semanal</h2>
+            <p className="workspace-eyebrow">Conferência</p>
+            <h2 className="section-title mt-2">Fechamento semanal</h2>
             <p className="section-subtitle">
               Use este resumo para conferir se todos os lançamentos da semana foram feitos antes de fechar o período.
             </p>
@@ -12028,8 +12029,9 @@ function EntriesView({
 
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <section className="panel">
-        <h2 className="section-title">Lancamento individual</h2>
+        <section className="panel form-workspace-card">
+        <p className="workspace-eyebrow">Pessoa</p>
+        <h2 className="section-title mt-2">Lançamento individual</h2>
         <p className="section-subtitle">
           Registre resultado real, avaliações e atendimentos da semana anterior.
         </p>
@@ -12199,8 +12201,9 @@ function EntriesView({
         </form>
         </section>
 
-        <section className="panel">
-        <h2 className="section-title">Performance da equipe</h2>
+        <section className="panel form-workspace-card">
+        <p className="workspace-eyebrow">Operação</p>
+        <h2 className="section-title mt-2">Performance da equipe</h2>
         <p className="section-subtitle">
           Formula atual: ligações atendidas / total processado x 100.
         </p>
@@ -12456,10 +12459,11 @@ function EntriesHistory({
   }
 
   return (
-    <section className="panel">
+    <section className="workspace-content-section workspace-content-section-divided">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h2 className="section-title">Historico de lançamentos</h2>
+          <p className="workspace-eyebrow">Histórico</p>
+          <h2 className="section-title mt-2">Histórico de lançamentos</h2>
           <p className="section-subtitle">
             Filtre registros por tipo, período e analista para revisar dados acumulados ou excluir lançamentos de teste.
           </p>
