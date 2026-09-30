@@ -1,7 +1,7 @@
 -- Bootstrap seguro da sincronização automática ClickDesk em homologação.
 -- O primeiro sync manual copia as credenciais já configuradas no servidor para o Vault,
 -- gera um token interno, mantém a revalidação D-1 às 06:10 BRT
--- e agenda sincronizações intradiárias a cada 45 minutos, das 09:00 às 18:45 BRT.
+-- e agenda sincronizações intradiárias de hora em hora, das 09:00 às 19:00 BRT.
 
 begin;
 
@@ -109,7 +109,8 @@ begin
       'clickdesk-chat-intraday-45-a',
       'clickdesk-chat-intraday-45-b',
       'clickdesk-chat-intraday-45-c',
-      'clickdesk-chat-intraday-45-d'
+      'clickdesk-chat-intraday-45-d',
+      'clickdesk-chat-intraday-hourly'
     )
   loop
     perform cron.unschedule(v_job_id);
@@ -137,71 +138,8 @@ begin
   ) into v_job_id;
 
   perform cron.schedule(
-    'clickdesk-chat-intraday-45-a',
-    '0 12,15,18,21 * * *',
-    $cron$
-      select net.http_post(
-        url := 'https://vvtorcvchnqhcredhorv.supabase.co/functions/v1/clickdesk-d1-sync',
-        headers := jsonb_build_object(
-          'Content-Type', 'application/json',
-          'Authorization', 'Bearer ' || (
-            select decrypted_secret
-            from vault.decrypted_secrets
-            where name = 'clickdesk_cron_token'
-            limit 1
-          )
-        ),
-        body := jsonb_build_object('trigger', 'cron', 'mode', 'intraday', 'requested_at', now()),
-        timeout_milliseconds := 120000
-      );
-    $cron$
-  );
-
-  perform cron.schedule(
-    'clickdesk-chat-intraday-45-b',
-    '45 12,15,18,21 * * *',
-    $cron$
-      select net.http_post(
-        url := 'https://vvtorcvchnqhcredhorv.supabase.co/functions/v1/clickdesk-d1-sync',
-        headers := jsonb_build_object(
-          'Content-Type', 'application/json',
-          'Authorization', 'Bearer ' || (
-            select decrypted_secret
-            from vault.decrypted_secrets
-            where name = 'clickdesk_cron_token'
-            limit 1
-          )
-        ),
-        body := jsonb_build_object('trigger', 'cron', 'mode', 'intraday', 'requested_at', now()),
-        timeout_milliseconds := 120000
-      );
-    $cron$
-  );
-
-  perform cron.schedule(
-    'clickdesk-chat-intraday-45-c',
-    '30 13,16,19 * * *',
-    $cron$
-      select net.http_post(
-        url := 'https://vvtorcvchnqhcredhorv.supabase.co/functions/v1/clickdesk-d1-sync',
-        headers := jsonb_build_object(
-          'Content-Type', 'application/json',
-          'Authorization', 'Bearer ' || (
-            select decrypted_secret
-            from vault.decrypted_secrets
-            where name = 'clickdesk_cron_token'
-            limit 1
-          )
-        ),
-        body := jsonb_build_object('trigger', 'cron', 'mode', 'intraday', 'requested_at', now()),
-        timeout_milliseconds := 120000
-      );
-    $cron$
-  );
-
-  perform cron.schedule(
-    'clickdesk-chat-intraday-45-d',
-    '15 14,17,20 * * *',
+    'clickdesk-chat-intraday-hourly',
+    '0 12-22 * * *',
     $cron$
       select net.http_post(
         url := 'https://vvtorcvchnqhcredhorv.supabase.co/functions/v1/clickdesk-d1-sync',
@@ -226,14 +164,9 @@ begin
     'job_id', v_job_id,
     'schedule_utc', '10 9 * * *',
     'schedule_brt', '06:10',
-    'intraday_interval_minutes', 45,
-    'intraday_window_brt', '09:00-18:45',
-    'intraday_utc', jsonb_build_array(
-      '0 12,15,18,21 * * *',
-      '45 12,15,18,21 * * *',
-      '30 13,16,19 * * *',
-      '15 14,17,20 * * *'
-    )
+    'intraday_interval_minutes', 60,
+    'intraday_window_brt', '09:00-19:00',
+    'intraday_utc', jsonb_build_array('0 12-22 * * *')
   );
 end;
 $$;
