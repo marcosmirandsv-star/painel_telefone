@@ -6320,6 +6320,141 @@ function ChatModuleDashboard({
     (sum, item) => sum + Number(item.today?.attendances ?? 0),
     0,
   )
+  const chat2OperationDailySource = clickDeskPersistedMetrics?.performance_daily ?? []
+  const chat2OperationDailyCoverageStart =
+    chat2OperationDailySource.length > 0
+      ? [...chat2OperationDailySource].sort((a, b) => a.date.localeCompare(b.date))[0]?.date ?? null
+      : null
+  const chat2OperationTodayDate = clickDeskPersistedMetrics?.today?.date ?? null
+  const chat2OperationPeriodEnd =
+    clickDeskPersistedMetrics?.period?.end &&
+    chat2OperationTodayDate &&
+    clickDeskPersistedMetrics.period.start <= chat2OperationTodayDate &&
+    chat2OperationTodayDate <= clickDeskPersistedMetrics.period.end
+      ? chat2OperationTodayDate
+      : clickDeskPersistedMetrics?.period?.end ?? null
+  const chat2OperationDailyMap = new Map(chat2OperationDailySource.map((item) => [item.date, item]))
+  const chat2OperationDailyRuler: Array<ClickDeskPersistedAggregate & { date: string; covered: boolean }> = []
+
+  if (
+    clickDeskPersistedMetrics?.period?.start &&
+    chat2OperationPeriodEnd &&
+    clickDeskPersistedMetrics.period.start <= chat2OperationPeriodEnd
+  ) {
+    const cursor = new Date(`${clickDeskPersistedMetrics.period.start}T00:00:00Z`)
+    const limit = new Date(`${chat2OperationPeriodEnd}T00:00:00Z`)
+    while (cursor <= limit) {
+      const date = cursor.toISOString().slice(0, 10)
+      const covered = chat2OperationDailyCoverageStart ? date >= chat2OperationDailyCoverageStart : false
+      const persistedDay = chat2OperationDailyMap.get(date)
+      chat2OperationDailyRuler.push(
+        persistedDay
+          ? { ...persistedDay, covered: true }
+          : {
+              date,
+              covered,
+              attendances: 0,
+              positive_reviews: 0,
+              negative_reviews: 0,
+              reviews: 0,
+              csat: null,
+              review_percentage: null,
+            },
+      )
+      cursor.setUTCDate(cursor.getUTCDate() + 1)
+    }
+  }
+
+  const chat2OperationCoveredDays = chat2OperationDailyRuler.filter((item) => item.covered)
+  const chat2OperationDaysWithVolume = chat2OperationCoveredDays.filter((item) => Number(item.attendances) > 0)
+  const chat2OperationDailyAverage =
+    chat2OperationDaysWithVolume.length > 0
+      ? round(
+          chat2OperationDaysWithVolume.reduce((sum, item) => sum + Number(item.attendances), 0) /
+            chat2OperationDaysWithVolume.length,
+        )
+      : 0
+  const chat2OperationPeakDay =
+    [...chat2OperationDaysWithVolume].sort(
+      (a, b) => Number(b.attendances) - Number(a.attendances) || a.date.localeCompare(b.date),
+    )[0] ?? null
+
+  const chat2OperationDateBefore = (date: string, days = 1) => {
+    const value = new Date(`${date}T00:00:00Z`)
+    value.setUTCDate(value.getUTCDate() - days)
+    return value.toISOString().slice(0, 10)
+  }
+  const chat2OperationIsCurrentPeriod =
+    Boolean(
+      chat2OperationTodayDate &&
+        clickDeskPersistedMetrics?.period?.start &&
+        clickDeskPersistedMetrics?.period?.end &&
+        clickDeskPersistedMetrics.period.start <= chat2OperationTodayDate &&
+        chat2OperationTodayDate <= clickDeskPersistedMetrics.period.end,
+    )
+  const chat2OperationReferenceDate =
+    chat2OperationIsCurrentPeriod && chat2OperationTodayDate
+      ? chat2OperationTodayDate
+      : chat2OperationPeriodEnd
+  const chat2OperationPreviousDate = chat2OperationReferenceDate
+    ? chat2OperationDateBefore(chat2OperationReferenceDate)
+    : null
+  const chat2OperationPreviousDay =
+    chat2OperationPreviousDate
+      ? chat2OperationDailyRuler.find((item) => item.date === chat2OperationPreviousDate) ?? null
+      : null
+  const chat2OperationReferenceDay =
+    chat2OperationReferenceDate
+      ? chat2OperationDailyRuler.find((item) => item.date === chat2OperationReferenceDate) ?? null
+      : null
+  const chat2OperationCompletedVolumeDays = chat2OperationDaysWithVolume.filter(
+    (item) => !chat2OperationTodayDate || item.date < chat2OperationTodayDate,
+  )
+  const chat2OperationLastCompletedDay = chat2OperationCompletedVolumeDays.at(-1) ?? null
+  const chat2OperationPreviousCompletedDay = chat2OperationCompletedVolumeDays.at(-2) ?? null
+  const chat2OperationClosedDayDelta =
+    chat2OperationLastCompletedDay && chat2OperationPreviousCompletedDay
+      ? Number(chat2OperationLastCompletedDay.attendances) -
+        Number(chat2OperationPreviousCompletedDay.attendances)
+      : null
+  const chat2OperationClosedDayDeltaPercent =
+    chat2OperationLastCompletedDay &&
+    chat2OperationPreviousCompletedDay &&
+    Number(chat2OperationPreviousCompletedDay.attendances) > 0
+      ? round(
+          (chat2OperationClosedDayDelta! /
+            Number(chat2OperationPreviousCompletedDay.attendances)) *
+            100,
+        )
+      : null
+  const chat2OperationRecentDailyPoints = chat2OperationCoveredDays
+    .slice(-14)
+    .map((item) => ({
+      label: item.date.slice(8, 10),
+      value: Number(item.attendances),
+    }))
+  const chat2WeekdayLabels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+  const chat2OperationWeekdayStats = chat2OperationDaysWithVolume.reduce<
+    Record<number, { total: number; days: number }>
+  >((acc, item) => {
+    const weekday = new Date(`${item.date}T12:00:00Z`).getUTCDay()
+    const current = acc[weekday] ?? { total: 0, days: 0 }
+    current.total += Number(item.attendances)
+    current.days += 1
+    acc[weekday] = current
+    return acc
+  }, {})
+  const chat2OperationWeekdayPoints = [1, 2, 3, 4, 5, 6, 0]
+    .filter((weekday) => Boolean(chat2OperationWeekdayStats[weekday]))
+    .map((weekday) => ({
+      label: chat2WeekdayLabels[weekday],
+      value: round(
+        chat2OperationWeekdayStats[weekday].total /
+          Math.max(chat2OperationWeekdayStats[weekday].days, 1),
+      ),
+    }))
+  const chat2OperationPeakWeekday =
+    [...chat2OperationWeekdayPoints].sort((a, b) => b.value - a.value)[0] ?? null
   const chat2PreviousAccumulated = clickDeskPreviousMetrics?.performance_accumulated ?? null
   const chat2HasPreviousComparison = (clickDeskPreviousMetrics?.by_analyst?.length ?? 0) > 0
   const chat2OperationCsatDelta =
@@ -7695,6 +7830,167 @@ function ChatModuleDashboard({
               </div>
             </div>
           </div>
+        </div>
+
+        <div className="mt-5 rounded-xl border border-white/10 bg-slate-950/25 p-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-[0.14em] text-cyan-300">Volume diário da operação</p>
+              <h3 className="mt-1 text-xl font-bold">Quanto atendemos em cada dia?</h3>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+                Visão coletiva dos atendimentos realizados no ClickDesk para {selectedTeamName.toLowerCase()}. O dia atual é parcial e acompanha a última sincronização disponível.
+              </p>
+            </div>
+            <div className="text-left lg:text-right">
+              <span className="inline-flex rounded-md border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-xs font-semibold text-cyan-100">
+                {chat2OperationIsCurrentPeriod ? 'Competência em andamento' : 'Competência histórica'}
+              </span>
+              <p className="mt-2 text-xs text-slate-500">
+                {clickDeskPersistedMetrics?.latest_sync?.finished_at
+                  ? `Última sincronização: ${formatDateTime(clickDeskPersistedMetrics.latest_sync.finished_at)}`
+                  : 'Última sincronização não informada'}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <div className="rounded-lg bg-slate-900 p-4">
+              <p className="text-xs text-slate-500">{chat2OperationIsCurrentPeriod ? 'Ontem' : 'Dia anterior ao fechamento'}</p>
+              <strong className="mt-2 block text-2xl tabular-nums">
+                {chat2OperationPreviousDay?.covered
+                  ? formatChatCount(chat2OperationPreviousDay.attendances)
+                  : '—'}
+              </strong>
+              <span className="mt-1 block text-xs text-slate-500">
+                {chat2OperationPreviousDay?.date ? formatDate(chat2OperationPreviousDay.date) : 'Sem base diária'}
+              </span>
+            </div>
+            <div className="rounded-lg bg-slate-900 p-4">
+              <p className="text-xs text-slate-500">{chat2OperationIsCurrentPeriod ? 'Hoje · importado até agora' : 'Último dia da competência'}</p>
+              <strong className="mt-2 block text-2xl tabular-nums text-cyan-200">
+                {chat2OperationReferenceDay?.covered
+                  ? formatChatCount(chat2OperationReferenceDay.attendances)
+                  : '—'}
+              </strong>
+              <span className="mt-1 block text-xs text-slate-500">
+                {chat2OperationReferenceDay?.date ? formatDate(chat2OperationReferenceDay.date) : 'Sem base diária'}
+              </span>
+            </div>
+            <div className="rounded-lg bg-slate-900 p-4">
+              <p className="text-xs text-slate-500">Média por dia com movimento</p>
+              <strong className="mt-2 block text-2xl tabular-nums">{formatChatCount(chat2OperationDailyAverage)}</strong>
+              <span className="mt-1 block text-xs text-slate-500">
+                {formatChatCount(chat2OperationDaysWithVolume.length)} dia(s) com atendimento
+              </span>
+            </div>
+            <div className="rounded-lg bg-slate-900 p-4">
+              <p className="text-xs text-slate-500">Pico do período</p>
+              <strong className="mt-2 block text-2xl tabular-nums text-amber-200">
+                {chat2OperationPeakDay ? formatChatCount(chat2OperationPeakDay.attendances) : '—'}
+              </strong>
+              <span className="mt-1 block text-xs text-slate-500">
+                {chat2OperationPeakDay ? formatDate(chat2OperationPeakDay.date) : 'Sem base diária'}
+              </span>
+            </div>
+            <div className="rounded-lg bg-slate-900 p-4">
+              <p className="text-xs text-slate-500">Variação · últimos dias fechados</p>
+              <strong className={`mt-2 block text-2xl tabular-nums ${
+                chat2OperationClosedDayDelta === null
+                  ? 'text-slate-200'
+                  : chat2OperationClosedDayDelta > 0
+                    ? 'text-emerald-300'
+                    : chat2OperationClosedDayDelta < 0
+                      ? 'text-amber-200'
+                      : 'text-slate-200'
+              }`}>
+                {chat2OperationClosedDayDelta === null
+                  ? '—'
+                  : `${chat2OperationClosedDayDelta > 0 ? '+' : ''}${formatChatCount(chat2OperationClosedDayDelta)}`}
+              </strong>
+              <span className="mt-1 block text-xs text-slate-500">
+                {chat2OperationClosedDayDeltaPercent === null
+                  ? 'Aguardando dois dias completos'
+                  : `${chat2OperationClosedDayDeltaPercent > 0 ? '+' : ''}${chat2OperationClosedDayDeltaPercent}% vs. dia anterior com movimento`}
+              </span>
+            </div>
+          </div>
+
+          {chat2OperationCoveredDays.length > 0 ? (
+            <>
+              <div className="mt-5 grid gap-4 xl:grid-cols-[1.45fr_0.85fr]">
+                <TrendLineChart
+                  label="Evolução diária · últimos 14 dias cobertos"
+                  points={chat2OperationRecentDailyPoints}
+                  singlePointLabel="Apenas um dia disponível para leitura."
+                  latestPointLabel="Último dia"
+                  highlightedPointLabel="Dia destacado"
+                />
+                <BarTrend
+                  label="Média de atendimentos por dia da semana"
+                  points={chat2OperationWeekdayPoints}
+                />
+              </div>
+
+              <div className="mt-5 rounded-lg border border-white/10 bg-slate-900/45 p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Régua do mês</p>
+                    <strong className="mt-1 block text-sm text-slate-200">Volume consolidado por dia</strong>
+                  </div>
+                  <span className="text-xs text-slate-500">
+                    {chat2OperationPeakWeekday
+                      ? `Maior média semanal: ${chat2OperationPeakWeekday.label} · ${formatChatCount(chat2OperationPeakWeekday.value)} atendimentos`
+                      : 'Padrão semanal ainda sem base suficiente'}
+                  </span>
+                </div>
+
+                <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
+                  {chat2OperationDailyRuler.map((item) => {
+                    const isToday = chat2OperationTodayDate === item.date
+                    const isPeak = chat2OperationPeakDay?.date === item.date
+                    return (
+                      <div
+                        key={item.date}
+                        className={`min-w-20 rounded-lg border px-3 py-3 text-center ${
+                          !item.covered
+                            ? 'border-white/5 bg-slate-950/20 text-slate-600'
+                            : isPeak
+                              ? 'border-amber-300/35 bg-amber-300/5'
+                              : isToday
+                                ? 'border-cyan-300/35 bg-cyan-300/5'
+                                : 'border-white/10 bg-slate-950/40'
+                        }`}
+                        title={
+                          item.covered
+                            ? `${formatDate(item.date)} · ${formatChatCount(item.attendances)} atendimento(s)`
+                            : `${formatDate(item.date)} · sem base diária`
+                        }
+                      >
+                        <span className="block text-[11px] text-slate-500">{item.date.slice(8, 10)}</span>
+                        <strong className="mt-1 block text-lg tabular-nums">
+                          {item.covered ? formatChatCount(item.attendances) : '—'}
+                        </strong>
+                        <span className="mt-1 block text-[10px] text-slate-500">
+                          {isPeak ? 'pico' : isToday ? 'hoje' : ''}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {clickDeskPersistedMetrics?.date_basis?.status === 'needs_validation' && (
+                <div className="mt-4 rounded-lg border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-xs leading-5 text-amber-100">
+                  <strong>Distribuição diária em validação.</strong>{' '}
+                  {clickDeskPersistedMetrics.date_basis.note}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="mt-5">
+              <EmptyState text="Ainda não há base diária suficiente para montar a evolução de volume desta competência." />
+            </div>
+          )}
         </div>
 
         <div className="mt-5">
