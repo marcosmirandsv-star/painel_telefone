@@ -6249,6 +6249,27 @@ function ChatModuleDashboard({
     selectedTeamId,
     isManagementUser,
   ])
+
+  useEffect(() => {
+    if (!isManagementUser) return
+
+    const refreshTimer = window.setInterval(() => {
+      void loadClickDeskPersistedMetricsOnly(
+        {
+          start: chat2SelectedPeriod.start,
+          end: chat2SelectedPeriod.end,
+        },
+        selectedTeamId,
+      )
+    }, 45 * 60 * 1000)
+
+    return () => window.clearInterval(refreshTimer)
+  }, [
+    chat2SelectedPeriod.start,
+    chat2SelectedPeriod.end,
+    selectedTeamId,
+    isManagementUser,
+  ])
   const chat2VisibleMetrics = metrics.filter((metric) => {
     const matchesTeam = selectedTeamId === 'all' || metric.team_id === selectedTeamId
     const matchesPeriod =
@@ -6898,8 +6919,8 @@ function ChatModuleDashboard({
               </span>
               <p className="mt-2 text-xs text-slate-500">
                 {clickDeskPersistedMetrics?.latest_sync?.finished_at
-                  ? `Dados atualizados em ${formatDateTime(clickDeskPersistedMetrics.latest_sync.finished_at)}`
-                  : 'Última atualização ainda não informada'}
+                  ? `Dados atualizados em ${formatDateTime(clickDeskPersistedMetrics.latest_sync.finished_at)} · ciclo automático de 45 min`
+                  : 'Última atualização ainda não informada · ciclo automático de 45 min'}
               </p>
             </div>
           </div>
@@ -11493,7 +11514,7 @@ function ReportsView({
   const supervisorDecisionText = analystResult
     ? analystResult.eligible
       ? selectedRankingPosition > 0 && selectedRankingPosition <= 3
-        ? 'Reconhecer o resultado, registrar as praticas que sustentaram o desempenho e combinar como proteger o padrao ate o fechamento.'
+        ? 'Reconhecer o resultado, registrar as práticas que sustentaram o desempenho e combinar como proteger o padrão até o fechamento.'
         : 'Manter elegibilidade, comparar com o top 3 e escolher um ganho objetivo em CSAT, avaliações ou volume para disputar posição.'
       : `Tratar os critérios pendentes antes de falar em pódio: ${analystResult.reasons.join(', ') || 'revisar indicadores'}.`
     : 'Selecione um analista com lançamento no período para liberar recomendação.'
@@ -11515,9 +11536,9 @@ function ReportsView({
           : 'Leitura personalizada'
   const supervisorPeriodStatusText =
     periodFilter.mode === 'month'
-      ? 'O mes e recalculado conforme novas semanas forem lancadas.'
+      ? 'O mês é recalculado conforme novas semanas forem lançadas.'
       : periodFilter.mode === 'year'
-        ? 'O ano e recalculado conforme novos meses e semanas forem lancados.'
+        ? 'O ano é recalculado conforme novos meses e semanas forem lançados.'
         : periodFilter.mode === 'week'
           ? 'A semana representa o recorte selecionado para acompanhamento.'
           : 'O resultado segue exatamente o intervalo escolhido.'
@@ -11532,11 +11553,11 @@ function ReportsView({
       label: 'Diagnóstico',
       title: supervisorCaseStatus,
       text: analystResult
-        ? `Ranking atual: ${selectedRankingPosition || '-'}o. CSAT ${formatPercent(analystResult.averageCsat)}, avaliações ${formatPercent(analystResult.reviewPercentage)} e ${formatChatCount(analystResult.totalTickets)} atendimentos contra média ${formatChatCount(supervisorAverageTickets)}.`
+        ? `Ranking atual: ${selectedRankingPosition || '-'}º. CSAT ${formatPercent(analystResult.averageCsat)}, avaliações ${formatPercent(analystResult.reviewPercentage)} e ${formatChatCount(analystResult.totalTickets)} atendimentos contra média ${formatChatCount(supervisorAverageTickets)}.`
         : 'Selecione um analista e período com dados para calcular a leitura.',
     },
     {
-      label: 'Acao recomendada',
+      label: 'Ação recomendada',
       title: analystResult?.eligible ? 'Preservar ou competir' : 'Corrigir impeditivos',
       text: supervisorDecisionText,
     },
@@ -11546,31 +11567,31 @@ function ReportsView({
       text: supervisorOneToOneText,
     },
     {
-      label: 'Proximo acompanhamento',
+      label: 'Próximo acompanhamento',
       title: 'Indicadores para revisar',
       text: supervisorFollowUpText,
     },
   ]
   const situationText = selectedAnalyst && analystResult
-    ? `${selectedAnalyst.name} fechou ${periodLabel} com CSAT de ${formatPercent(analystResult.averageCsat)}, ${formatChatCount(analystResult.totalReviews)} avaliações e ${formatChatCount(analystResult.totalTickets)} atendimentos registrados. A meta individual e ${analystResult.individualGoal}% e a referência para pódio e ${podiumCsatGoal}%. A variação contra o período anterior foi de ${formatDelta(csatDelta, ' p.p.')}.`
+    ? `${selectedAnalyst.name} fechou ${periodLabel} com CSAT de ${formatPercent(analystResult.averageCsat)}, ${formatChatCount(analystResult.totalReviews)} avaliações e ${formatChatCount(analystResult.totalTickets)} atendimentos registrados. A meta individual é ${analystResult.individualGoal}% e a referência para pódio é ${podiumCsatGoal}%. A variação contra o período anterior foi de ${formatDelta(csatDelta, ' p.p.')}.`
     : ''
   const actionText = analystResult
     ? analystResult.eligible
-      ? 'Foram alinhadas a manutencao das praticas atuais, a preservação do volume de avaliações e o acompanhamento semanal de qualquer oscilação antes do fechamento do ciclo.'
-      : `Foram alinhadas a priorização dos pontos: ${analystResult.reasons.join(', ')}. A recomendação inicial e revisar atendimentos de menor satisfação, reforcar o convite para avaliação e acompanhar o indicador semanalmente.`
+      ? 'Foram alinhadas a manutenção das práticas atuais, a preservação do volume de avaliações e o acompanhamento semanal de qualquer oscilação antes do fechamento do ciclo.'
+      : `Foram alinhadas a priorização dos pontos: ${analystResult.reasons.join(', ')}. A recomendação inicial é revisar atendimentos de menor satisfação, reforçar o convite para avaliação e acompanhar o indicador semanalmente.`
     : ''
   const resultText = analystResult
     ? analystResult.eligible
       ? `Resultado esperado: manter CSAT acima de ${podiumCsatGoal}%, preservar elegibilidade ao pódio e sustentar volume de avaliações igual ou superior a ${reviewGoal}% dos atendimentos.`
-      : `Resultado esperado: recuperar os pontos impeditivos para apróximar o desempenho da referência de pódio (${podiumCsatGoal}%) e elevar a consistencia do indicador no próximo ciclo.`
+      : `Resultado esperado: recuperar os pontos impeditivos para aproximar o desempenho da referência de pódio (${podiumCsatGoal}%) e elevar a consistência do indicador no próximo ciclo.`
     : ''
   const evolutionText = analystResult
-    ? `Expectativa e plano de desenvolvimento: ${buildDevelopmentFocus(analystResult, csatDelta)} Perguntas sugeridas para 1:1: o que ajudou ou atrapalhou o CSAT no período? quais atendimentos merecem revisao? qual ação simples pode aumentar avaliações na próxima semana?`
+    ? `Expectativa e plano de desenvolvimento: ${buildDevelopmentFocus(analystResult, csatDelta)} Perguntas sugeridas para 1:1: o que ajudou ou atrapalhou o CSAT no período? Quais atendimentos merecem revisão? qual ação simples pode aumentar avaliações na próxima semana?`
     : ''
   const feedbackSummary = analystResult
     ? analystResult.eligible
-      ? `${selectedAnalyst?.name ?? 'Analista'} está elegível ao pódio no período. O foco recomendado e preservar consistencia, volume de avaliações e acompanhamento semanal.`
-      : `${selectedAnalyst?.name ?? 'Analista'} ainda nao sustenta elegibilidade ao pódio neste período. O foco recomendado e atuar sobre: ${analystResult.reasons.join(', ')}.`
+      ? `${selectedAnalyst?.name ?? 'Analista'} está elegível ao pódio no período. O foco recomendado é preservar consistência, volume de avaliações e acompanhamento semanal.`
+      : `${selectedAnalyst?.name ?? 'Analista'} ainda não sustenta elegibilidade ao pódio neste período. O foco recomendado é atuar sobre: ${analystResult.reasons.join(', ')}.`
     : ''
   const phoneFeedbackSuggestion = selectedAnalyst && analystResult
     ? buildPhoneFeedbackText({
@@ -11598,9 +11619,9 @@ function ReportsView({
       detail: selectedAnalyst ? selectedAnalyst.name : 'Selecione um analista para gerar o SARE.',
     },
     {
-      label: 'Lancamento individual no período',
+      label: 'Lançamento individual no período',
       done: hasAnalystLaunch,
-      detail: hasAnalystLaunch ? 'Dados individuais encontrados.' : 'Não ha lançamento individual para este filtro.',
+      detail: hasAnalystLaunch ? 'Dados individuais encontrados.' : 'Não há lançamento individual para este filtro.',
     },
     {
       label: 'Desempenho da equipe',
@@ -11820,7 +11841,7 @@ function ReportsView({
         assistedFeedback: finalPhoneFeedback,
       })
 
-      setExportMessage(`Relatorio gerado: ${fileName}. Verifique a pasta Downloads.`)
+      setExportMessage(`Relatório gerado: ${fileName}. Verifique a pasta Downloads.`)
     } catch (error) {
       setExportMessage(`Não foi possível gerar o arquivo. ${getErrorMessage(error)}`)
     }
@@ -11831,7 +11852,7 @@ function ReportsView({
       <section className="workspace-filter-panel">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="section-title">Relatórios e IA analitica</h2>
+            <h2 className="section-title">Relatórios e análise assistida</h2>
             <p className="section-subtitle">
               Gere feedback MIMO ou SARE com base nos lançamentos do período, dados do pódio e observações da gestão.
             </p>
@@ -11867,7 +11888,7 @@ function ReportsView({
               </select>
             </Field>
           )}
-          <Field label="Inicio">
+          <Field label="Início">
             <input
               className="form-input"
               type="date"
@@ -11890,11 +11911,23 @@ function ReportsView({
         </div>
       </section>
 
-      <div className="metric-strip grid gap-3 md:grid-cols-4">
-        <MetricCard label="Analista" value={selectedAnalyst?.name ?? 'Sem analista'} />
-        <MetricCard label="CSAT do período" value={`${formatPercent(analystResult?.averageCsat ?? 0)}`} />
-        <MetricCard label="Variação vs período anterior" value={formatDelta(csatDelta, '%')} />
-        <MetricCard label="Performance equipe" value={formatPercent(teamPerformance)} />
+      <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-white/10 bg-slate-950/30 text-center lg:grid-cols-4 lg:divide-x lg:divide-white/10">
+        <div className="flex min-h-24 flex-col items-center justify-center px-4 py-3">
+          <span className="flex min-h-8 items-center justify-center text-xs leading-4 text-slate-500">Analista</span>
+          <strong className="mt-1 line-clamp-2 text-base">{selectedAnalyst?.name ?? 'Sem analista'}</strong>
+        </div>
+        <div className="flex min-h-24 flex-col items-center justify-center px-4 py-3">
+          <span className="flex min-h-8 items-center justify-center text-xs leading-4 text-slate-500">CSAT do período</span>
+          <strong className="mt-1 text-lg tabular-nums text-cyan-200">{formatPercent(analystResult?.averageCsat ?? 0)}</strong>
+        </div>
+        <div className="flex min-h-24 flex-col items-center justify-center px-4 py-3">
+          <span className="flex min-h-8 items-center justify-center text-xs leading-4 text-slate-500">Variação vs. período anterior</span>
+          <strong className="mt-1 text-lg tabular-nums">{formatDelta(csatDelta, '%')}</strong>
+        </div>
+        <div className="flex min-h-24 flex-col items-center justify-center px-4 py-3">
+          <span className="flex min-h-8 items-center justify-center text-xs leading-4 text-slate-500">Performance da equipe</span>
+          <strong className="mt-1 text-lg tabular-nums text-emerald-300">{formatPercent(teamPerformance)}</strong>
+        </div>
       </div>
 
       <section className="workspace-content-section no-print">
@@ -12971,7 +13004,7 @@ function EntriesHistory({
             ))}
           </select>
         </Field>
-        <Field label="Inicio">
+        <Field label="Início">
           <input
             className="form-input"
             type="date"
