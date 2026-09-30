@@ -1689,6 +1689,25 @@ button:disabled {
   font-weight: 800;
 }
 
+.module-sidebar-title-row {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.module-sidebar-chevron {
+  display: inline-block;
+  color: #64748b;
+  font-size: 0.75rem;
+  transition: transform 150ms ease, color 150ms ease;
+}
+
+.module-sidebar-chevron-open {
+  color: #a5f3fc;
+  transform: rotate(180deg);
+}
+
 .module-sidebar-copy small {
   margin-top: 2px;
   overflow: hidden;
