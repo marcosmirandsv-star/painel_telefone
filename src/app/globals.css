@@ -1975,6 +1975,11 @@ button:disabled {
   backdrop-filter: blur(14px);
 }
 
+.chat-navigation.workspace-navigation {
+  position: static;
+  top: auto;
+}
+
 .context-navigation {
   align-items: center;
 }
