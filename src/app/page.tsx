@@ -10103,7 +10103,7 @@ function DashboardView({
           : 'Comparar evolução semanal e preservar a rotina atual.'
   const executiveClosingRead =
     !hasPeriodData
-      ? 'Fechamento ainda nao liberado para leitura.'
+      ? 'Fechamento ainda não liberado para leitura.'
       : periodTeamPerformance < teamPerformanceGoal
         ? `Meta operacional em risco: performance atual de ${formatPercent(periodTeamPerformance)} para uma meta de ${teamPerformanceGoal}%. Revisar abandonos, escala e cobertura.`
         : periodAverageCsat < podiumCsatGoal
@@ -10218,7 +10218,7 @@ function DashboardView({
     : 'Sem lançamento no período'
   const analystFocusText = analystResult
     ? analystResult.eligible
-      ? 'Manter CSAT, volume e percentual de avaliações ate o fechamento.'
+      ? 'Manter CSAT, volume e percentual de avaliações até o fechamento.'
       : formatStatusText(analystResult.reasons.join(', '))
     : 'Selecione outro período ou aguarde o lançamento semanal.'
   const analystActionText = analystResult
@@ -10229,10 +10229,10 @@ function DashboardView({
       ? `Você está no ${analystManualPodiumPosition}º lugar por decisão registrada da gestão neste período.`
       : analystResult.eligible
       ? analystRankingPosition > 0 && analystRankingPosition <= 3
-        ? 'Você esta no pódio neste recorte. O foco e sustentar os critérios ate o fechamento.'
-        : 'Você cumpre os critérios, mas ainda esta fora do top 3 neste recorte.'
+        ? 'Você está no pódio neste recorte. O foco é sustentar os critérios até o fechamento.'
+        : 'Você cumpre os critérios, mas ainda está fora do top 3 neste recorte.'
       : 'Sua posição aparece no ranking, mas ainda existe critério pendente para entrar no pódio.'
-    : 'Ainda nao ha dados individuais para este filtro.'
+    : 'Ainda não há dados individuais para este filtro.'
   const analystPodiumPositionStatus = analystResult
     ? analystManualPodiumPosition
       ? 'No pódio por ajuste da gestão'
@@ -10246,9 +10246,9 @@ function DashboardView({
     ? !analystResult.eligible
       ? `Para projetar entrada no pódio, primeiro regularize: ${analystResult.reasons.join(', ') || 'critérios pendentes'}.`
       : periodFilter.mode === 'month'
-        ? `Se mantiver este ritmo ate o fechamento, a tendencia atual e terminar em ${analystRankingPosition ? `${analystRankingPosition}o lugar` : 'posição calculada'}; a posição muda conforme os novos lançamentos do time.`
-        : `Neste recorte, a posição atual e ${analystRankingPosition ? `${analystRankingPosition}o lugar` : 'calculada pelo ranking'}; no mensal, ela sera recalculada com todos os lançamentos.`
-    : 'Aguardando lançamento para calcular posição e tendencia.'
+        ? `Se mantiver este ritmo até o fechamento, a tendência atual é terminar em ${analystRankingPosition ? `${analystRankingPosition}o lugar` : 'posição calculada'}; a posição muda conforme os novos lançamentos do time.`
+        : `Neste recorte, a posição atual e ${analystRankingPosition ? `${analystRankingPosition}o lugar` : 'calculada pelo ranking'}; no mensal, ela será recalculada com todos os lançamentos.`
+    : 'Aguardando lançamento para calcular posição e tendência.'
   const podiumAverageFromSecureRanking = phonePodiumRanking.find((item) => Number(item.team_average_tickets) > 0)?.team_average_tickets
   const podiumAverageSource = phonePodiumRanking.length
     ? phonePodiumRanking.map((item) => Number(item.total_tickets))
@@ -10294,8 +10294,8 @@ function DashboardView({
   const analystJourneyProgress = analystResult ? Math.round((analystCriteriaCompleted / analystPodiumChecklist.length) * 100) : 0
   const analystPodiumGapText = analystResult
     ? analystResult.eligible
-      ? 'Você ja cumpre os critérios objetivos. Agora o foco e preservar qualidade, avaliações e volume ate o fechamento.'
-      : 'Para entrar no pódio, priorize os critérios abaixo que ainda estao pendentes neste recorte.'
+      ? 'Você já cumpre os critérios objetivos. Agora o foco é preservar qualidade, avaliações e volume até o fechamento.'
+      : 'Para entrar no pódio, priorize os critérios abaixo que ainda estão pendentes neste recorte.'
     : 'Sem lançamento no período para calcular distancia ate o pódio.'
   const analystActionPlan = analystResult
     ? [
@@ -10304,32 +10304,32 @@ function DashboardView({
           title: analystCsatGap > 0 ? `Recuperar ${formatDelta(analystCsatGap, ' p.p.').replace('+', '')} de CSAT` : 'Proteger o CSAT atual',
           text:
             analystCsatGap > 0
-              ? 'Nos próximos atendimentos, confirme o problema antes de orientar, valide se a solucao ficou clara e encerre perguntando se ainda ficou alguma duvida. A meta e reduzir motivos de avaliação negativa antes do próximo fechamento.'
-              : 'Seu CSAT esta acima da referência. Mantenha o mesmo padrao de abertura, diagnostico e fechamento para evitar queda de qualidade no restante do período.',
+              ? 'Nos próximos atendimentos, confirme o problema antes de orientar, valide se a solução ficou clara e encerre perguntando se ainda ficou alguma duvida. A meta é reduzir motivos de avaliação negativa antes do próximo fechamento.'
+              : 'Seu CSAT está acima da referência. Mantenha o mesmo padrão de abertura, diagnóstico e fechamento para evitar queda de qualidade no restante do período.',
         },
         {
           label: '2. Avaliações respondidas',
           title: analystReviewGap > 0 ? `Buscar mais ${formatDelta(analystReviewGap, ' p.p.').replace('+', '')} em avaliações` : 'Manter boa amostra de avaliações',
           text:
             analystReviewGap > 0
-              ? 'Ao perceber que o cliente teve o problema resolvido, faca um fechamento simples e objetivo pedindo a avaliação. O foco nao e forcar resposta, e aumentar a amostra para o resultado representar melhor sua entrega.'
-              : 'A amostra de avaliações esta saudavel. Continue encerrando os contatos com clareza, porque um bom volume de respostas protege a leitura do seu CSAT.',
+              ? 'Ao perceber que o cliente teve o problema resolvido, faça um fechamento simples e objetivo pedindo a avaliação. O foco não é forçar resposta, e sim aumentar a amostra para o resultado representar melhor sua entrega.'
+              : 'A amostra de avaliações está saudável. Continue encerrando os contatos com clareza, porque um bom volume de respostas protege a leitura do seu CSAT.',
         },
         {
           label: '3. Volume de atendimento',
           title: analystVolumeGap > 0 ? `Faltam ${analystVolumeGap} atendimentos para a média` : 'Volume dentro da média do time',
           text:
             analystVolumeGap > 0
-              ? `A média do time no recorte e ${formatChatCount(podiumAverageTickets)}. Combine com a gestão se houve fila, pausa, ausencia ou apoio a outro setor. Se a distribuicao estiver normal, o alvo e recuperar volume mantendo qualidade.`
-              : `Você esta com ${analystResult.totalTickets} atendimentos contra média de ${formatChatCount(podiumAverageTickets)}. O cuidado agora e nao ganhar volume sacrificando CSAT ou avaliação.`,
+              ? `A média do time no recorte é ${formatChatCount(podiumAverageTickets)}. Combine com a gestão se houve fila, pausa, ausência ou apoio a outro setor. Se a distribuição estiver normal, o alvo é recuperar volume mantendo qualidade.`
+              : `Você está com ${analystResult.totalTickets} atendimentos contra média de ${formatChatCount(podiumAverageTickets)}. O cuidado agora é não ganhar volume sacrificando CSAT ou avaliação.`,
         },
       ]
     : []
   const analystNextTargetText = analystResult
     ? analystResult.eligible
       ? analystRankingPosition > 0 && analystRankingPosition <= 3
-        ? 'Meta imédiata: preservar os tres critérios e evitar queda ate o próximo lançamento.'
-        : 'Meta imédiata: manter elegibilidade e buscar ganho em CSAT, avaliações ou volume para apróximar do top 3.'
+        ? 'Meta imédiata: preservar os três critérios e evitar queda até o próximo lançamento.'
+        : 'Meta imédiata: manter elegibilidade e buscar ganho em CSAT, avaliações ou volume para se aproximar do top 3.'
       : 'Meta imédiata: resolver primeiro os critérios pendentes antes de pensar em posição no pódio.'
     : 'Meta imédiata: aguardar o lançamento do período para liberar o plano.'
   const phoneFunnelItems = [
@@ -10484,7 +10484,7 @@ function DashboardView({
         </div>
 
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <Field label="Inicio">
+          <Field label="Início">
             <input
               className="form-input"
               type="date"
@@ -10615,15 +10615,20 @@ function DashboardView({
       )}
 
       {isManagementView && managementSection === 'area' && (
-        <section className="workspace-content-section workspace-content-section-divided">
-          <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Diagnóstico reservado</p>
-              <h2 className="section-title mt-2">Impacto no CSAT do telefone</h2>
-              <p className="section-subtitle">Visível apenas para master e coordenadora. O pódio continua considerando somente os analistas do N1.</p>
+        <details className="workspace-collapsible">
+          <summary className="cursor-pointer list-none">
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Diagnóstico reservado</p>
+                <h2 className="section-title mt-2">Impacto no CSAT do telefone</h2>
+                <p className="section-subtitle">Comparação gerencial entre o N1 e o resultado geral da operação.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">Gestão</span>
+                <span className="rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-xs font-semibold text-slate-300">Abrir diagnóstico</span>
+              </div>
             </div>
-            <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">Gestão</span>
-          </div>
+          </summary>
 
           {overallPhoneCsat === null ? (
             <div className="mt-5 rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
@@ -10656,7 +10661,7 @@ function DashboardView({
               </div>
             </>
           )}
-        </section>
+        </details>
       )}
 
       {(isAnalystDashboard || managementSection === 'people') && <CriteriaLegend
@@ -10668,12 +10673,21 @@ function DashboardView({
         ]}
       />}
 
-      {!isAnalystDashboard && managementSection === 'area' && <section className="workspace-content-section workspace-content-section-divided">
-        <p className="workspace-eyebrow">Projeção</p>
-        <h2 className="section-title mt-2">Projeção do fechamento</h2>
-        <p className="section-subtitle">
-          Mostra para onde os indicadores apontam se a tendência atual continuar. A projeção não altera os resultados já apurados.
-        </p>
+      {!isAnalystDashboard && managementSection === 'area' && <details className="workspace-collapsible">
+        <summary className="cursor-pointer list-none">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="workspace-eyebrow">Projeção</p>
+              <h2 className="section-title mt-2">Projeção do fechamento</h2>
+              <p className="section-subtitle">
+                Tendência de CSAT, performance, avaliações e risco sem alterar os resultados já apurados.
+              </p>
+            </div>
+            <span className="rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-xs font-semibold text-slate-300">
+              Abrir projeção
+            </span>
+          </div>
+        </summary>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-4">
           <PredictiveCard
@@ -10723,7 +10737,7 @@ function DashboardView({
             </p>
           </div>
         </div>
-      </section>}
+      </details>}
 
       {!isAnalystDashboard && managementSection === 'area' && <section className="workspace-content-section workspace-content-section-divided">
         <div className="flex flex-col gap-6 xl:flex-row xl:items-stretch">
