@@ -206,6 +206,7 @@ export async function GET(request: Request) {
           approved_percentage: operation360Percentage(approvedPositive, totals.positive),
         },
       },
+      preliminary_patterns: buildOperation360Analysis(analyses, 'analyzed'),
       validated_patterns: buildOperation360Analysis(analyses, 'approved'),
       analysis_status: {
         pending: analyses.filter((row) => row.validation_status === 'pending').length,
