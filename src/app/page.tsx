@@ -651,6 +651,17 @@ type ClickDeskOperation360PatternGroup = {
   takeaways: ClickDeskOperation360Pattern[]
 }
 
+type ClickDeskOperation360Synthesis = {
+  coverage_level: 'none' | 'initial' | 'partial' | 'strong'
+  coverage_label: string
+  headline: string
+  negative_read: string
+  control_read: string
+  positive_read: string
+  recommended_focus: string
+  caveat: string
+}
+
 type ClickDeskOperation360 = {
   source?: string
   period?: { start: string; end: string }
@@ -689,12 +700,14 @@ type ClickDeskOperation360 = {
     negative: ClickDeskOperation360PatternGroup
     positive: ClickDeskOperation360PatternGroup
   }
+  preliminary_synthesis?: ClickDeskOperation360Synthesis
   validated_patterns?: {
     status: string
     total: number
     negative: ClickDeskOperation360PatternGroup
     positive: ClickDeskOperation360PatternGroup
   }
+  validated_synthesis?: ClickDeskOperation360Synthesis
   analysis_status?: {
     pending: number
     approved: number
@@ -2750,11 +2763,17 @@ function Operation360PatternList({
   subtitle,
   patterns,
   tone = 'neutral',
+  onOpenTicket,
+  selectedTicketId = '',
+  ticketLoading = false,
 }: {
   title: string
   subtitle: string
   patterns: ClickDeskOperation360Pattern[]
   tone?: 'negative' | 'positive' | 'neutral'
+  onOpenTicket?: (ticketId: string) => void
+  selectedTicketId?: string
+  ticketLoading?: boolean
 }) {
   const shellClass =
     tone === 'negative'
@@ -2797,9 +2816,22 @@ function Operation360PatternList({
               )}
 
               {pattern.ticket_ids.length > 0 && (
-                <p className="mt-3 text-[11px] leading-5 text-slate-600">
-                  Evidências: {pattern.ticket_ids.slice(0, 6).map((ticketId) => `#${ticketId}`).join(' · ')}
-                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/10 pt-3">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-600">
+                    Evidências
+                  </span>
+                  {pattern.ticket_ids.slice(0, 6).map((ticketId) => (
+                    <button
+                      key={ticketId}
+                      type="button"
+                      className="rounded-md border border-white/10 bg-slate-900 px-2 py-1 text-[11px] font-semibold text-slate-300 hover:border-cyan-300/30 hover:text-cyan-100 disabled:cursor-wait disabled:opacity-60"
+                      disabled={ticketLoading && selectedTicketId === ticketId}
+                      onClick={() => onOpenTicket?.(ticketId)}
+                    >
+                      {ticketLoading && selectedTicketId === ticketId ? 'Abrindo...' : `#${ticketId}`}
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
           ))}
@@ -4097,6 +4129,9 @@ function ChatModuleDashboard({
   const [clickDeskOperation360Analyzing, setClickDeskOperation360Analyzing] = useState<'negative' | 'positive' | ''>('')
   const [clickDeskOperation360Progress, setClickDeskOperation360Progress] = useState('')
   const [clickDeskOperation360Message, setClickDeskOperation360Message] = useState('')
+  const [clickDeskOperation360EvidenceTicketId, setClickDeskOperation360EvidenceTicketId] = useState('')
+  const [clickDeskOperation360EvidenceLoading, setClickDeskOperation360EvidenceLoading] = useState(false)
+  const [clickDeskOperation360Evidence, setClickDeskOperation360Evidence] = useState<ClickDeskQualitativeResponse | null>(null)
   const [chatQualitativeFocusAnalystId, setChatQualitativeFocusAnalystId] = useState('')
   const [manualPodiumDraft, setManualPodiumDraft] = useState<Record<number, string>>({})
   const [chatPodiumMessage, setChatPodiumMessage] = useState('')
@@ -4849,6 +4884,8 @@ function ChatModuleDashboard({
 
     setClickDeskOperation360Loading(true)
     setClickDeskOperation360Message('')
+    setClickDeskOperation360Evidence(null)
+    setClickDeskOperation360EvidenceTicketId('')
 
     try {
       const {
@@ -4897,10 +4934,11 @@ function ChatModuleDashboard({
   }
 
   async function handleAnalyzeOperation360(kind: 'negative' | 'positive') {
-    const queue =
+    const availableQueue =
       kind === 'negative'
         ? clickDeskOperation360?.queues?.negative_unanalyzed ?? []
         : clickDeskOperation360?.queues?.positive_unanalyzed ?? []
+    const queue = kind === 'negative' ? availableQueue : availableQueue.slice(0, 20)
 
     if (!queue.length || clickDeskOperation360Analyzing) return
 
@@ -4958,6 +4996,58 @@ function ChatModuleDashboard({
     } finally {
       setClickDeskOperation360Analyzing('')
       setClickDeskOperation360Progress('')
+    }
+  }
+
+  async function handleOpenOperation360Evidence(ticketId: string) {
+    if (!ticketId || clickDeskOperation360EvidenceLoading) return
+
+    setClickDeskOperation360EvidenceTicketId(ticketId)
+    setClickDeskOperation360EvidenceLoading(true)
+    setClickDeskOperation360Evidence(null)
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        setClickDeskOperation360Evidence({
+          ticket_id: ticketId,
+          error: 'Sua sessão de homologação não está ativa.',
+        })
+        return
+      }
+
+      const response = await fetch('/api/clickdesk/qualitative', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ticket_id: ticketId }),
+      })
+      const data = (await response.json()) as ClickDeskQualitativeResponse
+      const rawError = data.error || data.erro
+      data.error = rawError
+        ? getQualitativeUserError(rawError, response.status)
+        : response.ok
+          ? undefined
+          : getQualitativeUserError('', response.status)
+
+      setClickDeskOperation360Evidence(data)
+      window.setTimeout(() => {
+        document
+          .getElementById('operation360-evidence')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 80)
+    } catch {
+      setClickDeskOperation360Evidence({
+        ticket_id: ticketId,
+        error: getQualitativeUserError('', 503),
+      })
+    } finally {
+      setClickDeskOperation360EvidenceLoading(false)
     }
   }
 
@@ -7140,7 +7230,9 @@ function ChatModuleDashboard({
   const operation360Totals = clickDeskOperation360?.totals
   const operation360Coverage = clickDeskOperation360?.coverage
   const operation360Preliminary = clickDeskOperation360?.preliminary_patterns
+  const operation360PreliminarySynthesis = clickDeskOperation360?.preliminary_synthesis
   const operation360Validated = clickDeskOperation360?.validated_patterns
+  const operation360ValidatedSynthesis = clickDeskOperation360?.validated_synthesis
   const operation360NegativeQueue = clickDeskOperation360?.queues?.negative_unanalyzed ?? []
   const operation360PositiveQueue = clickDeskOperation360?.queues?.positive_unanalyzed ?? []
   const operation360NegativePatterns = operation360Preliminary?.negative.causes ?? []
@@ -8283,7 +8375,7 @@ function ChatModuleDashboard({
                   {clickDeskOperation360Analyzing === 'positive'
                     ? `Analisando positivas · ${clickDeskOperation360Progress}`
                     : operation360PositiveQueue.length
-                      ? `Analisar ${operation360PositiveQueue.length} positiva(s) pendente(s)`
+                      ? `Analisar próximas ${Math.min(20, operation360PositiveQueue.length)} positiva(s)`
                       : 'Positivas analisadas'}
                 </button>
                 <button type="button" className="small-button" onClick={() => void loadOperation360()}>
@@ -8291,9 +8383,68 @@ function ChatModuleDashboard({
                 </button>
               </div>
 
+              {operation360PositiveQueue.length > 20 && (
+                <p className="mt-3 text-xs leading-5 text-slate-500">
+                  Positivas são processadas em lotes de até 20 para controlar custo e latência; as negativas permanecem exaustivas no filtro.
+                </p>
+              )}
+
               {clickDeskOperation360Message && (
                 <p className="mt-4 text-sm leading-6 text-violet-100">{clickDeskOperation360Message}</p>
               )}
+            </div>
+
+            <div className="rounded-xl border border-cyan-300/15 bg-cyan-300/5 p-5">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <p className="workspace-eyebrow text-cyan-200">Síntese 360º</p>
+                  <h3 className="mt-2 text-xl font-bold">O que a leitura disponível já consegue nos ensinar?</h3>
+                </div>
+                <span className="rounded-md border border-cyan-300/20 bg-slate-950/30 px-3 py-2 text-xs font-semibold text-cyan-100">
+                  {operation360PreliminarySynthesis?.coverage_label ?? 'Sem cobertura'}
+                </span>
+              </div>
+
+              <p className="mt-4 text-base font-semibold leading-7 text-slate-100">
+                {operation360PreliminarySynthesis?.headline ??
+                  'Ainda não há leitura qualitativa suficiente para construir uma síntese.'}
+              </p>
+
+              <div className="mt-5 grid gap-4 lg:grid-cols-3">
+                <div className="rounded-lg border border-amber-300/15 bg-slate-950/35 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-200">Negativas</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-300">
+                    {operation360PreliminarySynthesis?.negative_read ??
+                      'Ainda não há padrão negativo consolidável.'}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-violet-300/15 bg-slate-950/35 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">Controle</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-300">
+                    {operation360PreliminarySynthesis?.control_read ??
+                      'Ainda não há evidência suficiente para separar controlabilidade.'}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-emerald-300/15 bg-slate-950/35 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-200">Positivas</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-300">
+                    {operation360PreliminarySynthesis?.positive_read ??
+                      'Ainda não há prática positiva recorrente consolidável.'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-lg border border-cyan-300/15 bg-slate-950/35 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-200">Próximo foco da gestão</p>
+                <p className="mt-2 text-sm font-semibold leading-6 text-slate-100">
+                  {operation360PreliminarySynthesis?.recommended_focus ??
+                    'Complete a cobertura e valide as leituras antes de definir uma ação.'}
+                </p>
+                <p className="mt-3 text-xs leading-5 text-slate-500">
+                  {operation360PreliminarySynthesis?.caveat ??
+                    'Recorrência não prova causalidade.'}
+                </p>
+              </div>
             </div>
 
             <div className="rounded-xl border border-amber-300/15 bg-slate-950/30 p-5">
@@ -8316,12 +8467,18 @@ function ChatModuleDashboard({
                   subtitle="Fatores mais recorrentes entre os tickets negativos que a IA já conseguiu analisar."
                   patterns={operation360NegativePatterns}
                   tone="negative"
+                  onOpenTicket={handleOpenOperation360Evidence}
+                  selectedTicketId={clickDeskOperation360EvidenceTicketId}
+                  ticketLoading={clickDeskOperation360EvidenceLoading}
                 />
                 <Operation360PatternList
                   title="O que aparece nas positivas"
                   subtitle="Fatores e práticas que se repetem nos tickets positivos e podem indicar comportamentos a preservar."
                   patterns={operation360PositivePatterns}
                   tone="positive"
+                  onOpenTicket={handleOpenOperation360Evidence}
+                  selectedTicketId={clickDeskOperation360EvidenceTicketId}
+                  ticketLoading={clickDeskOperation360EvidenceLoading}
                 />
               </div>
             </div>
@@ -8332,6 +8489,9 @@ function ChatModuleDashboard({
                 subtitle="Separa o que estava sob controle do atendimento do que pertence a processo, empresa, cliente, fator externo ou combinação."
                 patterns={operation360ControlPatterns}
                 tone="neutral"
+                onOpenTicket={handleOpenOperation360Evidence}
+                selectedTicketId={clickDeskOperation360EvidenceTicketId}
+                ticketLoading={clickDeskOperation360EvidenceLoading}
               />
 
               <div className="rounded-xl border border-white/10 bg-slate-950/30 p-5">
@@ -8378,6 +8538,46 @@ function ChatModuleDashboard({
               </div>
             </div>
 
+            {(clickDeskOperation360EvidenceTicketId || clickDeskOperation360Evidence) && (
+              <div
+                id="operation360-evidence"
+                className="scroll-mt-24 rounded-xl border border-cyan-300/15 bg-slate-950/35 p-5"
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="workspace-eyebrow text-cyan-200">Evidência do padrão</p>
+                    <h3 className="mt-2 text-xl font-bold">
+                      Ticket #{clickDeskOperation360EvidenceTicketId || clickDeskOperation360Evidence?.ticket_id}
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-slate-400">
+                      Esta é a leitura qualitativa preservada do ticket que sustenta o padrão selecionado.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="small-button self-start"
+                    onClick={() => {
+                      setClickDeskOperation360Evidence(null)
+                      setClickDeskOperation360EvidenceTicketId('')
+                    }}
+                  >
+                    Fechar evidência
+                  </button>
+                </div>
+
+                {clickDeskOperation360EvidenceLoading ? (
+                  <div className="mt-4 rounded-lg border border-white/10 bg-slate-950/40 p-4 text-sm text-slate-400">
+                    Carregando a leitura preservada...
+                  </div>
+                ) : clickDeskOperation360Evidence ? (
+                  <QualitativeAnalysisCard
+                    result={clickDeskOperation360Evidence}
+                    audience="management"
+                  />
+                ) : null}
+              </div>
+            )}
+
             <div className="rounded-xl border border-emerald-300/15 bg-emerald-300/5 p-5">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
@@ -8386,11 +8586,30 @@ function ChatModuleDashboard({
                   <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-400">
                     Aqui entram somente análises aprovadas. Hoje há {formatChatCount(operation360Validated?.total ?? 0)} leitura(s) validada(s) neste recorte.
                   </p>
+                  {operation360ValidatedSynthesis && (
+                    <p className="mt-3 max-w-4xl text-sm font-semibold leading-6 text-emerald-100">
+                      {operation360ValidatedSynthesis.headline}
+                    </p>
+                  )}
                 </div>
                 <span className="rounded-md border border-emerald-300/20 bg-emerald-300/5 px-3 py-2 text-xs font-semibold text-emerald-100">
                   {formatChatPercent(operation360Coverage?.approved_percentage ?? 0)} da base avaliada validada
                 </span>
               </div>
+
+              {operation360ValidatedSynthesis && (
+                <div className="mt-5 rounded-lg border border-emerald-300/15 bg-slate-950/35 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-200">
+                    Foco sustentado por evidência validada
+                  </p>
+                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-100">
+                    {operation360ValidatedSynthesis.recommended_focus}
+                  </p>
+                  <p className="mt-3 text-xs leading-5 text-slate-500">
+                    {operation360ValidatedSynthesis.caveat}
+                  </p>
+                </div>
+              )}
 
               <div className="mt-5 grid gap-5 xl:grid-cols-2">
                 <Operation360PatternList
@@ -8398,12 +8617,18 @@ function ChatModuleDashboard({
                   subtitle="Padrões confirmados pela gestão nas avaliações negativas."
                   patterns={operation360Validated?.negative.causes ?? []}
                   tone="negative"
+                  onOpenTicket={handleOpenOperation360Evidence}
+                  selectedTicketId={clickDeskOperation360EvidenceTicketId}
+                  ticketLoading={clickDeskOperation360EvidenceLoading}
                 />
                 <Operation360PatternList
                   title="Positivas validadas"
                   subtitle="Padrões confirmados pela gestão nas avaliações positivas."
                   patterns={operation360Validated?.positive.causes ?? []}
                   tone="positive"
+                  onOpenTicket={handleOpenOperation360Evidence}
+                  selectedTicketId={clickDeskOperation360EvidenceTicketId}
+                  ticketLoading={clickDeskOperation360EvidenceLoading}
                 />
               </div>
             </div>

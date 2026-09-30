@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import {
   buildOperation360Analysis,
+  buildOperation360Synthesis,
   calculateOperation360Totals,
 } from '../src/lib/chat-operation-360.ts'
 
@@ -91,4 +92,118 @@ test('consolidação validada ignora pending e rejected', () => {
   assert.equal(result.negative.causes[0]?.key, 'communication')
   assert.equal(result.negative.causes[0]?.count, 1)
   assert.deepEqual(result.negative.causes[0]?.ticket_ids, ['approved-1'])
+})
+
+
+test('síntese não generaliza quando a cobertura negativa ainda é inicial', () => {
+  const analysis = {
+    status: 'analyzed',
+    total: 2,
+    negative: {
+      analyzed: 2,
+      causes: [
+        {
+          key: 'wait_time',
+          count: 2,
+          percentage: 100,
+          ticket_ids: ['n-1', 'n-2'],
+          examples: ['Houve espera antes da continuidade.'],
+        },
+      ],
+      controllability: [
+        {
+          key: 'company',
+          count: 2,
+          percentage: 100,
+          ticket_ids: ['n-1', 'n-2'],
+          examples: ['O fator observado dependeu de processo interno.'],
+        },
+      ],
+      human_influence: [],
+      takeaways: [],
+    },
+    positive: {
+      analyzed: 0,
+      causes: [],
+      controllability: [],
+      human_influence: [],
+      takeaways: [],
+    },
+  }
+
+  const synthesis = buildOperation360Synthesis({
+    negativeTotal: 39,
+    positiveTotal: 132,
+    analysis,
+  })
+
+  assert.equal(synthesis.coverage_level, 'initial')
+  assert.match(synthesis.headline, /2 de 39/)
+  assert.match(synthesis.recommended_focus, /Complete a cobertura/)
+  assert.match(synthesis.caveat, /Recorrência não prova causalidade/)
+})
+
+test('síntese orienta processo quando a cobertura é suficiente e o contexto é da empresa', () => {
+  const analysis = {
+    status: 'analyzed',
+    total: 30,
+    negative: {
+      analyzed: 24,
+      causes: [
+        {
+          key: 'process',
+          count: 14,
+          percentage: 58.33,
+          ticket_ids: ['n-1'],
+          examples: ['O fluxo interno impediu a continuidade.'],
+        },
+      ],
+      controllability: [
+        {
+          key: 'company',
+          count: 15,
+          percentage: 62.5,
+          ticket_ids: ['n-1'],
+          examples: ['O principal fator dependia da empresa.'],
+        },
+      ],
+      human_influence: [],
+      takeaways: [],
+    },
+    positive: {
+      analyzed: 6,
+      causes: [
+        {
+          key: 'resolution_quality',
+          count: 5,
+          percentage: 83.33,
+          ticket_ids: ['p-1'],
+          examples: ['A orientação levou à resolução.'],
+        },
+      ],
+      controllability: [],
+      human_influence: [],
+      takeaways: [
+        {
+          key: 'maintain',
+          count: 5,
+          percentage: 83.33,
+          ticket_ids: ['p-1'],
+          examples: ['Manter orientação passo a passo.'],
+        },
+      ],
+    },
+  }
+
+  const synthesis = buildOperation360Synthesis({
+    negativeTotal: 30,
+    positiveTotal: 20,
+    analysis,
+  })
+
+  assert.equal(synthesis.coverage_level, 'strong')
+  assert.match(synthesis.negative_read, /processo/)
+  assert.match(synthesis.control_read, /empresa ou processo interno/)
+  assert.match(synthesis.recommended_focus, /processo, regra interna, sistema ou produto/)
+  assert.match(synthesis.positive_read, /prática a manter/)
 })

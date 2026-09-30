@@ -143,3 +143,128 @@ export function buildOperation360Analysis(
     positive: summarize('positive'),
   }
 }
+
+
+export type Operation360Synthesis = {
+  coverage_level: 'none' | 'initial' | 'partial' | 'strong'
+  coverage_label: string
+  headline: string
+  negative_read: string
+  control_read: string
+  positive_read: string
+  recommended_focus: string
+  caveat: string
+}
+
+const OPERATION_360_LABELS: Record<string, string> = {
+  system_or_product: 'sistema ou produto',
+  process: 'processo',
+  wait_time: 'tempo de espera',
+  communication: 'comunicação',
+  resolution_quality: 'qualidade da resolução',
+  customer_expectation: 'expectativa do cliente',
+  external: 'fator externo',
+  other: 'outros fatores',
+  unclear: 'causa inconclusiva',
+  analyst: 'atendimento',
+  company: 'empresa ou processo interno',
+  customer: 'cliente',
+  mixed: 'fatores mistos',
+  maintain: 'prática a manter',
+  develop: 'ponto a desenvolver',
+  context: 'contexto fora do controle direto',
+  none: 'sem aprendizado específico',
+}
+
+function operation360Label(key?: string) {
+  if (!key) return 'sem padrão predominante'
+  return OPERATION_360_LABELS[key] ?? key.replace(/_/g, ' ')
+}
+
+function strongestPattern(patterns: Operation360Pattern[]) {
+  return patterns.find((pattern) => pattern.key !== 'unclear') ?? patterns[0] ?? null
+}
+
+function coverageLevel(analyzed: number, total: number): Operation360Synthesis['coverage_level'] {
+  if (analyzed <= 0 || total <= 0) return 'none'
+  const percentage = operation360Percentage(analyzed, total)
+  if (analyzed < 5 || percentage < 35) return 'initial'
+  if (percentage < 75) return 'partial'
+  return 'strong'
+}
+
+export function buildOperation360Synthesis(input: {
+  negativeTotal: number
+  positiveTotal: number
+  analysis: ReturnType<typeof buildOperation360Analysis>
+}): Operation360Synthesis {
+  const negativeAnalyzed = input.analysis.negative.analyzed
+  const positiveAnalyzed = input.analysis.positive.analyzed
+  const negativeCoverage = operation360Percentage(negativeAnalyzed, input.negativeTotal)
+  const positiveCoverage = operation360Percentage(positiveAnalyzed, input.positiveTotal)
+  const level = coverageLevel(negativeAnalyzed, input.negativeTotal)
+  const topNegative = strongestPattern(input.analysis.negative.causes)
+  const topControl = strongestPattern(input.analysis.negative.controllability)
+  const topPositiveTakeaway = strongestPattern(input.analysis.positive.takeaways)
+  const topPositiveCause = strongestPattern(input.analysis.positive.causes)
+
+  const coverageLabel =
+    level === 'strong'
+      ? 'Cobertura forte'
+      : level === 'partial'
+        ? 'Cobertura parcial'
+        : level === 'initial'
+          ? 'Cobertura inicial'
+          : 'Sem cobertura'
+
+  const headline =
+    input.negativeTotal === 0
+      ? 'Não há avaliações negativas neste recorte.'
+      : negativeAnalyzed === 0
+        ? `Há ${input.negativeTotal} avaliação(ões) negativa(s), mas a IA ainda não possui leituras válidas para consolidar padrões.`
+        : `A IA já leu ${negativeAnalyzed} de ${input.negativeTotal} avaliação(ões) negativa(s) (${negativeCoverage}%).`
+
+  const negativeRead =
+    !topNegative
+      ? 'Ainda não há base analisada suficiente para apontar um padrão negativo.'
+      : `Entre as negativas já analisadas, o fator mais recorrente é ${operation360Label(topNegative.key)}: ${topNegative.count} ocorrência(s), equivalentes a ${topNegative.percentage}% da leitura disponível.`
+
+  const controlRead =
+    !topControl
+      ? 'Ainda não é possível separar com segurança o que estava sob controle do atendimento e o que pertence ao contexto.'
+      : `Na dimensão de controlabilidade, o agrupamento mais frequente está em ${operation360Label(topControl.key)} (${topControl.count} ocorrência(s)). Isso orienta onde a gestão deve investigar antes de atribuir responsabilidade individual.`
+
+  const positivePattern = topPositiveTakeaway ?? topPositiveCause
+  const positiveRead =
+    positiveAnalyzed === 0 || !positivePattern
+      ? 'As avaliações positivas ainda não têm cobertura suficiente para consolidar uma prática recorrente.'
+      : `Nas positivas analisadas (${positiveAnalyzed} de ${input.positiveTotal}; ${positiveCoverage}%), aparece com mais frequência ${operation360Label(positivePattern.key)}. Esse sinal deve ser lido como prática ou contexto a preservar, não como causa automática da nota positiva.`
+
+  let recommendedFocus =
+    'Complete a cobertura das negativas e valide as leituras antes de transformar o padrão em ação gerencial.'
+
+  if (level === 'partial' || level === 'strong') {
+    if (topControl?.key === 'analyst' || topControl?.key === 'mixed') {
+      recommendedFocus =
+        'Priorize os tickets que combinam fator recorrente e influência do atendimento; valide a evidência e transforme somente comportamentos observáveis em ação de desenvolvimento.'
+    } else if (topControl?.key === 'company') {
+      recommendedFocus =
+        'Priorize a investigação de processo, regra interna, sistema ou produto antes de direcionar a ação para pessoas.'
+    } else if (topControl?.key === 'customer' || topControl?.key === 'external') {
+      recommendedFocus =
+        'Priorize alinhamento de expectativa e orientação ao cliente, separando claramente fatores externos da atuação do analista.'
+    }
+  }
+
+  return {
+    coverage_level: level,
+    coverage_label: coverageLabel,
+    headline,
+    negative_read: negativeRead,
+    control_read: controlRead,
+    positive_read: positiveRead,
+    recommended_focus: recommendedFocus,
+    caveat:
+      'A síntese descreve padrões dos tickets já analisados. Recorrência não prova causalidade e cobertura parcial não representa automaticamente toda a operação.',
+  }
+}
