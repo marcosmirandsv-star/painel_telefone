@@ -152,7 +152,7 @@ export type Operation360Synthesis = {
   negative_read: string
   control_read: string
   positive_read: string
-  recommended_focus: string
+  result_read: string
   caveat: string
 }
 
@@ -232,29 +232,24 @@ export function buildOperation360Synthesis(input: {
   const controlRead =
     !topControl
       ? 'Ainda não é possível separar com segurança o que estava sob controle do atendimento e o que pertence ao contexto.'
-      : `Na dimensão de controlabilidade, o agrupamento mais frequente está em ${operation360Label(topControl.key)} (${topControl.count} ocorrência(s)). Isso orienta onde a gestão deve investigar antes de atribuir responsabilidade individual.`
+      : `Na dimensão de controlabilidade, o agrupamento mais frequente está em ${operation360Label(topControl.key)} (${topControl.count} ocorrência(s)). Esse recorte ajuda a separar o que aparece ligado ao atendimento do que aparece ligado ao contexto da operação.`
 
-  const positivePattern = topPositiveTakeaway ?? topPositiveCause
+  const positivePattern = topPositiveCause ?? topPositiveTakeaway
   const positiveRead =
     positiveAnalyzed === 0 || !positivePattern
       ? 'As avaliações positivas ainda não têm cobertura suficiente para consolidar uma prática recorrente.'
-      : `Nas positivas analisadas (${positiveAnalyzed} de ${input.positiveTotal}; ${positiveCoverage}%), aparece com mais frequência ${operation360Label(positivePattern.key)}. Esse sinal deve ser lido como prática ou contexto a preservar, não como causa automática da nota positiva.`
+      : `Nas positivas analisadas (${positiveAnalyzed} de ${input.positiveTotal}; ${positiveCoverage}%), o fator mais recorrente é ${operation360Label(positivePattern.key)}. Esse dado descreve uma recorrência observada e, isoladamente, não prova a causa da avaliação positiva.`
 
-  let recommendedFocus =
-    'Complete a cobertura das negativas e valide as leituras antes de transformar o padrão em ação gerencial.'
-
-  if (level === 'partial' || level === 'strong') {
-    if (topControl?.key === 'analyst' || topControl?.key === 'mixed') {
-      recommendedFocus =
-        'Priorize os tickets que combinam fator recorrente e influência do atendimento; valide a evidência e transforme somente comportamentos observáveis em ação de desenvolvimento.'
-    } else if (topControl?.key === 'company') {
-      recommendedFocus =
-        'Priorize a investigação de processo, regra interna, sistema ou produto antes de direcionar a ação para pessoas.'
-    } else if (topControl?.key === 'customer' || topControl?.key === 'external') {
-      recommendedFocus =
-        'Priorize alinhamento de expectativa e orientação ao cliente, separando claramente fatores externos da atuação do analista.'
-    }
-  }
+  const resultRead =
+    input.negativeTotal === 0
+      ? 'Neste recorte, não há avaliações negativas pressionando o CSAT.'
+      : negativeAnalyzed === 0
+        ? `O período reúne ${input.negativeTotal} avaliação(ões) negativa(s), mas ainda não há leitura qualitativa suficiente para explicar quais fatores se repetem nelas.`
+        : topNegative && topControl
+          ? `Na leitura disponível, as negativas se concentram principalmente em ${operation360Label(topNegative.key)} (${topNegative.count} ocorrência(s)); na dimensão de contexto, ${operation360Label(topControl.key)} é o agrupamento mais frequente (${topControl.count} ocorrência(s)).`
+          : topNegative
+            ? `Na leitura disponível, o padrão negativo mais recorrente é ${operation360Label(topNegative.key)} (${topNegative.count} ocorrência(s)).`
+            : 'A leitura disponível ainda não mostra um fator predominante entre as avaliações negativas.'
 
   return {
     coverage_level: level,
@@ -263,7 +258,7 @@ export function buildOperation360Synthesis(input: {
     negative_read: negativeRead,
     control_read: controlRead,
     positive_read: positiveRead,
-    recommended_focus: recommendedFocus,
+    result_read: resultRead,
     caveat:
       'A síntese descreve padrões dos tickets já analisados. Recorrência não prova causalidade e cobertura parcial não representa automaticamente toda a operação.',
   }
