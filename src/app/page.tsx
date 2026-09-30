@@ -2745,6 +2745,74 @@ function ChatPerformanceDiagnosticPanel({
   )
 }
 
+function Operation360PatternList({
+  title,
+  subtitle,
+  patterns,
+  tone = 'neutral',
+}: {
+  title: string
+  subtitle: string
+  patterns: ClickDeskOperation360Pattern[]
+  tone?: 'negative' | 'positive' | 'neutral'
+}) {
+  const shellClass =
+    tone === 'negative'
+      ? 'border-amber-300/15 bg-amber-300/5'
+      : tone === 'positive'
+        ? 'border-emerald-300/15 bg-emerald-300/5'
+        : 'border-violet-300/15 bg-violet-300/5'
+
+  return (
+    <div className={`rounded-xl border p-4 ${shellClass}`}>
+      <h4 className="font-semibold text-slate-100">{title}</h4>
+      <p className="mt-1 text-xs leading-5 text-slate-500">{subtitle}</p>
+
+      {patterns.length > 0 ? (
+        <div className="mt-4 space-y-3">
+          {patterns.slice(0, 6).map((pattern) => (
+            <div key={pattern.key} className="rounded-lg border border-white/10 bg-slate-950/35 p-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <strong className="text-sm text-slate-100">
+                    {formatQualitativeLabel(pattern.key)}
+                  </strong>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {formatChatCount(pattern.count)} ocorrência(s) · {formatChatPercent(pattern.percentage)} da leitura analisada
+                  </p>
+                </div>
+                <span className="rounded-md bg-slate-900 px-2 py-1 text-xs font-semibold text-slate-300">
+                  {formatChatCount(pattern.count)}
+                </span>
+              </div>
+
+              {pattern.examples.length > 0 && (
+                <div className="mt-3 space-y-1 border-t border-white/10 pt-3">
+                  {pattern.examples.slice(0, 2).map((example) => (
+                    <p key={example} className="text-xs leading-5 text-slate-400">
+                      {example}
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              {pattern.ticket_ids.length > 0 && (
+                <p className="mt-3 text-[11px] leading-5 text-slate-600">
+                  Evidências: {pattern.ticket_ids.slice(0, 6).map((ticketId) => `#${ticketId}`).join(' · ')}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-4 rounded-lg border border-dashed border-white/10 bg-slate-950/25 p-4 text-sm text-slate-500">
+          Ainda não há análises suficientes para formar um padrão seguro neste recorte.
+        </div>
+      )}
+    </div>
+  )
+}
+
 function QualitativeAnalysisCard({
   result,
   onReanalyze,
@@ -4775,6 +4843,134 @@ function ChatModuleDashboard({
       setChatAnalystForm((current) => ({ ...current, teamId: teams[0].id }))
     }
   }, [teams, chatAnalystForm.teamId])
+
+  async function loadOperation360() {
+    if (!isManagementUser || !chat2PeriodKey) return
+
+    setClickDeskOperation360Loading(true)
+    setClickDeskOperation360Message('')
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        setClickDeskOperation360({
+          error: 'Sua sessão de homologação não está ativa.',
+        })
+        return
+      }
+
+      const [yearText, monthText] = chat2PeriodKey.split('-')
+      const now = new Date()
+      const year = Number(yearText) || now.getFullYear()
+      const monthNumber = Number(monthText) || now.getMonth() + 1
+      const period = getChatMonthPeriod(year, monthNumber)
+      const params = new URLSearchParams({
+        start: period.start,
+        end: period.end,
+      })
+      if (selectedTeamId !== 'all') params.set('team_id', selectedTeamId)
+
+      const response = await fetch(`/api/clickdesk/operation-360?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: 'no-store',
+      })
+      const data = (await response.json()) as ClickDeskOperation360
+      const message = data.error || data.erro
+
+      if (!response.ok) {
+        setClickDeskOperation360({
+          ...data,
+          error: message || 'Não foi possível montar a Análise 360º da operação.',
+        })
+        return
+      }
+
+      setClickDeskOperation360(data)
+    } catch (error) {
+      setClickDeskOperation360({ error: getErrorMessage(error) })
+    } finally {
+      setClickDeskOperation360Loading(false)
+    }
+  }
+
+  async function handleAnalyzeOperation360(kind: 'negative' | 'positive') {
+    const queue =
+      kind === 'negative'
+        ? clickDeskOperation360?.queues?.negative_unanalyzed ?? []
+        : clickDeskOperation360?.queues?.positive_unanalyzed ?? []
+
+    if (!queue.length || clickDeskOperation360Analyzing) return
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    if (!session?.access_token) {
+      setClickDeskOperation360Message('Sua sessão de homologação não está ativa.')
+      return
+    }
+
+    setClickDeskOperation360Analyzing(kind)
+    setClickDeskOperation360Message('')
+    setClickDeskOperation360Progress(`0 de ${queue.length}`)
+
+    let completed = 0
+    let failed = 0
+
+    try {
+      for (let index = 0; index < queue.length; index += 2) {
+        const batch = queue.slice(index, index + 2)
+        const results = await Promise.all(
+          batch.map(async (ticket) => {
+            try {
+              const response = await fetch('/api/clickdesk/qualitative', {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${session.access_token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ ticket_id: ticket.ticket_id }),
+              })
+              return response.ok
+            } catch {
+              return false
+            }
+          }),
+        )
+
+        completed += results.filter(Boolean).length
+        failed += results.filter((item) => !item).length
+        setClickDeskOperation360Progress(
+          `${Math.min(index + batch.length, queue.length)} de ${queue.length}`,
+        )
+      }
+
+      setClickDeskOperation360Message(
+        failed > 0
+          ? `${completed} atendimento(s) analisado(s); ${failed} ficaram pendentes por indisponibilidade e podem ser tentados novamente.`
+          : `${completed} atendimento(s) analisado(s). As novas leituras aguardam validação humana para entrarem no consolidado oficial.`,
+      )
+      setClickDeskOperation360Refresh((current) => current + 1)
+      setClickDeskQualitativeSummaryRefresh((current) => current + 1)
+    } finally {
+      setClickDeskOperation360Analyzing('')
+      setClickDeskOperation360Progress('')
+    }
+  }
+
+  useEffect(() => {
+    if (!isManagementUser || chatActiveTab !== 'operation360' || !chat2PeriodKey) return
+    void loadOperation360()
+  }, [
+    isManagementUser,
+    chatActiveTab,
+    chat2PeriodKey,
+    selectedTeamId,
+    clickDeskOperation360Refresh,
+  ])
 
   useEffect(() => {
     if (!isManagementUser || chatActiveTab !== 'podium') return
