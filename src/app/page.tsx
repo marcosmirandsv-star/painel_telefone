@@ -8318,7 +8318,9 @@ function ChatModuleDashboard({
               <summary className="cursor-pointer list-none text-sm font-semibold text-slate-200">
                 Cobertura e processamento da IA
                 <span className="ml-2 text-xs font-normal text-slate-500">
-                  ${formatChatCount(operation360Coverage?.negative.analyzed ?? 0)}/${formatChatCount(operation360Coverage?.negative.total ?? 0)} negativas analisadas
+                  {formatChatCount(operation360Coverage?.negative.analyzed ?? 0)}
+                  {' / '}
+                  {formatChatCount(operation360Coverage?.negative.total ?? 0)} negativas analisadas
                 </span>
               </summary>
               <div className="mt-4">
