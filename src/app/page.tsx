@@ -8054,20 +8054,20 @@ function ChatModuleDashboard({
             </p>
           </div>
           <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-white/10 bg-slate-950/30 text-center sm:grid-cols-4 sm:divide-x sm:divide-white/10">
-            <div className="px-3 py-3">
-              <span className="block text-xs text-slate-500">Prioridades</span>
+            <div className="flex min-h-20 flex-col items-center justify-center px-3 py-3">
+              <span className="flex min-h-8 items-center justify-center text-xs leading-4 text-slate-500">Prioridades</span>
               <strong className="mt-1 block text-lg tabular-nums text-amber-200">{chat2ManagementPriorities.length}</strong>
             </div>
-            <div className="px-3 py-3">
-              <span className="block text-xs text-slate-500">Dentro das metas</span>
+            <div className="flex min-h-20 flex-col items-center justify-center px-3 py-3">
+              <span className="flex min-h-8 items-center justify-center text-xs leading-4 text-slate-500">Metas atingidas</span>
               <strong className="mt-1 block text-lg tabular-nums text-emerald-300">{chat2ManagementHealthy.length}</strong>
             </div>
-            <div className="px-3 py-3">
-              <span className="block text-xs text-slate-500">Contexto de volume</span>
+            <div className="flex min-h-20 flex-col items-center justify-center px-3 py-3">
+              <span className="flex min-h-8 items-center justify-center text-xs leading-4 text-slate-500">Volume a validar</span>
               <strong className="mt-1 block text-lg tabular-nums text-cyan-200">{chat2ManagementVolumeContexts.length}</strong>
             </div>
-            <div className="px-3 py-3">
-              <span className="block text-xs text-slate-500">Negativas</span>
+            <div className="flex min-h-20 flex-col items-center justify-center px-3 py-3">
+              <span className="flex min-h-8 items-center justify-center text-xs leading-4 text-slate-500">Avaliações negativas</span>
               <strong className="mt-1 block text-lg tabular-nums text-rose-200">{chat2ManagementNegativeReviews}</strong>
             </div>
           </div>
@@ -16043,7 +16043,7 @@ function getChatRowValue(row: Record<string, string | number | null>, column: st
 }
 
 function getChatMonthPeriod(year: number, monthNumber: number) {
-  const month = chatMonthOptions.find((option) => Number(option.value) === monthNumber)?.label ?? 'Periodo'
+  const month = chatMonthOptions.find((option) => Number(option.value) === monthNumber)?.label ?? 'Período'
   const paddedMonth = String(monthNumber).padStart(2, '0')
   const lastDay = new Date(year, monthNumber, 0).getDate()
 
