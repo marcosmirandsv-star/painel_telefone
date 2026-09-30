@@ -11750,7 +11750,7 @@ function ReportsView({
     } catch (error) {
       setPhoneFeedbackDraft(phoneFeedbackSuggestion)
       setPhoneAiStatus('error')
-      setExportMessage(`A IA externa nao gerou um texto valido agora. Usei a sugestão local do telefone. Motivo: ${getErrorMessage(error)}`)
+      setExportMessage(`A IA externa não gerou um texto válido agora. Usei a sugestão local do telefone. Motivo: ${getErrorMessage(error)}`)
     } finally {
       setPhoneAiSaving(false)
     }
@@ -12160,16 +12160,16 @@ function ReportsView({
                 <strong>{analystResult.totalReviews}</strong>
               </div>
               <div className="report-summary-card">
-                <p>Podio</p>
+                <p>Pódio</p>
                 <strong>{selectedRankingPosition || '-'}</strong>
               </div>
             </div>
 
             {weeklyEvolution.length > 0 && (
               <div className="rounded-lg bg-slate-900 p-5">
-                <h3 className="text-lg font-bold">Evolucao visual</h3>
+                <h3 className="text-lg font-bold">Evolução visual</h3>
                 <p className="mt-1 text-sm text-slate-400">
-                  Leitura rapida de melhora, queda ou estabilidade no período.
+                  Leitura rápida de melhora, queda ou estabilidade no período.
                 </p>
                 <div className="mt-4 space-y-3">
                   {weeklyEvolution.map((item, index) => {
@@ -12247,7 +12247,7 @@ function ReportsView({
                   : 'aguardando lançamentos no período.'}
               </p>
               <p>
-                <span className="text-slate-500">Tendencia: </span>
+                <span className="text-slate-500">Tendência: </span>
                 {getTrendText(csatDelta)}.
               </p>
               <p>
@@ -12270,13 +12270,13 @@ function ReportsView({
                   {attentionResults.length ? attentionResults.map((item) => item.analystName).join(', ') : 'sem alertas críticos entre os lançamentos atuais.'}
                 </p>
                 <p>
-                  <span className="text-slate-500">Evolucao: </span>
+                  <span className="text-slate-500">Evolução: </span>
                   {bestGrowth ? `${bestGrowth.analystName} apresenta o melhor movimento comparativo (${formatDelta(bestGrowth.delta, ' p.p.')}).` : 'sem base comparativa suficiente.'}
                 </p>
               </div>
             ) : (
               <p className="mt-4 text-sm text-slate-300">
-                A visao completa de equipe e exclusiva da gestão. Você visualiza sua leitura individual e a performance geral compartilhada.
+                A visão completa da equipe é exclusiva da gestão. Você visualiza sua leitura individual e a performance geral compartilhada.
               </p>
             )}
           </div>
@@ -12289,10 +12289,10 @@ function ReportsView({
                 {formatPercent(teamPerformance)} no período, meta {teamPerformanceGoal}%.
               </p>
               <p>
-                <span className="text-slate-500">Previsao: </span>
+                <span className="text-slate-500">Previsão: </span>
                 {teamPerformance >= teamPerformanceGoal
                   ? 'fechamento tende a permanecer dentro da referência se o volume atual se mantiver.'
-                  : 'ha risco de fechamento abaixo da referência se nao houver recuperação.'}
+                  : 'há risco de fechamento abaixo da referência se não houver recuperação.'}
               </p>
               <p>
                 <span className="text-slate-500">Risco: </span>
@@ -12306,9 +12306,9 @@ function ReportsView({
           <div className="rounded-lg bg-slate-900 p-5">
             <p className="text-sm text-slate-400">Roteiro sugerido para 1:1</p>
             <ol className="mt-4 list-decimal space-y-2 pl-5 text-sm text-slate-300">
-              <li>Comecar pela situação do período e confirmar se os numeros refletem a realidade operacional.</li>
+              <li>Começar pela situação do período e confirmar se os números refletem a realidade operacional.</li>
               <li>Discutir o principal ponto de variação: CSAT, avaliações ou volume de atendimentos.</li>
-              <li>Definir uma ação objetiva para a próxima semana, com comportamento observavel.</li>
+              <li>Definir uma ação objetiva para a próxima semana, com comportamento observável.</li>
               <li>Registrar a expectativa do próximo ciclo e revisar no fechamento seguinte.</li>
             </ol>
           </div>
@@ -15997,15 +15997,15 @@ async function exportWordReport({
             <p>CSAT: ${formatPercent(achieved.csat)} (${goalGapText})</p>
             <p>Avaliações: ${formatPercent(achieved.reviewPercentage)} (${achieved.reviewCount} respondidas, ${reviewGapText})</p>
             <p>Atendimentos: ${achieved.answeredTickets}</p>
-            <p>Media por colaborador: ${achieved.averageTickets}</p>
-            <p>Posição pódio: ${achieved.rankingPosition || '-'}</p>
+            <p>Média por colaborador: ${achieved.averageTickets}</p>
+            <p>Posição no pódio: ${achieved.rankingPosition || '-'}</p>
           </div>
         </div>
 
-        <h2>Sintese do feedback</h2>
+        <h2>Síntese do feedback</h2>
         <div class="callout"><p>${escapeHtml(achieved.summary)}</p></div>
 
-        <h2>Graficos e evolução</h2>
+        <h2>Gráficos e evolução</h2>
         <p class="muted">Leitura visual para identificar rapidamente melhora, queda ou estabilidade.</p>
         <div class="insight-grid">
           <div class="insight">
@@ -16014,7 +16014,7 @@ async function exportWordReport({
             <div class="insight-note">${goalGapText}</div>
           </div>
           <div class="insight">
-            <div class="insight-label">Tendencia</div>
+            <div class="insight-label">Tendência</div>
             <div class="insight-value ${csatTrendClass}">${csatTrendLabel}</div>
             <div class="insight-note">${hasWeeklyComparison ? formatDelta(csatDelta, ' p.p.') : 'precisa de mais semanas'}</div>
           </div>
@@ -16750,7 +16750,7 @@ function buildChatMonthlyTrend(metrics: ChatMonthlyMetric[]) {
 function getPeriodModeLabel(mode: PeriodMode) {
   const labels: Record<PeriodMode, string> = {
     week: 'Semana',
-    month: 'Mes',
+    month: 'Mês',
     year: 'Ano',
     custom: 'Personalizado',
   }
@@ -16759,7 +16759,7 @@ function getPeriodModeLabel(mode: PeriodMode) {
 }
 
 function formatPeriodLabel(period: PeriodFilter) {
-  if (!period.start || !period.end) return 'todo o historico'
+  if (!period.start || !period.end) return 'todo o histórico'
   return `${formatDate(period.start)} a ${formatDate(period.end)}`
 }
 
