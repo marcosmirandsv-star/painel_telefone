@@ -10293,8 +10293,9 @@ function DashboardView({
         ]}
       />}
 
-      {!isAnalystDashboard && managementSection === 'area' && <section className="panel">
-        <h2 className="section-title">Projeção do fechamento</h2>
+      {!isAnalystDashboard && managementSection === 'area' && <section className="workspace-content-section workspace-content-section-divided">
+        <p className="workspace-eyebrow">Projeção</p>
+        <h2 className="section-title mt-2">Projeção do fechamento</h2>
         <p className="section-subtitle">
           Mostra para onde os indicadores apontam se a tendência atual continuar. A projeção não altera os resultados já apurados.
         </p>
@@ -10349,7 +10350,7 @@ function DashboardView({
         </div>
       </section>}
 
-      {!isAnalystDashboard && managementSection === 'area' && <section className="panel">
+      {!isAnalystDashboard && managementSection === 'area' && <section className="workspace-content-section workspace-content-section-divided">
         <div className="flex flex-col gap-6 xl:flex-row xl:items-stretch">
           <div className="xl:w-2/5">
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
@@ -10492,8 +10493,9 @@ function DashboardView({
       </section>}
 
       {!isAnalystDashboard && managementSection === 'people' && (
-        <section className="panel">
-          <h2 className="section-title">Análise visual do período</h2>
+        <section className="workspace-content-section workspace-content-section-divided">
+          <p className="workspace-eyebrow">Pessoas</p>
+          <h2 className="section-title mt-2">Análise visual do período</h2>
           <p className="section-subtitle">
             Compare elegibilidade, qualidade e volume para localizar rapidamente onde a equipe ganha ou perde força.
           </p>
@@ -10549,7 +10551,7 @@ function DashboardView({
 
       {isAnalystDashboard && (
         <>
-          <section className="panel">
+          <section className="workspace-content-section workspace-content-section-divided">
             <p className="workspace-eyebrow">Minha evolução</p>
             <h2 className="section-title mt-2">Minha evolução recente</h2>
             <p className="section-subtitle">Somente indicadores individuais dentro de ${periodLabel}.</p>
@@ -10587,7 +10589,7 @@ function DashboardView({
             </div>
           </section>
 
-          <section className="panel context-zone">
+          <section className="workspace-content-section workspace-content-section-divided workspace-metric-section-context">
             <p className="workspace-eyebrow">Nosso resultado</p>
             <h2 className="section-title mt-2">Evolução da equipe</h2>
             <p className="section-subtitle">Contexto coletivo mantido na visão do analista para acompanhar o equilíbrio da operação.</p>
@@ -10608,7 +10610,7 @@ function DashboardView({
       )}
 
       {!isAnalystDashboard && managementSection === 'area' && (
-        <section className="panel">
+        <section className="workspace-content-section workspace-content-section-divided">
           <p className="workspace-eyebrow">Operação</p>
           <h2 className="section-title mt-2">Variações recentes</h2>
           <p className="section-subtitle">Evolução calculada dentro de ${periodLabel}.</p>
@@ -10657,7 +10659,7 @@ function DashboardView({
         </section>
       )}
 
-      {(isAnalystDashboard || managementSection === 'people') && <section className="panel">
+      {(isAnalystDashboard || managementSection === 'people') && <section className="workspace-content-section workspace-content-section-divided">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h2 className="section-title">
