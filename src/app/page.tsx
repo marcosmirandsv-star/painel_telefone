@@ -13655,13 +13655,68 @@ function UsersView({
 }) {
   const activeAnalysts = analysts.filter((analyst) => analyst.active)
   const activeChatAnalysts = chatAnalysts.filter((analyst) => analyst.active)
+  const [userSection, setUserSection] = useState<'list' | 'create'>('list')
+  const analystUsers = profiles.filter((profile) => profile.role === 'analista').length
+  const managementUsers = profiles.filter((profile) => profile.role && profile.role !== 'analista').length
+  const linkedBoth = profiles.filter((profile) => profile.analyst_id && profile.chat_analyst_id).length
 
   return (
-    <div className="mt-8 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-      <section className="panel">
+    <div className="mt-8 space-y-6">
+      <nav className="workspace-filter-panel workspace-switcher" aria-label="Áreas de usuários">
+        <div>
+          <p className="workspace-eyebrow">Usuários · Sistema</p>
+          <h2 className="section-title mt-2">{userSection === 'list' ? 'Acessos cadastrados' : 'Criar acesso'}</h2>
+          <p className="section-subtitle">
+            {userSection === 'list'
+              ? 'Consulte perfis e vínculos individuais com Telefone e Chat.'
+              : 'Crie um login e defina o nível de acesso ao sistema.'}
+          </p>
+        </div>
+        <div className="workspace-switcher-row" role="group" aria-label="Navegar em usuários">
+          <button
+            className={userSection === 'list' ? 'workspace-switcher-button workspace-switcher-button-active' : 'workspace-switcher-button'}
+            type="button"
+            aria-pressed={userSection === 'list'}
+            onClick={() => setUserSection('list')}
+          >
+            Acessos
+          </button>
+          <button
+            className={userSection === 'create' ? 'workspace-switcher-button workspace-switcher-button-active' : 'workspace-switcher-button'}
+            type="button"
+            aria-pressed={userSection === 'create'}
+            onClick={() => setUserSection('create')}
+          >
+            Novo acesso
+          </button>
+        </div>
+      </nav>
+
+      {userSection === 'list' && (
+        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/10 bg-white/10 md:grid-cols-4">
+          <div className="bg-slate-950/80 p-4 text-center">
+            <span className="text-xs text-slate-500">Usuários</span>
+            <strong className="mt-1 block text-xl tabular-nums">{profiles.length}</strong>
+          </div>
+          <div className="bg-slate-950/80 p-4 text-center">
+            <span className="text-xs text-slate-500">Analistas</span>
+            <strong className="mt-1 block text-xl tabular-nums text-cyan-200">{analystUsers}</strong>
+          </div>
+          <div className="bg-slate-950/80 p-4 text-center">
+            <span className="text-xs text-slate-500">Gestão</span>
+            <strong className="mt-1 block text-xl tabular-nums text-emerald-300">{managementUsers}</strong>
+          </div>
+          <div className="bg-slate-950/80 p-4 text-center">
+            <span className="text-xs text-slate-500">Telefone + Chat</span>
+            <strong className="mt-1 block text-xl tabular-nums">{linkedBoth}</strong>
+          </div>
+        </div>
+      )}
+
+      <section className={userSection === 'create' ? 'panel' : 'hidden'}>
         <h2 className="section-title">Criar acesso ao sistema</h2>
         <p className="section-subtitle">
-          Crie o login, defina o perfil e vincule o usuario ao analista quando for acesso individual.
+          Crie o login, defina o perfil e vincule o usuário ao analista quando for acesso individual.
         </p>
 
         <form className="mt-5 grid gap-4" onSubmit={onSubmit}>
@@ -13684,7 +13739,7 @@ function UsersView({
             />
           </Field>
 
-          <Field label="Senha temporaria">
+          <Field label="Senha temporária">
             <input
               className="form-input"
               minLength={6}
@@ -13710,7 +13765,7 @@ function UsersView({
               }
             >
               <option value="analista">Analista</option>
-              <option value="coordenadora">Coordenadora / Supervisao</option>
+              <option value="coordenadora">Coordenadora / Supervisão</option>
               <option value="master">Master</option>
             </select>
           </Field>
@@ -13756,15 +13811,15 @@ function UsersView({
           )}
 
           <button className="primary-button" disabled={saving} type="submit">
-            {saving ? 'Criando...' : 'Criar usuario'}
+            {saving ? 'Criando...' : 'Criar usuário'}
           </button>
         </form>
       </section>
 
-      <section className="panel">
-        <h2 className="section-title">Usuarios vinculados</h2>
+      <section className={userSection === 'list' ? 'panel' : 'hidden'}>
+        <h2 className="section-title">Usuários vinculados</h2>
         <p className="section-subtitle">
-          Estes registros controlam o que cada pessoa pode visualizar apos entrar no sistema.
+          Estes registros controlam o que cada pessoa pode visualizar após entrar no sistema.
         </p>
 
         <div className="mt-5 overflow-x-auto">
@@ -13775,7 +13830,7 @@ function UsersView({
                 <th className="pb-3 pr-4 font-medium">Perfil</th>
                 <th className="pb-3 pr-4 font-medium">Telefone</th>
                 <th className="pb-3 pr-4 font-medium">Chat</th>
-                <th className="pb-3 font-medium">Acoes</th>
+                <th className="pb-3 font-medium">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
@@ -13827,7 +13882,7 @@ function UsersView({
             </tbody>
           </table>
 
-          {!profiles.length && <EmptyState text="Nenhum usuario vinculado encontrado." />}
+          {!profiles.length && <EmptyState text="Nenhum usuário vinculado encontrado." />}
         </div>
       </section>
     </div>
