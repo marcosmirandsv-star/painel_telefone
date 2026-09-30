@@ -7233,11 +7233,16 @@ function ChatModuleDashboard({
   const operation360PreliminarySynthesis = clickDeskOperation360?.preliminary_synthesis
   const operation360Validated = clickDeskOperation360?.validated_patterns
   const operation360ValidatedSynthesis = clickDeskOperation360?.validated_synthesis
+  const operation360HasValidated = (operation360Validated?.total ?? 0) > 0
+  const operation360Display = operation360HasValidated ? operation360Validated : operation360Preliminary
+  const operation360DisplaySynthesis = operation360HasValidated
+    ? operation360ValidatedSynthesis
+    : operation360PreliminarySynthesis
   const operation360NegativeQueue = clickDeskOperation360?.queues?.negative_unanalyzed ?? []
   const operation360PositiveQueue = clickDeskOperation360?.queues?.positive_unanalyzed ?? []
-  const operation360NegativePatterns = operation360Preliminary?.negative.causes ?? []
-  const operation360PositivePatterns = operation360Preliminary?.positive.causes ?? []
-  const operation360ControlPatterns = operation360Preliminary?.negative.controllability ?? []
+  const operation360NegativePatterns = operation360Display?.negative.causes ?? []
+  const operation360PositivePatterns = operation360Display?.positive.causes ?? []
+  const operation360ControlPatterns = operation360Display?.negative.controllability ?? []
   return (
     <div className="mt-8 space-y-7">
       <section className="panel workspace-hero">
@@ -8330,7 +8335,7 @@ function ChatModuleDashboard({
                   <p className="workspace-eyebrow text-violet-200">Cobertura da IA</p>
                   <h3 className="mt-2 text-xl font-bold">Quanto da história já foi lido?</h3>
                   <p className="mt-2 text-sm leading-6 text-slate-400">
-                    O CSAT é calculado sobre as avaliações. A IA analisa os tickets avaliados e procura padrões; o consolidado oficial continua usando somente leituras aprovadas pela gestão.
+                    O CSAT é calculado sobre as avaliações. A IA analisa os tickets avaliados, reaproveita leituras já disponíveis e procura padrões para explicar o resultado da operação.
                   </p>
                 </div>
                 <div className="grid min-w-[280px] grid-cols-2 gap-3">
@@ -8409,12 +8414,12 @@ function ChatModuleDashboard({
                   <h3 className="mt-2 text-xl font-bold">O que a leitura disponível já consegue nos ensinar?</h3>
                 </div>
                 <span className="rounded-md border border-cyan-300/20 bg-slate-950/30 px-3 py-2 text-xs font-semibold text-cyan-100">
-                  {operation360PreliminarySynthesis?.coverage_label ?? 'Sem cobertura'}
+                  {operation360DisplaySynthesis?.coverage_label ?? 'Sem cobertura'}
                 </span>
               </div>
 
               <p className="mt-4 text-base font-semibold leading-7 text-slate-100">
-                {operation360PreliminarySynthesis?.headline ??
+                {operation360DisplaySynthesis?.headline ??
                   'Ainda não há leitura qualitativa suficiente para construir uma síntese.'}
               </p>
 
@@ -8422,14 +8427,14 @@ function ChatModuleDashboard({
                 <div className="rounded-lg border border-amber-300/15 bg-slate-950/35 p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-200">Nas negativas</p>
                   <p className="mt-2 text-sm leading-6 text-slate-300">
-                    {operation360PreliminarySynthesis?.negative_read ??
+                    {operation360DisplaySynthesis?.negative_read ??
                       'Ainda não há padrão negativo consolidável.'}
                   </p>
                 </div>
                 <div className="rounded-lg border border-emerald-300/15 bg-slate-950/35 p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-200">Nas positivas</p>
                   <p className="mt-2 text-sm leading-6 text-slate-300">
-                    {operation360PreliminarySynthesis?.positive_read ??
+                    {operation360DisplaySynthesis?.positive_read ??
                       'Ainda não há prática positiva recorrente consolidável.'}
                   </p>
                 </div>
@@ -8438,7 +8443,7 @@ function ChatModuleDashboard({
               <div className="mt-5 border-t border-white/10 pt-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-200">Próximo foco da gestão</p>
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-100">
-                  {operation360PreliminarySynthesis?.recommended_focus ??
+                  {operation360DisplaySynthesis?.recommended_focus ??
                     'Complete a cobertura e valide as leituras antes de definir uma ação.'}
                 </p>
               </div>
@@ -8448,22 +8453,17 @@ function ChatModuleDashboard({
               <summary className="cursor-pointer list-none">
                 <span className="text-sm font-semibold text-slate-200">Ver detalhes, padrões e evidências</span>
                 <span className="ml-2 text-xs text-slate-500">
-                  causas, controlabilidade, validações e tickets
+                  causas, controlabilidade e tickets
                 </span>
               </summary>
               <div className="mt-5 space-y-6">
             <div className="rounded-xl border border-amber-300/15 bg-slate-950/30 p-5">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div>
-                  <p className="workspace-eyebrow text-amber-200">Leitura preliminar da IA</p>
-                  <h3 className="mt-2 text-xl font-bold">O que se repete nas avaliações?</h3>
-                  <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-400">
-                    Esta camada inclui análises já concluídas que ainda podem estar aguardando validação. Ela serve para investigação. O consolidado oficial permanece restrito às leituras aprovadas.
-                  </p>
-                </div>
-                <span className="rounded-md border border-amber-300/20 bg-amber-300/5 px-3 py-2 text-xs font-semibold text-amber-100">
-                  {formatChatCount(clickDeskOperation360?.analysis_status?.pending ?? 0)} aguardando validação
-                </span>
+              <div>
+                <p className="workspace-eyebrow text-amber-200">Padrões observados</p>
+                <h3 className="mt-2 text-xl font-bold">O que se repete nas avaliações?</h3>
+                <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-400">
+                  Abra os padrões somente quando precisar investigar as causas e os tickets que sustentam a leitura.
+                </p>
               </div>
 
               <div className="mt-5 grid gap-5 xl:grid-cols-2">
@@ -8488,60 +8488,15 @@ function ChatModuleDashboard({
               </div>
             </div>
 
-            <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-              <Operation360PatternList
-                title="De quem é o fator observado?"
-                subtitle="Separa o que estava sob controle do atendimento do que pertence a processo, empresa, cliente, fator externo ou combinação."
-                patterns={operation360ControlPatterns}
-                tone="neutral"
-                onOpenTicket={handleOpenOperation360Evidence}
-                selectedTicketId={clickDeskOperation360EvidenceTicketId}
-                ticketLoading={clickDeskOperation360EvidenceLoading}
-              />
-
-              <div className="rounded-xl border border-white/10 bg-slate-950/30 p-5">
-                <p className="workspace-eyebrow">Governança</p>
-                <h3 className="mt-2 text-xl font-bold">Do indício ao fato validado</h3>
-                <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-                  <div className="rounded-lg bg-slate-900 p-3">
-                    <span className="text-xs text-slate-500">Pendentes</span>
-                    <strong className="mt-1 block text-xl tabular-nums text-amber-100">
-                      {formatChatCount(clickDeskOperation360?.analysis_status?.pending ?? 0)}
-                    </strong>
-                  </div>
-                  <div className="rounded-lg bg-slate-900 p-3">
-                    <span className="text-xs text-slate-500">Aprovadas</span>
-                    <strong className="mt-1 block text-xl tabular-nums text-emerald-200">
-                      {formatChatCount(clickDeskOperation360?.analysis_status?.approved ?? 0)}
-                    </strong>
-                  </div>
-                  <div className="rounded-lg bg-slate-900 p-3">
-                    <span className="text-xs text-slate-500">Descartadas</span>
-                    <strong className="mt-1 block text-xl tabular-nums text-slate-300">
-                      {formatChatCount(clickDeskOperation360?.analysis_status?.rejected ?? 0)}
-                    </strong>
-                  </div>
-                </div>
-                <p className="mt-4 text-sm leading-6 text-slate-400">
-                  {clickDeskOperation360?.interpretation_rule?.causality ??
-                    'Recorrência não prova causalidade. A leitura precisa permanecer proporcional às evidências disponíveis.'}
-                </p>
-                <button
-                  type="button"
-                  className="secondary-button mt-4"
-                  onClick={() => {
-                    onChatActiveTabChange('podium')
-                    window.setTimeout(() => {
-                      document
-                        .getElementById('chat-qualitative-validation')
-                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                    }, 80)
-                  }}
-                >
-                  Revisar e validar evidências
-                </button>
-              </div>
-            </div>
+            <Operation360PatternList
+              title="De quem é o fator observado?"
+              subtitle="Separa o que estava sob controle do atendimento do que pertence a processo, empresa, cliente, fator externo ou combinação."
+              patterns={operation360ControlPatterns}
+              tone="neutral"
+              onOpenTicket={handleOpenOperation360Evidence}
+              selectedTicketId={clickDeskOperation360EvidenceTicketId}
+              ticketLoading={clickDeskOperation360EvidenceLoading}
+            />
 
             {(clickDeskOperation360EvidenceTicketId || clickDeskOperation360Evidence) && (
               <div
@@ -8583,60 +8538,7 @@ function ChatModuleDashboard({
               </div>
             )}
 
-            <div className="rounded-xl border border-emerald-300/15 bg-emerald-300/5 p-5">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div>
-                  <p className="workspace-eyebrow text-emerald-200">Consolidado validado</p>
-                  <h3 className="mt-2 text-xl font-bold">O que já pode sustentar uma decisão de gestão</h3>
-                  <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-400">
-                    Aqui entram somente análises aprovadas. Hoje há {formatChatCount(operation360Validated?.total ?? 0)} leitura(s) validada(s) neste recorte.
-                  </p>
-                  {operation360ValidatedSynthesis && (
-                    <p className="mt-3 max-w-4xl text-sm font-semibold leading-6 text-emerald-100">
-                      {operation360ValidatedSynthesis.headline}
-                    </p>
-                  )}
-                </div>
-                <span className="rounded-md border border-emerald-300/20 bg-emerald-300/5 px-3 py-2 text-xs font-semibold text-emerald-100">
-                  {formatChatPercent(operation360Coverage?.approved_percentage ?? 0)} da base avaliada validada
-                </span>
-              </div>
 
-              {operation360ValidatedSynthesis && (
-                <div className="mt-5 rounded-lg border border-emerald-300/15 bg-slate-950/35 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-200">
-                    Foco sustentado por evidência validada
-                  </p>
-                  <p className="mt-2 text-sm font-semibold leading-6 text-slate-100">
-                    {operation360ValidatedSynthesis.recommended_focus}
-                  </p>
-                  <p className="mt-3 text-xs leading-5 text-slate-500">
-                    {operation360ValidatedSynthesis.caveat}
-                  </p>
-                </div>
-              )}
-
-              <div className="mt-5 grid gap-5 xl:grid-cols-2">
-                <Operation360PatternList
-                  title="Negativas validadas"
-                  subtitle="Padrões confirmados pela gestão nas avaliações negativas."
-                  patterns={operation360Validated?.negative.causes ?? []}
-                  tone="negative"
-                  onOpenTicket={handleOpenOperation360Evidence}
-                  selectedTicketId={clickDeskOperation360EvidenceTicketId}
-                  ticketLoading={clickDeskOperation360EvidenceLoading}
-                />
-                <Operation360PatternList
-                  title="Positivas validadas"
-                  subtitle="Padrões confirmados pela gestão nas avaliações positivas."
-                  patterns={operation360Validated?.positive.causes ?? []}
-                  tone="positive"
-                  onOpenTicket={handleOpenOperation360Evidence}
-                  selectedTicketId={clickDeskOperation360EvidenceTicketId}
-                  ticketLoading={clickDeskOperation360EvidenceLoading}
-                />
-              </div>
-            </div>
               </div>
             </details>
 
