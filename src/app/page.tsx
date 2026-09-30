@@ -7686,7 +7686,7 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <section id="chat-qualitative-validation" className={chatActiveTab === 'podium' ? 'panel' : 'hidden'}>
+      <section id="chat-qualitative-validation" className={chatActiveTab === 'podium' ? 'workspace-content-section' : 'hidden'}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Gestão e ações</p>
@@ -7765,7 +7765,7 @@ function ChatModuleDashboard({
         )}
       </section>
 
-      <details className={chatActiveTab === 'podium' ? 'panel' : 'hidden'}>
+      <details className={chatActiveTab === 'podium' ? 'workspace-collapsible' : 'hidden'}>
         <summary className="cursor-pointer list-none">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -7824,10 +7824,10 @@ function ChatModuleDashboard({
       </details>
 
 
-      <section className={chatActiveTab === 'podium' ? 'panel' : 'hidden'}>
+      <section className={chatActiveTab === 'podium' ? 'workspace-content-section workspace-content-section-divided' : 'hidden'}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-violet-200">IA qualitativa · governança ativa</p>
+            <p className="workspace-eyebrow text-violet-200">IA qualitativa · governança ativa</p>
             <h2 className="mt-2 text-2xl font-bold">Da métrica para a causa</h2>
             <p className="section-subtitle">
               A leitura qualitativa funciona por ticket e consolida somente o que foi aprovado pela gestão. A cobertura continua explícita para evitar generalizações.
@@ -8359,10 +8359,10 @@ function ChatModuleDashboard({
 
       </section>
 
-      <section className={chatActiveTab === 'reports' ? 'panel' : 'hidden'}>
+      <section className={chatActiveTab === 'reports' ? 'workspace-content-section' : 'hidden'}>
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Leitura para fechamento</p>
+            <p className="workspace-eyebrow">Leitura para fechamento</p>
             <p className="mt-1 text-xs text-slate-500">Fonte: {chatReportSourceLabel}</p>
             <h2 className="mt-2 text-2xl font-bold">{chatReportClosureReading}</h2>
           </div>
@@ -8543,9 +8543,10 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <section className={chatActiveTab === 'reports' ? 'panel' : 'hidden'}>
+      <section className={chatActiveTab === 'reports' ? 'workspace-content-section workspace-content-section-divided' : 'hidden'}>
         <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
           <div>
+            <p className="workspace-eyebrow">Reconhecimento</p>
             <h2 className="section-title">Pódio final do chat</h2>
             <p className="section-subtitle">
               O ranking automático define os elegíveis. O ajuste manual pode reorganizar a ordem entre eles, mas não coloca no pódio quem deixou de cumprir os critérios.
@@ -8810,7 +8811,7 @@ function ChatModuleDashboard({
           {!chatRanking.length && <EmptyState text="Nenhum dado para análise neste filtro." />}
         </div>
       </section>
-      <section id="chat-report-individual" className={chatActiveTab === 'reports' ? 'panel' : 'hidden'}>
+      <section id="chat-report-individual" className={chatActiveTab === 'reports' ? 'workspace-content-section workspace-content-section-divided' : 'hidden'}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Relatório individual</p>
@@ -9001,10 +9002,10 @@ function ChatModuleDashboard({
         {chatExportMessage && <p className="mt-4 rounded-md bg-slate-900/70 px-4 py-3 text-sm text-slate-200">{chatExportMessage}</p>}
       </section>
       
-      <section className={chatActiveTab === 'reports' ? 'panel' : 'hidden'}>
+      <section className={chatActiveTab === 'reports' ? 'workspace-content-section workspace-content-section-divided' : 'hidden'}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
+            <p className="workspace-eyebrow">
               Fechamento oficial ClickDesk
             </p>
             <h3 className="mt-2 text-2xl font-bold">Aprovação final da competência</h3>
