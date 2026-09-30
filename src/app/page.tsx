@@ -14964,7 +14964,12 @@ function ClickDeskSyncStatus({
           timeZone: 'America/Sao_Paulo',
         }).format(nextSyncAt)
       : null
-  const remainingMs = nextSyncAt ? Math.max(0, nextSyncAt.getTime() - now) : null
+  const nextSyncTimestamp =
+    nextSyncAt && !Number.isNaN(nextSyncAt.getTime()) ? nextSyncAt.getTime() : null
+  const isOverdue =
+    nextSyncTimestamp !== null && now > nextSyncTimestamp + 120000
+  const remainingMs =
+    nextSyncTimestamp === null ? null : Math.max(0, nextSyncTimestamp - now)
   const remainingSeconds = remainingMs === null ? null : Math.floor(remainingMs / 1000)
   const hours = remainingSeconds === null ? 0 : Math.floor(remainingSeconds / 3600)
   const minutes = remainingSeconds === null ? 0 : Math.floor((remainingSeconds % 3600) / 60)
@@ -14972,16 +14977,18 @@ function ClickDeskSyncStatus({
   const countdown =
     remainingSeconds === null
       ? 'aguardando agenda'
-      : hours > 0
-        ? `${hours}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`
-        : `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+      : isOverdue
+        ? 'atualização atrasada'
+        : hours > 0
+          ? `${hours}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`
+          : `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 
   if (compact) {
     return (
       <p className="text-xs leading-5 text-slate-500">
         Última sincronização: <strong className="font-semibold text-slate-300">{latestSyncAt ? formatDateTime(latestSyncAt) : 'não informada'}</strong>
         {' '}· próxima {nextSyncTime ? `às ${nextSyncTime}` : 'não informada'}
-        {' '}· <span className="tabular-nums text-cyan-200">{countdown}</span>
+        {' '}· <span className={`tabular-nums ${isOverdue ? 'font-semibold text-amber-200' : 'text-cyan-200'}`}>{countdown}</span>
       </p>
     )
   }
@@ -14995,9 +15002,13 @@ function ClickDeskSyncStatus({
           {' '}· ciclo de {schedule?.interval_minutes ?? 60} minutos
         </p>
       </div>
-      <div className="rounded-lg border border-cyan-300/20 bg-cyan-300/5 px-4 py-2 text-right">
-        <span className="block text-xs text-slate-500">{nextSyncTime ? `Próxima às ${nextSyncTime}` : 'Próxima sincronização'}</span>
-        <strong className="mt-1 block text-lg tabular-nums text-cyan-200">{countdown}</strong>
+      <div className={`rounded-lg border px-4 py-2 text-right ${isOverdue ? 'border-amber-300/25 bg-amber-300/5' : 'border-cyan-300/20 bg-cyan-300/5'}`}>
+        <span className="block text-xs text-slate-500">
+          {isOverdue
+            ? nextSyncTime ? `Prevista às ${nextSyncTime}` : 'Sincronização prevista'
+            : nextSyncTime ? `Próxima às ${nextSyncTime}` : 'Próxima sincronização'}
+        </span>
+        <strong className={`mt-1 block text-lg tabular-nums ${isOverdue ? 'text-amber-200' : 'text-cyan-200'}`}>{countdown}</strong>
       </div>
     </div>
   )
