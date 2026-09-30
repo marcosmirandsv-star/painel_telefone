@@ -1996,6 +1996,55 @@ button:disabled {
   border-left: 3px solid rgba(103, 232, 249, 0.65) !important;
 }
 
+.workspace-page-heading {
+  margin-top: 18px;
+  border-bottom: 1px solid var(--ui-border);
+  padding: 4px 2px 16px;
+}
+
+.workspace-page-heading .section-subtitle {
+  max-width: 880px;
+}
+
+.workspace-content-section {
+  padding: 4px 0 2px;
+}
+
+.workspace-content-section-divided {
+  border-top: 1px solid var(--ui-border);
+  padding-top: 28px;
+}
+
+.metric-strip {
+  margin-top: 18px;
+  border-top: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
+  padding: 14px 0;
+}
+
+.metric-strip .metric-card {
+  min-height: 96px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(13, 23, 40, 0.58);
+  box-shadow: none;
+}
+
+.workspace-content-section .metric-card {
+  min-height: 104px;
+  box-shadow: none;
+}
+
+.data-table-shell {
+  border-top: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
+  background: transparent;
+}
+
+.workspace-content-section .executive-card {
+  box-shadow: none;
+}
+
 .app-shell .module-card,
 .app-shell .module-card-active {
   min-height: 118px;
@@ -2035,6 +2084,19 @@ button:disabled {
 }
 
 @media (max-width: 760px) {
+  .workspace-page-heading {
+    margin-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .workspace-content-section-divided {
+    padding-top: 22px;
+  }
+
+  .metric-strip {
+    padding: 12px 0;
+  }
+
   .workspace-navigation {
     position: static;
     overflow-x: auto;
@@ -2125,6 +2187,14 @@ button:disabled {
 
   .app-shell .metric-zone.context-zone {
     background: linear-gradient(180deg, #ecfeff, #ffffff);
+  }
+
+  .metric-strip .metric-card {
+    background: #ffffff;
+  }
+
+  .data-table-shell {
+    background: transparent;
   }
 
   .app-shell .executive-card,
