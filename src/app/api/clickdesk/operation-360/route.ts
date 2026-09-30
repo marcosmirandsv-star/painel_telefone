@@ -5,6 +5,7 @@ import {
   json,
 } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
+import { normalizeQualitativeAnalysis } from '@/lib/clickdesk-qualitative'
 import {
   buildOperation360Analysis,
   calculateOperation360Totals,
@@ -147,6 +148,10 @@ export async function GET(request: Request) {
     const analyses = (await loadAnalyses(access.admin, filters)).filter((row) =>
       attendanceIds.has(row.clickdesk_ticket_id),
     )
+    const normalizedAnalyses = analyses.map((row) => ({
+      ...row,
+      analysis: normalizeQualitativeAnalysis(row.analysis),
+    }))
 
     const totals = calculateOperation360Totals(attendances)
     const analyzedIds = new Set(
@@ -206,8 +211,8 @@ export async function GET(request: Request) {
           approved_percentage: operation360Percentage(approvedPositive, totals.positive),
         },
       },
-      preliminary_patterns: buildOperation360Analysis(analyses, 'analyzed'),
-      validated_patterns: buildOperation360Analysis(analyses, 'approved'),
+      preliminary_patterns: buildOperation360Analysis(normalizedAnalyses, 'analyzed'),
+      validated_patterns: buildOperation360Analysis(normalizedAnalyses, 'approved'),
       analysis_status: {
         pending: analyses.filter((row) => row.validation_status === 'pending').length,
         approved: analyses.filter((row) => row.validation_status === 'approved').length,
