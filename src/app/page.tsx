@@ -10711,16 +10711,37 @@ function DashboardView({
           <div className="metric-zone-heading">
             <div>
               <p className="workspace-eyebrow">Pessoas</p>
-              <h2 className="section-title mt-2">Saúde do time no período</h2>
-              <p className="section-subtitle">Aqui entram pessoas, comparação individual, elegibilidade e contexto de produtividade.</p>
+              <h2 className="section-title mt-2">Visão da equipe no período</h2>
+              <p className="section-subtitle">Resumo de pessoas, elegibilidade, volume e avaliações.</p>
             </div>
           </div>
-          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <MetricCard label="Analistas ativos" value={loading ? '...' : analystsCount} />
-            <MetricCard label="Elegíveis" value={eligibleCount} tone={eligibleCount > 0 ? 'success' : 'warning'} />
-            <MetricCard label="Em atenção" value={attentionCount} tone={attentionCount > 0 ? 'warning' : 'success'} />
-            <MetricCard label="Média de atendimentos" value={formatChatCount(podiumAverageTickets || 0)} />
-            <MetricCard label="Cobertura de avaliações" value={formatPercent(reviewCoverage)} tone={reviewCoverage >= reviewGoal ? 'success' : reviewCoverage >= 20 ? 'warning' : 'danger'} />
+          <div className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/10 bg-white/10 md:grid-cols-3 xl:grid-cols-5">
+            <div className="flex min-h-20 flex-col items-center justify-center bg-slate-950/80 px-3 py-3 text-center">
+              <span className="flex min-h-8 items-center justify-center text-xs leading-4 text-slate-500">Analistas ativos</span>
+              <strong className="mt-1 text-lg tabular-nums">{loading ? '...' : analystsCount}</strong>
+            </div>
+            <div className="flex min-h-20 flex-col items-center justify-center bg-slate-950/80 px-3 py-3 text-center">
+              <span className="flex min-h-8 items-center justify-center text-xs leading-4 text-slate-500">Elegíveis</span>
+              <strong className={`mt-1 text-lg tabular-nums ${eligibleCount > 0 ? 'text-emerald-300' : 'text-amber-200'}`}>{eligibleCount}</strong>
+            </div>
+            <div className="flex min-h-20 flex-col items-center justify-center bg-slate-950/80 px-3 py-3 text-center">
+              <span className="flex min-h-8 items-center justify-center text-xs leading-4 text-slate-500">Em atenção</span>
+              <strong className={`mt-1 text-lg tabular-nums ${attentionCount > 0 ? 'text-amber-200' : 'text-emerald-300'}`}>{attentionCount}</strong>
+            </div>
+            <div className="flex min-h-20 flex-col items-center justify-center bg-slate-950/80 px-3 py-3 text-center">
+              <span className="flex min-h-8 items-center justify-center text-xs leading-4 text-slate-500">Média de atendimentos</span>
+              <strong className="mt-1 text-lg tabular-nums text-cyan-200">{formatChatCount(podiumAverageTickets || 0)}</strong>
+            </div>
+            <div className="flex min-h-20 flex-col items-center justify-center bg-slate-950/80 px-3 py-3 text-center">
+              <span className="flex min-h-8 items-center justify-center text-xs leading-4 text-slate-500">Cobertura de avaliações</span>
+              <strong className={`mt-1 text-lg tabular-nums ${
+                reviewCoverage >= reviewGoal
+                  ? 'text-emerald-300'
+                  : reviewCoverage >= 20
+                    ? 'text-amber-200'
+                    : 'text-rose-200'
+              }`}>{formatPercent(reviewCoverage)}</strong>
+            </div>
           </div>
         </section>
       )}
@@ -11188,7 +11209,7 @@ function DashboardView({
 
             <div className="rounded-lg bg-slate-900 p-5">
               <p className="text-sm text-slate-400">Posição no período</p>
-              <p className="mt-2 text-3xl font-bold">{analystDataLoading ? '...' : analystRankingPosition ? `${analystRankingPosition}o` : '-'}</p>
+              <p className="mt-2 text-3xl font-bold">{analystDataLoading ? '...' : analystRankingPosition ? `${analystRankingPosition}º` : '-'}</p>
               <p className={`mt-2 text-sm font-semibold ${analystDataLoading ? 'text-cyan-300' : analystResult?.eligible && analystRankingPosition <= 3 ? 'text-emerald-300' : analystResult?.eligible ? 'text-cyan-300' : 'text-amber-200'}`}>
                 {analystDataLoading ? 'Calculando com os dados do período' : analystPodiumPositionStatus}
               </p>
