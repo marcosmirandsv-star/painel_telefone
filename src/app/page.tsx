@@ -8280,14 +8280,18 @@ function ChatModuleDashboard({
           </div>
         ) : (
           <div className="space-y-6">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
               <MetricCard
                 label="Atendimentos"
                 value={formatChatCount(operation360Totals?.attendances ?? 0)}
               />
               <MetricCard
                 label="Avaliações"
-                value={formatChatCount(operation360Totals?.evaluated ?? 0)}
+                value={
+                  operation360Totals?.review_percentage === null || operation360Totals?.review_percentage === undefined
+                    ? formatChatCount(operation360Totals?.evaluated ?? 0)
+                    : `${formatChatCount(operation360Totals?.evaluated ?? 0)} · ${formatChatPercent(operation360Totals.review_percentage)}`
+                }
               />
               <MetricCard
                 label="CSAT"
@@ -8297,14 +8301,6 @@ function ChatModuleDashboard({
                     : formatChatPercent(operation360Totals.csat)
                 }
                 tone={(operation360Totals?.csat ?? 0) >= 90 ? 'success' : (operation360Totals?.csat ?? 0) >= 85 ? 'warning' : 'danger'}
-              />
-              <MetricCard
-                label="% avaliados"
-                value={
-                  operation360Totals?.review_percentage === null || operation360Totals?.review_percentage === undefined
-                    ? '—'
-                    : formatChatPercent(operation360Totals.review_percentage)
-                }
               />
               <MetricCard
                 label="Positivas"
@@ -8318,6 +8314,14 @@ function ChatModuleDashboard({
               />
             </div>
 
+            <details className="rounded-xl border border-white/10 bg-slate-950/25 p-4">
+              <summary className="cursor-pointer list-none text-sm font-semibold text-slate-200">
+                Cobertura e processamento da IA
+                <span className="ml-2 text-xs font-normal text-slate-500">
+                  ${formatChatCount(operation360Coverage?.negative.analyzed ?? 0)}/${formatChatCount(operation360Coverage?.negative.total ?? 0)} negativas analisadas
+                </span>
+              </summary>
+              <div className="mt-4">
             <div className="rounded-xl border border-violet-300/15 bg-violet-300/5 p-5">
               <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                 <div className="max-w-3xl">
@@ -8393,6 +8397,8 @@ function ChatModuleDashboard({
                 <p className="mt-4 text-sm leading-6 text-violet-100">{clickDeskOperation360Message}</p>
               )}
             </div>
+              </div>
+            </details>
 
             <div className="rounded-xl border border-cyan-300/15 bg-cyan-300/5 p-5">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -8410,23 +8416,16 @@ function ChatModuleDashboard({
                   'Ainda não há leitura qualitativa suficiente para construir uma síntese.'}
               </p>
 
-              <div className="mt-5 grid gap-4 lg:grid-cols-3">
+              <div className="mt-5 space-y-3">
                 <div className="rounded-lg border border-amber-300/15 bg-slate-950/35 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-200">Negativas</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-200">Nas negativas</p>
                   <p className="mt-2 text-sm leading-6 text-slate-300">
                     {operation360PreliminarySynthesis?.negative_read ??
                       'Ainda não há padrão negativo consolidável.'}
                   </p>
                 </div>
-                <div className="rounded-lg border border-violet-300/15 bg-slate-950/35 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">Controle</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-300">
-                    {operation360PreliminarySynthesis?.control_read ??
-                      'Ainda não há evidência suficiente para separar controlabilidade.'}
-                  </p>
-                </div>
                 <div className="rounded-lg border border-emerald-300/15 bg-slate-950/35 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-200">Positivas</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-200">Nas positivas</p>
                   <p className="mt-2 text-sm leading-6 text-slate-300">
                     {operation360PreliminarySynthesis?.positive_read ??
                       'Ainda não há prática positiva recorrente consolidável.'}
@@ -8434,19 +8433,23 @@ function ChatModuleDashboard({
                 </div>
               </div>
 
-              <div className="mt-5 rounded-lg border border-cyan-300/15 bg-slate-950/35 p-4">
+              <div className="mt-5 border-t border-white/10 pt-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-200">Próximo foco da gestão</p>
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-100">
                   {operation360PreliminarySynthesis?.recommended_focus ??
                     'Complete a cobertura e valide as leituras antes de definir uma ação.'}
                 </p>
-                <p className="mt-3 text-xs leading-5 text-slate-500">
-                  {operation360PreliminarySynthesis?.caveat ??
-                    'Recorrência não prova causalidade.'}
-                </p>
               </div>
             </div>
 
+            <details className="rounded-xl border border-white/10 bg-slate-950/25 p-4">
+              <summary className="cursor-pointer list-none">
+                <span className="text-sm font-semibold text-slate-200">Ver detalhes, padrões e evidências</span>
+                <span className="ml-2 text-xs text-slate-500">
+                  causas, controlabilidade, validações e tickets
+                </span>
+              </summary>
+              <div className="mt-5 space-y-6">
             <div className="rounded-xl border border-amber-300/15 bg-slate-950/30 p-5">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
@@ -8632,6 +8635,9 @@ function ChatModuleDashboard({
                 />
               </div>
             </div>
+              </div>
+            </details>
+
           </div>
         )}
       </section>
