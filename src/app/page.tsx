@@ -10461,11 +10461,11 @@ function DashboardView({
       <section className="workspace-filter-panel">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="section-title">Periodo de análise</h2>
+            <h2 className="section-title">Período de análise</h2>
             <p className="section-subtitle">
               {isAnalystDashboard
-                ? 'Sua performance, graficos e elegibilidade seguem este filtro.'
-                : 'Os cards, graficos, pódio e insights abaixo seguem este filtro.'}
+                ? 'Sua performance, gráficos e elegibilidade seguem este filtro.'
+                : 'Os indicadores, gráficos, pódio e análises abaixo seguem este filtro.'}
             </p>
           </div>
 
@@ -12067,11 +12067,11 @@ function ReportsView({
             <p className="workspace-eyebrow">Apoio à liderança</p>
             <h2 className="section-title mt-2">Camadas de IA e plano de ação</h2>
             <p className="section-subtitle">
-              Leitura automatica para apoiar feedback, acompanhamento e decisao da lideranca.
+              Leitura automática para apoiar feedback, acompanhamento e decisão da liderança.
             </p>
           </div>
           <div className="rounded-lg bg-slate-900 px-4 py-3 text-sm text-slate-300">
-            Periodo analisado: <strong>{periodLabel}</strong>
+            Período analisado: <strong>{periodLabel}</strong>
           </div>
         </div>
 
@@ -12350,7 +12350,7 @@ function EntriesView({
 
         <div className="mt-5 grid gap-4 lg:grid-cols-4">
           <div className="rounded-lg bg-slate-900 p-4">
-            <p className="text-sm text-slate-400">Periodo conferido</p>
+            <p className="text-sm text-slate-400">Período conferido</p>
             <p className="mt-2 font-semibold">
               {checklistStart && checklistEnd ? `${formatDate(checklistStart)} a ${formatDate(checklistEnd)}` : 'Nenhum período lançado'}
             </p>
@@ -12361,7 +12361,7 @@ function EntriesView({
             )}
           </div>
           <div className="rounded-lg bg-slate-900 p-4">
-            <p className="text-sm text-slate-400">Analistas lancados</p>
+            <p className="text-sm text-slate-400">Analistas lançados</p>
             <p className="mt-2 text-2xl font-bold">{checklistIndividualMetrics.length}/{analysts.length}</p>
           </div>
           <div className="rounded-lg bg-slate-900 p-4">
@@ -14016,7 +14016,7 @@ function TrendLineChart({
           })}
         </svg>
       ) : (
-        <EmptyState text="Sem dados suficientes para o grafico." />
+        <EmptyState text="Sem dados suficientes para o gráfico." />
       )}
     </div>
   )
@@ -14061,7 +14061,7 @@ function BarTrend({
             <strong className="text-right tabular-nums">{formatChatCount(point.value)}</strong>
           </div>
         ))}
-        {!points.length && <EmptyState text="Sem dados suficientes para o grafico." />}
+        {!points.length && <EmptyState text="Sem dados suficientes para o gráfico." />}
       </div>
     </div>
   )
@@ -14101,7 +14101,7 @@ function GroupedPercentTrendChart({
             </div>
           </div>
         ))}
-        {!points.length && <EmptyState text="Sem dados suficientes para o grafico." />}
+        {!points.length && <EmptyState text="Sem dados suficientes para o gráfico." />}
       </div>
     </div>
   )
@@ -14142,7 +14142,7 @@ function ComparisonBars({
             </div>
           </div>
         ))}
-        {!rows.length && <EmptyState text="Sem dados suficientes para o grafico." />}
+        {!rows.length && <EmptyState text="Sem dados suficientes para o gráfico." />}
       </div>
     </div>
   )
