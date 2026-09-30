@@ -6632,7 +6632,7 @@ function ChatModuleDashboard({
       </nav>
 
       {chatActiveTab === 'overview' && (
-        <section className="panel workspace-section-intro">
+        <section className="workspace-page-heading">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <p className="workspace-eyebrow">Visão da operação</p>
@@ -6656,7 +6656,7 @@ function ChatModuleDashboard({
       )}
 
       {chatActiveTab === 'prototype' && (
-        <section className="panel workspace-section-intro">
+        <section className="workspace-page-heading">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <p className="workspace-eyebrow">Equipe e produtividade</p>
@@ -6680,7 +6680,7 @@ function ChatModuleDashboard({
       )}
 
       {chatActiveTab === 'analysis' && (
-        <section className="panel workspace-section-intro">
+        <section className="workspace-page-heading">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <p className="workspace-eyebrow">Ferramentas · conferência da base</p>
@@ -6710,7 +6710,7 @@ function ChatModuleDashboard({
       )}
 
       {chatActiveTab === 'podium' && (
-        <section className="panel workspace-section-intro">
+        <section className="workspace-page-heading">
           <p className="workspace-eyebrow">Gestão e ações</p>
           <h2 className="mt-2 text-2xl font-bold">Onde agir e o que acompanhar?</h2>
           <p className="section-subtitle">Diagnóstico gerencial, prioridades, pontos de atenção e ações para o próximo ciclo, com leitura qualitativa apoiada por IA e validação humana.</p>
@@ -6718,7 +6718,7 @@ function ChatModuleDashboard({
       )}
 
       {chatActiveTab === 'reports' && (
-        <section className="panel workspace-section-intro">
+        <section className="workspace-page-heading">
           <p className="workspace-eyebrow">Fechamento mensal</p>
           <h2 className="mt-2 text-2xl font-bold">Consolidar, reconhecer e comunicar</h2>
           <p className="section-subtitle">Ranking final, ajustes operacionais do pódio e geração dos relatórios individuais.</p>
@@ -6726,12 +6726,12 @@ function ChatModuleDashboard({
       )}
 
       {chatActiveTab === 'prototype' && (
-        <div className="space-y-6">
-          <section className="panel">
+        <div className="space-y-7">
+          <section className="workspace-content-section">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Equipe e produtividade</p>
-                <h3 className="mt-2 text-2xl font-bold">Visão do time</h3>
+                <p className="workspace-eyebrow">Visão do time</p>
+                <h3 className="mt-2 text-2xl font-bold">Desempenho coletivo</h3>
                 <p className="section-subtitle">
                   Leia primeiro o cenário coletivo. Depois, clique em um analista para abrir o detalhamento individual logo abaixo.
                 </p>
@@ -6759,7 +6759,7 @@ function ChatModuleDashboard({
             </div>
 
             {chat2ProductivityRows.length > 0 ? (
-              <div className="mt-5 overflow-x-auto rounded-xl border border-white/10 bg-slate-950/30">
+              <div className="data-table-shell mt-5 overflow-x-auto">
                 <div className="grid min-w-[680px] grid-cols-[minmax(220px,1.6fr)_repeat(3,minmax(110px,0.7fr))] gap-3 border-b border-white/10 px-4 py-3 text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">
                   <span>Analista</span>
                   <span className="text-right">Atendimentos</span>
@@ -6804,10 +6804,10 @@ function ChatModuleDashboard({
             )}
           </section>
 
-          <section className="panel">
+          <section className="workspace-content-section workspace-content-section-divided">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Equipe e produtividade · visão individual</p>
+                <p className="workspace-eyebrow">Visão individual</p>
                 <h3 className="mt-2 text-2xl font-bold">Resultado do analista</h3>
                 <p className="section-subtitle">
                   Selecione uma pessoa para acompanhar o resultado individual na mesma lógica da experiência do analista. Atendimentos de gestão permanecem na operação, mas ficam fora da comparação individual e das metas.
@@ -7532,7 +7532,7 @@ function ChatModuleDashboard({
           </div>
         </div>
       </section>
-      <div className={chatActiveTab === 'overview' ? 'metric-zone grid gap-4 sm:grid-cols-2 xl:grid-cols-6' : 'hidden'}>
+      <div className={chatActiveTab === 'overview' ? 'metric-strip grid gap-3 sm:grid-cols-2 xl:grid-cols-6' : 'hidden'}>
         <MetricCard label="Atendimentos na competência" value={formatChatCount(chat2ProductivityTickets)} />
         <MetricCard label="Atendimentos hoje" value={formatChatCount(chat2OperationTodayTickets)} />
         <MetricCard
@@ -7559,7 +7559,7 @@ function ChatModuleDashboard({
         ]}
       />
 
-      <section className={chatActiveTab === 'overview' ? 'panel' : 'hidden'}>
+      <section className={chatActiveTab === 'overview' ? 'workspace-content-section' : 'hidden'}>
         <div className="grid gap-5 xl:grid-cols-[1.05fr_1.95fr]">
           <div className="rounded-xl border border-white/10 bg-slate-950/35 p-5">
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Leitura da operação</p>
