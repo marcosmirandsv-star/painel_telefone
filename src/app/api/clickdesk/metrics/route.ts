@@ -4,6 +4,34 @@ import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 export const runtime = 'nodejs'
 
 const BUSINESS_TIME_ZONE = 'America/Sao_Paulo'
+const CLICKDESK_SYNC_INTERVAL_MINUTES = 60
+const CLICKDESK_SYNC_START_UTC_HOUR = 12
+const CLICKDESK_SYNC_END_UTC_HOUR = 22
+
+function getNextClickDeskSyncAt(now = new Date()) {
+  const next = new Date(now)
+  next.setUTCSeconds(0, 0)
+
+  const currentHour = next.getUTCHours()
+  const currentMinute = next.getUTCMinutes()
+
+  if (
+    currentHour < CLICKDESK_SYNC_START_UTC_HOUR ||
+    (currentHour === CLICKDESK_SYNC_START_UTC_HOUR && currentMinute === 0)
+  ) {
+    next.setUTCHours(CLICKDESK_SYNC_START_UTC_HOUR, 0, 0, 0)
+    return next.toISOString()
+  }
+
+  if (currentHour < CLICKDESK_SYNC_END_UTC_HOUR) {
+    next.setUTCHours(currentHour + 1, 0, 0, 0)
+    return next.toISOString()
+  }
+
+  next.setUTCDate(next.getUTCDate() + 1)
+  next.setUTCHours(CLICKDESK_SYNC_START_UTC_HOUR, 0, 0, 0)
+  return next.toISOString()
+}
 
 type DailyMetricRow = {
   occurred_date: string
@@ -331,6 +359,11 @@ export async function GET(request: Request) {
         : latestSync.data?.finished_at
           ? { finished_at: latestSync.data.finished_at }
           : null,
+      sync_schedule: {
+        interval_minutes: CLICKDESK_SYNC_INTERVAL_MINUTES,
+        window_brt: '09:00-19:00',
+        next_sync_at: getNextClickDeskSyncAt(),
+      },
       date_basis: {
         sources: timestampSources,
         status: dateBasisNeedsValidation ? 'needs_validation' : 'validated',
