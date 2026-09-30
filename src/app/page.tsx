@@ -11252,12 +11252,16 @@ function DashboardView({
                 <p className="section-subtitle">Indicadores individuais, posição e critérios que dependem diretamente do seu resultado.</p>
               </div>
             </div>
-            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-              <AnalystIdentityCard analyst={analystProfile} />
+            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <AnalystIdentityCard
+                analyst={analystProfile}
+                rankingPosition={analystRankingPosition}
+                rankingStatus={analystPodiumPositionStatus}
+                loading={analystDataLoading}
+              />
               <MetricCard label="Meu CSAT" value={formatPercent(analystResult?.averageCsat ?? 0)} tone={analystResult && analystResult.averageCsat >= analystResult.individualGoal ? 'success' : analystResult ? 'warning' : undefined} />
               <MetricCard label="Minhas avaliações" value={`${formatChatCount(totalReviews)} (${formatPercent(reviewCoverage)})`} tone={reviewCoverage >= reviewGoal ? 'success' : reviewCoverage >= 20 ? 'warning' : 'danger'} />
               <MetricCard label="Meus atendimentos" value={formatChatCount(totalTickets)} tone={podiumAverageTickets && totalTickets >= podiumAverageTickets ? 'success' : podiumAverageTickets ? 'warning' : undefined} />
-              <MetricCard label="Minha posição" value={analystDataLoading ? '...' : analystRankingPosition ? `${analystRankingPosition}º` : '-'} tone={analystResult?.eligible ? 'success' : analystResult ? 'warning' : undefined} />
             </div>
           </section>
 
@@ -14810,14 +14814,41 @@ function MetricCard({
   )
 }
 
-function AnalystIdentityCard({ analyst }: { analyst: Pick<Analyst, 'name' | 'photo_url'> | null }) {
+function AnalystIdentityCard({
+  analyst,
+  rankingPosition,
+  rankingStatus,
+  loading = false,
+}: {
+  analyst: Pick<Analyst, 'name' | 'photo_url'> | null
+  rankingPosition?: number
+  rankingStatus?: string
+  loading?: boolean
+}) {
   return (
     <div className="metric-card border border-cyan-400/25 bg-cyan-400/5 p-5">
       <p className="text-sm text-slate-400">Analista</p>
-      <div className="mt-3 flex items-center gap-3">
-        <AnalystAvatar name={analyst?.name ?? 'Analista'} photoUrl={analyst?.photo_url} size="md" />
-        <p className="text-xl font-semibold leading-tight text-cyan-200 sm:text-2xl">{analyst?.name ?? 'Não vinculado'}</p>
+      <div className="mt-3 flex items-center justify-between gap-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <AnalystAvatar name={analyst?.name ?? 'Analista'} photoUrl={analyst?.photo_url} size="md" />
+          <p className="min-w-0 text-xl font-semibold leading-tight text-cyan-200 sm:text-2xl">
+            {analyst?.name ?? 'Não vinculado'}
+          </p>
+        </div>
+        <div className="shrink-0 text-right">
+          <span className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+            Posição
+          </span>
+          <strong className="mt-1 block text-2xl tabular-nums text-white">
+            {loading ? '...' : rankingPosition ? `${rankingPosition}º` : '—'}
+          </strong>
+        </div>
       </div>
+      {rankingStatus && (
+        <p className="mt-3 border-t border-white/10 pt-3 text-xs leading-5 text-slate-400">
+          {loading ? 'Atualizando sua posição no período.' : rankingStatus}
+        </p>
+      )}
     </div>
   )
 }
