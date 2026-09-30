@@ -207,3 +207,116 @@ test('síntese orienta processo quando a cobertura é suficiente e o contexto é
   assert.match(synthesis.recommended_focus, /processo, regra interna, sistema ou produto/)
   assert.match(synthesis.positive_read, /prática a manter/)
 })
+
+
+test('funil permanece estável quando não há avaliações negativas', () => {
+  const rows = [
+    ...Array.from({ length: 80 }, (_, index) => ({
+      clickdesk_ticket_id: `u-${index}`,
+      satisfaction_label: null,
+    })),
+    ...Array.from({ length: 20 }, (_, index) => ({
+      clickdesk_ticket_id: `p-${index}`,
+      satisfaction_label: 'positive',
+    })),
+  ]
+
+  const result = calculateOperation360Totals(rows)
+
+  assert.equal(result.attendances, 100)
+  assert.equal(result.evaluated, 20)
+  assert.equal(result.positive, 20)
+  assert.equal(result.negative, 0)
+  assert.equal(result.csat, 100)
+  assert.equal(result.review_percentage, 20)
+})
+
+test('síntese sem negativas explica ausência de impacto negativo no recorte', () => {
+  const analysis = buildOperation360Analysis([], 'approved')
+  const synthesis = buildOperation360Synthesis({
+    negativeTotal: 0,
+    positiveTotal: 20,
+    analysis,
+  })
+
+  assert.equal(synthesis.coverage_level, 'none')
+  assert.match(synthesis.headline, /Não há avaliações negativas/)
+})
+
+test('agregação preserva rastreabilidade dos tickets por padrão', () => {
+  const makeAnalysis = (summary: string) => ({
+    primary_cause: {
+      category: 'resolution_quality',
+      summary,
+    },
+    human_influence: {
+      classification: 'worsened',
+      summary: 'A condução não levou à resolução.',
+    },
+    controllability: {
+      classification: 'analyst',
+      summary: 'Havia ação possível no atendimento.',
+    },
+    analyst_takeaway: {
+      kind: 'develop',
+      summary: 'Confirmar a resolução antes do encerramento.',
+    },
+  })
+
+  const result = buildOperation360Analysis(
+    [
+      {
+        clickdesk_ticket_id: 'neg-101',
+        satisfaction_label: 'negative',
+        validation_status: 'approved',
+        analysis: makeAnalysis('A solução não ficou confirmada.'),
+      },
+      {
+        clickdesk_ticket_id: 'neg-102',
+        satisfaction_label: 'negative',
+        validation_status: 'approved',
+        analysis: makeAnalysis('O atendimento terminou sem resolução clara.'),
+      },
+    ],
+    'approved',
+  )
+
+  assert.equal(result.negative.causes[0]?.key, 'resolution_quality')
+  assert.equal(result.negative.causes[0]?.count, 2)
+  assert.deepEqual(result.negative.causes[0]?.ticket_ids, ['neg-101', 'neg-102'])
+  assert.equal(result.negative.causes[0]?.examples.length, 2)
+})
+
+test('grande volume mantém percentuais e limita evidências expostas por padrão', () => {
+  const rows = Array.from({ length: 120 }, (_, index) => ({
+    clickdesk_ticket_id: `neg-${index + 1}`,
+    satisfaction_label: 'negative',
+    validation_status: 'approved' as const,
+    analysis: {
+      primary_cause: {
+        category: 'process',
+        summary: `Processo observado ${index + 1}.`,
+      },
+      human_influence: {
+        classification: 'neutral',
+        summary: 'Sem influência humana demonstrável.',
+      },
+      controllability: {
+        classification: 'company',
+        summary: 'Fator de processo interno.',
+      },
+      analyst_takeaway: {
+        kind: 'context',
+        summary: 'Contextualizar limitação operacional.',
+      },
+    },
+  }))
+
+  const result = buildOperation360Analysis(rows, 'approved')
+
+  assert.equal(result.negative.analyzed, 120)
+  assert.equal(result.negative.causes[0]?.count, 120)
+  assert.equal(result.negative.causes[0]?.percentage, 100)
+  assert.equal(result.negative.causes[0]?.ticket_ids.length, 8)
+  assert.equal(result.negative.causes[0]?.examples.length, 3)
+})
