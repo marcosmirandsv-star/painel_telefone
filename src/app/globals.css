@@ -2475,6 +2475,29 @@ button:disabled {
   }
 }
 
+
+/* Análise 360º: o bloco final é diagnóstico, não recomendação de estratégia.
+   O seletor mantém compatibilidade enquanto o page.tsx monolítico ainda usa o rótulo legado. */
+section.workspace-content-section
+  > div.space-y-6
+  > div[class~="border-cyan-300/15"][class~="bg-cyan-300/5"]
+  > div.mt-5.border-t
+  > p:first-child {
+  font-size: 0;
+}
+
+section.workspace-content-section
+  > div.space-y-6
+  > div[class~="border-cyan-300/15"][class~="bg-cyan-300/5"]
+  > div.mt-5.border-t
+  > p:first-child::after {
+  content: "Leitura do resultado";
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .app-shell *,
   .app-shell *::before,
