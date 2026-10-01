@@ -139,11 +139,13 @@ test('síntese não generaliza quando a cobertura negativa ainda é inicial', ()
 
   assert.equal(synthesis.coverage_level, 'initial')
   assert.match(synthesis.headline, /2 de 39/)
-  assert.match(synthesis.recommended_focus, /Complete a cobertura/)
+  assert.match(synthesis.result_read, /tempo de espera/)
+  assert.equal(synthesis.recommended_focus, synthesis.result_read)
+  assert.doesNotMatch(synthesis.result_read, /Priorize|Complete a cobertura|ação gerencial|transforme/)
   assert.match(synthesis.caveat, /Recorrência não prova causalidade/)
 })
 
-test('síntese orienta processo quando a cobertura é suficiente e o contexto é da empresa', () => {
+test('síntese descreve processo quando a cobertura é suficiente e o contexto é da empresa', () => {
   const analysis = {
     status: 'analyzed',
     total: 30,
@@ -204,8 +206,11 @@ test('síntese orienta processo quando a cobertura é suficiente e o contexto é
   assert.equal(synthesis.coverage_level, 'strong')
   assert.match(synthesis.negative_read, /processo/)
   assert.match(synthesis.control_read, /empresa ou processo interno/)
-  assert.match(synthesis.recommended_focus, /processo, regra interna, sistema ou produto/)
-  assert.match(synthesis.positive_read, /prática a manter/)
+  assert.match(synthesis.result_read, /processo/)
+  assert.match(synthesis.result_read, /empresa ou processo interno/)
+  assert.equal(synthesis.recommended_focus, synthesis.result_read)
+  assert.match(synthesis.positive_read, /qualidade da resolução/)
+  assert.doesNotMatch(JSON.stringify(synthesis), /Priorize|Complete a cobertura|ação gerencial|transforme/)
 })
 
 
