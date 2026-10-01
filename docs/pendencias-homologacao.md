@@ -33,6 +33,7 @@ Este arquivo é a referência operacional das pendências ainda não encerradas.
 - [x] Confirmar cache e reaproveitamento de análises já persistidas no fluxo implementado.
 - [x] Confirmar fluxo de governança `pending -> approved/rejected` no modelo e nas rotas existentes.
 - [x] Garantir que consolidações oficiais usem somente evidências aprovadas.
+- [x] Cobrir automaticamente a cadeia de fallback: provedor indisponível -> próximo provedor -> indisponibilidade controlada se todos falharem.
 - [ ] Validar end-to-end indisponibilidade do provedor e reanálise sem perda de dados em sessão autenticada.
 - [x] Preservar evidências, limitações, confiança e rastreabilidade por ticket.
 - [x] Redigir identificadores sensíveis do transcript antes da análise externa.
@@ -60,12 +61,14 @@ Este arquivo é a referência operacional das pendências ainda não encerradas.
 - [x] Validar cenário sem negativas.
 - [x] Validar poucas negativas e impedir generalização quando a cobertura é inicial.
 - [x] Validar grande volume de negativas e estabilidade dos percentuais.
-- [x] Validar cobertura forte e recomendação coerente com controlabilidade.
+- [x] Validar cobertura forte com leitura diagnóstica coerente, sem prescrever estratégia ou ação gerencial.
 - [x] Validar que `pending` e `rejected` não entram no consolidado oficial.
 - [x] Validar rastreabilidade da síntese/padrões até os tickets de origem.
 - [x] Limitar a quantidade de IDs/exemplos exibidos por padrão sem perder a contagem total.
 - [ ] Validar em sessão autenticada Todas as equipes x equipe específica.
 - [ ] Validar visualmente períodos diferentes e competência atual parcial.
+- [x] Cobrir automaticamente a recusa de transcript com menos de 40 caracteres antes da análise.
+- [x] Cobrir automaticamente a separação de acesso entre gestão e Analista no Chat.
 - [ ] Validar end-to-end ticket sem transcript suficiente.
 - [ ] Validar end-to-end provedor de IA indisponível.
 - [ ] Validar tentativa real de acesso ao 360º por usuário sem permissão.
@@ -74,6 +77,7 @@ Este arquivo é a referência operacional das pendências ainda não encerradas.
 - [x] Build completo após as entregas do 360º.
 - [x] Suíte de testes automatizados existente.
 - [x] Testes novos da lógica 360º.
+- [x] Pipeline da branch `homologacao` verde após a rodada atual: testes automatizados + build + deploy Preview.
 - [x] Validar cron/Edge Function da sincronização diretamente no Supabase de homologação.
 - [x] Conferir que produção/`main` permanece fora das alterações realizadas nesta rodada.
 - [x] Atualizar documentação técnica e checklist de pendências.
@@ -83,8 +87,14 @@ Este arquivo é a referência operacional das pendências ainda não encerradas.
 - [ ] Validar cenários autenticados pendentes de permissões/filtros/IA.
 - [ ] Somente depois dessas validações discutir promoção para `main`.
 
+## 8. Hardening de segurança da homologação
+- [ ] Definir o tratamento de `public.chat_legacy_import`: a tabela está vazia e sem referências encontradas em views/funções, mas o Supabase Security Advisor acusa RLS desabilitado e grants amplos para `anon`/`authenticated`. Não alterar automaticamente sem decidir se a tabela será removida, bloqueada ou protegida por política.
+- [ ] Revisar avisos do Security Advisor para funções `SECURITY DEFINER` executáveis por `anon`/`authenticated`, separando helpers intencionais de funções que devem ter `EXECUTE` revogado.
+- [ ] Revisar as tabelas internas com RLS habilitado e sem policies (`homologation_access_allowlist`, `integration_keys`, `integration_usage`) e confirmar que grants/revogação mantêm o acesso fechado.
+- [ ] Avaliar habilitação de proteção contra senhas vazadas no Supabase Auth da homologação.
+
 ## Bloqueios/observações conhecidos
-- O Preview da Vercel está protegido. A conexão disponível ao assistente não possui autorização para abrir o projeto/time `project-gestao`; por isso nenhuma inspeção visual autenticada é marcada como concluída.
+- O Preview da Vercel está protegido. A conexão disponível ao assistente não possui autorização para abrir o projeto/time `project-gestao`; por isso nenhuma inspeção visual autenticada é marcada como concluída. O pipeline GitHub/Vercel, porém, está verde e o deploy Preview concluiu com sucesso.
 - O papel `Gestor` com escopo por equipe ainda não existe no enum/tabela de perfis da homologação. Criá-lo exige desenho de autorização/RLS para o Chat inteiro, não uma regra isolada do 360º.
 - O endpoint técnico da Edge Function ainda se chama `clickdesk-d1-sync` somente por compatibilidade com o cron instalado; o modo D-1 foi desativado e é recusado.
 
