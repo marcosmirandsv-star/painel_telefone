@@ -137,6 +137,14 @@ export async function POST(request: Request) {
       }
     }
 
+    const afterResponse = await fetch(
+      `${baseUrl}/api/clickdesk/operation-360?${query.toString()}`,
+      { headers: forwardHeaders, cache: 'no-store' },
+    )
+    const afterPayload = (await readJson(afterResponse)) as Operation360Payload | null
+    const afterNegative = afterPayload?.queues?.negative_unanalyzed ?? []
+    const afterPositive = afterPayload?.queues?.positive_unanalyzed ?? []
+
     return json({
       source: 'clickdesk_operation_360_processor',
       requested: selected.length,
@@ -149,7 +157,12 @@ export async function POST(request: Request) {
         positive: positive.length,
         total: negative.length + positive.length,
       },
-      has_more: negative.length + positive.length > selected.length,
+      remaining_after_batch: {
+        negative: afterNegative.length,
+        positive: afterPositive.length,
+        total: afterNegative.length + afterPositive.length,
+      },
+      has_more: afterNegative.length + afterPositive.length > 0,
       batch_limit: limit,
     })
   })
