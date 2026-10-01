@@ -31,6 +31,10 @@ as $$
   select coalesce(public.current_user_role() in ('master', 'coordenadora'), false)
 $$;
 
+revoke execute on function public.current_user_role() from public, anon;
+revoke execute on function public.current_user_analyst_id() from public, anon;
+revoke execute on function public.is_management_user() from public, anon;
+
 grant execute on function public.current_user_role() to authenticated;
 grant execute on function public.current_user_analyst_id() to authenticated;
 grant execute on function public.is_management_user() to authenticated;
