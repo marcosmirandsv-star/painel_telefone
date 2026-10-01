@@ -153,6 +153,8 @@ export type Operation360Synthesis = {
   control_read: string
   positive_read: string
   result_read: string
+  /** Compatibilidade temporária com a interface legada; contém a mesma leitura diagnóstica de result_read. */
+  recommended_focus: string
   caveat: string
 }
 
@@ -259,6 +261,7 @@ export function buildOperation360Synthesis(input: {
     control_read: controlRead,
     positive_read: positiveRead,
     result_read: resultRead,
+    recommended_focus: resultRead,
     caveat:
       'A síntese descreve padrões dos tickets já analisados. Recorrência não prova causalidade e cobertura parcial não representa automaticamente toda a operação.',
   }
