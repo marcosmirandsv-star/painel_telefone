@@ -106,6 +106,13 @@ export function isQualitativeTranscriptSufficient(
   return transcript.trim().length >= minimum
 }
 
+
+export function shouldReuseQualitativeCache(
+  validationStatus: string | null | undefined,
+) {
+  return validationStatus !== 'rejected'
+}
+
 export async function runQualitativeProviderFallback<T>(
   providers: Array<{
     name: string
