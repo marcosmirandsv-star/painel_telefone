@@ -658,7 +658,8 @@ type ClickDeskOperation360Synthesis = {
   negative_read: string
   control_read: string
   positive_read: string
-  recommended_focus: string
+  result_read: string
+  recommended_focus?: string
   caveat: string
 }
 
@@ -4939,6 +4940,11 @@ function ChatModuleDashboard({
         ? clickDeskOperation360?.queues?.negative_unanalyzed ?? []
         : clickDeskOperation360?.queues?.positive_unanalyzed ?? []
     const queue = kind === 'negative' ? availableQueue : availableQueue.slice(0, 20)
+    const totalScope =
+      kind === 'negative'
+        ? clickDeskOperation360?.coverage?.negative.total ?? availableQueue.length
+        : clickDeskOperation360?.coverage?.positive.total ?? availableQueue.length
+    const alreadyCovered = Math.max(0, totalScope - availableQueue.length)
 
     if (!queue.length || clickDeskOperation360Analyzing) return
 
@@ -4986,10 +4992,15 @@ function ChatModuleDashboard({
         )
       }
 
+      const coveredAfterRun = Math.min(totalScope, alreadyCovered + completed)
       setClickDeskOperation360Message(
-        failed > 0
-          ? `${completed} atendimento(s) analisado(s); ${failed} ficaram pendentes por indisponibilidade e podem ser tentados novamente.`
-          : `${completed} atendimento(s) analisado(s). As novas leituras aguardam validação humana para entrarem no consolidado oficial.`,
+        kind === 'negative'
+          ? failed > 0
+            ? `A leitura 360º cobre ${coveredAfterRun} de ${totalScope} negativas. ${failed} ticket(s) ficaram pendentes e podem ser tentados novamente.`
+            : `Leitura concluída: ${totalScope} de ${totalScope} negativas consideradas. Leituras válidas foram reaproveitadas e análises rejeitadas foram refeitas quando necessário.`
+          : failed > 0
+            ? `${completed} positiva(s) analisada(s); ${failed} ficaram pendentes e podem ser tentadas novamente.`
+            : `${completed} positiva(s) analisada(s). A leitura do 360º foi atualizada; a governança continua no menu próprio.`,
       )
       setClickDeskOperation360Refresh((current) => current + 1)
       setClickDeskQualitativeSummaryRefresh((current) => current + 1)
@@ -7231,13 +7242,8 @@ function ChatModuleDashboard({
   const operation360Coverage = clickDeskOperation360?.coverage
   const operation360Preliminary = clickDeskOperation360?.preliminary_patterns
   const operation360PreliminarySynthesis = clickDeskOperation360?.preliminary_synthesis
-  const operation360Validated = clickDeskOperation360?.validated_patterns
-  const operation360ValidatedSynthesis = clickDeskOperation360?.validated_synthesis
-  const operation360HasValidated = (operation360Validated?.total ?? 0) > 0
-  const operation360Display = operation360HasValidated ? operation360Validated : operation360Preliminary
-  const operation360DisplaySynthesis = operation360HasValidated
-    ? operation360ValidatedSynthesis
-    : operation360PreliminarySynthesis
+  const operation360Display = operation360Preliminary
+  const operation360DisplaySynthesis = operation360PreliminarySynthesis
   const operation360NegativeQueue = clickDeskOperation360?.queues?.negative_unanalyzed ?? []
   const operation360PositiveQueue = clickDeskOperation360?.queues?.positive_unanalyzed ?? []
   const operation360NegativePatterns = operation360Display?.negative.causes ?? []
@@ -8374,8 +8380,8 @@ function ChatModuleDashboard({
                   {clickDeskOperation360Analyzing === 'negative'
                     ? `Analisando negativas · ${clickDeskOperation360Progress}`
                     : operation360NegativeQueue.length
-                      ? `Analisar ${operation360NegativeQueue.length} negativa(s) pendente(s)`
-                      : 'Negativas analisadas'}
+                      ? `Completar leitura das ${operation360Coverage?.negative.total ?? operation360NegativeQueue.length} negativas · ${operation360NegativeQueue.length} por processar`
+                      : `${operation360Coverage?.negative.total ?? 0} negativas consideradas`}
                 </button>
                 <button
                   type="button"
@@ -8411,7 +8417,7 @@ function ChatModuleDashboard({
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <p className="workspace-eyebrow text-cyan-200">Síntese 360º</p>
-                  <h3 className="mt-2 text-xl font-bold">O que a leitura disponível já consegue nos ensinar?</h3>
+                  <h3 className="mt-2 text-xl font-bold">O que está acontecendo com o resultado?</h3>
                 </div>
                 <span className="rounded-md border border-cyan-300/20 bg-slate-950/30 px-3 py-2 text-xs font-semibold text-cyan-100">
                   {operation360DisplaySynthesis?.coverage_label ?? 'Sem cobertura'}
@@ -8441,10 +8447,10 @@ function ChatModuleDashboard({
               </div>
 
               <div className="mt-5 border-t border-white/10 pt-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-200">Próximo foco da gestão</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-200">Leitura do resultado</p>
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-100">
-                  {operation360DisplaySynthesis?.recommended_focus ??
-                    'Complete a cobertura e valide as leituras antes de definir uma ação.'}
+                  {operation360DisplaySynthesis?.result_read ??
+                    'Ainda não há leitura suficiente para explicar quais fatores estão pesando no resultado.'}
                 </p>
               </div>
             </div>
