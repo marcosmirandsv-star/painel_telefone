@@ -4127,7 +4127,7 @@ function ChatModuleDashboard({
   const [clickDeskOperation360, setClickDeskOperation360] = useState<ClickDeskOperation360 | null>(null)
   const [clickDeskOperation360Loading, setClickDeskOperation360Loading] = useState(false)
   const [clickDeskOperation360Refresh, setClickDeskOperation360Refresh] = useState(0)
-  const [clickDeskOperation360Analyzing, setClickDeskOperation360Analyzing] = useState<'negative' | 'positive' | ''>('')
+  const [clickDeskOperation360Analyzing, setClickDeskOperation360Analyzing] = useState<'negative' | 'positive' | 'all' | ''>('')
   const [clickDeskOperation360Progress, setClickDeskOperation360Progress] = useState('')
   const [clickDeskOperation360Message, setClickDeskOperation360Message] = useState('')
   const [clickDeskOperation360EvidenceTicketId, setClickDeskOperation360EvidenceTicketId] = useState('')
@@ -5007,6 +5007,110 @@ function ChatModuleDashboard({
     } finally {
       setClickDeskOperation360Analyzing('')
       setClickDeskOperation360Progress('')
+    }
+  }
+
+  async function handleCompleteOperation360() {
+    if (!chat2PeriodKey || clickDeskOperation360Analyzing) return
+
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    if (!session?.access_token) {
+      setClickDeskOperation360Message('Sua sessão de homologação não está ativa.')
+      return
+    }
+
+    setClickDeskOperation360Analyzing('all')
+    setClickDeskOperation360Message('')
+    setClickDeskOperation360Progress('Preparando fila completa...')
+
+    let totalProcessed = 0
+    let stalledRounds = 0
+    let remaining = (clickDeskOperation360?.queues?.negative_unanalyzed?.length ?? 0) +
+      (clickDeskOperation360?.queues?.positive_unanalyzed?.length ?? 0)
+
+    try {
+      for (let round = 1; round <= 20; round += 1) {
+        const response = await fetch('/api/clickdesk/operation-360/process', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            start: chat2SelectedPeriod.start,
+            end: chat2SelectedPeriod.end,
+            team_id: selectedTeamId === 'all' ? null : selectedTeamId,
+            limit: 20,
+          }),
+          cache: 'no-store',
+        })
+
+        const data = (await response.json()) as {
+          processed?: number
+          failed?: number
+          failures?: { ticket_id: string; error: string }[]
+          remaining_after_batch?: { negative: number; positive: number; total: number }
+          error?: string
+          erro?: string
+        }
+
+        if (!response.ok) {
+          setClickDeskOperation360Message(
+            data.error || data.erro || 'Não foi possível processar a fila completa do 360º.',
+          )
+          break
+        }
+
+        const processedThisRound = data.processed ?? 0
+        totalProcessed += processedThisRound
+        remaining = data.remaining_after_batch?.total ?? Math.max(0, remaining - processedThisRound)
+
+        setClickDeskOperation360Progress(
+          `${totalProcessed} processada(s) nesta execução · ${remaining} pendente(s)`,
+        )
+
+        if (remaining <= 0) {
+          setClickDeskOperation360Message(
+            `Leitura qualitativa concluída para todo o recorte. ${totalProcessed} avaliação(ões) pendente(s) foram processadas nesta execução.`,
+          )
+          break
+        }
+
+        if (processedThisRound <= 0) {
+          stalledRounds += 1
+        } else {
+          stalledRounds = 0
+        }
+
+        if (stalledRounds >= 2) {
+          const failurePreview = (data.failures ?? [])
+            .slice(0, 3)
+            .map((item) => `#${item.ticket_id}: ${item.error}`)
+            .join(' · ')
+          setClickDeskOperation360Message(
+            `O processamento avançou até restarem ${remaining} avaliação(ões), mas esses tickets não puderam ser concluídos após novas tentativas.${failurePreview ? ` Motivos: ${failurePreview}` : ''}`,
+          )
+          break
+        }
+
+        if (round === 20) {
+          setClickDeskOperation360Message(
+            `O processamento automático atingiu o limite de segurança desta execução. Restam ${remaining} avaliação(ões); uma nova atualização continuará somente do ponto pendente.`,
+          )
+        }
+      }
+    } catch (error) {
+      setClickDeskOperation360Message(
+        `Falha durante o processamento da fila qualitativa: ${getErrorMessage(error)}`,
+      )
+    } finally {
+      setClickDeskOperation360Analyzing('')
+      setClickDeskOperation360Progress('')
+      setClickDeskOperation360Refresh((current) => current + 1)
+      setClickDeskQualitativeSummaryRefresh((current) => current + 1)
     }
   }
 
@@ -8395,14 +8499,23 @@ function ChatModuleDashboard({
                       ? `Analisar próximas ${Math.min(20, operation360PositiveQueue.length)} positiva(s)`
                       : 'Positivas analisadas'}
                 </button>
-                <button type="button" className="small-button" onClick={() => void loadOperation360()}>
-                  Atualizar leitura
+                <button
+                  type="button"
+                  className="small-button"
+                  disabled={Boolean(clickDeskOperation360Analyzing)}
+                  onClick={() => void handleCompleteOperation360()}
+                >
+                  {clickDeskOperation360Analyzing === 'all'
+                    ? `Processando leitura completa · ${clickDeskOperation360Progress}`
+                    : operation360NegativeQueue.length + operation360PositiveQueue.length > 0
+                      ? `Atualizar leitura completa · ${operation360NegativeQueue.length + operation360PositiveQueue.length} pendente(s)`
+                      : 'Leitura completa'}
                 </button>
               </div>
 
               {operation360PositiveQueue.length > 20 && (
                 <p className="mt-3 text-xs leading-5 text-slate-500">
-                  Positivas são processadas em lotes de até 20 para controlar custo e latência; as negativas permanecem exaustivas no filtro.
+                  O processamento completo usa lotes controlados e continua automaticamente até esgotar a fila ou encontrar tickets que precisem de nova tentativa.
                 </p>
               )}
 
