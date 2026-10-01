@@ -6,6 +6,7 @@ import {
   normalizeQualitativeAnalysis,
   redactTranscriptText,
   runQualitativeProviderFallback,
+  shouldReuseQualitativeCache,
 } from '../src/lib/clickdesk-qualitative.ts'
 
 test('redação remove identificadores sensíveis antes da análise externa', () => {
@@ -207,3 +208,9 @@ test('fallback qualitativo retorna indisponibilidade quando todos os provedores 
   assert.match(outcome.errors.join(' | '), /github: falha B/)
 })
 
+test('cache qualitativo rejeitado é refeito enquanto pending e approved são reaproveitados', () => {
+  assert.equal(shouldReuseQualitativeCache('approved'), true)
+  assert.equal(shouldReuseQualitativeCache('pending'), true)
+  assert.equal(shouldReuseQualitativeCache('rejected'), false)
+  assert.equal(shouldReuseQualitativeCache(null), true)
+})
