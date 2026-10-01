@@ -8,7 +8,9 @@ import {
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 import {
   extractTranscriptText,
+  isQualitativeTranscriptSufficient,
   normalizeQualitativeAnalysis,
+  runQualitativeProviderFallback,
 } from '@/lib/clickdesk-qualitative'
 
 export const runtime = 'nodejs'
@@ -597,38 +599,17 @@ async function generateWithGitHubModels(prompt: string) {
 }
 
 async function generateQualitativeAnalysis(prompt: string) {
-  const errors: string[] = []
+  const outcome = await runQualitativeProviderFallback([
+    { name: 'gemini', run: () => generateWithGemini(prompt) },
+    { name: 'gemma', run: () => generateWithGemma(prompt) },
+    { name: 'github-models', run: () => generateWithGitHubModels(prompt) },
+    { name: 'vercel-gateway', run: () => generateWithVercelGateway(prompt) },
+  ])
 
-  try {
-    const directGemini = await generateWithGemini(prompt)
-    if (directGemini) return directGemini
-  } catch (error) {
-    errors.push(getErrorText(error))
-  }
+  if (outcome.result) return outcome.result
 
-  try {
-    const gemma = await generateWithGemma(prompt)
-    if (gemma) return gemma
-  } catch (error) {
-    errors.push(getErrorText(error))
-  }
-
-  try {
-    const githubModels = await generateWithGitHubModels(prompt)
-    if (githubModels) return githubModels
-  } catch (error) {
-    errors.push(getErrorText(error))
-  }
-
-  try {
-    const gateway = await generateWithVercelGateway(prompt)
-    if (gateway) return gateway
-  } catch (error) {
-    errors.push(getErrorText(error))
-  }
-
-  const reason = errors.length
-    ? errors.join(' | ').slice(0, 1200)
+  const reason = outcome.errors.length
+    ? outcome.errors.join(' | ').slice(0, 1200)
     : 'nenhum provedor de IA está disponível no ambiente'
 
   console.warn(
@@ -732,7 +713,7 @@ export async function POST(request: Request) {
     }
 
     const transcript = extractTranscriptText(transcriptPayload)
-    if (!transcript || transcript.length < 40) {
+    if (!isQualitativeTranscriptSufficient(transcript)) {
       throw new ApiError(
         422,
         'O transcript não trouxe texto suficiente para uma análise qualitativa segura.',
