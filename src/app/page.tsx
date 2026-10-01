@@ -16,6 +16,8 @@ import { normalizeQualitativeAnalysis } from '@/lib/clickdesk-qualitative'
 
 // Homologação: IA qualitativa liberada no acesso individual com governança separada da gestão.
 const QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS = true
+// Release outubro/2026: módulo Escalas permanece pausado e fora do pacote de produção.
+const SCHEDULE_MODULE_ENABLED = false
 
 type Goal = {
   id: string
@@ -1358,7 +1360,7 @@ export default function Home() {
   ])
 
   useEffect(() => {
-    if (!isManagementUser || !profile?.full_name) {
+    if (!SCHEDULE_MODULE_ENABLED || !isManagementUser || !profile?.full_name) {
       setScheduleProfileId(null)
       setScheduleNotifications([])
       setSchedulePopup(null)
@@ -1428,7 +1430,7 @@ export default function Home() {
   }, [isManagementUser, profile?.full_name])
 
   useEffect(() => {
-    if (!scheduleProfileId) return
+    if (!SCHEDULE_MODULE_ENABLED || !scheduleProfileId) return
 
     const checkUnseen = async () => {
       const { data } = await scheduleSupabase
@@ -2235,7 +2237,7 @@ export default function Home() {
 
   return (
     <main className="app-shell min-h-screen px-5 py-6 sm:px-8">
-      {schedulePopup && (
+      {SCHEDULE_MODULE_ENABLED && schedulePopup && (
         <div className="fixed right-4 top-4 z-50 w-[min(430px,calc(100vw-2rem))] rounded-2xl border border-cyan-400/50 bg-slate-900 p-5 shadow-2xl shadow-cyan-950/50">
           <div className="flex items-start gap-3">
             <div className="animate-bounce text-2xl">🔔</div>
@@ -2459,7 +2461,7 @@ export default function Home() {
                 </div>
               )}
 
-              {isManagementUser && (
+              {SCHEDULE_MODULE_ENABLED && isManagementUser && (
                 <div className="module-sidebar-group">
                   <Link className="module-sidebar-button" href="/escalas">
                     <span className="module-sidebar-code" aria-hidden="true">ESC</span>
@@ -2528,7 +2530,7 @@ export default function Home() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 self-start">
-            {isManagementUser && (
+            {SCHEDULE_MODULE_ENABLED && isManagementUser && (
               <>
                 <button
                   className={`relative secondary-button ${scheduleNotifications.some((item) => !item.seen_at) ? 'animate-bounce' : ''}`}
