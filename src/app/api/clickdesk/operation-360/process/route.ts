@@ -71,6 +71,12 @@ export async function POST(request: Request) {
     }
 
     const baseUrl = new URL(request.url).origin
+    const authorization = request.headers.get('authorization') ?? ''
+    const cookie = request.headers.get('cookie') ?? ''
+    const forwardHeaders: Record<string, string> = {}
+    if (authorization) forwardHeaders.Authorization = authorization
+    if (cookie) forwardHeaders.cookie = cookie
+
     const query = new URLSearchParams({ start, end })
     if (teamId) query.set('team_id', teamId)
 
@@ -78,7 +84,7 @@ export async function POST(request: Request) {
     // processada é exatamente a mesma exibida no painel (somente operação válida).
     const queueResponse = await fetch(
       `${baseUrl}/api/clickdesk/operation-360?${query.toString()}`,
-      { headers: { cookie: request.headers.get('cookie') ?? '' }, cache: 'no-store' },
+      { headers: forwardHeaders, cache: 'no-store' },
     )
     const queuePayload = (await readJson(queueResponse)) as Operation360Payload | null
     if (!queueResponse.ok || !queuePayload?.queues) {
@@ -107,8 +113,8 @@ export async function POST(request: Request) {
         const response = await fetch(`${baseUrl}/api/clickdesk/qualitative`, {
           method: 'POST',
           headers: {
+            ...forwardHeaders,
             'content-type': 'application/json',
-            cookie: request.headers.get('cookie') ?? '',
           },
           body: JSON.stringify({ ticket_id: ticketId, force: false }),
           cache: 'no-store',
