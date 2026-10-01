@@ -325,3 +325,43 @@ test('grande volume mantém percentuais e limita evidências expostas por padrã
   assert.equal(result.negative.causes[0]?.ticket_ids.length, 8)
   assert.equal(result.negative.causes[0]?.examples.length, 3)
 })
+
+test('consolidação preliminar usa pending e approved e exclui rejected', () => {
+  const analysis = {
+    primary_cause: { category: 'process', summary: 'Processo observado.' },
+    human_influence: { classification: 'neutral', summary: 'Sem influência demonstrável.' },
+    controllability: { classification: 'company', summary: 'Fator de processo.' },
+    analyst_takeaway: { kind: 'context', summary: 'Contexto operacional.' },
+  }
+
+  const result = buildOperation360Analysis(
+    [
+      {
+        clickdesk_ticket_id: 'approved-1',
+        satisfaction_label: 'negative',
+        validation_status: 'approved',
+        analysis,
+      },
+      {
+        clickdesk_ticket_id: 'pending-1',
+        satisfaction_label: 'negative',
+        validation_status: 'pending',
+        analysis,
+      },
+      {
+        clickdesk_ticket_id: 'rejected-1',
+        satisfaction_label: 'negative',
+        validation_status: 'rejected',
+        analysis,
+      },
+    ],
+    'analyzed',
+  )
+
+  assert.equal(result.negative.analyzed, 2)
+  assert.equal(result.negative.causes[0]?.count, 2)
+  assert.deepEqual(
+    result.negative.causes[0]?.ticket_ids,
+    ['approved-1', 'pending-1'],
+  )
+})
