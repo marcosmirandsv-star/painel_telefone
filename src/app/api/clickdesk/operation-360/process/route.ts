@@ -58,10 +58,17 @@ export async function POST(request: Request) {
     }
 
     const body = (await request.json().catch(() => null)) as ProcessRequest | null
-    const start = body?.start?.trim() ?? ''
-    const end = body?.end?.trim() ?? ''
-    const teamId = body?.team_id?.trim() || null
-    const limit = Math.max(1, Math.min(Math.trunc(body?.limit ?? 20), 30))
+    const start = typeof body?.start === 'string' ? body.start.trim() : ''
+    const end = typeof body?.end === 'string' ? body.end.trim() : ''
+    const teamId =
+      typeof body?.team_id === 'string' && body.team_id.trim()
+        ? body.team_id.trim()
+        : null
+    const requestedLimit =
+      typeof body?.limit === 'number' && Number.isFinite(body.limit)
+        ? Math.trunc(body.limit)
+        : 20
+    const limit = Math.max(1, Math.min(requestedLimit, 30))
 
     if (!validDate(start) || !validDate(end) || start > end) {
       throw new ApiError(400, 'Período inválido.')
@@ -142,8 +149,14 @@ export async function POST(request: Request) {
       { headers: forwardHeaders, cache: 'no-store' },
     )
     const afterPayload = (await readJson(afterResponse)) as Operation360Payload | null
-    const afterNegative = afterPayload?.queues?.negative_unanalyzed ?? []
-    const afterPositive = afterPayload?.queues?.positive_unanalyzed ?? []
+    if (!afterResponse.ok || !afterPayload?.queues) {
+      throw new ApiError(
+        503,
+        'O lote foi processado, mas não foi possível conferir a fila restante do 360º.',
+      )
+    }
+    const afterNegative = afterPayload.queues.negative_unanalyzed ?? []
+    const afterPositive = afterPayload.queues.positive_unanalyzed ?? []
 
     return json({
       source: 'clickdesk_operation_360_processor',
