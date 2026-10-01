@@ -8435,7 +8435,10 @@ function ChatModuleDashboard({
                 <span className="ml-2 text-xs font-normal text-slate-500">
                   {formatChatCount(operation360Coverage?.negative.analyzed ?? 0)}
                   {' / '}
-                  {formatChatCount(operation360Coverage?.negative.total ?? 0)} negativas analisadas
+                  {formatChatCount(operation360Coverage?.negative.total ?? 0)} negativas ·{' '}
+                  {formatChatCount(operation360Coverage?.positive.analyzed ?? 0)}
+                  {' / '}
+                  {formatChatCount(operation360Coverage?.positive.total ?? 0)} positivas
                 </span>
               </summary>
               <div className="mt-4">
