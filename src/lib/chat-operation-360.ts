@@ -40,17 +40,12 @@ export function calculateOperation360Totals(rows: Operation360Attendance[]) {
     positive,
     negative,
     csat: evaluated > 0 ? operation360Percentage(positive, evaluated) : null,
-    review_percentage:
-      rows.length > 0 ? operation360Percentage(evaluated, rows.length) : null,
+    review_percentage: rows.length > 0 ? operation360Percentage(evaluated, rows.length) : null,
   }
 }
 
 function buildPatterns(
-  rows: Array<{
-    ticket_id: string
-    key: string
-    example: string
-  }>,
+  rows: Array<{ ticket_id: string; key: string; example: string }>,
 ): Operation360Pattern[] {
   const total = rows.length
   const grouped = new Map<string, { count: number; ticketIds: string[]; examples: string[] }>()
@@ -58,92 +53,33 @@ function buildPatterns(
   for (const row of rows) {
     const current = grouped.get(row.key) ?? { count: 0, ticketIds: [], examples: [] }
     current.count += 1
-
-    if (current.ticketIds.length < 8 && !current.ticketIds.includes(row.ticket_id)) {
-      current.ticketIds.push(row.ticket_id)
-    }
-
-    if (
-      row.example &&
-      current.examples.length < 3 &&
-      !current.examples.includes(row.example)
-    ) {
-      current.examples.push(row.example)
-    }
-
+    if (current.ticketIds.length < 8 && !current.ticketIds.includes(row.ticket_id)) current.ticketIds.push(row.ticket_id)
+    if (row.example && current.examples.length < 3 && !current.examples.includes(row.example)) current.examples.push(row.example)
     grouped.set(row.key, current)
   }
 
   return [...grouped.entries()]
-    .map(([key, value]) => ({
-      key,
-      count: value.count,
-      percentage: operation360Percentage(value.count, total),
-      ticket_ids: value.ticketIds,
-      examples: value.examples,
-    }))
+    .map(([key, value]) => ({ key, count: value.count, percentage: operation360Percentage(value.count, total), ticket_ids: value.ticketIds, examples: value.examples }))
     .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key))
 }
 
-export function buildOperation360Analysis(
-  rows: Operation360AnalysisRow[],
-  status: 'approved' | 'analyzed' = 'approved',
-) {
-  const eligible =
-    status === 'approved'
-      ? rows.filter((row) => row.validation_status === 'approved')
-      : rows.filter((row) => row.validation_status !== 'rejected')
-
-  const normalized = eligible.map((row) => ({
-    ticket_id: row.clickdesk_ticket_id,
-    satisfaction_label: row.satisfaction_label,
-    analysis: row.analysis,
-  }))
+export function buildOperation360Analysis(rows: Operation360AnalysisRow[], status: 'approved' | 'analyzed' = 'approved') {
+  const eligible = status === 'approved' ? rows.filter((row) => row.validation_status === 'approved') : rows.filter((row) => row.validation_status !== 'rejected')
+  const normalized = eligible.map((row) => ({ ticket_id: row.clickdesk_ticket_id, satisfaction_label: row.satisfaction_label, analysis: row.analysis }))
 
   const summarize = (satisfaction: 'positive' | 'negative') => {
     const scoped = normalized.filter((row) => row.satisfaction_label === satisfaction)
-
     return {
       analyzed: scoped.length,
-      causes: buildPatterns(
-        scoped.map((row) => ({
-          ticket_id: row.ticket_id,
-          key: row.analysis.primary_cause.category,
-          example: row.analysis.primary_cause.summary,
-        })),
-      ),
-      controllability: buildPatterns(
-        scoped.map((row) => ({
-          ticket_id: row.ticket_id,
-          key: row.analysis.controllability.classification,
-          example: row.analysis.controllability.summary,
-        })),
-      ),
-      human_influence: buildPatterns(
-        scoped.map((row) => ({
-          ticket_id: row.ticket_id,
-          key: row.analysis.human_influence.classification,
-          example: row.analysis.human_influence.summary,
-        })),
-      ),
-      takeaways: buildPatterns(
-        scoped.map((row) => ({
-          ticket_id: row.ticket_id,
-          key: row.analysis.analyst_takeaway.kind,
-          example: row.analysis.analyst_takeaway.summary,
-        })),
-      ),
+      causes: buildPatterns(scoped.map((row) => ({ ticket_id: row.ticket_id, key: row.analysis.primary_cause.category, example: row.analysis.primary_cause.summary }))),
+      controllability: buildPatterns(scoped.map((row) => ({ ticket_id: row.ticket_id, key: row.analysis.controllability.classification, example: row.analysis.controllability.summary }))),
+      human_influence: buildPatterns(scoped.map((row) => ({ ticket_id: row.ticket_id, key: row.analysis.human_influence.classification, example: row.analysis.human_influence.summary }))),
+      takeaways: buildPatterns(scoped.map((row) => ({ ticket_id: row.ticket_id, key: row.analysis.analyst_takeaway.kind, example: row.analysis.analyst_takeaway.summary }))),
     }
   }
 
-  return {
-    status,
-    total: normalized.length,
-    negative: summarize('negative'),
-    positive: summarize('positive'),
-  }
+  return { status, total: normalized.length, negative: summarize('negative'), positive: summarize('positive') }
 }
-
 
 export type Operation360Synthesis = {
   coverage_level: 'none' | 'initial' | 'partial' | 'strong'
@@ -153,29 +89,12 @@ export type Operation360Synthesis = {
   control_read: string
   positive_read: string
   result_read: string
-  /** Compatibilidade temporária com a interface legada; contém a mesma leitura diagnóstica de result_read. */
   recommended_focus: string
   caveat: string
 }
 
 const OPERATION_360_LABELS: Record<string, string> = {
-  system_or_product: 'sistema ou produto',
-  process: 'processo',
-  wait_time: 'tempo de espera',
-  communication: 'comunicação',
-  resolution_quality: 'qualidade da resolução',
-  customer_expectation: 'expectativa do cliente',
-  external: 'fator externo',
-  other: 'outros fatores',
-  unclear: 'causa inconclusiva',
-  analyst: 'atendimento',
-  company: 'empresa ou processo interno',
-  customer: 'cliente',
-  mixed: 'fatores mistos',
-  maintain: 'prática a manter',
-  develop: 'ponto a desenvolver',
-  context: 'contexto fora do controle direto',
-  none: 'sem aprendizado específico',
+  system_or_product: 'sistema ou produto', process: 'processo', wait_time: 'tempo de espera', communication: 'comunicação', resolution_quality: 'qualidade da resolução', customer_expectation: 'expectativa do cliente', external: 'fator externo', other: 'outros fatores', unclear: 'causa inconclusiva', analyst: 'atendimento', company: 'empresa ou processo interno', customer: 'cliente', mixed: 'fatores mistos', maintain: 'prática a manter', develop: 'ponto a desenvolver', context: 'contexto fora do controle direto', none: 'sem aprendizado específico',
 }
 
 function operation360Label(key?: string) {
@@ -195,6 +114,19 @@ function coverageLevel(analyzed: number, total: number): Operation360Synthesis['
   return 'strong'
 }
 
+function concreteExamples(pattern: Operation360Pattern | null, limit = 3) {
+  if (!pattern) return ''
+  const examples = pattern.examples.map((value) => value.trim()).filter(Boolean).slice(0, limit)
+  if (!examples.length) return ''
+  return examples.join(' | ')
+}
+
+function patternWithMeaning(pattern: Operation360Pattern | null) {
+  if (!pattern) return 'sem padrão predominante'
+  const examples = concreteExamples(pattern)
+  return `${operation360Label(pattern.key)} (${pattern.count} ocorrência(s))${examples ? `. O que aparece nos tickets: ${examples}` : ''}`
+}
+
 export function buildOperation360Synthesis(input: {
   negativeTotal: number
   positiveTotal: number
@@ -210,48 +142,37 @@ export function buildOperation360Synthesis(input: {
   const topPositiveTakeaway = strongestPattern(input.analysis.positive.takeaways)
   const topPositiveCause = strongestPattern(input.analysis.positive.causes)
 
-  const coverageLabel =
-    level === 'strong'
-      ? 'Cobertura forte'
-      : level === 'partial'
-        ? 'Cobertura parcial'
-        : level === 'initial'
-          ? 'Cobertura inicial'
-          : 'Sem cobertura'
+  const coverageLabel = level === 'strong' ? 'Cobertura forte' : level === 'partial' ? 'Cobertura parcial' : level === 'initial' ? 'Cobertura inicial' : 'Análise pendente'
 
-  const headline =
-    input.negativeTotal === 0
-      ? 'Não há avaliações negativas neste recorte.'
-      : negativeAnalyzed === 0
-        ? `Há ${input.negativeTotal} avaliação(ões) negativa(s), mas a IA ainda não possui leituras válidas para consolidar padrões.`
-        : `A IA já leu ${negativeAnalyzed} de ${input.negativeTotal} avaliação(ões) negativa(s) (${negativeCoverage}%).`
+  const headline = input.negativeTotal === 0
+    ? 'Não há avaliações negativas neste recorte.'
+    : negativeAnalyzed === 0
+      ? `Existem ${input.negativeTotal} avaliação(ões) negativa(s), mas nenhuma delas foi processada qualitativamente pela IA neste recorte.`
+      : `A IA processou ${negativeAnalyzed} de ${input.negativeTotal} avaliação(ões) negativa(s) (${negativeCoverage}%). A síntese abaixo descreve somente essa parcela.`
 
-  const negativeRead =
-    !topNegative
-      ? 'Ainda não há base analisada suficiente para apontar um padrão negativo.'
-      : `Entre as negativas já analisadas, o fator mais recorrente é ${operation360Label(topNegative.key)}: ${topNegative.count} ocorrência(s), equivalentes a ${topNegative.percentage}% da leitura disponível.`
+  const negativeRead = !topNegative
+    ? negativeAnalyzed === 0 ? 'As avaliações negativas ainda aguardam processamento qualitativo.' : 'A parcela já analisada ainda não mostra um fator negativo recorrente.'
+    : `Na parcela analisada, o agrupamento mais frequente é ${patternWithMeaning(topNegative)}.`
 
-  const controlRead =
-    !topControl
-      ? 'Ainda não é possível separar com segurança o que estava sob controle do atendimento e o que pertence ao contexto.'
-      : `Na dimensão de controlabilidade, o agrupamento mais frequente está em ${operation360Label(topControl.key)} (${topControl.count} ocorrência(s)). Esse recorte ajuda a separar o que aparece ligado ao atendimento do que aparece ligado ao contexto da operação.`
+  const controlRead = !topControl
+    ? 'Ainda não é possível separar com segurança o que estava sob controle do atendimento e o que pertence ao contexto.'
+    : `Quanto à responsabilidade/contexto, aparece com maior frequência ${patternWithMeaning(topControl)}.`
 
   const positivePattern = topPositiveCause ?? topPositiveTakeaway
-  const positiveRead =
-    positiveAnalyzed === 0 || !positivePattern
-      ? 'As avaliações positivas ainda não têm cobertura suficiente para consolidar uma prática recorrente.'
-      : `Nas positivas analisadas (${positiveAnalyzed} de ${input.positiveTotal}; ${positiveCoverage}%), o fator mais recorrente é ${operation360Label(positivePattern.key)}. Esse dado descreve uma recorrência observada e, isoladamente, não prova a causa da avaliação positiva.`
+  const positiveRead = positiveAnalyzed === 0 || !positivePattern
+    ? input.positiveTotal > 0 ? `Existem ${input.positiveTotal} avaliação(ões) positiva(s), mas ainda não há leitura qualitativa processada suficiente para explicar o que funcionou.` : 'Não há avaliações positivas neste recorte.'
+    : `A IA processou ${positiveAnalyzed} de ${input.positiveTotal} positiva(s) (${positiveCoverage}%). O agrupamento mais frequente é ${patternWithMeaning(positivePattern)}.`
 
-  const resultRead =
-    input.negativeTotal === 0
-      ? 'Neste recorte, não há avaliações negativas pressionando o CSAT.'
-      : negativeAnalyzed === 0
-        ? `O período reúne ${input.negativeTotal} avaliação(ões) negativa(s), mas ainda não há leitura qualitativa suficiente para explicar quais fatores se repetem nelas.`
-        : topNegative && topControl
-          ? `Na leitura disponível, as negativas se concentram principalmente em ${operation360Label(topNegative.key)} (${topNegative.count} ocorrência(s)); na dimensão de contexto, ${operation360Label(topControl.key)} é o agrupamento mais frequente (${topControl.count} ocorrência(s)).`
-          : topNegative
-            ? `Na leitura disponível, o padrão negativo mais recorrente é ${operation360Label(topNegative.key)} (${topNegative.count} ocorrência(s)).`
-            : 'A leitura disponível ainda não mostra um fator predominante entre as avaliações negativas.'
+  const lowCoveragePrefix = level === 'strong' ? '' : `Leitura parcial (${negativeAnalyzed}/${input.negativeTotal} negativas processadas). `
+  const resultRead = input.negativeTotal === 0
+    ? 'Neste recorte, não há avaliações negativas pressionando o CSAT.'
+    : negativeAnalyzed === 0
+      ? `Há ${input.negativeTotal} avaliação(ões) negativa(s), porém a análise qualitativa ainda não foi executada para esses tickets. Não é possível explicar o resultado antes do processamento.`
+      : topNegative && topControl
+        ? `${lowCoveragePrefix}O principal agrupamento negativo observado é ${patternWithMeaning(topNegative)}. Na dimensão de responsabilidade/contexto, o agrupamento mais frequente é ${patternWithMeaning(topControl)}.`
+        : topNegative
+          ? `${lowCoveragePrefix}O principal agrupamento negativo observado é ${patternWithMeaning(topNegative)}.`
+          : `${lowCoveragePrefix}A parcela analisada ainda não mostra um fator predominante.`
 
   return {
     coverage_level: level,
@@ -262,7 +183,8 @@ export function buildOperation360Synthesis(input: {
     positive_read: positiveRead,
     result_read: resultRead,
     recommended_focus: resultRead,
-    caveat:
-      'A síntese descreve padrões dos tickets já analisados. Recorrência não prova causalidade e cobertura parcial não representa automaticamente toda a operação.',
+    caveat: level === 'strong'
+      ? 'A síntese descreve recorrências observadas nos tickets analisados. Recorrência não prova causalidade; consulte as evidências antes de concluir responsabilidade.'
+      : 'Cobertura incompleta: a síntese não representa automaticamente todas as avaliações do período. Os tickets pendentes precisam ser processados antes de uma conclusão consolidada.',
   }
 }
