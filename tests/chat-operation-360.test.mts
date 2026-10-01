@@ -365,3 +365,82 @@ test('consolidação preliminar usa pending e approved e exclui rejected', () =>
     ['approved-1', 'pending-1'],
   )
 })
+
+
+test('síntese aprofunda expectativa do cliente com exemplos concretos dos tickets', () => {
+  const analysis = {
+    status: 'analyzed',
+    total: 6,
+    negative: {
+      analyzed: 4,
+      causes: [
+        {
+          key: 'customer_expectation',
+          count: 3,
+          percentage: 75,
+          ticket_ids: ['n-1', 'n-2', 'n-3'],
+          examples: [
+            'Cliente esperava que a correção fiscal fosse feita diretamente pelo suporte.',
+            'Cliente esperava conclusão imediata mesmo dependendo de validação externa.',
+            'Cliente esperava continuidade do atendimento sem nova etapa de confirmação.',
+          ],
+        },
+      ],
+      controllability: [
+        {
+          key: 'mixed',
+          count: 3,
+          percentage: 75,
+          ticket_ids: ['n-1', 'n-2', 'n-3'],
+          examples: ['Parte da expectativa dependia do cliente e parte da condução do atendimento.'],
+        },
+      ],
+      human_influence: [],
+      takeaways: [],
+    },
+    positive: {
+      analyzed: 2,
+      causes: [
+        {
+          key: 'resolution_quality',
+          count: 2,
+          percentage: 100,
+          ticket_ids: ['p-1', 'p-2'],
+          examples: ['A orientação passo a passo levou à resolução.'],
+        },
+      ],
+      controllability: [],
+      human_influence: [],
+      takeaways: [],
+    },
+  }
+
+  const synthesis = buildOperation360Synthesis({
+    negativeTotal: 6,
+    positiveTotal: 10,
+    analysis,
+  })
+
+  assert.match(synthesis.negative_read, /expectativa do cliente/)
+  assert.match(synthesis.negative_read, /correção fiscal/)
+  assert.match(synthesis.negative_read, /validação externa/)
+  assert.match(synthesis.result_read, /expectativa do cliente/)
+  assert.match(synthesis.result_read, /O que aparece nos tickets/)
+  assert.match(synthesis.positive_read, /orientação passo a passo/)
+})
+
+test('síntese sem cobertura informa processamento pendente em vez de sugerir padrão insuficiente', () => {
+  const analysis = buildOperation360Analysis([], 'analyzed')
+  const synthesis = buildOperation360Synthesis({
+    negativeTotal: 5,
+    positiveTotal: 15,
+    analysis,
+  })
+
+  assert.equal(synthesis.coverage_level, 'none')
+  assert.match(synthesis.coverage_label, /Análise pendente/)
+  assert.match(synthesis.headline, /nenhuma delas foi processada qualitativamente/)
+  assert.match(synthesis.negative_read, /aguardam processamento qualitativo/)
+  assert.match(synthesis.result_read, /análise qualitativa ainda não foi executada/)
+  assert.doesNotMatch(synthesis.result_read, /padrão seguro|base suficiente/)
+})
