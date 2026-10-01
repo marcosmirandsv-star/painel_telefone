@@ -65,8 +65,9 @@ Este arquivo é a referência operacional das pendências ainda não encerradas.
 - [x] Validar que `pending` e `rejected` não entram no consolidado oficial.
 - [x] Validar rastreabilidade da síntese/padrões até os tickets de origem.
 - [x] Limitar a quantidade de IDs/exemplos exibidos por padrão sem perder a contagem total.
+- [x] Validar matematicamente no banco vivo da homologação que Todas as equipes = soma exata das duas equipes para atendimentos, avaliações, positivas e negativas na competência atual.
 - [ ] Validar em sessão autenticada Todas as equipes x equipe específica.
-- [ ] Validar visualmente períodos diferentes e competência atual parcial.
+- [ ] Validar visualmente períodos diferentes e competência atual parcial. A base ClickDesk persistida disponível hoje contém setembro/2026; não há agosto persistido para comparação equivalente.
 - [x] Cobrir automaticamente a recusa de transcript com menos de 40 caracteres antes da análise.
 - [x] Cobrir automaticamente a separação de acesso entre gestão e Analista no Chat.
 - [ ] Validar end-to-end ticket sem transcript suficiente.
@@ -89,11 +90,13 @@ Este arquivo é a referência operacional das pendências ainda não encerradas.
 
 ## 8. Hardening de segurança da homologação
 - [ ] Definir o tratamento de `public.chat_legacy_import`: a tabela está vazia e sem referências encontradas em views/funções, mas o Supabase Security Advisor acusa RLS desabilitado e grants amplos para `anon`/`authenticated`. Não alterar automaticamente sem decidir se a tabela será removida, bloqueada ou protegida por política.
-- [ ] Revisar avisos do Security Advisor para funções `SECURITY DEFINER` executáveis por `anon`/`authenticated`, separando helpers intencionais de funções que devem ter `EXECUTE` revogado.
-- [ ] Revisar as tabelas internas com RLS habilitado e sem policies (`homologation_access_allowlist`, `integration_keys`, `integration_usage`) e confirmar que grants/revogação mantêm o acesso fechado.
+- [x] Revisar avisos do Security Advisor para funções `SECURITY DEFINER`. A exposição `anon/PUBLIC` dos helpers de autorização foi removida e `process_schedule_transport_reminders(date)` deixou de ser executável por clientes; o cron interno continua rodando como `postgres`. Avisos restantes para `authenticated` correspondem a helpers/RPCs usados pelo portal ou a funções com checagem interna de papel e devem continuar sob revisão quando o modelo de Gestor for implementado.
+- [x] Revisar as tabelas internas com RLS habilitado e sem policies (`homologation_access_allowlist`, `integration_keys`, `integration_usage`): não há grants para `anon` ou `authenticated`; o acesso está restrito a `service_role`.
 - [ ] Avaliar habilitação de proteção contra senhas vazadas no Supabase Auth da homologação.
 
 ## Bloqueios/observações conhecidos
+- O hardening aplicado no Supabase de homologação está registrado em `supabase/homologation-security-hardening.sql`; produção não foi alterada.
+- O plano seguro para o papel Gestor por equipe está documentado em `docs/chat-gestor-team-scope-plan.md`; a implementação permanece pendente para não misturar gestão global com gestão restrita do Chat.
 - O Preview da Vercel está protegido. A conexão disponível ao assistente não possui autorização para abrir o projeto/time `project-gestao`; por isso nenhuma inspeção visual autenticada é marcada como concluída. O pipeline GitHub/Vercel, porém, está verde e o deploy Preview concluiu com sucesso.
 - O papel `Gestor` com escopo por equipe ainda não existe no enum/tabela de perfis da homologação. Criá-lo exige desenho de autorização/RLS para o Chat inteiro, não uma regra isolada do 360º.
 - O endpoint técnico da Edge Function ainda se chama `clickdesk-d1-sync` somente por compatibilidade com o cron instalado; o modo D-1 foi desativado e é recusado.
