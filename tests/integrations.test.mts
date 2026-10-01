@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { calculateAverageCsat, calculateChatAverage, phoneSummary, chatSummary } from '../src/lib/indicators.ts'
-import { ApiError, bearer, findConsumer, parseQuery, authorizeManager, authorizeKeyAdmin } from '../src/lib/integration-server.ts'
+import { ApiError, bearer, findConsumer, parseQuery, authorizeManager, authorizeKeyAdmin, authorizeClickDeskSessionClient } from '../src/lib/integration-server.ts'
 import { currentIndicators, officialIndicators } from '../src/lib/integration-data.ts'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
@@ -69,6 +69,71 @@ test('gestão valida sessão longa no Supabase e mantém verificação do perfil
   await assert.rejects(authorizeManager(request), (e: unknown) => e instanceof ApiError && e.status === 403)
   valid = false
   await assert.rejects(authorizeManager(request), (e: unknown) => e instanceof ApiError && e.status === 401)
+})
+
+test('acesso ClickDesk separa gestão de analista e exige vínculo individual', async (t) => {
+  const originalUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const originalKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+  const originalVercelEnv = process.env.VERCEL_ENV
+  process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://supabase.example.test'
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'test-publishable-key'
+  delete process.env.VERCEL_ENV
+
+  t.after(() => {
+    if (originalUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL
+    else process.env.NEXT_PUBLIC_SUPABASE_URL = originalUrl
+    if (originalKey === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+    else process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = originalKey
+    if (originalVercelEnv === undefined) delete process.env.VERCEL_ENV
+    else process.env.VERCEL_ENV = originalVercelEnv
+  })
+
+  const token = `eyJ${'b'.repeat(1200)}.payload.signature`
+  let role = 'master'
+  let chatAnalystId: string | null = null
+
+  t.mock.method(globalThis, 'fetch', async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input)
+    if (url.includes('/auth/v1/user')) {
+      assert.equal(new Headers(init?.headers).get('authorization'), `Bearer ${token}`)
+      return Response.json({
+        id: 'user-chat-test',
+        app_metadata: {},
+        user_metadata: {},
+        aud: 'authenticated',
+        created_at: '2026-01-01',
+      })
+    }
+
+    assert.ok(url.includes('/rest/v1/profiles'))
+    return Response.json({ role, chat_analyst_id: chatAnalystId })
+  })
+
+  const request = new Request('https://example.test', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  const management = await authorizeClickDeskSessionClient(request)
+  assert.equal(management.isManagement, true)
+  assert.equal(management.chatAnalystId, null)
+
+  role = 'analista'
+  chatAnalystId = '11111111-1111-4111-8111-111111111111'
+  const analyst = await authorizeClickDeskSessionClient(request)
+  assert.equal(analyst.isManagement, false)
+  assert.equal(analyst.chatAnalystId, chatAnalystId)
+
+  chatAnalystId = null
+  await assert.rejects(
+    authorizeClickDeskSessionClient(request),
+    (error: unknown) => error instanceof ApiError && error.status === 403,
+  )
+
+  role = 'visitante'
+  await assert.rejects(
+    authorizeClickDeskSessionClient(request),
+    (error: unknown) => error instanceof ApiError && error.status === 403,
+  )
 })
 
 test('consulta pagina mais de 1.000 registros e inclui semanas sobrepostas', async () => {
