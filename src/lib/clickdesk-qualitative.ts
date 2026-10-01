@@ -96,6 +96,39 @@ const CAUSE = new Set<QualitativeCauseCategory>([
   'unclear',
 ])
 
+
+export const QUALITATIVE_MIN_TRANSCRIPT_CHARS = 40
+
+export function isQualitativeTranscriptSufficient(
+  transcript: string,
+  minimum = QUALITATIVE_MIN_TRANSCRIPT_CHARS,
+) {
+  return transcript.trim().length >= minimum
+}
+
+export async function runQualitativeProviderFallback<T>(
+  providers: Array<{
+    name: string
+    run: () => Promise<T | null>
+  }>,
+) {
+  const errors: string[] = []
+
+  for (const provider of providers) {
+    try {
+      const result = await provider.run()
+      if (result) {
+        return { result, errors, provider: provider.name }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      errors.push(`${provider.name}: ${message}`)
+    }
+  }
+
+  return { result: null as T | null, errors, provider: null as string | null }
+}
+
 function record(value: unknown) {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
