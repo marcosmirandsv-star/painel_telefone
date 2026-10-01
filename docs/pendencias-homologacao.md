@@ -44,8 +44,9 @@ Este arquivo é a referência operacional das pendências ainda não encerradas.
 - [x] Respeitar equipe e período selecionados no filtro.
 - [x] Exibir funil: atendimentos -> avaliações -> positivas/negativas -> CSAT.
 - [x] Permitir abrir a Análise 360º a partir da Visão da operação por ação discreta.
-- [x] Colocar todas as negativas ainda não analisadas do filtro na fila de análise, sem limite amostral de 5.
+- [x] Colocar todas as negativas que ainda precisam de processamento na fila, sem limite amostral de 5; leituras aprovadas/pending são reaproveitadas, rejeitadas são reprocessadas e tickets nunca analisados entram na fila.
 - [x] Processar negativas em lotes técnicos e reutilizar análises persistidas.
+- [x] Garantir cobertura integral do universo de negativas no diagnóstico 360º: a tela usa a leitura não rejeitada do recorte e busca completar 41/41 (ou o total vigente), sem reduzir a síntese às poucas análises aprovadas.
 - [x] Processar positivas em lotes de até 20 para controlar custo/latência sem impedir cobertura progressiva.
 - [x] Consolidar padrões de causa, recorrência, influência humana, controlabilidade e evidências.
 - [x] Separar fatores do atendimento, empresa/processo, cliente/externo, mistos e inconclusivos.
