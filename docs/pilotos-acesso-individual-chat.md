@@ -14,20 +14,22 @@ Validar a experiência que será distribuída aos analistas antes da promoção 
 O único perfil `analista` confirmado hoje na homologação está vinculado a:
 - Karolyne Moreira
 - equipe: Polyana Ventura - Chat Outros
+- e-mail: karolyne.moreira@clickdigital.com.br
 
-Não foi encontrado perfil/auth/allowlist com os termos “Caroline” ou “Moderante”. Se “Caroline Moderante” se referia a outra pessoa, confirmar identidade antes de criar qualquer acesso.
+A referência verbal “Caroline Moreira” foi confrontada com o banco. O cadastro real é Karolyne Moreira, com K. Não criar um segundo acesso para “Caroline”.
 
 ### Piloto da equipe Marcos
 
-Foi solicitado preparar acesso para “Vanessa Catelini”, porém a base operacional do Chat contém:
-- Vanessa Silva
+A colaboradora foi confirmada em registros anteriores da operação como:
+- Vanessa Kateline da Silva
+- no ClickDesk/base persistida aparece de forma abreviada como Vanessa Silva
 - equipe: Marcos Miranda - Chat Notas
 - ativa
 - 44 atendimentos em setembro
 - 11 avaliações: 7 positivas e 4 negativas
 - sem perfil individual criado hoje
 
-Não foi encontrado “Vanessa Catelini” em Auth, profiles ou homologation_access_allowlist. Confirmar nome/e-mail antes do provisionamento para evitar vínculo incorreto.
+Ainda não foi localizado um e-mail corporativo exato em Auth, profiles, allowlist ou produção. Não inferir o endereço pelo padrão nominal. Confirmar o e-mail antes do provisionamento e vincular o acesso ao analyst_id já confirmado da Vanessa Silva.
 
 ### Segundo piloto da equipe Polyana
 
