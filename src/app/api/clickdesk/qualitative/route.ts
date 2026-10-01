@@ -10,6 +10,7 @@ import {
   extractTranscriptText,
   isQualitativeTranscriptSufficient,
   normalizeQualitativeAnalysis,
+  shouldReuseQualitativeCache,
   runQualitativeProviderFallback,
 } from '@/lib/clickdesk-qualitative'
 
@@ -650,7 +651,11 @@ export async function POST(request: Request) {
         .eq('clickdesk_ticket_id', ticketId)
         .maybeSingle()
 
-      if (!cached.error && cached.data) {
+      if (
+        !cached.error &&
+        cached.data &&
+        shouldReuseQualitativeCache(cached.data.validation_status)
+      ) {
         return json({
           source: 'clickdesk_qualitative_cache',
           cached: true,
