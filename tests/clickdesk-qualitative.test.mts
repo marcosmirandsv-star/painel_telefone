@@ -2,8 +2,10 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import {
   extractTranscriptText,
+  isQualitativeTranscriptSufficient,
   normalizeQualitativeAnalysis,
   redactTranscriptText,
+  runQualitativeProviderFallback,
 } from '../src/lib/clickdesk-qualitative.ts'
 
 test('redação remove identificadores sensíveis antes da análise externa', () => {
@@ -143,3 +145,65 @@ test('aprendizado do analista preserva uma força observável mesmo sem coaching
   assert.equal(result.analyst_takeaway.kind, 'maintain')
   assert.match(result.analyst_takeaway.summary, /próximos passos/i)
 })
+
+test('transcript curto é recusado antes de qualquer análise qualitativa', () => {
+  assert.equal(isQualitativeTranscriptSufficient(''), false)
+  assert.equal(isQualitativeTranscriptSufficient('mensagem curta'), false)
+  assert.equal(isQualitativeTranscriptSufficient('x'.repeat(39)), false)
+  assert.equal(isQualitativeTranscriptSufficient('x'.repeat(40)), true)
+})
+
+test('fallback qualitativo tenta o próximo provedor e preserva os erros anteriores', async () => {
+  const calls: string[] = []
+  const outcome = await runQualitativeProviderFallback([
+    {
+      name: 'primeiro',
+      run: async () => {
+        calls.push('primeiro')
+        return null
+      },
+    },
+    {
+      name: 'segundo',
+      run: async () => {
+        calls.push('segundo')
+        throw new Error('indisponível')
+      },
+    },
+    {
+      name: 'terceiro',
+      run: async () => {
+        calls.push('terceiro')
+        return { model: 'ok' }
+      },
+    },
+    {
+      name: 'quarto',
+      run: async () => {
+        calls.push('quarto')
+        return { model: 'não deveria executar' }
+      },
+    },
+  ])
+
+  assert.deepEqual(calls, ['primeiro', 'segundo', 'terceiro'])
+  assert.deepEqual(outcome.result, { model: 'ok' })
+  assert.equal(outcome.provider, 'terceiro')
+  assert.match(outcome.errors[0] ?? '', /segundo: indisponível/)
+})
+
+test('fallback qualitativo retorna indisponibilidade quando todos os provedores falham', async () => {
+  const outcome = await runQualitativeProviderFallback([
+    { name: 'gemini', run: async () => null },
+    { name: 'gemma', run: async () => { throw new Error('falha A') } },
+    { name: 'github', run: async () => { throw new Error('falha B') } },
+    { name: 'gateway', run: async () => null },
+  ])
+
+  assert.equal(outcome.result, null)
+  assert.equal(outcome.provider, null)
+  assert.equal(outcome.errors.length, 2)
+  assert.match(outcome.errors.join(' | '), /gemma: falha A/)
+  assert.match(outcome.errors.join(' | '), /github: falha B/)
+})
+
