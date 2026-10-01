@@ -240,9 +240,9 @@ export async function GET(request: Request) {
       },
       interpretation_rule: {
         message:
-          'Os padrões consolidados usam somente análises aprovadas. Avaliações ainda não analisadas ou pendentes permanecem fora da leitura validada.',
+          'O diagnóstico 360º usa as análises não rejeitadas do recorte. Aprovadas e pendentes são reaproveitadas; rejeitadas voltam para reanálise; tickets sem leitura entram na fila até completar o universo do filtro.',
         causality:
-          'Recorrência não prova causalidade. A leitura deve ser apresentada como padrão observado, com confiança e evidências rastreáveis.',
+          'Recorrência não prova causalidade. A leitura deve ser apresentada como padrão observado, com confiança e evidências rastreáveis. A governança de aprovação/rejeição permanece no menu próprio.',
       },
     })
   })
