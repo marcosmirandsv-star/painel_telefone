@@ -185,6 +185,6 @@ export function buildOperation360Synthesis(input: {
     recommended_focus: resultRead,
     caveat: level === 'strong'
       ? 'A síntese descreve recorrências observadas nos tickets analisados. Recorrência não prova causalidade; consulte as evidências antes de concluir responsabilidade.'
-      : 'Cobertura incompleta: a síntese não representa automaticamente todas as avaliações do período. Os tickets pendentes precisam ser processados antes de uma conclusão consolidada.',
+      : 'Cobertura incompleta: a síntese não representa automaticamente todas as avaliações do período. Recorrência não prova causalidade. Os tickets pendentes precisam ser processados antes de uma conclusão consolidada.',
   }
 }
