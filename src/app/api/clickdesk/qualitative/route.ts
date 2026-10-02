@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import {
   ApiError,
+  authorizeClickDeskAutomation,
   authorizeClickDeskSessionClient,
   handle,
   json,
@@ -641,7 +642,11 @@ export async function POST(request: Request) {
       throw new ApiError(404, 'IA qualitativa disponível somente na homologação.')
     }
 
-    const access = await authorizeClickDeskSessionClient(request)
+    const automationRequest =
+      request.headers.get('x-central-automation') === 'clickdesk-sync'
+    const access = automationRequest
+      ? await authorizeClickDeskAutomation(request)
+      : await authorizeClickDeskSessionClient(request)
     const body = (await request.json()) as QualitativeRequest
     const ticketId = body.ticket_id?.trim() ?? ''
     if (!validTicketId(ticketId)) {
