@@ -3,6 +3,7 @@ import {
   ApiError,
   authorizeClickDeskAutomation,
   authorizeClickDeskSessionClient,
+  callClickDeskAutomationDb,
   handle,
   json,
 } from '@/lib/integration-server'
@@ -24,6 +25,19 @@ const CLICKDESK_BASE_URL = 'https://api.desk.click.app/api/v1'
 type QualitativeRequest = {
   ticket_id?: string
   force?: boolean
+}
+
+type PersistedTicket = {
+  clickdesk_ticket_id: string
+  analyst_id: string | null
+  area: string | null
+  satisfaction_label: string | null
+  occurred_date: string | null
+  identity_role?: string | null
+}
+
+type AutomationTicketResponse = {
+  ticket?: PersistedTicket
 }
 
 function validTicketId(value: string) {
@@ -644,74 +658,101 @@ export async function POST(request: Request) {
 
     const automationRequest =
       request.headers.get('x-central-automation') === 'clickdesk-sync'
-    const access = automationRequest
+    const automationAccess = automationRequest
       ? await authorizeClickDeskAutomation(request)
+      : null
+    const sessionAccess = automationRequest
+      ? null
       : await authorizeClickDeskSessionClient(request)
+
     const body = (await request.json()) as QualitativeRequest
     const ticketId = body.ticket_id?.trim() ?? ''
     if (!validTicketId(ticketId)) {
       throw new ApiError(400, 'ticket_id inválido.')
     }
 
-    if (body.force && !access.isManagement) {
+    if (body.force && !automationRequest && !sessionAccess?.isManagement) {
       throw new ApiError(403, 'A reanálise forçada é restrita à gestão.')
     }
 
-    const persisted = await access.admin
-      .from('clickdesk_chat_attendances')
-      .select(
-        'clickdesk_ticket_id,analyst_id,area,satisfaction_label,occurred_date,identity_role',
-      )
-      .eq('clickdesk_ticket_id', ticketId)
-      .eq('identity_role', 'analyst')
-      .maybeSingle()
+    let persistedData: PersistedTicket
 
-    if (persisted.error) {
-      throw new ApiError(503, 'Não foi possível validar o atendimento persistido.')
-    }
-    if (!persisted.data) {
-      throw new ApiError(404, 'Atendimento não encontrado na base persistida do Chat.')
-    }
+    if (automationRequest) {
+      const payload = (await callClickDeskAutomationDb(
+        automationAccess?.token ?? '',
+        {
+          action: 'ticket',
+          ticket_id: ticketId,
+        },
+      )) as AutomationTicketResponse
 
-    if (
-      !access.isManagement &&
-      persisted.data.analyst_id !== access.chatAnalystId
-    ) {
-      throw new ApiError(404, 'Atendimento não encontrado na sua base individual.')
-    }
+      if (!payload.ticket) {
+        throw new ApiError(404, 'Atendimento não encontrado na base persistida do Chat.')
+      }
+      persistedData = payload.ticket
+    } else {
+      if (!sessionAccess) {
+        throw new ApiError(401, 'Sessão inválida.')
+      }
 
-    if (!body.force) {
-      const cached = await access.admin
-        .from('clickdesk_qualitative_analyses')
+      const persisted = await sessionAccess.admin
+        .from('clickdesk_chat_attendances')
         .select(
-          'clickdesk_ticket_id,analyst_id,occurred_date,area,satisfaction_label,analysis,model,transcript_characters,validation_status,validated_at,updated_at',
+          'clickdesk_ticket_id,analyst_id,area,satisfaction_label,occurred_date,identity_role',
         )
         .eq('clickdesk_ticket_id', ticketId)
+        .eq('identity_role', 'analyst')
         .maybeSingle()
 
+      if (persisted.error) {
+        throw new ApiError(503, 'Não foi possível validar o atendimento persistido.')
+      }
+      if (!persisted.data) {
+        throw new ApiError(404, 'Atendimento não encontrado na base persistida do Chat.')
+      }
+
       if (
-        !cached.error &&
-        cached.data &&
-        shouldReuseQualitativeCache(
-          cached.data.validation_status,
-          qualitativeAnalysisVersion(cached.data.analysis),
-        )
+        !sessionAccess.isManagement &&
+        persisted.data.analyst_id !== sessionAccess.chatAnalystId
       ) {
-        return json({
-          source: 'clickdesk_qualitative_cache',
-          cached: true,
-          ticket_id: cached.data.clickdesk_ticket_id,
-          analyst_id: cached.data.analyst_id,
-          occurred_date: cached.data.occurred_date,
-          area: cached.data.area,
-          satisfaction_label: cached.data.satisfaction_label,
-          transcript_characters_analyzed: cached.data.transcript_characters,
-          model: cached.data.model,
-          analyzed_at: cached.data.updated_at,
-          validation_status: cached.data.validation_status,
-          validated_at: cached.data.validated_at,
-          analysis: normalizeQualitativeAnalysis(cached.data.analysis),
-        })
+        throw new ApiError(404, 'Atendimento não encontrado na sua base individual.')
+      }
+
+      persistedData = persisted.data as PersistedTicket
+
+      if (!body.force) {
+        const cached = await sessionAccess.admin
+          .from('clickdesk_qualitative_analyses')
+          .select(
+            'clickdesk_ticket_id,analyst_id,occurred_date,area,satisfaction_label,analysis,model,transcript_characters,validation_status,validated_at,updated_at',
+          )
+          .eq('clickdesk_ticket_id', ticketId)
+          .maybeSingle()
+
+        if (
+          !cached.error &&
+          cached.data &&
+          shouldReuseQualitativeCache(
+            cached.data.validation_status,
+            qualitativeAnalysisVersion(cached.data.analysis),
+          )
+        ) {
+          return json({
+            source: 'clickdesk_qualitative_cache',
+            cached: true,
+            ticket_id: cached.data.clickdesk_ticket_id,
+            analyst_id: cached.data.analyst_id,
+            occurred_date: cached.data.occurred_date,
+            area: cached.data.area,
+            satisfaction_label: cached.data.satisfaction_label,
+            transcript_characters_analyzed: cached.data.transcript_characters,
+            model: cached.data.model,
+            analyzed_at: cached.data.updated_at,
+            validation_status: cached.data.validation_status,
+            validated_at: cached.data.validated_at,
+            analysis: normalizeQualitativeAnalysis(cached.data.analysis),
+          })
+        }
       }
     }
 
@@ -747,47 +788,64 @@ export async function POST(request: Request) {
     const result = await generateQualitativeAnalysis(
       buildQualitativePrompt({
         transcript,
-        satisfaction: persisted.data.satisfaction_label,
-        area: persisted.data.area,
-        occurredDate: persisted.data.occurred_date,
+        satisfaction: persistedData.satisfaction_label,
+        area: persistedData.area,
+        occurredDate: persistedData.occurred_date,
       }),
     )
 
-    if (!persisted.data.analyst_id) {
+    if (!persistedData.analyst_id) {
       throw new ApiError(422, 'Atendimento sem vínculo de analista para salvar a análise.')
     }
 
-    const stored = await access.admin
-      .from('clickdesk_qualitative_analyses')
-      .upsert(
-        {
-          clickdesk_ticket_id: ticketId,
-          analyst_id: persisted.data.analyst_id,
-          occurred_date: persisted.data.occurred_date,
-          area: persisted.data.area,
-          satisfaction_label: persisted.data.satisfaction_label,
-          analysis: {
-            ...result.analysis,
-            _analysis_version: QUALITATIVE_ANALYSIS_VERSION,
-          },
-          model: result.model,
-          transcript_hash: transcriptHash,
-          transcript_characters: transcript.length,
-          created_by: access.userId,
-          validation_status: 'pending',
-          validated_by: null,
-          validated_at: null,
-          validation_notes: null,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'clickdesk_ticket_id' },
-      )
+    const storedAnalysis = {
+      ...result.analysis,
+      _analysis_version: QUALITATIVE_ANALYSIS_VERSION,
+    }
 
-    if (stored.error) {
-      throw new ApiError(
-        503,
-        `A análise foi gerada, mas não pôde ser salva para validação: ${sanitizeProviderMessage(stored.error.message).slice(0, 220)}`,
-      )
+    if (automationRequest) {
+      await callClickDeskAutomationDb(automationAccess?.token ?? '', {
+        action: 'save',
+        ticket_id: ticketId,
+        analysis: storedAnalysis,
+        model: result.model,
+        transcript_hash: transcriptHash,
+        transcript_characters: transcript.length,
+      })
+    } else {
+      if (!sessionAccess) {
+        throw new ApiError(401, 'Sessão inválida.')
+      }
+
+      const stored = await sessionAccess.admin
+        .from('clickdesk_qualitative_analyses')
+        .upsert(
+          {
+            clickdesk_ticket_id: ticketId,
+            analyst_id: persistedData.analyst_id,
+            occurred_date: persistedData.occurred_date,
+            area: persistedData.area,
+            satisfaction_label: persistedData.satisfaction_label,
+            analysis: storedAnalysis,
+            model: result.model,
+            transcript_hash: transcriptHash,
+            transcript_characters: transcript.length,
+            created_by: sessionAccess.userId,
+            validation_status: 'pending',
+            validated_by: null,
+            validated_at: null,
+            validation_notes: null,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'clickdesk_ticket_id' },
+        )
+
+      if (stored.error) {
+        throw new ApiError(
+          503,
+          `A análise foi gerada, mas não pôde ser salva para validação: ${sanitizeProviderMessage(stored.error.message).slice(0, 220)}`,
+        )
+      }
     }
 
     const cached = true
@@ -796,10 +854,10 @@ export async function POST(request: Request) {
       source: `clickdesk_transcript_${result.provider}`,
       cached,
       ticket_id: ticketId,
-      analyst_id: persisted.data.analyst_id,
-      occurred_date: persisted.data.occurred_date,
-      area: persisted.data.area,
-      satisfaction_label: persisted.data.satisfaction_label,
+      analyst_id: persistedData.analyst_id,
+      occurred_date: persistedData.occurred_date,
+      area: persistedData.area,
+      satisfaction_label: persistedData.satisfaction_label,
       transcript_characters_analyzed: transcript.length,
       model: result.model,
       analyzed_at: new Date().toISOString(),
@@ -809,3 +867,4 @@ export async function POST(request: Request) {
     })
   })
 }
+
