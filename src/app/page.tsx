@@ -8430,6 +8430,37 @@ function ChatModuleDashboard({
               />
             </div>
 
+            <div className="rounded-xl border border-violet-300/20 bg-violet-300/5 p-4">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-violet-100">Processamento qualitativo do recorte</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-400">
+                    {operation360NegativeQueue.length + operation360PositiveQueue.length > 0
+                      ? `${operation360NegativeQueue.length} negativa(s) e ${operation360PositiveQueue.length} positiva(s) aguardam leitura. O processamento percorre toda a fila e reaproveita o que já estiver válido.`
+                      : 'Todas as avaliações elegíveis deste recorte já possuem leitura qualitativa válida.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="secondary-button shrink-0"
+                  disabled={
+                    Boolean(clickDeskOperation360Analyzing) ||
+                    operation360NegativeQueue.length + operation360PositiveQueue.length === 0
+                  }
+                  onClick={() => void handleCompleteOperation360()}
+                >
+                  {clickDeskOperation360Analyzing === 'all'
+                    ? `Processando leitura completa · ${clickDeskOperation360Progress}`
+                    : operation360NegativeQueue.length + operation360PositiveQueue.length > 0
+                      ? `Processar leitura completa · ${operation360NegativeQueue.length + operation360PositiveQueue.length} pendente(s)`
+                      : 'Leitura completa'}
+                </button>
+              </div>
+              {clickDeskOperation360Message && (
+                <p className="mt-3 text-sm leading-6 text-violet-100">{clickDeskOperation360Message}</p>
+              )}
+            </div>
+
             <details className="rounded-xl border border-white/10 bg-slate-950/25 p-4">
               <summary className="cursor-pointer list-none text-sm font-semibold text-slate-200">
                 Cobertura e processamento da IA
@@ -8508,18 +8539,6 @@ function ChatModuleDashboard({
                       ? `Analisar próximas ${Math.min(20, operation360PositiveQueue.length)} positiva(s)`
                       : 'Positivas analisadas'}
                 </button>
-                <button
-                  type="button"
-                  className="small-button"
-                  disabled={Boolean(clickDeskOperation360Analyzing)}
-                  onClick={() => void handleCompleteOperation360()}
-                >
-                  {clickDeskOperation360Analyzing === 'all'
-                    ? `Processando leitura completa · ${clickDeskOperation360Progress}`
-                    : operation360NegativeQueue.length + operation360PositiveQueue.length > 0
-                      ? `Atualizar leitura completa · ${operation360NegativeQueue.length + operation360PositiveQueue.length} pendente(s)`
-                      : 'Leitura completa'}
-                </button>
               </div>
 
               {operation360PositiveQueue.length > 20 && (
@@ -8528,9 +8547,6 @@ function ChatModuleDashboard({
                 </p>
               )}
 
-              {clickDeskOperation360Message && (
-                <p className="mt-4 text-sm leading-6 text-violet-100">{clickDeskOperation360Message}</p>
-              )}
             </div>
               </div>
             </details>
