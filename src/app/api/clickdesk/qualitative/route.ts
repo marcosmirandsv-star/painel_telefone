@@ -10,6 +10,8 @@ import {
   extractTranscriptText,
   isQualitativeTranscriptSufficient,
   normalizeQualitativeAnalysis,
+  qualitativeAnalysisVersion,
+  QUALITATIVE_ANALYSIS_VERSION,
   shouldReuseQualitativeCache,
   runQualitativeProviderFallback,
 } from '@/lib/clickdesk-qualitative'
@@ -662,7 +664,10 @@ export async function POST(request: Request) {
       if (
         !cached.error &&
         cached.data &&
-        shouldReuseQualitativeCache(cached.data.validation_status)
+        shouldReuseQualitativeCache(
+          cached.data.validation_status,
+          qualitativeAnalysisVersion(cached.data.analysis),
+        )
       ) {
         return json({
           source: 'clickdesk_qualitative_cache',
@@ -756,7 +761,10 @@ export async function POST(request: Request) {
           occurred_date: persisted.data.occurred_date,
           area: persisted.data.area,
           satisfaction_label: persisted.data.satisfaction_label,
-          analysis: result.analysis,
+          analysis: {
+            ...result.analysis,
+            _analysis_version: QUALITATIVE_ANALYSIS_VERSION,
+          },
           model: result.model,
           transcript_hash: transcriptHash,
           transcript_characters: transcript.length,
