@@ -82,3 +82,11 @@ test('SQL de Escalas não reabre políticas amplas de homologação', () => {
   assert.match(saturdaySql, /schedule_saturday_members_management_all/)
   assert.doesNotMatch(saturdaySql, /using \(true\)/)
 })
+
+
+test('portal individual nunca usa o primeiro analista como fallback', () => {
+  const page = source('src/app/page.tsx')
+  assert.match(page, /find\(\(item\) => item\.analyst_id === analyst\.id\) \?\? null/)
+  assert.doesNotMatch(page, /metrics\?\.by_analyst\?\.\[0\]/)
+  assert.match(page, /Somente seus dados/)
+})
