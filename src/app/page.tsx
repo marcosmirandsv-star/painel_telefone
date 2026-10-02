@@ -5033,7 +5033,7 @@ function ChatModuleDashboard({
       (clickDeskOperation360?.queues?.positive_unanalyzed?.length ?? 0)
 
     try {
-      for (let round = 1; round <= 20; round += 1) {
+      for (let round = 1; round <= 40; round += 1) {
         const response = await fetch('/api/clickdesk/operation-360/process', {
           method: 'POST',
           headers: {
@@ -5044,7 +5044,7 @@ function ChatModuleDashboard({
             start: chat2SelectedPeriod.start,
             end: chat2SelectedPeriod.end,
             team_id: selectedTeamId === 'all' ? null : selectedTeamId,
-            limit: 20,
+            limit: 8,
           }),
           cache: 'no-store',
         })
@@ -5097,7 +5097,7 @@ function ChatModuleDashboard({
           break
         }
 
-        if (round === 20) {
+        if (round === 40) {
           setClickDeskOperation360Message(
             `O processamento automático atingiu o limite de segurança desta execução. Restam ${remaining} avaliação(ões); uma nova atualização continuará somente do ponto pendente.`,
           )
