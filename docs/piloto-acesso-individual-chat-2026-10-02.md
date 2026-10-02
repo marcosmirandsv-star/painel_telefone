@@ -38,3 +38,16 @@ O piloto é aprovado quando:
 - navegação é simples e sem menus gerenciais;
 - os dados principais são compreensíveis sem explicação externa;
 - Karolyne e Vanessa conseguem usar o painel sem intervenção técnica.
+
+
+## Linha de base de outubro — captura técnica
+
+Use estes valores apenas como referência do momento da captura. Outubro é base viva e pode mudar após novas sincronizações.
+
+| Piloto | Equipe | Atendimentos | Avaliações | Positivas | Negativas | CSAT | Cobertura de avaliações |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Karolyne Moreira | Polyana Ventura - Chat Outros | 14 | 2 | 2 | 0 | 100,00% | 14,29% |
+| Thiago Reis | Marcos Miranda - Chat Notas | 65 | 15 | 11 | 4 | 73,33% | 23,08% |
+| Vanessa Silva | Marcos Miranda - Chat Notas | 59 | 15 | 10 | 5 | 66,67% | 25,42% |
+
+Na validação, compare sempre o portal do piloto com a visão Master filtrada para o mesmo analista e período. Se a base tiver sincronizado depois desta captura, os números podem aumentar; o que deve permanecer igual é a reconciliação entre as duas visões.
