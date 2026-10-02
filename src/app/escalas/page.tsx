@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { supabase as authSupabase } from '@/lib/supabase'
 import { scheduleSupabase as supabase } from '@/lib/schedule-supabase'
 import { generateMonthlySchedule, validateSchedule } from '@/lib/schedule-engine'
 import { ScheduleDateList } from '@/components/schedule-date-list'
@@ -414,64 +415,115 @@ export default function EscalasPage() {
 
   const loadAll = useCallback(async () => {
     setLoading(true)
-    const { data: userData } = await supabase.auth.getUser()
-    const user = userData.user
-    const [
-      profileResult,
-      teamResult,
-      peopleResult,
-      membershipsResult,
-      rulesResult,
-      absencesResult,
-      entriesResult,
-      contextsResult,
-      notificationResult,
-    ] = await Promise.all([
-      user
-        ? supabase.from('profiles').select('id,full_name,role').eq('id', user.id).maybeSingle()
-        : supabase.from('profiles').select('id,full_name,role').eq('full_name', 'Marcos Miranda').maybeSingle(),
-      supabase.from('schedule_teams').select('*').eq('active', true).order('name'),
-      supabase.from('schedule_people').select('*').order('name'),
-      supabase.from('schedule_memberships').select('*').order('start_date'),
-      supabase.from('schedule_rules').select('*').eq('active', true).order('start_date'),
-      supabase.from('schedule_absences').select('*').lte('start_date', paddedEndDate).gte('end_date', paddedStartDate),
-      supabase.from('schedule_entries').select('*').gte('date', paddedStartDate).lte('date', paddedEndDate),
-      supabase.from('schedule_month_contexts').select('*').order('year').order('month'),
-      supabase.from('schedule_notifications').select('*').order('created_at', { ascending: false }).limit(30),
-    ])
+    setMessage('')
 
-    const loadedProfile = (profileResult.data as Profile | null) ?? { id: 'homologacao', full_name: 'Marcos Miranda', role: 'master' }
-    setProfile(loadedProfile)
-    const loadedTeams = (teamResult.data ?? []) as ScheduleTeam[]
-    setTeams(loadedTeams)
-    setSelectedTeamId((current) => current || loadedTeams[0]?.id || '')
-    setPeople((peopleResult.data ?? []) as SchedulePerson[])
-    setMemberships((membershipsResult.data ?? []) as ScheduleMembership[])
-    setRules((rulesResult.data ?? []) as ScheduleRule[])
-    setAbsences((absencesResult.data ?? []) as ScheduleAbsence[])
-    setEntries((entriesResult.data ?? []) as ScheduleEntry[])
-    const loadedContexts = (contextsResult.data ?? []) as ScheduleMonthContext[]
-    setMonthContexts(loadedContexts)
-    const currentContext = loadedContexts.find((item) => item.year === year && item.month === month)
-    setContext(
-      currentContext
-        ? {
-            id: currentContext.id,
-            year,
-            month,
-            holidays: currentContext.holidays ?? [],
-            optional_days: currentContext.optional_days ?? [],
-            click_days: currentContext.click_days ?? [],
-            notes: currentContext.notes,
-          }
-        : { year, month, holidays: [], optional_days: [], click_days: [] },
-    )
-    const loadedNotifications = ((notificationResult.data ?? []) as Notification[]).filter(
-      (item) => item.profile_id === loadedProfile.id,
-    )
-    setNotifications(loadedNotifications)
-    latestNotificationIds.current = new Set(loadedNotifications.map((item) => item.id))
-    setLoading(false)
+    try {
+      const {
+        data: { user },
+      } = await authSupabase.auth.getUser()
+
+      if (!user) {
+        setProfile(null)
+        setMessage('Entre na Central de Performance com uma conta de gestão para acessar Escalas.')
+        return
+      }
+
+      const profileResult = await authSupabase
+        .from('profiles')
+        .select('id,full_name,role')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      const loadedProfile = profileResult.data as Profile | null
+      const managementRole = ['master','coordenadora','coordinator'].includes(
+        String(loadedProfile?.role ?? '').toLowerCase(),
+      )
+
+      if (profileResult.error || !loadedProfile || !managementRole) {
+        setProfile(loadedProfile)
+        setTeams([])
+        setPeople([])
+        setMemberships([])
+        setRules([])
+        setAbsences([])
+        setEntries([])
+        setMonthContexts([])
+        setNotifications([])
+        setMessage('Esta área é exclusiva da gestão.')
+        return
+      }
+
+      setProfile(loadedProfile)
+
+      const [
+        teamResult,
+        peopleResult,
+        membershipsResult,
+        rulesResult,
+        absencesResult,
+        entriesResult,
+        contextsResult,
+        notificationResult,
+      ] = await Promise.all([
+        supabase.from('schedule_teams').select('*').eq('active', true).order('name'),
+        supabase.from('schedule_people').select('*').order('name'),
+        supabase.from('schedule_memberships').select('*').order('start_date'),
+        supabase.from('schedule_rules').select('*').eq('active', true).order('start_date'),
+        supabase.from('schedule_absences').select('*').lte('start_date', paddedEndDate).gte('end_date', paddedStartDate),
+        supabase.from('schedule_entries').select('*').gte('date', paddedStartDate).lte('date', paddedEndDate),
+        supabase.from('schedule_month_contexts').select('*').order('year').order('month'),
+        supabase.from('schedule_notifications').select('*').order('created_at', { ascending: false }).limit(30),
+      ])
+
+      const loadedTeams = (teamResult.data ?? []) as ScheduleTeam[]
+      setTeams(loadedTeams)
+      setSelectedTeamId((current) => current || loadedTeams[0]?.id || '')
+      setPeople((peopleResult.data ?? []) as SchedulePerson[])
+      setMemberships((membershipsResult.data ?? []) as ScheduleMembership[])
+      setRules((rulesResult.data ?? []) as ScheduleRule[])
+      setAbsences((absencesResult.data ?? []) as ScheduleAbsence[])
+      setEntries((entriesResult.data ?? []) as ScheduleEntry[])
+
+      const loadedContexts = (contextsResult.data ?? []) as ScheduleMonthContext[]
+      setMonthContexts(loadedContexts)
+      const currentContext = loadedContexts.find((item) => item.year === year && item.month === month)
+      setContext(
+        currentContext
+          ? {
+              id: currentContext.id,
+              year,
+              month,
+              holidays: currentContext.holidays ?? [],
+              optional_days: currentContext.optional_days ?? [],
+              click_days: currentContext.click_days ?? [],
+              notes: currentContext.notes,
+            }
+          : { year, month, holidays: [], optional_days: [], click_days: [] },
+      )
+
+      const loadedNotifications = ((notificationResult.data ?? []) as Notification[]).filter(
+        (item) => item.profile_id === loadedProfile.id,
+      )
+      setNotifications(loadedNotifications)
+      latestNotificationIds.current = new Set(loadedNotifications.map((item) => item.id))
+
+      const firstError = [
+        teamResult.error,
+        peopleResult.error,
+        membershipsResult.error,
+        rulesResult.error,
+        absencesResult.error,
+        entriesResult.error,
+        contextsResult.error,
+        notificationResult.error,
+      ].find(Boolean)
+
+      if (firstError) {
+        setMessage('Parte dos dados de Escalas não pôde ser carregada. Atualize a página para tentar novamente.')
+      }
+    } finally {
+      setLoading(false)
+    }
   }, [month, paddedEndDate, paddedStartDate, year])
 
   useEffect(() => {
@@ -865,6 +917,21 @@ export default function EscalasPage() {
   }, [memberships, monthEndDate, monthStartDate, people, selectedTeam])
 
   if (loading) return <main className="schedule-shell p-8">Carregando módulo de escalas...</main>
+
+  if (!isManagement) {
+    return (
+      <main className="schedule-shell p-8">
+        <section className="mx-auto max-w-2xl rounded-2xl border border-amber-300/20 bg-slate-950/60 p-6">
+          <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-200">Acesso restrito</p>
+          <h1 className="mt-2 text-2xl font-bold">Escalas é uma área exclusiva da gestão</h1>
+          <p className="mt-3 text-sm leading-6 text-slate-300">
+            Seu perfil não possui permissão para visualizar dados, regras ou solicitações deste módulo.
+          </p>
+          <Link className="secondary-button mt-5 inline-flex" href="/">Voltar à Central de Performance</Link>
+        </section>
+      </main>
+    )
+  }
 
   return (
     <main className="schedule-shell p-4 sm:p-7">
