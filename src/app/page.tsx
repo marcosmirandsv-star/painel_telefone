@@ -983,7 +983,7 @@ type PeriodFilter = {
   end: string
 }
 
-type AppModule = 'phone' | 'chat'
+type AppModule = 'phone' | 'chat' | 'system'
 type ChatActiveTab = 'overview' | 'operation360' | 'prototype' | 'podium' | 'analysis' | 'reports' | 'import' | 'settings'
 
 type ChatFeedbackStyle = 'coach' | 'sare' | 'mimo'
@@ -2349,13 +2349,6 @@ export default function Home() {
                           >
                             Metas
                           </button>
-                          <button
-                            className={activeTab === 'users' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
-                            type="button"
-                            onClick={() => setActiveTab('users')}
-                          >
-                            Usuários
-                          </button>
                           <Link className="module-sidebar-subitem module-sidebar-subitem-link" href="/integracoes">
                             Fechamentos
                           </Link>
@@ -2462,6 +2455,26 @@ export default function Home() {
 
               {isManagementUser && (
                 <div className="module-sidebar-group">
+                  <button
+                    className={activeModule === 'system' ? 'module-sidebar-button module-sidebar-button-active' : 'module-sidebar-button'}
+                    type="button"
+                    onClick={() => {
+                      setActiveModule('system')
+                      setActiveTab('users')
+                      setExpandedSidebarModule(null)
+                    }}
+                  >
+                    <span className="module-sidebar-code" aria-hidden="true">SYS</span>
+                    <span className="module-sidebar-copy">
+                      <strong>Sistema</strong>
+                      <small>Usuários e acessos</small>
+                    </span>
+                  </button>
+                </div>
+              )}
+
+              {isManagementUser && (
+                <div className="module-sidebar-group">
                   <Link className="module-sidebar-button" href="/escalas">
                     <span className="module-sidebar-code" aria-hidden="true">ESC</span>
                     <span className="module-sidebar-copy">
@@ -2477,7 +2490,11 @@ export default function Home() {
               <span>Perfil atual</span>
               <strong>{getRoleLabel(userRole)}</strong>
               <small>
-                {activeModule === 'chat' ? 'Módulo Chat' : 'Módulo Telefone'}
+                {activeModule === 'chat'
+                  ? 'Módulo Chat'
+                  : activeModule === 'system'
+                    ? 'Sistema'
+                    : 'Módulo Telefone'}
               </small>
             </div>
           </aside>
@@ -2486,10 +2503,16 @@ export default function Home() {
         <header className="app-header flex flex-col gap-5 border-b border-white/10 pb-6 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-300">
-              {activeModule === 'chat' ? 'Módulo Chat' : 'Módulo Telefone'}
+              {activeModule === 'chat'
+                ? 'Módulo Chat'
+                : activeModule === 'system'
+                  ? 'Sistema'
+                  : 'Módulo Telefone'}
             </p>
             <h1 className="mt-3 text-3xl font-bold sm:text-4xl">
-              Gestão de Performance de Atendimento
+              {activeModule === 'system'
+                ? 'Administração do sistema'
+                : 'Gestão de Performance de Atendimento'}
             </h1>
             <p className="mt-3 max-w-3xl text-slate-300">
               {activeModule === 'chat'
@@ -2504,7 +2527,9 @@ export default function Home() {
                       : chatActiveTab === 'reports'
                         ? 'Fechamento mensal, ranking e relatórios individuais.'
                         : 'Ferramentas de conferência, importação e cadastros do Chat.'
-                : 'Metas, lançamentos, performance, pódio, relatórios e acompanhamento da operação de telefone.'}
+                : activeModule === 'system'
+                  ? 'Gerencie usuários, perfis e vínculos de acesso aos módulos da Central de Performance.'
+                  : 'Metas, lançamentos, performance, pódio, relatórios e acompanhamento da operação de telefone.'}
             </p>
             {!isManagementUser && (
               <p className="mt-3 text-sm text-slate-400">
@@ -2646,7 +2671,7 @@ export default function Home() {
           />
         )}
 
-        {activeModule === 'phone' && isManagementUser && activeTab === 'users' && (
+        {activeModule === 'system' && isManagementUser && activeTab === 'users' && (
           <UsersView
             profiles={profiles}
             analysts={analysts}
