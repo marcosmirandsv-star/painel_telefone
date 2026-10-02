@@ -90,3 +90,18 @@ test('portal individual nunca usa o primeiro analista como fallback', () => {
   assert.doesNotMatch(page, /metrics\?\.by_analyst\?\.\[0\]/)
   assert.match(page, /Somente seus dados/)
 })
+
+
+test('automação 360 usa credencial interna e permanece restrita à homologação', () => {
+  const autoProcessor = source('src/app/api/clickdesk/operation-360/auto-process/route.ts')
+  const qualitative = source('src/app/api/clickdesk/qualitative/route.ts')
+  const integrationServer = source('src/lib/integration-server.ts')
+
+  assert.match(autoProcessor, /environment !== 'homologacao'/)
+  assert.match(autoProcessor, /authorizeClickDeskAutomation\(request\)/)
+  assert.match(autoProcessor, /X-Central-Automation/)
+  assert.match(qualitative, /x-central-automation/)
+  assert.match(qualitative, /authorizeClickDeskAutomation\(request\)/)
+  assert.match(integrationServer, /get_clickdesk_cron_credentials/)
+  assert.match(integrationServer, /Automação do ClickDesk não autorizada/)
+})
