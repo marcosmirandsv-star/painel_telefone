@@ -5,7 +5,11 @@ import {
   json,
 } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
-import { normalizeQualitativeAnalysis } from '@/lib/clickdesk-qualitative'
+import {
+  normalizeQualitativeAnalysis,
+  qualitativeAnalysisVersion,
+  QUALITATIVE_ANALYSIS_VERSION,
+} from '@/lib/clickdesk-qualitative'
 import {
   buildOperation360Analysis,
   buildOperation360Synthesis,
@@ -155,14 +159,19 @@ export async function GET(request: Request) {
     }))
 
     const totals = calculateOperation360Totals(attendances)
+    const currentAnalyses = analyses.filter(
+      (row) =>
+        qualitativeAnalysisVersion(row.analysis) >= QUALITATIVE_ANALYSIS_VERSION,
+    )
+
     const analyzedIds = new Set(
-      analyses
+      currentAnalyses
         .filter((row) => row.validation_status !== 'rejected')
         .map((row) => row.clickdesk_ticket_id),
     )
 
     const approvedIds = new Set(
-      analyses
+      currentAnalyses
         .filter((row) => row.validation_status === 'approved')
         .map((row) => row.clickdesk_ticket_id),
     )
@@ -187,8 +196,12 @@ export async function GET(request: Request) {
     const analyzedNegative = negativeRows.filter((row) => analyzedIds.has(row.clickdesk_ticket_id)).length
     const analyzedPositive = positiveRows.filter((row) => analyzedIds.has(row.clickdesk_ticket_id)).length
 
-    const preliminaryPatterns = buildOperation360Analysis(normalizedAnalyses, 'analyzed')
-    const validatedPatterns = buildOperation360Analysis(normalizedAnalyses, 'approved')
+    const normalizedCurrentAnalyses = currentAnalyses.map((row) => ({
+      ...row,
+      analysis: normalizeQualitativeAnalysis(row.analysis),
+    }))
+    const preliminaryPatterns = buildOperation360Analysis(normalizedCurrentAnalyses, 'analyzed')
+    const validatedPatterns = buildOperation360Analysis(normalizedCurrentAnalyses, 'approved')
     const preliminarySynthesis = buildOperation360Synthesis({
       negativeTotal: totals.negative,
       positiveTotal: totals.positive,
@@ -230,9 +243,10 @@ export async function GET(request: Request) {
       validated_patterns: validatedPatterns,
       validated_synthesis: validatedSynthesis,
       analysis_status: {
-        pending: analyses.filter((row) => row.validation_status === 'pending').length,
-        approved: analyses.filter((row) => row.validation_status === 'approved').length,
-        rejected: analyses.filter((row) => row.validation_status === 'rejected').length,
+        pending: currentAnalyses.filter((row) => row.validation_status === 'pending').length,
+        approved: currentAnalyses.filter((row) => row.validation_status === 'approved').length,
+        rejected: currentAnalyses.filter((row) => row.validation_status === 'rejected').length,
+        stale: analyses.length - currentAnalyses.length,
       },
       queues: {
         negative_unanalyzed: unanalyzedNegative.map(serializeQueue),
@@ -240,7 +254,7 @@ export async function GET(request: Request) {
       },
       interpretation_rule: {
         message:
-          'O diagnóstico 360º usa as análises não rejeitadas do recorte. Aprovadas e pendentes são reaproveitadas; rejeitadas voltam para reanálise; tickets sem leitura entram na fila até completar o universo do filtro.',
+          'O diagnóstico 360º usa somente análises na versão qualitativa atual. Aprovadas e pendentes atuais são reaproveitadas; rejeitadas e análises de versões antigas voltam para reanálise; tickets sem leitura entram na fila até completar o universo do filtro.',
         causality:
           'Recorrência não prova causalidade. A leitura deve ser apresentada como padrão observado, com confiança e evidências rastreáveis. A governança de aprovação/rejeição permanece no menu próprio.',
       },
