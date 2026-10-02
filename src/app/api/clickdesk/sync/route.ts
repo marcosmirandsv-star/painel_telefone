@@ -5,6 +5,8 @@ export const runtime = 'nodejs'
 
 const CLICKDESK_BASE_URL = 'https://api.desk.click.app/api/v1'
 const MAX_HUMAN_PAGES = 100
+const MAX_INTRADAY_HUMAN_PAGES = 30
+const CLICKDESK_FETCH_TIMEOUT_MS = 30000
 const BUSINESS_TIME_ZONE = 'America/Sao_Paulo'
 
 type TicketRow = {
@@ -656,7 +658,7 @@ function readPaginationNumber(payload: unknown, wantedKey: string, depth = 0): n
 
 async function fetchClickDesk(path: string, apiKey: string, accountId: string) {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 15000)
+  const timeout = setTimeout(() => controller.abort(), CLICKDESK_FETCH_TIMEOUT_MS)
 
   try {
     const response = await fetch(`${CLICKDESK_BASE_URL}${path}`, {
@@ -743,6 +745,64 @@ async function fetchAllHumanPages(apiKey: string, accountId: string) {
   return { rows, pagesScanned: payloads.length, lastPage }
 }
 
+async function fetchRecentHumanPages(
+  apiKey: string,
+  accountId: string,
+  periodStart: string,
+) {
+  const first = await fetchClickDesk(
+    '/tickets?inbox=conversations&attendance=human&page=1',
+    apiKey,
+    accountId,
+  )
+  const lastPage = Math.max(1, readPaginationNumber(first, 'last_page') ?? 1)
+  const pagesToScan = Math.min(lastPage, MAX_INTRADAY_HUMAN_PAGES)
+
+  const payloads: unknown[] = [first]
+  for (let startPage = 2; startPage <= pagesToScan; startPage += 5) {
+    const pages = Array.from(
+      { length: Math.min(5, pagesToScan - startPage + 1) },
+      (_, index) => startPage + index,
+    )
+    const batch = await Promise.all(
+      pages.map((page) =>
+        fetchClickDesk(
+          `/tickets?inbox=conversations&attendance=human&page=${page}`,
+          apiKey,
+          accountId,
+        ),
+      ),
+    )
+    payloads.push(...batch)
+  }
+
+  if (lastPage > pagesToScan) {
+    const boundaryRows = summarizePayload(payloads[payloads.length - 1] ?? null)
+    const reachedOlderPeriod = boundaryRows.some((row) => {
+      if (!row.timestamp) return false
+      const date = businessDate(row.timestamp)
+      return Boolean(date && date < periodStart)
+    })
+
+    if (!reachedOlderPeriod) {
+      throw new ApiError(
+        422,
+        `A janela recente de ${pagesToScan} páginas ainda não alcançou registros anteriores a ${periodStart}.`,
+      )
+    }
+  }
+
+  const seen = new Set<string>()
+  const rows = payloads.flatMap(summarizePayload).filter((row) => {
+    if (seen.has(row.id)) return false
+    seen.add(row.id)
+    return true
+  })
+
+  return { rows, pagesScanned: payloads.length, lastPage }
+}
+
+
 function businessDate(timestamp: string) {
   const date = new Date(timestamp)
   if (Number.isNaN(date.getTime())) return null
@@ -802,7 +862,7 @@ async function parsePeriod(request: Request) {
     throw new ApiError(400, 'A sincronização aceita no máximo 93 dias por execução.')
   }
 
-  return { start, end, triggerMode }
+  return { start, end, triggerMode, today }
 }
 
 async function upsertInBatches(
@@ -826,7 +886,7 @@ export async function POST(request: Request) {
     }
 
     const { admin, userId } = await authorizeManagerSessionClient(request)
-    const { start, end, triggerMode } = await parsePeriod(request)
+    const { start, end, triggerMode, today } = await parsePeriod(request)
 
     const apiKey = process.env.CLICKDESK_API_KEY?.trim()
     const accountId = process.env.CLICKDESK_ACCOUNT_ID?.trim()
@@ -866,7 +926,9 @@ export async function POST(request: Request) {
     try {
       const [{ rows, pagesScanned }, analystsResult, linksResult, areaLinksResult, teamsResult] =
         await Promise.all([
-          fetchAllHumanPages(apiKey, accountId),
+          end === today
+            ? fetchRecentHumanPages(apiKey, accountId, start)
+            : fetchAllHumanPages(apiKey, accountId),
           admin.from('chat_analysts').select('id,team_id,name,active'),
           admin
             .from('clickdesk_chat_analyst_links')
