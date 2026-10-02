@@ -2,7 +2,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const CLICKDESK_BASE_URL = 'https://api.desk.click.app/api/v1'
 const BUSINESS_TIME_ZONE = 'America/Sao_Paulo'
-const MAX_HUMAN_PAGES = 100
+const MAX_INTRADAY_HUMAN_PAGES = 30
+const CLICKDESK_FETCH_TIMEOUT_MS = 30000
 
 type TicketRow = {
   id: string
@@ -260,7 +261,7 @@ function detectsHumanRole(value: unknown, depth = 0): boolean {
 
 async function fetchClickDesk(path: string, apiKey: string, accountId: string) {
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 15000)
+  const timeout = setTimeout(() => controller.abort(), CLICKDESK_FETCH_TIMEOUT_MS)
   try {
     const response = await fetch(`${CLICKDESK_BASE_URL}${path}`, {
       headers: {
@@ -279,20 +280,24 @@ async function fetchClickDesk(path: string, apiKey: string, accountId: string) {
   }
 }
 
-async function fetchAllHumanPages(apiKey: string, accountId: string) {
+async function fetchRecentHumanPages(
+  apiKey: string,
+  accountId: string,
+  periodStart: string,
+) {
   const first = await fetchClickDesk(
     '/tickets?inbox=conversations&attendance=human&page=1',
     apiKey,
     accountId,
   )
   const lastPage = Math.max(1, readPaginationNumber(first, 'last_page') ?? 1)
-  if (lastPage > MAX_HUMAN_PAGES) throw new Error('Volume humano acima do limite seguro.')
+  const pagesToScan = Math.min(lastPage, MAX_INTRADAY_HUMAN_PAGES)
 
   const payloads: unknown[] = [first]
-  for (let start = 2; start <= lastPage; start += 5) {
+  for (let startPage = 2; startPage <= pagesToScan; startPage += 5) {
     const pages = Array.from(
-      { length: Math.min(5, lastPage - start + 1) },
-      (_, index) => start + index,
+      { length: Math.min(5, pagesToScan - startPage + 1) },
+      (_, index) => startPage + index,
     )
     const batch = await Promise.all(
       pages.map((page) =>
@@ -306,13 +311,33 @@ async function fetchAllHumanPages(apiKey: string, accountId: string) {
     payloads.push(...batch)
   }
 
+  if (lastPage > pagesToScan) {
+    const boundaryRows = summarizePayload(payloads[payloads.length - 1] ?? null)
+    const reachedOlderPeriod = boundaryRows.some((row) => {
+      if (!row.updatedAt) return false
+      const date = businessDate(row.updatedAt)
+      return Boolean(date && date < periodStart)
+    })
+
+    if (!reachedOlderPeriod) {
+      throw new Error(
+        `Janela recente insuficiente: ${pagesToScan} páginas ainda não alcançaram registros anteriores a ${periodStart}.`,
+      )
+    }
+  }
+
   const seen = new Set<string>()
   const rows = payloads.flatMap(summarizePayload).filter((row) => {
     if (seen.has(row.id)) return false
     seen.add(row.id)
     return true
   })
-  return { rows, pagesScanned: payloads.length }
+
+  return {
+    rows,
+    pagesScanned: payloads.length,
+    totalPagesAvailable: lastPage,
+  }
 }
 
 async function resolveOperationalRows(
@@ -482,7 +507,7 @@ Deno.serve(async (req: Request) => {
   try {
     const [{ rows, pagesScanned }, analystsResult, linksResult, areaLinksResult, teamsResult] =
       await Promise.all([
-        fetchAllHumanPages(apiKey, accountId),
+        fetchRecentHumanPages(apiKey, accountId, start),
         admin.from('chat_analysts').select('id,team_id,name,active'),
         admin
           .from('clickdesk_chat_analyst_links')
