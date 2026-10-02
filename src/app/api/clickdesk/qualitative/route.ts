@@ -652,6 +652,29 @@ export async function POST(request: Request) {
       throw new ApiError(403, 'A reanálise forçada é restrita à gestão.')
     }
 
+    const persisted = await access.admin
+      .from('clickdesk_chat_attendances')
+      .select(
+        'clickdesk_ticket_id,analyst_id,area,satisfaction_label,occurred_date,identity_role',
+      )
+      .eq('clickdesk_ticket_id', ticketId)
+      .eq('identity_role', 'analyst')
+      .maybeSingle()
+
+    if (persisted.error) {
+      throw new ApiError(503, 'Não foi possível validar o atendimento persistido.')
+    }
+    if (!persisted.data) {
+      throw new ApiError(404, 'Atendimento não encontrado na base persistida do Chat.')
+    }
+
+    if (
+      !access.isManagement &&
+      persisted.data.analyst_id !== access.chatAnalystId
+    ) {
+      throw new ApiError(404, 'Atendimento não encontrado na sua base individual.')
+    }
+
     if (!body.force) {
       const cached = await access.admin
         .from('clickdesk_qualitative_analyses')
@@ -685,29 +708,6 @@ export async function POST(request: Request) {
           analysis: normalizeQualitativeAnalysis(cached.data.analysis),
         })
       }
-    }
-
-    const persisted = await access.admin
-      .from('clickdesk_chat_attendances')
-      .select(
-        'clickdesk_ticket_id,analyst_id,area,satisfaction_label,occurred_date,identity_role',
-      )
-      .eq('clickdesk_ticket_id', ticketId)
-      .eq('identity_role', 'analyst')
-      .maybeSingle()
-
-    if (persisted.error) {
-      throw new ApiError(503, 'Não foi possível validar o atendimento persistido.')
-    }
-    if (!persisted.data) {
-      throw new ApiError(404, 'Atendimento não encontrado na base persistida do Chat.')
-    }
-
-    if (
-      !access.isManagement &&
-      persisted.data.analyst_id !== access.chatAnalystId
-    ) {
-      throw new ApiError(404, 'Atendimento não encontrado na sua base individual.')
     }
 
     const apiKey = process.env.CLICKDESK_API_KEY?.trim()
