@@ -179,36 +179,46 @@ alter table public.schedule_notifications enable row level security;
 alter table public.schedule_public_links enable row level security;
 
 do $$
-declare t text;
+declare
+  p record;
+  t record;
+  policy_name text;
 begin
-  foreach t in array array[
-    'schedule_teams','schedule_people','schedule_memberships','schedule_rules',
-    'schedule_month_contexts','schedule_absences','schedule_entries',
-    'schedule_publications','schedule_requests','schedule_notification_recipients',
-    'schedule_notifications','schedule_public_links'
-  ] loop
-    execute format('drop policy if exists %I on public.%I', t || '_management_all', t);
+  -- Limpa políticas residuais do protótipo/homologação, inclusive nomes antigos.
+  for p in
+    select tablename, policyname
+    from pg_policies
+    where schemaname = 'public'
+      and tablename like 'schedule_%'
+  loop
+    execute format('drop policy if exists %I on public.%I', p.policyname, p.tablename);
+  end loop;
+
+  -- Enquanto o módulo de Escalas permanecer restrito à gestão, nenhuma tabela
+  -- schedule_* é acessível por anon ou por analistas autenticados.
+  for t in
+    select table_name
+    from information_schema.tables
+    where table_schema = 'public'
+      and table_type = 'BASE TABLE'
+      and table_name like 'schedule_%'
+  loop
+    execute format('alter table public.%I enable row level security', t.table_name);
+    execute format('revoke all on table public.%I from anon', t.table_name);
+    execute format('grant select, insert, update, delete on table public.%I to authenticated', t.table_name);
+
+    policy_name := t.table_name || '_management_all';
     execute format(
-      'create policy %I on public.%I for all to authenticated using (public.is_management_user()) with check (public.is_management_user())',
-      t || '_management_all', t
+      'create policy %I on public.%I for all to authenticated using ((select public.is_management_user())) with check ((select public.is_management_user()))',
+      policy_name,
+      t.table_name
     );
   end loop;
 end $$;
 
-drop policy if exists schedule_notifications_select_own on public.schedule_notifications;
-create policy schedule_notifications_select_own
-on public.schedule_notifications
-for select
-to authenticated
-using (profile_id = auth.uid() or public.is_management_user());
-
-drop policy if exists schedule_notifications_update_own on public.schedule_notifications;
-create policy schedule_notifications_update_own
-on public.schedule_notifications
-for update
-to authenticated
-using (profile_id = auth.uid() or public.is_management_user())
-with check (profile_id = auth.uid() or public.is_management_user());
+-- Self-service de Escalas fica desativado nesta fase de homologação.
+-- Quando o módulo for retomado, qualquer política individual deve ser criada
+-- explicitamente e sem reabrir acesso amplo às demais tabelas.
 
 create or replace function public.notify_schedule_request()
 returns trigger
