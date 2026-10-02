@@ -127,6 +127,11 @@ function patternWithMeaning(pattern: Operation360Pattern | null) {
   return `${operation360Label(pattern.key)} (${pattern.count} ocorrência(s))${examples ? `. O que aparece nos tickets: ${examples}` : ''}`
 }
 
+function isDominantPattern(pattern: Operation360Pattern | null) {
+  if (!pattern) return false
+  return pattern.count >= 3 && pattern.percentage >= 40
+}
+
 export function buildOperation360Synthesis(input: {
   negativeTotal: number
   positiveTotal: number
@@ -136,7 +141,11 @@ export function buildOperation360Synthesis(input: {
   const positiveAnalyzed = input.analysis.positive.analyzed
   const negativeCoverage = operation360Percentage(negativeAnalyzed, input.negativeTotal)
   const positiveCoverage = operation360Percentage(positiveAnalyzed, input.positiveTotal)
-  const level = coverageLevel(negativeAnalyzed, input.negativeTotal)
+  const totalEvaluated = input.negativeTotal + input.positiveTotal
+  const totalAnalyzed = negativeAnalyzed + positiveAnalyzed
+  const overallCoverage = operation360Percentage(totalAnalyzed, totalEvaluated)
+  const level = coverageLevel(totalAnalyzed, totalEvaluated)
+  const positiveLevel = coverageLevel(positiveAnalyzed, input.positiveTotal)
   const topNegative = strongestPattern(input.analysis.negative.causes)
   const topControl = strongestPattern(input.analysis.negative.controllability)
   const topPositiveTakeaway = strongestPattern(input.analysis.positive.takeaways)
@@ -148,11 +157,13 @@ export function buildOperation360Synthesis(input: {
     ? 'Não há avaliações negativas neste recorte.'
     : negativeAnalyzed === 0
       ? `Existem ${input.negativeTotal} avaliação(ões) negativa(s), mas nenhuma delas foi processada qualitativamente pela IA neste recorte.`
-      : `A IA processou ${negativeAnalyzed} de ${input.negativeTotal} avaliação(ões) negativa(s) (${negativeCoverage}%). A síntese abaixo descreve somente essa parcela.`
+      : `A IA processou ${totalAnalyzed} de ${totalEvaluated} avaliação(ões) do recorte (${overallCoverage}%). Entre as negativas, foram ${negativeAnalyzed} de ${input.negativeTotal} (${negativeCoverage}%). A síntese abaixo descreve somente a parcela processada.`
 
   const negativeRead = !topNegative
     ? negativeAnalyzed === 0 ? 'As avaliações negativas ainda aguardam processamento qualitativo.' : 'A parcela já analisada ainda não mostra um fator negativo recorrente.'
-    : `Na parcela analisada, o agrupamento mais frequente é ${patternWithMeaning(topNegative)}.`
+    : isDominantPattern(topNegative)
+      ? `Na parcela analisada, há concentração em ${patternWithMeaning(topNegative)}.`
+      : `Na parcela analisada, ainda não há concentração dominante. O agrupamento mais frequente é ${patternWithMeaning(topNegative)}, representando ${topNegative.percentage}% dos tickets negativos já processados.`
 
   const controlRead = !topControl
     ? 'Ainda não é possível separar com segurança o que estava sob controle do atendimento e o que pertence ao contexto.'
@@ -161,17 +172,19 @@ export function buildOperation360Synthesis(input: {
   const positivePattern = topPositiveCause ?? topPositiveTakeaway
   const positiveRead = positiveAnalyzed === 0 || !positivePattern
     ? input.positiveTotal > 0 ? `Existem ${input.positiveTotal} avaliação(ões) positiva(s), mas ainda não há leitura qualitativa processada suficiente para explicar o que funcionou.` : 'Não há avaliações positivas neste recorte.'
-    : `A IA processou ${positiveAnalyzed} de ${input.positiveTotal} positiva(s) (${positiveCoverage}%). O agrupamento mais frequente é ${patternWithMeaning(positivePattern)}.`
+    : positiveLevel === 'initial'
+      ? `A IA processou apenas ${positiveAnalyzed} de ${input.positiveTotal} positiva(s) (${positiveCoverage}%). A amostra positiva ainda é inicial e não deve ser generalizada. Entre os tickets já lidos aparece ${patternWithMeaning(positivePattern)}.`
+      : `A IA processou ${positiveAnalyzed} de ${input.positiveTotal} positiva(s) (${positiveCoverage}%). O agrupamento mais frequente é ${patternWithMeaning(positivePattern)}.`
 
-  const lowCoveragePrefix = level === 'strong' ? '' : `Leitura parcial (${negativeAnalyzed}/${input.negativeTotal} negativas processadas). `
+  const lowCoveragePrefix = level === 'strong' ? '' : `Leitura parcial (${totalAnalyzed}/${totalEvaluated} avaliações processadas; ${negativeAnalyzed}/${input.negativeTotal} negativas). `
   const resultRead = input.negativeTotal === 0
     ? 'Neste recorte, não há avaliações negativas pressionando o CSAT.'
     : negativeAnalyzed === 0
       ? `Há ${input.negativeTotal} avaliação(ões) negativa(s), porém a análise qualitativa ainda não foi executada para esses tickets. Não é possível explicar o resultado antes do processamento.`
       : topNegative && topControl
-        ? `${lowCoveragePrefix}O principal agrupamento negativo observado é ${patternWithMeaning(topNegative)}. Na dimensão de responsabilidade/contexto, o agrupamento mais frequente é ${patternWithMeaning(topControl)}.`
+        ? `${lowCoveragePrefix}${isDominantPattern(topNegative) ? 'Há concentração no agrupamento negativo' : 'O agrupamento negativo mais frequente, sem dominância na amostra, é'} ${patternWithMeaning(topNegative)}. Na dimensão de responsabilidade/contexto, o agrupamento mais frequente é ${patternWithMeaning(topControl)}.`
         : topNegative
-          ? `${lowCoveragePrefix}O principal agrupamento negativo observado é ${patternWithMeaning(topNegative)}.`
+          ? `${lowCoveragePrefix}${isDominantPattern(topNegative) ? 'Há concentração no agrupamento negativo' : 'O agrupamento negativo mais frequente, sem dominância na amostra, é'} ${patternWithMeaning(topNegative)}.`
           : `${lowCoveragePrefix}A parcela analisada ainda não mostra um fator predominante.`
 
   return {
