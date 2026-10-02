@@ -139,6 +139,14 @@ REGRAS OBRIGATÓRIAS
 - Não deduza intenção, personalidade, capacidade, esforço ou estado emocional interno do atendente.
 - "Sentimento" significa apenas o tom observável da interação, não diagnóstico psicológico.
 - Em controllability, use analyst somente quando houver ação concreta sob controle do analista; company para sistema/processo interno; external para fatores de fora; customer para decisão/condição do cliente; mixed quando houver mais de um fator demonstrável.
+- Escolha primary_cause.category pela causa concreta observável, não pelo tema geral da conversa.
+- Use customer_expectation SOMENTE quando o transcript mostrar uma diferença explícita entre o que o cliente esperava e o que o atendimento/produto/processo podia entregar. Nesse caso, primary_cause.summary deve escrever obrigatoriamente "O cliente esperava X, mas Y ocorreu/foi possível", deixando X e Y concretos.
+- Não use customer_expectation apenas porque o cliente tinha uma dúvida, pediu orientação ou ficou insatisfeito.
+- Encerramento automático por inatividade/regra de timeout deve ser process quando a regra operacional for o fator principal.
+- Encerramento prematuro pelo atendente ou investigação que não avança deve ser resolution_quality quando a condução humana for o fator principal.
+- Falha, comportamento incorreto, sincronização ou limitação do software deve ser system_or_product quando houver evidência no transcript.
+- Dependência de definição contábil, fiscal, SEFAZ ou outro agente externo deve ser external quando essa dependência for o fator principal; se o ponto central for a expectativa de que o suporte fornecesse uma definição fora do seu escopo, customer_expectation só é válido se essa expectativa estiver explícita e o summary explicar exatamente qual era.
+- Dúvida sobre passo a passo, primeira emissão, CNPJ ou uso do sistema não é customer_expectation por si só; classifique communication, process, resolution_quality ou unclear conforme a evidência.
 - coaching_signal.available deve ser true somente quando houver comportamento observável que possa ser trabalhado em feedback gerencial.
 - analyst_takeaway é independente de coaching_signal e responde ao que a própria pessoa pode aprender com este atendimento.
 - analyst_takeaway.kind = maintain quando houver comportamento observável adequado que valha repetir, mesmo que ele não seja a causa principal da avaliação.
