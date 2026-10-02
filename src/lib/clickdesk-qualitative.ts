@@ -97,6 +97,7 @@ const CAUSE = new Set<QualitativeCauseCategory>([
 ])
 
 
+export const QUALITATIVE_ANALYSIS_VERSION = 2
 export const QUALITATIVE_MIN_TRANSCRIPT_CHARS = 40
 
 export function isQualitativeTranscriptSufficient(
@@ -107,10 +108,20 @@ export function isQualitativeTranscriptSufficient(
 }
 
 
+export function qualitativeAnalysisVersion(value: unknown) {
+  const source = record(value)
+  const raw = source._analysis_version
+  return typeof raw === 'number' && Number.isFinite(raw) ? Math.trunc(raw) : 0
+}
+
 export function shouldReuseQualitativeCache(
   validationStatus: string | null | undefined,
+  analysisVersion = QUALITATIVE_ANALYSIS_VERSION,
 ) {
-  return validationStatus !== 'rejected'
+  return (
+    validationStatus !== 'rejected' &&
+    analysisVersion >= QUALITATIVE_ANALYSIS_VERSION
+  )
 }
 
 export async function runQualitativeProviderFallback<T>(
