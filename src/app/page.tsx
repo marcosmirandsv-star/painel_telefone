@@ -3458,12 +3458,10 @@ function ChatAnalystPortal({
   }
 
   const ownMetric =
-    metrics?.by_analyst?.find((item) => item.analyst_id === analyst.id) ??
-    metrics?.by_analyst?.[0] ??
-    null
-  const accumulated = ownMetric ?? metrics?.performance_accumulated ?? null
-  const today = ownMetric?.today ?? metrics?.today ?? null
-  const daily = ownMetric?.daily ?? metrics?.performance_daily ?? []
+    metrics?.by_analyst?.find((item) => item.analyst_id === analyst.id) ?? null
+  const accumulated = ownMetric
+  const today = ownMetric?.today ?? null
+  const daily = ownMetric?.daily ?? []
   const csat = accumulated?.csat ?? null
   const reviewPercentage = accumulated?.review_percentage ?? null
   const csatGoal = Number(analyst.csat_goal)
@@ -3509,9 +3507,14 @@ function ChatAnalystPortal({
   return (
     <div className="mt-8 space-y-6">
       <section className="panel">
-        <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
-          Chat · acesso individual
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
+            Chat · acesso individual
+          </p>
+          <span className="rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-xs text-slate-400">
+            Somente seus dados
+          </span>
+        </div>
         <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
             <div className="flex items-center gap-4">
