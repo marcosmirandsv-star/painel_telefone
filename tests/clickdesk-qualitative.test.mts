@@ -4,6 +4,8 @@ import {
   extractTranscriptText,
   isQualitativeTranscriptSufficient,
   normalizeQualitativeAnalysis,
+  qualitativeAnalysisVersion,
+  QUALITATIVE_ANALYSIS_VERSION,
   redactTranscriptText,
   runQualitativeProviderFallback,
   shouldReuseQualitativeCache,
@@ -208,9 +210,14 @@ test('fallback qualitativo retorna indisponibilidade quando todos os provedores 
   assert.match(outcome.errors.join(' | '), /github: falha B/)
 })
 
-test('cache qualitativo rejeitado é refeito enquanto pending e approved são reaproveitados', () => {
+test('cache qualitativo rejeitado ou de versão antiga é refeito', () => {
   assert.equal(shouldReuseQualitativeCache('approved'), true)
   assert.equal(shouldReuseQualitativeCache('pending'), true)
   assert.equal(shouldReuseQualitativeCache('rejected'), false)
   assert.equal(shouldReuseQualitativeCache(null), true)
+  assert.equal(shouldReuseQualitativeCache('approved', QUALITATIVE_ANALYSIS_VERSION - 1), false)
+  assert.equal(shouldReuseQualitativeCache('pending', QUALITATIVE_ANALYSIS_VERSION - 1), false)
+  assert.equal(shouldReuseQualitativeCache('approved', QUALITATIVE_ANALYSIS_VERSION), true)
+  assert.equal(qualitativeAnalysisVersion({ _analysis_version: QUALITATIVE_ANALYSIS_VERSION }), QUALITATIVE_ANALYSIS_VERSION)
+  assert.equal(qualitativeAnalysisVersion({}), 0)
 })
