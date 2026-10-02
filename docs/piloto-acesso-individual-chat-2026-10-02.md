@@ -51,3 +51,19 @@ Use estes valores apenas como referência do momento da captura. Outubro é base
 | Vanessa Silva | Marcos Miranda - Chat Notas | 59 | 15 | 10 | 5 | 66,67% | 25,42% |
 
 Na validação, compare sempre o portal do piloto com a visão Master filtrada para o mesmo analista e período. Se a base tiver sincronizado depois desta captura, os números podem aumentar; o que deve permanecer igual é a reconciliação entre as duas visões.
+
+
+## Pré-validação técnica concluída
+
+Antes do início dos pilotos, a homologação passou por uma revisão de isolamento:
+
+- métricas, histórico e tickets rejeitam tentativa de consultar outro `analyst_id`;
+- Análise 360º e processamento do 360º são exclusivos da gestão;
+- IA qualitativa valida a propriedade do ticket antes de consultar/reutilizar cache;
+- o portal individual não usa outro analista como fallback quando o próprio registro não é encontrado;
+- `/integracoes` exige gestão e o gerenciamento de chaves exige Master;
+- `/escalas` bloqueia Analista antes de carregar qualquer dado;
+- tabelas `schedule_*` foram fechadas no RLS para gestão, com privilégios de `anon` revogados;
+- políticas de leitura da IA qualitativa limitam Analista ao próprio `chat_analyst_id`.
+
+A validação humana dos pilotos continua necessária para experiência, clareza visual e reconciliação dos números exibidos.
