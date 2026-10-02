@@ -153,11 +153,6 @@ export async function GET(request: Request) {
     const analyses = (await loadAnalyses(access.admin, filters)).filter((row) =>
       attendanceIds.has(row.clickdesk_ticket_id),
     )
-    const normalizedAnalyses = analyses.map((row) => ({
-      ...row,
-      analysis: normalizeQualitativeAnalysis(row.analysis),
-    }))
-
     const totals = calculateOperation360Totals(attendances)
     const currentAnalyses = analyses.filter(
       (row) =>
