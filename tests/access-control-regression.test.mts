@@ -56,3 +56,29 @@ test('Escalas não usa fallback de usuário e só carrega dados após validar ge
     'dados de Escalas não podem ser consultados antes da autorização gerencial',
   )
 })
+
+
+test('Fechamentos e chaves de integração exigem gestão no backend', () => {
+  const closures = source('src/app/api/integrations/closures/route.ts')
+  const keys = source('src/app/api/integrations/keys/route.ts')
+  const page = source('src/app/integracoes/page.tsx')
+
+  assert.match(closures, /authorizeManager\(request\)/)
+  assert.match(keys, /authorizeKeyAdmin\(request\)/)
+  assert.match(page, /\['master', 'coordenadora', 'coordinator'\]/)
+  assert.match(page, /Esta área é exclusiva da gestão/)
+})
+
+test('SQL de Escalas não reabre políticas amplas de homologação', () => {
+  const moduleSql = source('supabase/schedule-module.sql')
+  const saturdaySql = source('supabase/schedule-saturdays.sql')
+
+  assert.match(moduleSql, /revoke all on table public\.%I from anon/)
+  assert.match(moduleSql, /is_management_user/)
+  assert.doesNotMatch(moduleSql, /for all to anon/)
+  assert.doesNotMatch(moduleSql, /for all to authenticated using \(true\)/)
+
+  assert.match(saturdaySql, /revoke all on public\.schedule_saturday_members from anon/)
+  assert.match(saturdaySql, /schedule_saturday_members_management_all/)
+  assert.doesNotMatch(saturdaySql, /using \(true\)/)
+})
