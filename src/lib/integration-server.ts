@@ -125,6 +125,26 @@ export async function authorizeManagerSessionClient(request: Request) {
 
   return { admin: client, userId: data.user.id, role }
 }
+export async function authorizeClickDeskAutomation(request: Request) {
+  const token = bearer(request)
+  const admin = adminClient()
+  const verification = await admin.rpc('get_clickdesk_cron_credentials', {
+    p_token: token,
+  })
+
+  if (verification.error || !verification.data) {
+    throw new ApiError(401, 'Automação do ClickDesk não autorizada.')
+  }
+
+  return {
+    admin,
+    userId: null as string | null,
+    role: 'automation',
+    isManagement: true,
+    chatAnalystId: null as string | null,
+  }
+}
+
 export async function authorizeClickDeskSessionClient(request: Request) {
   const token = bearer(request, 'session')
   const homologation = process.env.VERCEL_ENV === 'preview'
