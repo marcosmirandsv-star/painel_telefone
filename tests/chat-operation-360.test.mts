@@ -145,7 +145,7 @@ test('síntese não generaliza quando a cobertura negativa ainda é inicial', ()
   assert.match(synthesis.caveat, /Recorrência não prova causalidade/)
 })
 
-test('síntese descreve processo quando a cobertura é suficiente e o contexto é da empresa', () => {
+test('síntese considera cobertura total do universo, não apenas negativas', () => {
   const analysis = {
     status: 'analyzed',
     total: 30,
@@ -203,7 +203,7 @@ test('síntese descreve processo quando a cobertura é suficiente e o contexto �
     analysis,
   })
 
-  assert.equal(synthesis.coverage_level, 'strong')
+  assert.equal(synthesis.coverage_level, 'partial')
   assert.match(synthesis.negative_read, /processo/)
   assert.match(synthesis.control_read, /empresa ou processo interno/)
   assert.match(synthesis.result_read, /processo/)
@@ -443,4 +443,96 @@ test('síntese sem cobertura informa processamento pendente em vez de sugerir pa
   assert.match(synthesis.negative_read, /aguardam processamento qualitativo/)
   assert.match(synthesis.result_read, /análise qualitativa ainda não foi executada/)
   assert.doesNotMatch(synthesis.result_read, /padrão seguro|base suficiente/)
+})
+
+
+test('não chama de dominante um agrupamento de 3 em 9 negativas processadas', () => {
+  const analysis = {
+    status: 'analyzed',
+    total: 13,
+    negative: {
+      analyzed: 9,
+      causes: [
+        {
+          key: 'customer_expectation',
+          count: 3,
+          percentage: 33.33,
+          ticket_ids: ['n-1', 'n-2', 'n-3'],
+          examples: [
+            'Cliente esperava definição fiscal do suporte.',
+            'Atendimento foi encerrado por inatividade.',
+            'Cliente tinha dúvida sobre primeira emissão.',
+          ],
+        },
+      ],
+      controllability: [
+        {
+          key: 'mixed',
+          count: 3,
+          percentage: 33.33,
+          ticket_ids: ['n-1', 'n-2', 'n-3'],
+          examples: ['Fatores combinados.'],
+        },
+      ],
+      human_influence: [],
+      takeaways: [],
+    },
+    positive: {
+      analyzed: 4,
+      causes: [
+        {
+          key: 'resolution_quality',
+          count: 4,
+          percentage: 100,
+          ticket_ids: ['p-1', 'p-2', 'p-3', 'p-4'],
+          examples: ['Orientação levou à resolução.'],
+        },
+      ],
+      controllability: [],
+      human_influence: [],
+      takeaways: [],
+    },
+  }
+
+  const synthesis = buildOperation360Synthesis({
+    negativeTotal: 16,
+    positiveTotal: 68,
+    analysis,
+  })
+
+  assert.equal(synthesis.coverage_level, 'initial')
+  assert.match(synthesis.headline, /13 de 84/)
+  assert.match(synthesis.negative_read, /não há concentração dominante/)
+  assert.match(synthesis.result_read, /sem dominância/)
+  assert.doesNotMatch(synthesis.result_read, /principal agrupamento/)
+  assert.match(synthesis.positive_read, /amostra positiva ainda é inicial/)
+})
+
+test('cobertura forte exige leitura ampla do universo avaliado', () => {
+  const analysis = {
+    status: 'analyzed',
+    total: 90,
+    negative: {
+      analyzed: 18,
+      causes: [],
+      controllability: [],
+      human_influence: [],
+      takeaways: [],
+    },
+    positive: {
+      analyzed: 72,
+      causes: [],
+      controllability: [],
+      human_influence: [],
+      takeaways: [],
+    },
+  }
+
+  const synthesis = buildOperation360Synthesis({
+    negativeTotal: 20,
+    positiveTotal: 80,
+    analysis,
+  })
+
+  assert.equal(synthesis.coverage_level, 'strong')
 })
