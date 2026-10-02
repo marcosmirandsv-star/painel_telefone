@@ -7461,7 +7461,7 @@ function ChatModuleDashboard({
                 className="secondary-button mt-3"
                 onClick={() => onChatActiveTabChange('operation360')}
               >
-                Entender o CSAT com IA
+                Abrir Análise 360º
               </button>
             </div>
           </div>
@@ -15020,8 +15020,25 @@ function ClickDeskSyncStatus({
       : null
   const nextSyncTimestamp =
     nextSyncAt && !Number.isNaN(nextSyncAt.getTime()) ? nextSyncAt.getTime() : null
+  const latestSyncTimestamp =
+    latestSyncAt && !Number.isNaN(new Date(latestSyncAt).getTime())
+      ? new Date(latestSyncAt).getTime()
+      : null
+  const intervalMs = (schedule?.interval_minutes ?? 60) * 60 * 1000
+  const currentBusinessHour = Number(
+    new Intl.DateTimeFormat('en-US', {
+      hour: '2-digit',
+      hourCycle: 'h23',
+      timeZone: 'America/Sao_Paulo',
+    }).format(new Date(now)),
+  )
+  const insideSyncWindow = currentBusinessHour >= 9 && currentBusinessHour <= 19
+  const latestSyncIsStale =
+    insideSyncWindow &&
+    (latestSyncTimestamp === null || now - latestSyncTimestamp > intervalMs + 10 * 60 * 1000)
   const isOverdue =
-    nextSyncTimestamp !== null && now > nextSyncTimestamp + 120000
+    latestSyncIsStale ||
+    (nextSyncTimestamp !== null && now > nextSyncTimestamp + 120000)
   const remainingMs =
     nextSyncTimestamp === null ? null : Math.max(0, nextSyncTimestamp - now)
   const remainingSeconds = remainingMs === null ? null : Math.floor(remainingMs / 1000)
