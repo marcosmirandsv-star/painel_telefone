@@ -14,12 +14,15 @@ create table if not exists public.schedule_saturday_members (
 );
 
 alter table public.schedule_saturday_members enable row level security;
+revoke all on public.schedule_saturday_members from anon;
+grant select, insert, update, delete on public.schedule_saturday_members to authenticated;
+drop policy if exists schedule_saturday_members_homologation_all on public.schedule_saturday_members;
 drop policy if exists schedule_saturday_members_management_all on public.schedule_saturday_members;
 create policy schedule_saturday_members_management_all
 on public.schedule_saturday_members
 for all to authenticated
-using (public.is_management_user())
-with check (public.is_management_user());
+using ((select public.is_management_user()))
+with check ((select public.is_management_user()));
 
 -- Reaproveita os cadastros já existentes em Telefone e Chat sem duplicar os módulos legados.
 insert into public.schedule_people (name, phone_analyst_id, active)
