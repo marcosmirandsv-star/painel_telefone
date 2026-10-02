@@ -713,6 +713,7 @@ type ClickDeskOperation360 = {
     pending: number
     approved: number
     rejected: number
+    stale?: number
   }
   queues?: {
     negative_unanalyzed: {
@@ -8450,6 +8451,11 @@ function ChatModuleDashboard({
                   <p className="mt-2 text-sm leading-6 text-slate-400">
                     O CSAT é calculado sobre as avaliações. A IA analisa os tickets avaliados, reaproveita leituras já disponíveis e procura padrões para explicar o resultado da operação.
                   </p>
+                  {(clickDeskOperation360?.analysis_status?.stale ?? 0) > 0 && (
+                    <p className="mt-3 rounded-lg border border-amber-300/15 bg-amber-300/5 px-3 py-2 text-xs leading-5 text-amber-100">
+                      {formatChatCount(clickDeskOperation360?.analysis_status?.stale ?? 0)} análise(s) de uma versão qualitativa anterior serão refeitas automaticamente para usar os critérios atuais.
+                    </p>
+                  )}
                 </div>
                 <div className="grid min-w-[280px] grid-cols-2 gap-3">
                   <div className="rounded-lg bg-slate-950/40 p-3">
