@@ -127,22 +127,53 @@ export async function authorizeManagerSessionClient(request: Request) {
 }
 export async function authorizeClickDeskAutomation(request: Request) {
   const token = bearer(request)
-  const admin = adminClient()
-  const verification = await admin.rpc('get_clickdesk_cron_credentials', {
-    p_token: token,
+  return { token }
+}
+
+export async function callClickDeskAutomationDb(
+  token: string,
+  payload: Record<string, unknown>,
+) {
+  const url =
+    process.env.NEXT_PUBLIC_HOMOLOGATION_SUPABASE_URL ??
+    'https://vvtorcvchnqhcredhorv.supabase.co'
+
+  const response = await fetch(`${url}/functions/v1/clickdesk-360-db`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+    cache: 'no-store',
   })
 
-  if (verification.error || !verification.data) {
-    throw new ApiError(401, 'Automação do ClickDesk não autorizada.')
+  const text = await response.text()
+  let data: unknown = null
+  try {
+    data = text ? JSON.parse(text) : null
+  } catch {
+    data = { error: text.slice(0, 300) }
   }
 
-  return {
-    admin,
-    userId: null as string | null,
-    role: 'automation',
-    isManagement: true,
-    chatAnalystId: null as string | null,
+  if (!response.ok) {
+    const source =
+      data && typeof data === 'object'
+        ? (data as { error?: unknown; detail?: unknown })
+        : {}
+    const message =
+      typeof source.error === 'string'
+        ? source.error
+        : response.status === 401
+          ? 'Automação do ClickDesk não autorizada.'
+          : 'Serviço interno da automação do ClickDesk indisponível.'
+    throw new ApiError(
+      response.status === 401 ? 401 : response.status >= 500 ? 503 : response.status,
+      message,
+    )
   }
+
+  return data
 }
 
 export async function authorizeClickDeskSessionClient(request: Request) {
