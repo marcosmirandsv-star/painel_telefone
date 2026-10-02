@@ -1,4 +1,4 @@
-# Piloto de acesso individual do Chat — Karolyne e Vanessa
+# Piloto de acesso individual do Chat — Karolyne, Thiago e Vanessa
 
 Ambiente: **homologação**  
 Objetivo: validar experiência, isolamento de dados e leitura individual antes da liberação para os demais analistas.
@@ -6,9 +6,10 @@ Objetivo: validar experiência, isolamento de dados e leitura individual antes d
 ## Pilotos
 
 - Karolyne Moreira — Chat Outros / Polyana Ventura.
+- Thiago Reis — Chat Notas / Marcos Miranda.
 - Vanessa Silva — Chat Notas / Marcos Miranda.
 
-Ambas devem ter perfil **Analista**, sem vínculo com Telefone e com acesso apenas aos próprios dados do Chat.
+Os três devem ter perfil **Analista**, sem vínculo com Telefone e com acesso apenas aos próprios dados do Chat.
 
 ## Teste funcional
 
@@ -67,3 +68,34 @@ Antes do início dos pilotos, a homologação passou por uma revisão de isolame
 - políticas de leitura da IA qualitativa limitam Analista ao próprio `chat_analyst_id`.
 
 A validação humana dos pilotos continua necessária para experiência, clareza visual e reconciliação dos números exibidos.
+
+
+## Evidências reais do piloto — 02/10/2026
+
+Validação executada diretamente na homologação após a liberação do Shareable Link e a correção do tema escuro.
+
+### Acesso
+
+- Vanessa Silva: e-mail confirmado e primeiro acesso registrado em 02/10/2026.
+- Thiago Reis: e-mail confirmado e primeiro acesso registrado em 02/10/2026.
+- Karolyne Moreira: acesso já existente e vínculo mantido como Analista.
+- Vanessa validou visualmente o portal individual pela URL compartilhável da branch `homologacao`.
+- O portal autenticado foi fixado no tema escuro para manter consistência visual entre gestão e acesso individual.
+
+### Isolamento RLS simulado com a identidade real de cada piloto
+
+| Piloto | Perfis visíveis | Analistas visíveis | Times visíveis | Atendimentos próprios de outubro | Dados de outro piloto | Análises qualitativas próprias | Análises de outro piloto | Escalas | Gestão |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Vanessa Silva | 1 | 1 | 1 | 68 | 0 | 20 | 0 | 0 | Não |
+| Thiago Reis | 1 | 1 | 1 | 72 | 0 | 19 | 0 | 0 | Não |
+| Karolyne Moreira | 1 | 1 | 1 | 25 | 0 | 10 | 0 | 0 | Não |
+
+Os totais de outubro acima são uma fotografia técnica do momento do teste e podem crescer a cada sincronização horária.
+
+### Teste de elevação de privilégio
+
+Foi simulada uma tentativa da identidade da Vanessa de alterar o próprio perfil para `master`. Resultado: **0 linhas alteradas**.
+
+### Resultado técnico desta rodada
+
+O isolamento de dados do piloto está aprovado tecnicamente. Permanecem como validação humana: clareza dos textos, navegação cotidiana, reconciliação visual dos números com a visão Master e uso real das rotinas de tickets/análise qualitativa.
