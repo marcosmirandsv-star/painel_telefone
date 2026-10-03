@@ -5,6 +5,55 @@ const BUSINESS_TIME_ZONE = 'America/Sao_Paulo'
 const MAX_INTRADAY_HUMAN_PAGES = 30
 const CLICKDESK_FETCH_TIMEOUT_MS = 30000
 
+const CLICKDESK_REPORT_DEPARTMENTS = [
+  { departmentId: 12, departmentName: 'Suporte - Fiscal' },
+  { departmentId: 3, departmentName: 'Suporte - ERP' },
+] as const
+
+function reportObject(payload: unknown): Record<string, unknown> {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return {}
+  const source = payload as Record<string, unknown>
+  const data = source.data
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    return data as Record<string, unknown>
+  }
+  return source
+}
+
+function readPath(source: Record<string, unknown>, path: string[]): unknown {
+  let current: unknown = source
+  for (const key of path) {
+    if (!current || typeof current !== 'object' || Array.isArray(current)) return null
+    current = (current as Record<string, unknown>)[key]
+  }
+  return current
+}
+
+function numericValue(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value))) {
+    return Number(value)
+  }
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return numericValue((value as Record<string, unknown>).value)
+  }
+  return null
+}
+
+function numberAt(source: Record<string, unknown>, path: string[]) {
+  return numericValue(readPath(source, path))
+}
+
+function stringArrayAt(source: Record<string, unknown>, path: string[]) {
+  const value = readPath(source, path)
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is string => typeof item === 'string')
+}
+
+function numericDelta(left: number | null, right: number | null) {
+  return left === null || right === null ? null : left - right
+}
+
 type TicketRow = {
   id: string
   area: string | null
@@ -278,6 +327,136 @@ async function fetchClickDesk(path: string, apiKey: string, accountId: string) {
   } finally {
     clearTimeout(timeout)
   }
+}
+
+
+async function collectReportSnapshotRows(params: {
+  admin: any
+  apiKey: string
+  accountId: string
+  periodDate: string
+  runId: string
+  areaLinkByKey: Map<string, any>
+}) {
+  const { admin, apiKey, accountId, periodDate, runId, areaLinkByKey } = params
+  const rows: Record<string, unknown>[] = []
+
+  for (const department of CLICKDESK_REPORT_DEPARTMENTS) {
+    const query =
+      `from=${encodeURIComponent(periodDate)}&to=${encodeURIComponent(periodDate)}&department_id=${department.departmentId}`
+
+    const [generalPayload, agentsPayload, aiPayload] = await Promise.all([
+      fetchClickDesk(`/support/reports?${query}`, apiKey, accountId),
+      fetchClickDesk(`/support/reports/agents?${query}`, apiKey, accountId),
+      fetchClickDesk(`/support/reports/ai?${query}`, apiKey, accountId),
+    ])
+
+    const general = reportObject(generalPayload)
+    const agents = reportObject(agentsPayload)
+    const ai = reportObject(aiPayload)
+
+    const teamId =
+      areaLinkByKey.get(normalizeLabel(department.departmentName))?.team_id ?? null
+
+    let humanAnswered: number | null = null
+    if (teamId) {
+      const countResult = await admin
+        .from('clickdesk_chat_attendances')
+        .select('clickdesk_ticket_id', { count: 'exact', head: true })
+        .eq('occurred_date', periodDate)
+        .eq('team_id', teamId)
+        .eq('attendance_mode', 'human')
+
+      if (countResult.error) throw new Error(countResult.error.message)
+      humanAnswered = countResult.count ?? 0
+    }
+
+    const reportCreated = numberAt(general, ['totals', 'created', 'value'])
+    const reportResolved = numberAt(general, ['totals', 'resolved', 'value'])
+    const agentReceived = numberAt(agents, ['summary', 'received', 'value'])
+    const agentResolved = numberAt(agents, ['summary', 'resolved'])
+    const aiEscalated = numberAt(ai, ['handoff', 'escalated'])
+
+    if (reportCreated === null && agentReceived === null && aiEscalated === null) {
+      throw new Error(
+        `ClickDesk reports returned no recognized summary fields for department ${department.departmentId}`,
+      )
+    }
+
+    const timezone =
+      findFirstByKeyPattern(generalPayload, /^(timezone|time_zone)$/i) ??
+      BUSINESS_TIME_ZONE
+
+    rows.push({
+      sync_run_id: runId,
+      period_date: periodDate,
+      department_id: department.departmentId,
+      department_name: department.departmentName,
+      team_id: teamId,
+      report_created: reportCreated,
+      report_resolved: reportResolved,
+      report_open_now: numberAt(general, ['totals', 'open_now']),
+      report_waiting_now: numberAt(general, ['totals', 'waiting_now']),
+      agent_received: agentReceived,
+      agent_resolved: agentResolved,
+      agent_transferred: numberAt(agents, ['summary', 'transferred']),
+      ai_handled: numberAt(ai, ['containment', 'handled']),
+      ai_decided: numberAt(ai, ['containment', 'decided']),
+      ai_resolved_alone: numberAt(ai, ['containment', 'resolved_alone']),
+      ai_escalated: aiEscalated,
+      ai_abandoned: numberAt(ai, ['handoff', 'abandoned']),
+      human_answered: humanAnswered,
+      csat_pct: numberAt(general, ['csat', 'score_pct', 'value']),
+      csat_total: numberAt(general, ['csat', 'total']),
+      human_csat_pct: numberAt(ai, ['csat', 'human', 'value']),
+      human_csat_total: numberAt(ai, ['csat', 'human', 'total']),
+      report_first_response_seconds: numberAt(general, [
+        'speed',
+        'first_response_seconds',
+        'value',
+      ]),
+      human_response_seconds: numberAt(general, [
+        'speed',
+        'human_response_seconds',
+        'value',
+      ]),
+      agent_first_response_seconds: numberAt(agents, [
+        'summary',
+        'first_response_seconds',
+        'value',
+      ]),
+      agent_handle_seconds: numberAt(agents, [
+        'summary',
+        'handle_seconds',
+        'value',
+      ]),
+      resolution_seconds:
+        numberAt(general, ['speed', 'resolution_seconds', 'value']) ??
+        numberAt(agents, ['summary', 'resolution_seconds', 'value']),
+      ai_time_to_escalate_seconds: numberAt(ai, [
+        'handoff',
+        'time_to_escalate_seconds',
+        'value',
+      ]),
+      ai_wait_after_seconds: numberAt(ai, [
+        'handoff',
+        'wait_after_seconds',
+        'value',
+      ]),
+      source_timezone: timezone,
+      diagnostics: {
+        requested_from: periodDate,
+        requested_to: periodDate,
+        report_series_labels: stringArrayAt(general, ['series', 'labels']),
+        created_minus_agent_received: numericDelta(reportCreated, agentReceived),
+        report_resolved_minus_agent_resolved: numericDelta(reportResolved, agentResolved),
+        ai_escalated_minus_human_answered: numericDelta(aiEscalated, humanAnswered),
+        human_answered_definition:
+          'Accumulated attendance rows for the same date/team after the current sync cycle.',
+      },
+    })
+  }
+  return rows
 }
 
 async function fetchRecentHumanPages(
@@ -749,6 +928,29 @@ Deno.serve(async (req: Request) => {
       if (error) throw new Error(error.message)
     }
 
+    let reportSnapshots = 0
+    let reportSnapshotError: string | null = null
+    try {
+      const reportRows = await collectReportSnapshotRows({
+        admin,
+        apiKey,
+        accountId,
+        periodDate: start,
+        runId,
+        areaLinkByKey,
+      })
+      if (reportRows.length) {
+        const reportResult = await admin
+          .from('clickdesk_chat_report_snapshots')
+          .upsert(reportRows, { onConflict: 'sync_run_id,department_id' })
+        if (reportResult.error) throw new Error(reportResult.error.message)
+        reportSnapshots = reportRows.length
+      }
+    } catch (error) {
+      reportSnapshotError =
+        error instanceof Error ? error.message.slice(0, 500) : 'Unexpected report snapshot error'
+    }
+
     const analystRows = attendanceRows.filter((row) => row.identity_role === 'analyst').length
     const managementRows = attendanceRows.filter((row) => row.identity_role === 'management').length
     const unmappedRows = attendanceRows.filter((row) => row.identity_role === 'unmapped').length
@@ -785,6 +987,8 @@ Deno.serve(async (req: Request) => {
           end,
           total_pages_available: totalPagesAvailable,
           pagination: paginationAudit,
+          report_snapshots: reportSnapshots,
+          report_snapshot_error: reportSnapshotError,
         },
         finished_at: new Date().toISOString(),
       })
@@ -804,6 +1008,8 @@ Deno.serve(async (req: Request) => {
       management_rows: managementRows,
       unmapped_rows: unmappedRows,
       timestamp_audit: operational.audit,
+      report_snapshots: reportSnapshots,
+      report_snapshot_error: reportSnapshotError,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected sync error'
