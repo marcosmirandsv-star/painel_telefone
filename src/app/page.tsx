@@ -983,7 +983,7 @@ type PeriodFilter = {
   end: string
 }
 
-type AppModule = 'phone' | 'chat' | 'system'
+type AppModule = 'central' | 'phone' | 'chat' | 'system'
 type ChatActiveTab = 'overview' | 'operation360' | 'prototype' | 'podium' | 'analysis' | 'reports' | 'import' | 'settings'
 
 type ChatFeedbackStyle = 'coach' | 'sare' | 'mimo'
@@ -1091,6 +1091,140 @@ async function uploadAnalystPhoto(file: File, scope: 'phone' | 'chat', analystId
   return `${data.publicUrl}?v=${Date.now()}`
 }
 
+
+function CentralOverview({
+  phoneCsat,
+  phonePerformance,
+  phoneAttention,
+  phonePeriodLabel,
+  chatTeams,
+  chatMetrics,
+  onOpenPhone,
+  onOpenChat,
+}: {
+  phoneCsat: number
+  phonePerformance: number
+  phoneAttention: number
+  phonePeriodLabel: string
+  chatTeams: ChatTeam[]
+  chatMetrics: ChatMonthlyMetric[]
+  onOpenPhone: () => void
+  onOpenChat: (teamId?: string) => void
+}) {
+  const activeTeams = chatTeams.filter((team) => team.active)
+  const latestChatPeriod = chatMetrics.reduce(
+    (latest, metric) => {
+      const key = metric.year * 100 + metric.month_number
+      return key > latest.key ? { key, label: metric.month_label } : latest
+    },
+    { key: 0, label: 'Sem competência carregada' },
+  )
+  const latestMetrics = chatMetrics.filter(
+    (metric) => metric.year * 100 + metric.month_number === latestChatPeriod.key,
+  )
+
+  const chatCards = activeTeams.map((team) => {
+    const rows = latestMetrics.filter((metric) => metric.team_id === team.id)
+    const reviews = rows.reduce((sum, metric) => sum + Number(metric.reviews), 0)
+    const positives = rows.reduce((sum, metric) => sum + Number(metric.positive_reviews), 0)
+    const validTickets = rows.reduce((sum, metric) => sum + Number(metric.valid_tickets), 0)
+    const tickets = rows.reduce((sum, metric) => sum + Number(metric.total_tickets), 0)
+    const csat = reviews ? round((positives / reviews) * 100) : null
+    const reviewPercentage = validTickets ? round((reviews / validTickets) * 100) : null
+    const attention = rows.filter(
+      (metric) =>
+        Number(metric.csat) < Number(metric.csat_goal) ||
+        Number(metric.review_percentage) < Number(metric.general_review_goal),
+    ).length
+    const healthy = rows.length > 0 && attention === 0
+    return { team, rows, tickets, csat, reviewPercentage, attention, healthy }
+  })
+
+  const phoneHealthy = phoneCsat >= 90 && phonePerformance >= 96
+  const attentionTotal = phoneAttention + chatCards.reduce((sum, card) => sum + card.attention, 0)
+  const mainAttention = [
+    { label: 'Telefone', count: phoneAttention },
+    ...chatCards.map((card) => ({ label: card.team.name, count: card.attention })),
+  ].sort((a, b) => b.count - a.count)[0]
+
+  return (
+    <div className="space-y-5">
+      <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">Hoje na Central</p>
+            <h2 className="mt-2 text-2xl font-bold">Onde vale olhar primeiro?</h2>
+            <p className="mt-2 text-sm text-slate-400">Visão executiva das operações. Entre no módulo apenas quando precisar aprofundar.</p>
+          </div>
+          <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-right">
+            <span className="block text-xs text-slate-500">Pontos de atenção</span>
+            <strong className="mt-1 block text-2xl tabular-nums">{attentionTotal}</strong>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-3">
+        <button type="button" onClick={onOpenPhone} className="rounded-2xl border border-white/10 bg-slate-900/55 p-5 text-left transition hover:border-cyan-300/35">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Telefone</p>
+              <h3 className="mt-2 text-lg font-bold">Operação de voz</h3>
+            </div>
+            <span className={phoneHealthy ? 'text-xs font-semibold text-emerald-300' : 'text-xs font-semibold text-amber-200'}>
+              {phoneHealthy ? '● Saudável' : '● Acompanhar'}
+            </span>
+          </div>
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <div><span className="text-xs text-slate-500">Performance</span><strong className="mt-1 block text-xl">{formatPercent(phonePerformance)}</strong></div>
+            <div><span className="text-xs text-slate-500">CSAT</span><strong className="mt-1 block text-xl">{formatPercent(phoneCsat)}</strong></div>
+          </div>
+          <div className="mt-5 flex items-center justify-between border-t border-white/10 pt-4 text-xs">
+            <span className="text-slate-500">{phonePeriodLabel} · {phoneAttention} ponto(s) de atenção</span>
+            <span className="font-semibold text-cyan-200">Abrir Telefone →</span>
+          </div>
+        </button>
+
+        {chatCards.map((card) => (
+          <button key={card.team.id} type="button" onClick={() => onOpenChat(card.team.id)} className="rounded-2xl border border-white/10 bg-slate-900/55 p-5 text-left transition hover:border-cyan-300/35">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Chat</p>
+                <h3 className="mt-2 text-lg font-bold">{card.team.name}</h3>
+              </div>
+              <span className={card.healthy ? 'text-xs font-semibold text-emerald-300' : 'text-xs font-semibold text-amber-200'}>
+                {card.rows.length === 0 ? '● Sem base' : card.healthy ? '● Saudável' : '● Acompanhar'}
+              </span>
+            </div>
+            <div className="mt-5 grid grid-cols-3 gap-3">
+              <div><span className="text-xs text-slate-500">CSAT</span><strong className="mt-1 block text-lg">{card.csat === null ? '—' : formatPercent(card.csat)}</strong></div>
+              <div><span className="text-xs text-slate-500">Avaliações</span><strong className="mt-1 block text-lg">{card.reviewPercentage === null ? '—' : formatPercent(card.reviewPercentage)}</strong></div>
+              <div><span className="text-xs text-slate-500">Atend.</span><strong className="mt-1 block text-lg">{formatNumber(card.tickets)}</strong></div>
+            </div>
+            <div className="mt-5 flex items-center justify-between border-t border-white/10 pt-4 text-xs">
+              <span className="text-slate-500">{latestChatPeriod.label} · {card.attention} ponto(s) de atenção</span>
+              <span className="font-semibold text-cyan-200">Abrir Chat →</span>
+            </div>
+          </button>
+        ))}
+      </section>
+
+      <section className="rounded-2xl border border-violet-300/15 bg-violet-300/[0.04] px-5 py-4">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-violet-200">Leitura da Central</p>
+            <p className="mt-1 text-sm text-slate-300">
+              {attentionTotal === 0
+                ? 'As referências carregadas não sinalizam prioridade aberta neste recorte.'
+                : (mainAttention?.label ?? 'A operação') + ' concentra a maior quantidade de pontos de atenção (' + (mainAttention?.count ?? 0) + ').'}
+            </p>
+          </div>
+          <span className="text-xs text-slate-500">Clique em uma operação para aprofundar</span>
+        </div>
+      </section>
+    </div>
+  )
+}
+
 export default function Home() {
   const [user, setUser] = useState<User | null>(null)
   const [isHomologationView, setIsHomologationView] = useState(false)
@@ -1109,7 +1243,7 @@ export default function Home() {
   const [chatMonthlyMetrics, setChatMonthlyMetrics] = useState<ChatMonthlyMetric[]>([])
   const [chatPodiumManual, setChatPodiumManual] = useState<ChatPodiumManual[]>([])
   const [chatPodiumExclusions, setChatPodiumExclusions] = useState<ChatPodiumExclusion[]>([])
-  const [activeModule, setActiveModule] = useState<AppModule>('phone')
+  const [activeModule, setActiveModule] = useState<AppModule>('central')
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard')
   const [chatActiveTab, setChatActiveTab] = useState<ChatActiveTab>('overview')
   const [expandedSidebarModule, setExpandedSidebarModule] = useState<AppModule | null>(null)
@@ -1336,6 +1470,12 @@ export default function Home() {
     if (isManagementUser) return
 
     if (activeTab !== 'dashboard') setActiveTab('dashboard')
+
+    if (activeModule === 'central') {
+      if (hasPhoneAnalystAccess) setActiveModule('phone')
+      else if (hasChatAnalystAccess) setActiveModule('chat')
+      return
+    }
 
     if (activeModule === 'phone' && !hasPhoneAnalystAccess && hasChatAnalystAccess) {
       setActiveModule('chat')
@@ -2284,6 +2424,25 @@ export default function Home() {
             </div>
 
             <nav className="corporate-module-nav" aria-label="Menu principal">
+              {isManagementUser && (
+                <div className="module-sidebar-group">
+                  <button
+                    className={activeModule === 'central' ? 'module-sidebar-button module-sidebar-button-active' : 'module-sidebar-button'}
+                    type="button"
+                    onClick={() => {
+                      setActiveModule('central')
+                      setExpandedSidebarModule(null)
+                    }}
+                  >
+                    <span className="module-sidebar-code" aria-hidden="true">CP</span>
+                    <span className="module-sidebar-copy">
+                      <strong>Visão geral</strong>
+                      <small>Central de Performance</small>
+                    </span>
+                  </button>
+                </div>
+              )}
+
               {(isManagementUser || hasPhoneAnalystAccess) && (
                 <div className="module-sidebar-group">
                   <button
@@ -2490,11 +2649,13 @@ export default function Home() {
               <span>Perfil atual</span>
               <strong>{getRoleLabel(userRole)}</strong>
               <small>
-                {activeModule === 'chat'
-                  ? 'Módulo Chat'
-                  : activeModule === 'system'
-                    ? 'Sistema'
-                    : 'Módulo Telefone'}
+                {activeModule === 'central'
+                  ? 'Visão geral'
+                  : activeModule === 'chat'
+                    ? 'Módulo Chat'
+                    : activeModule === 'system'
+                      ? 'Sistema'
+                      : 'Módulo Telefone'}
               </small>
             </div>
           </aside>
@@ -2503,19 +2664,25 @@ export default function Home() {
         <header className="app-header flex flex-col gap-5 border-b border-white/10 pb-6 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-300">
-              {activeModule === 'chat'
-                ? 'Módulo Chat'
-                : activeModule === 'system'
-                  ? 'Sistema'
-                  : 'Módulo Telefone'}
+              {activeModule === 'central'
+                ? 'Central de Performance'
+                : activeModule === 'chat'
+                  ? 'Módulo Chat'
+                  : activeModule === 'system'
+                    ? 'Sistema'
+                    : 'Módulo Telefone'}
             </p>
             <h1 className="mt-3 text-3xl font-bold sm:text-4xl">
-              {activeModule === 'system'
-                ? 'Administração do sistema'
-                : 'Gestão de Performance de Atendimento'}
+              {activeModule === 'central'
+                ? 'Visão geral da operação'
+                : activeModule === 'system'
+                  ? 'Administração do sistema'
+                  : 'Gestão de Performance de Atendimento'}
             </h1>
             <p className="mt-3 max-w-3xl text-slate-300">
-              {activeModule === 'chat'
+              {activeModule === 'central'
+                ? 'Um panorama compacto para decidir onde olhar primeiro.'
+                : activeModule === 'chat'
                 ? chatActiveTab === 'overview'
                   ? 'Visão consolidada da operação com dados do ClickDesk.'
                   : chatActiveTab === 'operation360'
@@ -2590,6 +2757,26 @@ export default function Home() {
 
 
         {message && <Feedback message={message} />}
+
+        {activeModule === 'central' && isManagementUser && (
+          <CentralOverview
+            phoneCsat={periodAverageCsat}
+            phonePerformance={periodTeamPerformance}
+            phoneAttention={attentionList.length}
+            phonePeriodLabel={periodLabel}
+            chatTeams={chatTeams}
+            chatMetrics={chatMonthlyMetrics}
+            onOpenPhone={() => {
+              setActiveModule('phone')
+              setActiveTab('dashboard')
+            }}
+            onOpenChat={(teamId) => {
+              setActiveModule('chat')
+              setChatActiveTab('overview')
+              if (teamId) window.sessionStorage.setItem('central:chat-team', teamId)
+            }}
+          />
+        )}
 
         {activeModule === 'chat' && isManagementUser && (
           <ChatModuleDashboard
