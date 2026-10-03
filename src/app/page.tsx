@@ -2315,7 +2315,7 @@ export default function Home() {
                       <button
                         className={activeTab === 'dashboard' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
                         type="button"
-                        onClick={() => setActiveTab('dashboard')}
+                        onClick={() => { setActiveTab('dashboard'); setExpandedSidebarModule(null) }}
                       >
                         Dashboard
                       </button>
@@ -2324,28 +2324,28 @@ export default function Home() {
                           <button
                             className={activeTab === 'reports' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
                             type="button"
-                            onClick={() => setActiveTab('reports')}
+                            onClick={() => { setActiveTab('reports'); setExpandedSidebarModule(null) }}
                           >
                             Relatórios
                           </button>
                           <button
                             className={activeTab === 'entries' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
                             type="button"
-                            onClick={() => setActiveTab('entries')}
+                            onClick={() => { setActiveTab('entries'); setExpandedSidebarModule(null) }}
                           >
                             Lançamentos
                           </button>
                           <button
                             className={activeTab === 'analysts' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
                             type="button"
-                            onClick={() => setActiveTab('analysts')}
+                            onClick={() => { setActiveTab('analysts'); setExpandedSidebarModule(null) }}
                           >
                             Analistas
                           </button>
                           <button
                             className={activeTab === 'goals' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
                             type="button"
-                            onClick={() => setActiveTab('goals')}
+                            onClick={() => { setActiveTab('goals'); setExpandedSidebarModule(null) }}
                           >
                             Metas
                           </button>
@@ -2390,35 +2390,35 @@ export default function Home() {
                       <button
                         className={chatActiveTab === 'overview' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
                         type="button"
-                        onClick={() => setChatActiveTab('overview')}
+                        onClick={() => { setChatActiveTab('overview'); setExpandedSidebarModule(null) }}
                       >
                         Visão da operação
                       </button>
                       <button
                         className={chatActiveTab === 'operation360' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
                         type="button"
-                        onClick={() => setChatActiveTab('operation360')}
+                        onClick={() => { setChatActiveTab('operation360'); setExpandedSidebarModule(null) }}
                       >
                         Análise 360º
                       </button>
                       <button
                         className={chatActiveTab === 'prototype' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
                         type="button"
-                        onClick={() => setChatActiveTab('prototype')}
+                        onClick={() => { setChatActiveTab('prototype'); setExpandedSidebarModule(null) }}
                       >
                         Equipe e produtividade
                       </button>
                       <button
                         className={chatActiveTab === 'podium' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
                         type="button"
-                        onClick={() => setChatActiveTab('podium')}
+                        onClick={() => { setChatActiveTab('podium'); setExpandedSidebarModule(null) }}
                       >
                         Gestão e ações
                       </button>
                       <button
                         className={chatActiveTab === 'reports' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
                         type="button"
-                        onClick={() => setChatActiveTab('reports')}
+                        onClick={() => { setChatActiveTab('reports'); setExpandedSidebarModule(null) }}
                       >
                         Fechamento mensal
                       </button>
@@ -2427,21 +2427,21 @@ export default function Home() {
                       <button
                         className={chatActiveTab === 'analysis' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
                         type="button"
-                        onClick={() => setChatActiveTab('analysis')}
+                        onClick={() => { setChatActiveTab('analysis'); setExpandedSidebarModule(null) }}
                       >
                         Conferência da base
                       </button>
                       <button
                         className={chatActiveTab === 'import' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
                         type="button"
-                        onClick={() => setChatActiveTab('import')}
+                        onClick={() => { setChatActiveTab('import'); setExpandedSidebarModule(null) }}
                       >
                         Importação
                       </button>
                       <button
                         className={chatActiveTab === 'settings' ? 'module-sidebar-subitem module-sidebar-subitem-active' : 'module-sidebar-subitem'}
                         type="button"
-                        onClick={() => setChatActiveTab('settings')}
+                        onClick={() => { setChatActiveTab('settings'); setExpandedSidebarModule(null) }}
                       >
                         Cadastros
                       </button>
