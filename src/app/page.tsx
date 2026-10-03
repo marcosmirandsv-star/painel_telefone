@@ -3505,8 +3505,8 @@ function ChatAnalystPortal({
   const activeRoutineDays = ruler.filter((item) => item.attendances > 0)
 
   return (
-    <div className="mt-8 space-y-6">
-      <section className="panel">
+    <div className="analyst-portal mt-6 space-y-5">
+      <section className="panel analyst-portal-hero">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
             Chat · acesso individual
@@ -3583,11 +3583,11 @@ function ChatAnalystPortal({
             )}
           </div>
 
-          <div className="rounded-lg border border-cyan-400/20 bg-cyan-400/5 px-4 py-3 text-sm">
+          <div className="analyst-status-card rounded-lg border border-cyan-400/20 bg-cyan-400/5 px-4 py-3 text-sm">
             <p className="text-slate-400">Situação atual</p>
             <strong className="mt-1 block text-cyan-100">{status}</strong>
             <span className="mt-1 block text-xs text-slate-400">
-              Entenda a leitura logo abaixo
+              {Number(meetsCsat) + Number(meetsReviews)} de 2 metas atingidas
             </span>
           </div>
         </div>
@@ -7390,7 +7390,7 @@ function ChatModuleDashboard({
             <p className="workspace-eyebrow">Módulo Chat</p>
             <h2 className="workspace-title">Central de performance do Chat</h2>
             <p className="section-subtitle">
-              Operação, produtividade, gestão e fechamento em uma única experiência, com dados do ClickDesk e histórico oficial.
+              Indicadores, pessoas, Análise 360º e fechamento com dados do ClickDesk.
             </p>
           </div>
 
@@ -7477,7 +7477,7 @@ function ChatModuleDashboard({
               <p className="workspace-eyebrow">Visão da operação</p>
               <h2 className="mt-2 text-2xl font-bold">Como está a operação agora?</h2>
               <p className="section-subtitle">
-                Fotografia da competência com base viva do ClickDesk, comparação com o mês anterior e alertas objetivos para orientar a gestão.
+                Resumo do mês, comparação anterior e alertas para decisão rápida.
               </p>
             </div>
             <div className="text-left lg:text-right">
@@ -7503,7 +7503,7 @@ function ChatModuleDashboard({
               <p className="workspace-eyebrow">Análise 360º da operação</p>
               <h2 className="mt-2 text-2xl font-bold">Por que o CSAT está nesse nível?</h2>
               <p className="section-subtitle">
-                A IA cruza as avaliações do período, procura padrões nas negativas e identifica práticas recorrentes nas positivas. A leitura é da operação, não um julgamento individual do analista.
+                Cruza avaliações, explica padrões das negativas e destaca práticas recorrentes nas positivas.
               </p>
             </div>
             <span className="inline-flex rounded-md border border-violet-300/20 bg-violet-300/5 px-3 py-2 text-sm font-semibold text-violet-100">
@@ -7520,7 +7520,7 @@ function ChatModuleDashboard({
               <p className="workspace-eyebrow">Equipe e produtividade</p>
               <h2 className="mt-2 text-2xl font-bold">Desempenho do time e leitura individual</h2>
               <p className="section-subtitle">
-                Acompanhe volume, qualidade, avaliações, posição no ranking e evolução de cada analista com a base persistida do ClickDesk.
+                Volume, CSAT, avaliações, ranking e evolução por analista.
               </p>
             </div>
             <div className="text-left lg:text-right">
@@ -7543,7 +7543,7 @@ function ChatModuleDashboard({
             <div>
               <p className="workspace-eyebrow">Ferramentas · conferência da base</p>
               <h2 className="mt-2 text-2xl font-bold">Conferência e auditoria da base</h2>
-              <p className="section-subtitle">Compare analistas, volume, qualidade e participação nas avaliações, valide a consistência dos dados e consulte tickets específicos quando necessário.</p>
+              <p className="section-subtitle">Valide dados, compare indicadores e consulte tickets quando necessário.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <button
@@ -7571,7 +7571,7 @@ function ChatModuleDashboard({
         <section className="workspace-page-heading">
           <p className="workspace-eyebrow">Gestão e ações</p>
           <h2 className="mt-2 text-2xl font-bold">Onde agir e o que acompanhar?</h2>
-          <p className="section-subtitle">Diagnóstico gerencial, prioridades, pontos de atenção e ações para o próximo ciclo, com leitura qualitativa apoiada por IA e validação humana.</p>
+          <p className="section-subtitle">Prioridades, alertas e ações gerenciais apoiadas por dados e IA.</p>
         </section>
       )}
 
