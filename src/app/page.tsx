@@ -7340,6 +7340,102 @@ function ChatModuleDashboard({
     (sum, item) => sum + Number(item.negative_reviews ?? 0),
     0,
   )
+  const chat2PreviousAnalystRows = clickDeskPreviousMetrics?.by_analyst ?? []
+  const chat2PeopleMovementRows = chat2ManagementRows.map((item) => {
+    const previous =
+      chat2PreviousAnalystRows.find(
+        (previousItem) =>
+          Boolean(item.analyst_id) &&
+          Boolean(previousItem.analyst_id) &&
+          previousItem.analyst_id === item.analyst_id,
+      ) ??
+      chat2PreviousAnalystRows.find(
+        (previousItem) =>
+          normalizeChatText(previousItem.assignee_name) === normalizeChatText(item.assignee_name) &&
+          normalizeChatText(previousItem.area) === normalizeChatText(item.area),
+      ) ??
+      null
+    const previousCsat =
+      previous?.csat === null || previous?.csat === undefined ? null : Number(previous.csat)
+    const previousReviewPercentage =
+      previous?.review_percentage === null || previous?.review_percentage === undefined
+        ? null
+        : Number(previous.review_percentage)
+    const csatDelta =
+      item.csat === null || previousCsat === null
+        ? null
+        : round(Number(item.csat) - previousCsat)
+    const reviewDelta =
+      item.review_percentage === null || previousReviewPercentage === null
+        ? null
+        : round(Number(item.review_percentage) - previousReviewPercentage)
+    const currentHealthy = !item.priority
+    const previousHealthy =
+      previousCsat !== null &&
+      previousReviewPercentage !== null &&
+      previousCsat >= item.csatGoal &&
+      previousReviewPercentage >= item.reviewGoal
+
+    return {
+      ...item,
+      previous,
+      previousCsat,
+      previousReviewPercentage,
+      csatDelta,
+      reviewDelta,
+      currentHealthy,
+      previousHealthy,
+      enteredHealthy: Boolean(previous) && currentHealthy && !previousHealthy,
+    }
+  })
+  const chat2RecoveryPerson =
+    [...chat2PeopleMovementRows]
+      .filter((item) => item.enteredHealthy)
+      .sort((a, b) => (b.csatDelta ?? 0) - (a.csatDelta ?? 0))[0] ??
+    [...chat2PeopleMovementRows]
+      .filter((item) => item.csatDelta !== null && Number(item.csatDelta) > 0)
+      .sort((a, b) => Number(b.csatDelta ?? 0) - Number(a.csatDelta ?? 0))[0] ??
+    null
+  const chat2ConsistencyPerson =
+    [...chat2ManagementHealthy]
+      .filter((item) => item.csat !== null && item.review_percentage !== null)
+      .sort((a, b) => {
+        const bStrength = Number(b.csatGap ?? 0) + Number(b.reviewGap ?? 0)
+        const aStrength = Number(a.csatGap ?? 0) + Number(a.reviewGap ?? 0)
+        if (bStrength !== aStrength) return bStrength - aStrength
+        return Number(b.attendances) - Number(a.attendances)
+      })[0] ?? null
+  const chat2PriorityPerson = chat2ManagementPriorities[0] ?? null
+  const chat2CommandPulseDotClass =
+    chat2ProductivityRows.length === 0
+      ? 'bg-slate-500'
+      : chat2OperationStatus === 'Operação saudável'
+        ? 'bg-emerald-300'
+        : chat2OperationStatus === 'Acompanhamento prioritário'
+          ? 'bg-rose-300'
+          : 'bg-amber-300'
+  const chat2CommandCenterBriefing =
+    chat2ProductivityRows.length === 0
+      ? 'A Central ainda não recebeu base suficiente para gerar um briefing executivo desta competência.'
+      : [
+          chat2OperationStatus + '.',
+          formatChatCount(chat2OperationTodayTickets) + ' atendimento(s) registrados hoje;',
+          'o CSAT acumulado está em ' +
+            (chat2ProductivityCsat === null ? '—' : formatChatPercent(chat2ProductivityCsat)) +
+            ' e a participação nas avaliações em ' +
+            (chat2ProductivityReviewPercentage === null ? '—' : formatChatPercent(chat2ProductivityReviewPercentage)) +
+            '.',
+          chat2ManagementPriorities.length > 0
+            ? formatChatCount(chat2ManagementPriorities.length) + ' pessoa(s) pedem leitura gerencial neste recorte.'
+            : 'Nenhuma pessoa está abaixo das duas referências principais neste recorte.',
+        ].join(' ')
+  const chat2CommandCenterSyncLabel = clickDeskPersistedMetrics?.latest_sync?.finished_at
+    ? formatDateTime(clickDeskPersistedMetrics.latest_sync.finished_at)
+    : 'aguardando sincronização'
+  const chat2CommandCenterNextSyncLabel = clickDeskPersistedMetrics?.sync_schedule?.next_sync_at
+    ? formatDateTime(clickDeskPersistedMetrics.sync_schedule.next_sync_at)
+    : 'agenda não informada'
+
   const chat2SelectedMetric =
     chat2VisibleMetrics.find((metric) => metric.analyst_id === chat2AnalystId) ?? chat2VisibleMetrics[0] ?? null
   const chat2TeamMetrics = chat2SelectedMetric
@@ -7491,6 +7587,284 @@ function ChatModuleDashboard({
               >
                 Abrir Análise 360º
               </button>
+            </div>
+          </div>
+        </section>
+      )}
+
+
+      {chatActiveTab === 'overview' && (
+        <section className="overflow-hidden rounded-2xl border border-cyan-300/15 bg-slate-950/35 shadow-[0_22px_70px_rgba(2,8,23,0.28)]">
+          <div className="border-b border-white/10 px-5 py-4 sm:px-6">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">
+                    Hoje na operação · Command Center
+                  </p>
+                  <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-slate-400">
+                    leitura automática
+                  </span>
+                </div>
+                <p className="mt-2 text-sm text-slate-400">
+                  O essencial primeiro: pulso, mudanças relevantes e pessoas que merecem contexto.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => onChatActiveTabChange('operation360')}
+                >
+                  Investigar qualidade
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => onChatActiveTabChange('prototype')}
+                >
+                  Ver pessoas
+                </button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => onChatActiveTabChange('podium')}
+                >
+                  Abrir prioridades
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-5 p-5 sm:p-6 xl:grid-cols-[0.92fr_1.08fr]">
+            <div className="rounded-2xl border border-white/10 bg-slate-900/55 p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm text-slate-400">Pulso da operação</p>
+                  <div className="mt-2 flex items-center gap-3">
+                    <span className={'h-2.5 w-2.5 rounded-full shadow-[0_0_18px_currentColor] ' + chat2CommandPulseDotClass} />
+                    <h3 className={'text-2xl font-bold ' + chat2OperationStatusTone}>{chat2OperationStatus}</h3>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-500">
+                    {selectedTeamName} · {chat2SelectedPeriod.label}
+                  </p>
+                </div>
+                <span className="rounded-full border border-white/10 bg-slate-950/55 px-3 py-1.5 text-xs text-slate-400">
+                  ClickDesk vivo
+                </span>
+              </div>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">CSAT</p>
+                  <strong className="mt-2 block text-2xl tabular-nums">
+                    {chat2ProductivityCsat === null ? '—' : formatChatPercent(chat2ProductivityCsat)}
+                  </strong>
+                  <span className={'mt-1 block text-xs ' + (
+                    chat2OperationCsatDelta === null
+                      ? 'text-slate-500'
+                      : chat2OperationCsatDelta >= 0
+                        ? 'text-emerald-300'
+                        : 'text-amber-200'
+                  )}>
+                    {chat2OperationCsatDelta === null
+                      ? 'sem base anterior comparável'
+                      : formatDelta(chat2OperationCsatDelta, ' p.p.') + ' vs. mês anterior'}
+                  </span>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Avaliações</p>
+                  <strong className="mt-2 block text-2xl tabular-nums">
+                    {chat2ProductivityReviewPercentage === null ? '—' : formatChatPercent(chat2ProductivityReviewPercentage)}
+                  </strong>
+                  <span className={'mt-1 block text-xs ' + (
+                    chat2OperationReviewDelta === null
+                      ? 'text-slate-500'
+                      : chat2OperationReviewDelta >= 0
+                        ? 'text-emerald-300'
+                        : 'text-amber-200'
+                  )}>
+                    {chat2OperationReviewDelta === null
+                      ? 'sem base anterior comparável'
+                      : formatDelta(chat2OperationReviewDelta, ' p.p.') + ' vs. mês anterior'}
+                  </span>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Hoje</p>
+                  <strong className="mt-2 block text-2xl tabular-nums">
+                    {formatChatCount(chat2OperationTodayTickets)}
+                  </strong>
+                  <span className="mt-1 block text-xs text-slate-500">
+                    média diária da base: {formatChatCount(chat2OperationDailyAverage)}
+                  </span>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Prioridades</p>
+                  <strong className="mt-2 block text-2xl tabular-nums">
+                    {formatChatCount(chat2ManagementPriorities.length)}
+                  </strong>
+                  <span className="mt-1 block text-xs text-slate-500">
+                    {formatChatCount(chat2ManagementHealthy.length)} pessoa(s) com as referências principais atendidas
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-violet-300/15 bg-violet-300/[0.04] p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-violet-100">Copiloto da operação</p>
+                  <p className="mt-1 text-xs text-slate-500">Briefing gerado a partir dos indicadores disponíveis</p>
+                </div>
+                <span className="rounded-full border border-violet-300/20 bg-violet-300/10 px-2.5 py-1 text-[11px] font-semibold text-violet-100">
+                  agora
+                </span>
+              </div>
+              <p className="mt-4 text-sm leading-6 text-slate-200">{chat2CommandCenterBriefing}</p>
+
+              <div className="mt-5 border-t border-white/10 pt-4">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">3 movimentos importantes</p>
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-start gap-3 rounded-xl bg-slate-950/35 px-4 py-3">
+                    <span className="mt-1 text-cyan-300">↗</span>
+                    <div>
+                      <strong className="text-sm text-slate-100">Qualidade</strong>
+                      <p className="mt-1 text-xs leading-5 text-slate-400">
+                        {chat2OperationCsatDelta === null
+                          ? 'A competência anterior ainda não oferece comparação equivalente.'
+                          : 'CSAT ' + formatDelta(chat2OperationCsatDelta, ' p.p.') + ' em relação à competência anterior.'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 rounded-xl bg-slate-950/35 px-4 py-3">
+                    <span className="mt-1 text-amber-200">◎</span>
+                    <div>
+                      <strong className="text-sm text-slate-100">Pessoas</strong>
+                      <p className="mt-1 text-xs leading-5 text-slate-400">
+                        {chat2ManagementPriorities.length > 0
+                          ? formatChatCount(chat2ManagementPriorities.length) + ' pessoa(s) estão abaixo de pelo menos uma referência principal.'
+                          : 'Nenhuma prioridade individual foi sinalizada pelas referências principais.'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 rounded-xl bg-slate-950/35 px-4 py-3">
+                    <span className="mt-1 text-emerald-300">●</span>
+                    <div>
+                      <strong className="text-sm text-slate-100">Ritmo</strong>
+                      <p className="mt-1 text-xs leading-5 text-slate-400">
+                        {chat2OperationPeakDay
+                          ? 'Pico da base em ' + formatDate(chat2OperationPeakDay.date) + ' com ' + formatChatCount(chat2OperationPeakDay.attendances) + ' atendimento(s).'
+                          : 'A série diária ainda não tem cobertura suficiente para identificar pico.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-white/10 px-5 py-5 sm:px-6">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-300">Radar de pessoas</p>
+                <h3 className="mt-1 text-lg font-bold">O que mudou e onde vale olhar primeiro</h3>
+              </div>
+              <p className="text-xs text-slate-500">
+                Leitura comparativa; volume isolado nunca é tratado como desempenho individual.
+              </p>
+            </div>
+
+            <div className="mt-4 grid gap-3 lg:grid-cols-3">
+              <button
+                type="button"
+                disabled={!chat2PriorityPerson}
+                onClick={() => {
+                  if (!chat2PriorityPerson) return
+                  setChat2LiveAnalystKey(chat2PriorityPerson.area + '::' + chat2PriorityPerson.assignee_name)
+                  onChatActiveTabChange('prototype')
+                }}
+                className="rounded-xl border border-amber-300/15 bg-amber-300/[0.04] p-4 text-left transition hover:border-amber-300/30 disabled:cursor-default disabled:opacity-70"
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-amber-200">Prioridade atual</p>
+                <strong className="mt-2 block text-base text-slate-100">
+                  {chat2PriorityPerson?.assignee_name ?? 'Nenhuma prioridade'}
+                </strong>
+                <span className="mt-2 block text-xs leading-5 text-slate-400">
+                  {chat2PriorityPerson
+                    ? chat2PriorityPerson.signals.slice(0, 2).join(' · ')
+                    : 'As referências principais não apontam prioridade individual neste recorte.'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                disabled={!chat2RecoveryPerson}
+                onClick={() => {
+                  if (!chat2RecoveryPerson) return
+                  setChat2LiveAnalystKey(chat2RecoveryPerson.area + '::' + chat2RecoveryPerson.assignee_name)
+                  onChatActiveTabChange('prototype')
+                }}
+                className="rounded-xl border border-cyan-300/15 bg-cyan-300/[0.04] p-4 text-left transition hover:border-cyan-300/30 disabled:cursor-default disabled:opacity-70"
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-200">Movimento positivo</p>
+                <strong className="mt-2 block text-base text-slate-100">
+                  {chat2RecoveryPerson?.assignee_name ?? 'Sem comparação suficiente'}
+                </strong>
+                <span className="mt-2 block text-xs leading-5 text-slate-400">
+                  {chat2RecoveryPerson
+                    ? chat2RecoveryPerson.enteredHealthy
+                      ? 'Passou a atender as referências principais' +
+                        (chat2RecoveryPerson.csatDelta === null
+                          ? '.'
+                          : ' · CSAT ' + formatDelta(chat2RecoveryPerson.csatDelta, ' p.p.') + '.')
+                      : 'Maior avanço comparável de CSAT: ' + formatDelta(chat2RecoveryPerson.csatDelta ?? 0, ' p.p.') + '.'
+                    : 'A competência anterior não permite comparar pessoas com segurança.'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                disabled={!chat2ConsistencyPerson}
+                onClick={() => {
+                  if (!chat2ConsistencyPerson) return
+                  setChat2LiveAnalystKey(chat2ConsistencyPerson.area + '::' + chat2ConsistencyPerson.assignee_name)
+                  onChatActiveTabChange('prototype')
+                }}
+                className="rounded-xl border border-emerald-300/15 bg-emerald-300/[0.04] p-4 text-left transition hover:border-emerald-300/30 disabled:cursor-default disabled:opacity-70"
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-emerald-200">Consistência atual</p>
+                <strong className="mt-2 block text-base text-slate-100">
+                  {chat2ConsistencyPerson?.assignee_name ?? 'Aguardando base'}
+                </strong>
+                <span className="mt-2 block text-xs leading-5 text-slate-400">
+                  {chat2ConsistencyPerson
+                    ? 'CSAT ' +
+                      (chat2ConsistencyPerson.csat === null ? '—' : formatChatPercent(chat2ConsistencyPerson.csat)) +
+                      ' · avaliações ' +
+                      (chat2ConsistencyPerson.review_percentage === null
+                        ? '—'
+                        : formatChatPercent(chat2ConsistencyPerson.review_percentage)) +
+                      '.'
+                    : 'Ainda não há uma leitura consolidada de consistência neste recorte.'}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div className="grid gap-3 border-t border-white/10 bg-slate-950/30 px-5 py-4 text-xs sm:grid-cols-3 sm:px-6">
+            <div>
+              <span className="block text-slate-500">Base atualizada</span>
+              <strong className="mt-1 block font-semibold text-slate-300">{chat2CommandCenterSyncLabel}</strong>
+            </div>
+            <div>
+              <span className="block text-slate-500">Próximo ciclo</span>
+              <strong className="mt-1 block font-semibold text-slate-300">{chat2CommandCenterNextSyncLabel}</strong>
+            </div>
+            <div>
+              <span className="block text-slate-500">Próxima leitura</span>
+              <strong className="mt-1 block font-semibold text-cyan-200">
+                Dados → diagnóstico → ação gerencial
+              </strong>
             </div>
           </div>
         </section>
@@ -8390,23 +8764,6 @@ function ChatModuleDashboard({
           </div>
         </div>
       </section>
-      <div className={chatActiveTab === 'overview' ? 'metric-strip grid gap-3 sm:grid-cols-2 xl:grid-cols-6' : 'hidden'}>
-        <MetricCard label="Atendimentos na competência" value={formatChatCount(chat2ProductivityTickets)} />
-        <MetricCard label="Atendimentos hoje" value={formatChatCount(chat2OperationTodayTickets)} />
-        <MetricCard
-          label="CSAT do time"
-          value={chat2ProductivityCsat === null ? '—' : formatChatPercent(chat2ProductivityCsat)}
-          tone={(chat2ProductivityCsat ?? 0) >= 90 ? 'success' : (chat2ProductivityCsat ?? 0) >= 85 ? 'warning' : 'danger'}
-        />
-        <MetricCard
-          label="% de avaliações"
-          value={chat2ProductivityReviewPercentage === null ? '—' : formatChatPercent(chat2ProductivityReviewPercentage)}
-          tone={(chat2ProductivityReviewPercentage ?? 0) >= 25 ? 'success' : (chat2ProductivityReviewPercentage ?? 0) >= 20 ? 'warning' : 'danger'}
-        />
-        <MetricCard label="Positivas" value={formatChatCount(chat2ProductivityPositive)} tone="success" />
-        <MetricCard label="Negativas" value={formatChatCount(chat2ProductivityNegative)} tone={chat2ProductivityNegative > 0 ? 'warning' : 'success'} />
-      </div>
-
       <section className={chatActiveTab === 'operation360' ? 'workspace-content-section' : 'hidden'}>
         {clickDeskOperation360Loading && !clickDeskOperation360 ? (
           <div className="rounded-xl border border-white/10 bg-slate-950/30 p-6 text-sm text-slate-400">
