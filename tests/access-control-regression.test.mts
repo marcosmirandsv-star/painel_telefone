@@ -109,3 +109,31 @@ test('automação 360 usa credencial interna e permanece restrita à homologaç�
   assert.match(automationDb, /get_clickdesk_cron_credentials/)
   assert.match(automationDb, /validation_status: 'pending'/)
 })
+
+
+test('menu lateral recolhe o submenu após a seleção para manter leitura compacta', () => {
+  const page = source('src/app/page.tsx')
+
+  for (const tab of ['dashboard', 'reports', 'entries', 'analysts', 'goals']) {
+    const pattern = new RegExp(
+      `setActiveTab\\('${tab}'\\); setExpandedSidebarModule\\(null\\)`,
+    )
+    assert.match(page, pattern)
+  }
+
+  for (const tab of [
+    'overview',
+    'operation360',
+    'prototype',
+    'podium',
+    'reports',
+    'analysis',
+    'import',
+    'settings',
+  ]) {
+    const pattern = new RegExp(
+      `setChatActiveTab\\('${tab}'\\); setExpandedSidebarModule\\(null\\)`,
+    )
+    assert.match(page, pattern)
+  }
+})
