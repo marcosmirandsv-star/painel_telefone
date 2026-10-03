@@ -311,19 +311,19 @@ async function fetchRecentHumanPages(
     payloads.push(...batch)
   }
 
-  if (lastPage > pagesToScan) {
-    const boundaryRows = summarizePayload(payloads[payloads.length - 1] ?? null)
-    const reachedOlderPeriod = boundaryRows.some((row) => {
-      if (!row.updatedAt) return false
-      const date = businessDate(row.updatedAt)
-      return Boolean(date && date < periodStart)
-    })
+  const boundaryRows = summarizePayload(payloads[payloads.length - 1] ?? null)
+  const boundaryDates = boundaryRows
+    .map((row) => row.updatedAt ? businessDate(row.updatedAt) : null)
+    .filter((value): value is string => Boolean(value))
+    .sort()
+  const boundaryOldestDate = boundaryDates[0] ?? null
+  const boundaryNewestDate = boundaryDates.at(-1) ?? null
+  const reachedOlderPeriod = boundaryDates.some((date) => date < periodStart)
 
-    if (!reachedOlderPeriod) {
-      throw new Error(
-        `Janela recente insuficiente: ${pagesToScan} páginas ainda não alcançaram registros anteriores a ${periodStart}.`,
-      )
-    }
+  if (lastPage > pagesToScan && !reachedOlderPeriod) {
+    throw new Error(
+      `Janela recente insuficiente: ${pagesToScan} páginas ainda não alcançaram registros anteriores a ${periodStart}.`,
+    )
   }
 
   const seen = new Set<string>()
@@ -337,6 +337,24 @@ async function fetchRecentHumanPages(
     rows,
     pagesScanned: payloads.length,
     totalPagesAvailable: lastPage,
+    paginationAudit: {
+      total_pages_available: lastPage,
+      pages_scanned: payloads.length,
+      page_cap: MAX_INTRADAY_HUMAN_PAGES,
+      capped: lastPage > pagesToScan,
+      boundary_rows: boundaryRows.length,
+      boundary_oldest_date: boundaryOldestDate,
+      boundary_newest_date: boundaryNewestDate,
+      reached_older_period: reachedOlderPeriod,
+      coverage_status:
+        rows.length === 0
+          ? 'empty_collection'
+          : lastPage <= pagesToScan
+            ? 'all_pages_scanned'
+            : reachedOlderPeriod
+              ? 'boundary_reached_older_period'
+              : 'uncertain',
+    },
   }
 }
 
@@ -505,7 +523,7 @@ Deno.serve(async (req: Request) => {
   const runId = runInsert.data.id as string
 
   try {
-    const [{ rows, pagesScanned }, analystsResult, linksResult, areaLinksResult, teamsResult] =
+    const [{ rows, pagesScanned, totalPagesAvailable, paginationAudit }, analystsResult, linksResult, areaLinksResult, teamsResult] =
       await Promise.all([
         fetchRecentHumanPages(apiKey, accountId, start),
         admin.from('chat_analysts').select('id,team_id,name,active'),
@@ -765,6 +783,8 @@ Deno.serve(async (req: Request) => {
           sync_mode: mode,
           start,
           end,
+          total_pages_available: totalPagesAvailable,
+          pagination: paginationAudit,
         },
         finished_at: new Date().toISOString(),
       })
@@ -779,6 +799,7 @@ Deno.serve(async (req: Request) => {
       period: { start, end },
       rows_received: rows.length,
       rows_persisted: attendanceRows.length,
+      pagination: paginationAudit,
       analyst_rows: analystRows,
       management_rows: managementRows,
       unmapped_rows: unmappedRows,
