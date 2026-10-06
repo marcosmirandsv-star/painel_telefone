@@ -1198,7 +1198,7 @@ function CentralOverview({
             <div className="mt-5 grid grid-cols-3 gap-3">
               <div><span className="text-xs text-slate-500">CSAT</span><strong className="mt-1 block text-lg">{card.csat === null ? '—' : formatPercent(card.csat)}</strong></div>
               <div><span className="text-xs text-slate-500">Avaliações</span><strong className="mt-1 block text-lg">{card.reviewPercentage === null ? '—' : formatPercent(card.reviewPercentage)}</strong></div>
-              <div><span className="text-xs text-slate-500">Atend.</span><strong className="mt-1 block text-lg">{formatNumber(card.tickets)}</strong></div>
+              <div><span className="text-xs text-slate-500">Atend.</span><strong className="mt-1 block text-lg">{formatChatCount(card.tickets)}</strong></div>
             </div>
             <div className="mt-5 flex items-center justify-between border-t border-white/10 pt-4 text-xs">
               <span className="text-slate-500">{latestChatPeriod.label} · {card.attention} ponto(s) de atenção</span>
