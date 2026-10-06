@@ -1465,6 +1465,35 @@ export default function Home() {
         : individualMetrics.filter((metric) => metric.analyst_id === profileAnalystId),
     [isManagementUser, individualMetrics, profileAnalystId],
   )
+  const centralPhoneSnapshot = useMemo(() => {
+    const individualEnds = new Set(individualMetrics.map((metric) => metric.week_end).filter(Boolean))
+    const teamEnds = new Set(teamMetrics.map((metric) => metric.week_end).filter(Boolean))
+    const allEnds = [...new Set([...individualEnds, ...teamEnds])].sort((a, b) => b.localeCompare(a))
+    const latestEnd = allEnds.find((end) => individualEnds.has(end) && teamEnds.has(end)) ?? allEnds[0] ?? ''
+
+    if (!latestEnd) {
+      return { csat: 0, performance: 0, attention: 0, label: 'Sem período carregado' }
+    }
+
+    const latestIndividual = individualMetrics.filter((metric) => metric.week_end === latestEnd)
+    const latestTeam = teamMetrics.filter((metric) => metric.week_end === latestEnd)
+    const latestStart = [...latestIndividual.map((metric) => metric.week_start), ...latestTeam.map((metric) => metric.week_start)]
+      .filter(Boolean)
+      .sort()[0] ?? latestEnd
+    const podium = buildPeriodPodium(
+      latestIndividual,
+      analysts,
+      getGoalValue(goals, 'podium_csat_minimum', 90),
+      getGoalValue(goals, 'review_percentage', 25),
+    )
+
+    return {
+      csat: calculateAverageCsat(latestIndividual),
+      performance: calculateTeamPerformance(latestTeam),
+      attention: podium.filter((item) => !item.eligible).length,
+      label: formatWeek(latestStart, latestEnd),
+    }
+  }, [individualMetrics, teamMetrics, analysts, goals])
 
   useEffect(() => {
     if (isManagementUser) return
@@ -2760,10 +2789,10 @@ export default function Home() {
 
         {activeModule === 'central' && isManagementUser && (
           <CentralOverview
-            phoneCsat={periodAverageCsat}
-            phonePerformance={periodTeamPerformance}
-            phoneAttention={attentionList.length}
-            phonePeriodLabel={periodLabel}
+            phoneCsat={centralPhoneSnapshot.csat}
+            phonePerformance={centralPhoneSnapshot.performance}
+            phoneAttention={centralPhoneSnapshot.attention}
+            phonePeriodLabel={centralPhoneSnapshot.label}
             chatTeams={chatTeams}
             chatMetrics={chatMonthlyMetrics}
             onOpenPhone={() => {
