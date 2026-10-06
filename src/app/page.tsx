@@ -523,6 +523,44 @@ type ClickDeskPersistedMetrics = {
   erro?: string
 }
 
+type CentralChatOverviewSnapshot = {
+  team_id: string
+  period_date: string
+  department_id: number
+  department_name: string
+  report_created: number
+  report_resolved: number
+  open_now: number
+  waiting_now: number
+  agent_received: number
+  agent_resolved: number
+  agent_transferred: number
+  ai_handled: number
+  ai_escalated: number
+  csat_pct: number | null
+  csat_total: number
+  captured_at: string
+}
+
+type CentralChatOverviewResponse = {
+  source?: string
+  snapshots?: CentralChatOverviewSnapshot[]
+  latest_sync?: {
+    id: string
+    status: string
+    period_start: string
+    period_end: string
+    trigger_mode: string
+    finished_at: string | null
+  } | null
+  semantics?: {
+    source: string
+    current_state: string[]
+    historical_detail_status: string
+  }
+  erro?: string
+}
+
 type ClickDeskDailyTicket = {
   ticket_id: string
   occurred_at: string
@@ -1098,7 +1136,9 @@ function CentralOverview({
   phoneAttention,
   phonePeriodLabel,
   chatTeams,
-  chatMetrics,
+  chatOverview,
+  chatOverviewLoading,
+  chatOverviewError,
   onOpenPhone,
   onOpenChat,
 }: {
@@ -1107,58 +1147,37 @@ function CentralOverview({
   phoneAttention: number
   phonePeriodLabel: string
   chatTeams: ChatTeam[]
-  chatMetrics: ChatMonthlyMetric[]
+  chatOverview: CentralChatOverviewResponse | null
+  chatOverviewLoading: boolean
+  chatOverviewError: string
   onOpenPhone: () => void
   onOpenChat: (teamId?: string) => void
 }) {
   const activeTeams = chatTeams.filter((team) => team.active)
-  const latestChatPeriod = chatMetrics.reduce(
-    (latest, metric) => {
-      const key = metric.year * 100 + metric.month_number
-      return key > latest.key ? { key, label: metric.month_label } : latest
-    },
-    { key: 0, label: 'Sem competência carregada' },
+  const snapshotByTeam = new Map(
+    (chatOverview?.snapshots ?? []).map((snapshot) => [snapshot.team_id, snapshot]),
   )
-  const latestMetrics = chatMetrics.filter(
-    (metric) => metric.year * 100 + metric.month_number === latestChatPeriod.key,
-  )
-
-  const chatCards = activeTeams.map((team) => {
-    const rows = latestMetrics.filter((metric) => metric.team_id === team.id)
-    const reviews = rows.reduce((sum, metric) => sum + Number(metric.reviews), 0)
-    const positives = rows.reduce((sum, metric) => sum + Number(metric.positive_reviews), 0)
-    const validTickets = rows.reduce((sum, metric) => sum + Number(metric.valid_tickets), 0)
-    const tickets = rows.reduce((sum, metric) => sum + Number(metric.total_tickets), 0)
-    const csat = reviews ? round((positives / reviews) * 100) : null
-    const reviewPercentage = validTickets ? round((reviews / validTickets) * 100) : null
-    const attention = rows.filter(
-      (metric) =>
-        Number(metric.csat) < Number(metric.csat_goal) ||
-        Number(metric.review_percentage) < Number(metric.general_review_goal),
-    ).length
-    const healthy = rows.length > 0 && attention === 0
-    return { team, rows, tickets, csat, reviewPercentage, attention, healthy }
-  })
-
-  const phoneHealthy = phoneCsat >= 90 && phonePerformance >= 96
-  const attentionTotal = phoneAttention + chatCards.reduce((sum, card) => sum + card.attention, 0)
-  const mainAttention = [
-    { label: 'Telefone', count: phoneAttention },
-    ...chatCards.map((card) => ({ label: card.team.name, count: card.attention })),
-  ].sort((a, b) => b.count - a.count)[0]
+  const availableChatSnapshots = activeTeams.filter((team) => snapshotByTeam.has(team.id)).length
+  const phoneHasData = phonePeriodLabel !== 'Sem período carregado'
+  const availableSources = (phoneHasData ? 1 : 0) + availableChatSnapshots
+  const totalSources = 1 + activeTeams.length
+  const phoneHealthy = phoneHasData && phoneCsat >= 90 && phonePerformance >= 96
+  const missingChatSnapshots = activeTeams.length - availableChatSnapshots
 
   return (
     <div className="space-y-5">
       <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">Hoje na Central</p>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">Visão executiva</p>
             <h2 className="mt-2 text-2xl font-bold">Onde vale olhar primeiro?</h2>
-            <p className="mt-2 text-sm text-slate-400">Visão executiva das operações. Entre no módulo apenas quando precisar aprofundar.</p>
+            <p className="mt-2 text-sm text-slate-400">
+              Telefone e Chat aparecem juntos, mas cada operação preserva sua própria fonte e data de atualização.
+            </p>
           </div>
           <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-right">
-            <span className="block text-xs text-slate-500">Pontos de atenção</span>
-            <strong className="mt-1 block text-2xl tabular-nums">{attentionTotal}</strong>
+            <span className="block text-xs text-slate-500">Leituras disponíveis</span>
+            <strong className="mt-1 block text-2xl tabular-nums">{availableSources}/{totalSources}</strong>
           </div>
         </div>
       </section>
@@ -1171,41 +1190,51 @@ function CentralOverview({
               <h3 className="mt-2 text-lg font-bold">Operação de voz</h3>
             </div>
             <span className={phoneHealthy ? 'text-xs font-semibold text-emerald-300' : 'text-xs font-semibold text-amber-200'}>
-              {phoneHealthy ? '● Saudável' : '● Acompanhar'}
+              {!phoneHasData ? '● Sem base' : phoneHealthy ? '● Dentro das referências' : '● Acompanhar'}
             </span>
           </div>
           <div className="mt-5 grid grid-cols-2 gap-3">
-            <div><span className="text-xs text-slate-500">Performance</span><strong className="mt-1 block text-xl">{formatPercent(phonePerformance)}</strong></div>
-            <div><span className="text-xs text-slate-500">CSAT</span><strong className="mt-1 block text-xl">{formatPercent(phoneCsat)}</strong></div>
+            <div><span className="text-xs text-slate-500">Performance</span><strong className="mt-1 block text-xl">{phoneHasData ? formatPercent(phonePerformance) : '—'}</strong></div>
+            <div><span className="text-xs text-slate-500">CSAT</span><strong className="mt-1 block text-xl">{phoneHasData ? formatPercent(phoneCsat) : '—'}</strong></div>
           </div>
           <div className="mt-5 flex items-center justify-between border-t border-white/10 pt-4 text-xs">
-            <span className="text-slate-500">{phonePeriodLabel} · {phoneAttention} ponto(s) de atenção</span>
+            <span className="text-slate-500">{phonePeriodLabel}{phoneHasData ? ` · ${phoneAttention} ponto(s) de atenção` : ''}</span>
             <span className="font-semibold text-cyan-200">Abrir Telefone →</span>
           </div>
         </button>
 
-        {chatCards.map((card) => (
-          <button key={card.team.id} type="button" onClick={() => onOpenChat(card.team.id)} className="rounded-2xl border border-white/10 bg-slate-900/55 p-5 text-left transition hover:border-cyan-300/35">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Chat</p>
-                <h3 className="mt-2 text-lg font-bold">{card.team.name}</h3>
+        {activeTeams.map((team) => {
+          const snapshot = snapshotByTeam.get(team.id)
+          return (
+            <button key={team.id} type="button" onClick={() => onOpenChat(team.id)} className="rounded-2xl border border-white/10 bg-slate-900/55 p-5 text-left transition hover:border-cyan-300/35">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Chat · ClickDesk</p>
+                  <h3 className="mt-2 text-lg font-bold">{team.name}</h3>
+                </div>
+                <span className={snapshot ? 'text-xs font-semibold text-emerald-300' : 'text-xs font-semibold text-amber-200'}>
+                  {snapshot ? '● Snapshot oficial' : chatOverviewLoading ? '● Atualizando' : '● Sem leitura'}
+                </span>
               </div>
-              <span className={card.healthy ? 'text-xs font-semibold text-emerald-300' : 'text-xs font-semibold text-amber-200'}>
-                {card.rows.length === 0 ? '● Sem base' : card.healthy ? '● Saudável' : '● Acompanhar'}
-              </span>
-            </div>
-            <div className="mt-5 grid grid-cols-3 gap-3">
-              <div><span className="text-xs text-slate-500">CSAT</span><strong className="mt-1 block text-lg">{card.csat === null ? '—' : formatPercent(card.csat)}</strong></div>
-              <div><span className="text-xs text-slate-500">Avaliações</span><strong className="mt-1 block text-lg">{card.reviewPercentage === null ? '—' : formatPercent(card.reviewPercentage)}</strong></div>
-              <div><span className="text-xs text-slate-500">Atend.</span><strong className="mt-1 block text-lg">{formatChatCount(card.tickets)}</strong></div>
-            </div>
-            <div className="mt-5 flex items-center justify-between border-t border-white/10 pt-4 text-xs">
-              <span className="text-slate-500">{latestChatPeriod.label} · {card.attention} ponto(s) de atenção</span>
-              <span className="font-semibold text-cyan-200">Abrir Chat →</span>
-            </div>
-          </button>
-        ))}
+              <div className="mt-5 grid grid-cols-3 gap-3">
+                <div><span className="text-xs text-slate-500">CSAT</span><strong className="mt-1 block text-lg">{snapshot?.csat_pct === null || snapshot?.csat_pct === undefined ? '—' : formatPercent(snapshot.csat_pct)}</strong></div>
+                <div><span className="text-xs text-slate-500">Entraram</span><strong className="mt-1 block text-lg">{snapshot ? formatChatCount(snapshot.report_created) : '—'}</strong></div>
+                <div><span className="text-xs text-slate-500">Resolvidos</span><strong className="mt-1 block text-lg">{snapshot ? formatChatCount(snapshot.report_resolved) : '—'}</strong></div>
+              </div>
+              <div className="mt-4 rounded-lg bg-slate-950/35 px-3 py-2 text-xs text-slate-400">
+                {snapshot
+                  ? `Estado agora: ${formatChatCount(snapshot.open_now)} aberto(s) · ${formatChatCount(snapshot.waiting_now)} aguardando`
+                  : 'Aguardando snapshot oficial do ClickDesk.'}
+              </div>
+              <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-4 text-xs">
+                <span className="text-slate-500">
+                  {snapshot ? `${formatDate(snapshot.period_date)} · atualizado ${formatDateTime(snapshot.captured_at)}` : 'Sem atualização oficial disponível'}
+                </span>
+                <span className="font-semibold text-cyan-200">Abrir Chat →</span>
+              </div>
+            </button>
+          )
+        })}
       </section>
 
       <section className="rounded-2xl border border-violet-300/15 bg-violet-300/[0.04] px-5 py-4">
@@ -1213,12 +1242,22 @@ function CentralOverview({
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.14em] text-violet-200">Leitura da Central</p>
             <p className="mt-1 text-sm text-slate-300">
-              {attentionTotal === 0
-                ? 'As referências carregadas não sinalizam prioridade aberta neste recorte.'
-                : (mainAttention?.label ?? 'A operação') + ' concentra a maior quantidade de pontos de atenção (' + (mainAttention?.count ?? 0) + ').'}
+              {chatOverviewError
+                ? `A leitura operacional do Chat não pôde ser carregada: ${chatOverviewError}`
+                : missingChatSnapshots > 0 && !chatOverviewLoading
+                  ? `${missingChatSnapshots} operação(ões) de Chat ainda não têm snapshot oficial disponível.`
+                  : phoneAttention > 0
+                    ? `O último período lançado do Telefone possui ${phoneAttention} ponto(s) de atenção. O Chat usa o snapshot oficial mais recente do ClickDesk.`
+                    : 'As fontes disponíveis foram carregadas. Abra cada operação para aprofundar sem misturar recortes históricos com estado atual.'}
             </p>
           </div>
-          <span className="text-xs text-slate-500">Clique em uma operação para aprofundar</span>
+          <span className="text-xs text-slate-500">
+            {chatOverview?.latest_sync?.finished_at
+              ? `Última sincronização ClickDesk: ${formatDateTime(chatOverview.latest_sync.finished_at)}`
+              : chatOverviewLoading
+                ? 'Consultando ClickDesk...'
+                : 'Clique em uma operação para aprofundar'}
+          </span>
         </div>
       </section>
     </div>
@@ -1243,6 +1282,9 @@ export default function Home() {
   const [chatMonthlyMetrics, setChatMonthlyMetrics] = useState<ChatMonthlyMetric[]>([])
   const [chatPodiumManual, setChatPodiumManual] = useState<ChatPodiumManual[]>([])
   const [chatPodiumExclusions, setChatPodiumExclusions] = useState<ChatPodiumExclusion[]>([])
+  const [centralChatOverview, setCentralChatOverview] = useState<CentralChatOverviewResponse | null>(null)
+  const [centralChatOverviewLoading, setCentralChatOverviewLoading] = useState(false)
+  const [centralChatOverviewError, setCentralChatOverviewError] = useState('')
   const [activeModule, setActiveModule] = useState<AppModule>('central')
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard')
   const [chatActiveTab, setChatActiveTab] = useState<ChatActiveTab>('overview')
@@ -1494,6 +1536,63 @@ export default function Home() {
       label: formatWeek(latestStart, latestEnd),
     }
   }, [individualMetrics, teamMetrics, analysts, goals])
+
+  useEffect(() => {
+    if (!isManagementUser || !user) {
+      setCentralChatOverview(null)
+      setCentralChatOverviewError('')
+      setCentralChatOverviewLoading(false)
+      return
+    }
+
+    let cancelled = false
+
+    async function loadCentralChatOverview() {
+      setCentralChatOverviewLoading(true)
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+
+        if (!session?.access_token) {
+          if (!cancelled) setCentralChatOverviewError('Sessão expirada.')
+          return
+        }
+
+        const response = await fetch('/api/clickdesk/overview', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: 'no-store',
+        })
+        const data = (await response.json()) as CentralChatOverviewResponse
+
+        if (!response.ok) {
+          throw new Error(data.erro || 'Não foi possível consultar a visão operacional do Chat.')
+        }
+
+        if (!cancelled) {
+          setCentralChatOverview(data)
+          setCentralChatOverviewError('')
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setCentralChatOverview(null)
+          setCentralChatOverviewError(getErrorMessage(error))
+        }
+      } finally {
+        if (!cancelled) setCentralChatOverviewLoading(false)
+      }
+    }
+
+    void loadCentralChatOverview()
+    const refreshTimer = window.setInterval(() => {
+      void loadCentralChatOverview()
+    }, 60 * 60 * 1000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(refreshTimer)
+    }
+  }, [isManagementUser, user])
 
   useEffect(() => {
     if (isManagementUser) return
@@ -2794,7 +2893,9 @@ export default function Home() {
             phoneAttention={centralPhoneSnapshot.attention}
             phonePeriodLabel={centralPhoneSnapshot.label}
             chatTeams={chatTeams}
-            chatMetrics={chatMonthlyMetrics}
+            chatOverview={centralChatOverview}
+            chatOverviewLoading={centralChatOverviewLoading}
+            chatOverviewError={centralChatOverviewError}
             onOpenPhone={() => {
               setActiveModule('phone')
               setActiveTab('dashboard')
