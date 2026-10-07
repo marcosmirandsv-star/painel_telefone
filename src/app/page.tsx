@@ -1135,6 +1135,7 @@ function CentralOverview({
   phonePerformance,
   phoneAttention,
   phonePeriodLabel,
+  phonePeriodEnd,
   chatTeams,
   chatOverview,
   chatOverviewLoading,
@@ -1146,6 +1147,7 @@ function CentralOverview({
   phonePerformance: number
   phoneAttention: number
   phonePeriodLabel: string
+  phonePeriodEnd: string
   chatTeams: ChatTeam[]
   chatOverview: CentralChatOverviewResponse | null
   chatOverviewLoading: boolean
@@ -1158,11 +1160,14 @@ function CentralOverview({
     (chatOverview?.snapshots ?? []).map((snapshot) => [snapshot.team_id, snapshot]),
   )
   const availableChatSnapshots = activeTeams.filter((team) => snapshotByTeam.has(team.id)).length
-  const phoneHasData = phonePeriodLabel !== 'Sem período carregado'
+  const phoneHasData = Boolean(phonePeriodEnd)
   const availableSources = (phoneHasData ? 1 : 0) + availableChatSnapshots
   const totalSources = 1 + activeTeams.length
   const phoneHealthy = phoneHasData && phoneCsat >= 90 && phonePerformance >= 96
   const missingChatSnapshots = activeTeams.length - availableChatSnapshots
+  const phonePeriodAgeDays = phonePeriodEnd
+    ? Math.max(0, Math.floor((Date.now() - Date.parse(`${phonePeriodEnd}T12:00:00`)) / 86400000))
+    : null
 
   return (
     <div className="space-y-5">
@@ -1190,14 +1195,19 @@ function CentralOverview({
               <h3 className="mt-2 text-lg font-bold">Operação de voz</h3>
             </div>
             <span className={phoneHealthy ? 'text-xs font-semibold text-emerald-300' : 'text-xs font-semibold text-amber-200'}>
-              {!phoneHasData ? '● Sem base' : phoneHealthy ? '● Dentro das referências' : '● Acompanhar'}
+              {!phoneHasData ? '● Sem base' : phoneHealthy ? '● Período dentro das referências' : '● Período em atenção'}
             </span>
           </div>
           <div className="mt-5 grid grid-cols-2 gap-3">
             <div><span className="text-xs text-slate-500">Performance</span><strong className="mt-1 block text-xl">{phoneHasData ? formatPercent(phonePerformance) : '—'}</strong></div>
             <div><span className="text-xs text-slate-500">CSAT</span><strong className="mt-1 block text-xl">{phoneHasData ? formatPercent(phoneCsat) : '—'}</strong></div>
           </div>
-          <div className="mt-5 flex items-center justify-between border-t border-white/10 pt-4 text-xs">
+          <div className="mt-4 rounded-lg bg-slate-950/35 px-3 py-2 text-xs text-slate-400">
+            {phoneHasData
+              ? `Fonte: lançamento manual semanal · período encerrado há ${phonePeriodAgeDays} dia(s)`
+              : 'Nenhum lançamento semanal disponível.'}
+          </div>
+          <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-4 text-xs">
             <span className="text-slate-500">{phonePeriodLabel}{phoneHasData ? ` · ${phoneAttention} ponto(s) de atenção` : ''}</span>
             <span className="font-semibold text-cyan-200">Abrir Telefone →</span>
           </div>
@@ -1247,8 +1257,10 @@ function CentralOverview({
                 : missingChatSnapshots > 0 && !chatOverviewLoading
                   ? `${missingChatSnapshots} operação(ões) de Chat ainda não têm snapshot oficial disponível.`
                   : phoneAttention > 0
-                    ? `O último período lançado do Telefone possui ${phoneAttention} ponto(s) de atenção. O Chat usa o snapshot oficial mais recente do ClickDesk.`
-                    : 'As fontes disponíveis foram carregadas. Abra cada operação para aprofundar sem misturar recortes históricos com estado atual.'}
+                    ? `O último período lançado manualmente do Telefone possui ${phoneAttention} ponto(s) de atenção. O Chat usa o snapshot oficial mais recente do ClickDesk.`
+                    : phoneHasData
+                      ? 'O Telefone representa o último período lançado manualmente; o Chat representa o snapshot oficial mais recente do ClickDesk. Os dois recortes não devem ser interpretados como tendo a mesma data-base.'
+                      : 'As fontes disponíveis foram carregadas. Abra cada operação para aprofundar sem misturar recortes históricos com estado atual.'}
             </p>
           </div>
           <span className="text-xs text-slate-500">
@@ -1514,7 +1526,7 @@ export default function Home() {
     const latestEnd = allEnds.find((end) => individualEnds.has(end) && teamEnds.has(end)) ?? allEnds[0] ?? ''
 
     if (!latestEnd) {
-      return { csat: 0, performance: 0, attention: 0, label: 'Sem período carregado' }
+      return { csat: 0, performance: 0, attention: 0, label: 'Sem período carregado', end: '' }
     }
 
     const latestIndividual = individualMetrics.filter((metric) => metric.week_end === latestEnd)
@@ -1534,6 +1546,7 @@ export default function Home() {
       performance: calculateTeamPerformance(latestTeam),
       attention: podium.filter((item) => !item.eligible).length,
       label: formatWeek(latestStart, latestEnd),
+      end: latestEnd,
     }
   }, [individualMetrics, teamMetrics, analysts, goals])
 
@@ -2892,6 +2905,7 @@ export default function Home() {
             phonePerformance={centralPhoneSnapshot.performance}
             phoneAttention={centralPhoneSnapshot.attention}
             phonePeriodLabel={centralPhoneSnapshot.label}
+            phonePeriodEnd={centralPhoneSnapshot.end}
             chatTeams={chatTeams}
             chatOverview={centralChatOverview}
             chatOverviewLoading={centralChatOverviewLoading}
