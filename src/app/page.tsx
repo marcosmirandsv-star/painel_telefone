@@ -8367,7 +8367,7 @@ function ChatModuleDashboard({
             )}
           </section>
 
-          <section className="workspace-content-section workspace-content-section-divided">
+          <section className="workspace-content-section workspace-content-section-divided phone-ai-layers">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <p className="workspace-eyebrow">Visão individual</p>
@@ -8588,7 +8588,7 @@ function ChatModuleDashboard({
                   </div>
                 )}
 
-                <div className="mt-5 grid gap-4 lg:grid-cols-3">
+                <div className="phone-reports-filter-grid mt-4 grid gap-3 lg:grid-cols-3">
                   <div className="rounded-xl border border-white/10 bg-slate-900/70 p-5">
                     <p className="text-sm font-semibold uppercase tracking-[0.14em] text-cyan-300">Qualidade</p>
                     <div className="mt-4 space-y-3 text-sm">
@@ -13474,8 +13474,8 @@ function ReportsView({
   }
 
   return (
-    <div className="phone-reports-workspace mt-6 space-y-7">
-      <section className="workspace-filter-panel">
+    <div className="phone-reports-workspace phone-reports-modern mt-4 space-y-5">
+      <section className="workspace-filter-panel phone-reports-filter">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h2 className="section-title">Relatórios e análise assistida</h2>
@@ -13537,7 +13537,7 @@ function ReportsView({
         </div>
       </section>
 
-      <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-white/10 bg-slate-950/30 text-center lg:grid-cols-4 lg:divide-x lg:divide-white/10">
+      <div className="phone-report-summary-strip grid grid-cols-2 overflow-hidden rounded-xl border border-white/10 bg-slate-950/30 text-center lg:grid-cols-4 lg:divide-x lg:divide-white/10">
         <div className="flex min-h-24 flex-col items-center justify-center px-4 py-3">
           <span className="flex min-h-8 items-center justify-center text-xs leading-4 text-slate-500">Analista</span>
           <strong className="mt-1 line-clamp-2 text-base">{selectedAnalyst?.name ?? 'Sem analista'}</strong>
@@ -13556,7 +13556,7 @@ function ReportsView({
         </div>
       </div>
 
-      <section className="workspace-content-section no-print">
+      <section className="workspace-content-section no-print phone-supervisor-insight">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="workspace-eyebrow">Inteligência de gestão</p>
@@ -13593,7 +13593,7 @@ function ReportsView({
 
 
 
-      <section className="workspace-content-section workspace-content-section-divided no-print">
+      <section className="workspace-content-section workspace-content-section-divided no-print phone-report-readiness">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="workspace-eyebrow">Validação</p>
@@ -13618,7 +13618,7 @@ function ReportsView({
           ))}
         </div>
       </section>
-      <section className="panel print-report">
+      <section className="panel print-report phone-report-composer">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="hidden print:block text-sm font-bold uppercase tracking-[0.18em] text-cyan-300">
@@ -13641,7 +13641,7 @@ function ReportsView({
           )}
         </div>
 
-        <div className="no-print mt-5 grid gap-4">
+        <div className="phone-report-editor no-print mt-4 grid gap-3">
           <Field label="Observações do gestor">
             <textarea
               className="form-input min-h-24"
