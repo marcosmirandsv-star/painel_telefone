@@ -12247,7 +12247,7 @@ function DashboardView({
                 <p className="section-subtitle">Indicadores individuais, posição e critérios que dependem diretamente do seu resultado.</p>
               </div>
             </div>
-            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="phone-analyst-kpi-grid mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <AnalystIdentityCard
                 analyst={analystProfile}
                 rankingPosition={analystRankingPosition}
@@ -12260,7 +12260,7 @@ function DashboardView({
             </div>
           </section>
 
-          <section className="workspace-metric-section workspace-metric-section-context">
+          <section className="workspace-metric-section workspace-metric-section-context phone-analyst-context">
             <div className="metric-zone-heading">
               <div>
                 <p className="workspace-eyebrow">Nosso resultado</p>
@@ -12268,7 +12268,7 @@ function DashboardView({
                 <p className="section-subtitle">A performance é coletiva e permanece visível para mostrar o resultado que o time está construindo junto.</p>
               </div>
             </div>
-            <div className="mt-5 grid gap-4 md:grid-cols-3">
+            <div className="phone-analyst-context-grid mt-4 grid gap-3 md:grid-cols-3">
               <MetricCard label="Performance da equipe" value={formatPercent(periodTeamPerformance || 0)} tone={periodTeamPerformance >= teamPerformanceGoal ? 'success' : periodTeamPerformance >= teamPerformanceGoal - 3 ? 'warning' : 'danger'} />
               <MetricCard label="CSAT equipe N1" value={formatPercent(n1TeamAverageCsat || 0)} tone={n1TeamAverageCsat >= podiumCsatGoal ? 'success' : n1TeamAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
               <MetricCard label="CSAT geral N1 + N2" value={overallPhoneCsat === null ? 'Não informado' : formatPercent(overallPhoneCsat)} tone={overallPhoneCsat === null ? undefined : overallPhoneCsat >= podiumCsatGoal ? 'success' : overallPhoneCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
@@ -12776,9 +12776,9 @@ function DashboardView({
         </div>
 
         {isAnalystDashboard ? (
-          <div className="mt-6 grid gap-4 lg:grid-cols-3">
-            <div className="rounded-lg bg-slate-900 p-5">
-              <p className="text-sm text-slate-400">Status do período</p>
+          <div className="phone-analyst-status-grid mt-5 grid gap-3 lg:grid-cols-3">
+            <div className="phone-analyst-status-card rounded-lg bg-slate-900 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Status do período</p>
               <h3 className={`mt-2 text-2xl font-bold ${analystDataLoading ? 'text-cyan-300' : analystResult?.eligible ? 'text-emerald-300' : 'text-cyan-300'}`}>
                 {analystDataLoading ? 'Atualizando leitura...' : analystStatusText}
               </h3>
@@ -12787,8 +12787,8 @@ function DashboardView({
               </p>
             </div>
 
-            <div className="rounded-lg bg-slate-900 p-5">
-              <p className="text-sm text-slate-400">CSAT e avaliações</p>
+            <div className="phone-analyst-status-card rounded-lg bg-slate-900 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">CSAT e avaliações</p>
               <p className="mt-2 text-3xl font-bold text-cyan-300">
                 {formatPercent(analystResult?.averageCsat ?? 0)}
               </p>
@@ -12797,8 +12797,8 @@ function DashboardView({
               </p>
             </div>
 
-            <div className="rounded-lg bg-slate-900 p-5">
-              <p className="text-sm text-slate-400">Posição no período</p>
+            <div className="phone-analyst-status-card rounded-lg bg-slate-900 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Posição no período</p>
               <p className="mt-2 text-3xl font-bold">{analystDataLoading ? '...' : analystRankingPosition ? `${analystRankingPosition}º` : '-'}</p>
               <p className={`mt-2 text-sm font-semibold ${analystDataLoading ? 'text-cyan-300' : analystResult?.eligible && analystRankingPosition <= 3 ? 'text-emerald-300' : analystResult?.eligible ? 'text-cyan-300' : 'text-amber-200'}`}>
                 {analystDataLoading ? 'Calculando com os dados do período' : analystPodiumPositionStatus}
@@ -12808,7 +12808,7 @@ function DashboardView({
               </p>
             </div>
 
-            <div className="rounded-lg bg-slate-900 p-5 lg:col-span-3">
+            <div className="phone-analyst-journey-card rounded-lg bg-slate-900 p-4 lg:col-span-3">
               <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                 <div>
                   <p className="text-sm text-slate-400">O que falta para o pódio?</p>
@@ -12820,7 +12820,7 @@ function DashboardView({
                   {analystDataLoading ? 'Aguarde enquanto o sistema cruza CSAT, avaliações, volume e ranking do período.' : analystPodiumGapText}
                 </p>
               </div>
-              <div className="mt-5 rounded-lg border border-cyan-400/20 bg-slate-950/70 p-5">
+              <div className="phone-analyst-journey-inner mt-4 rounded-lg border border-cyan-400/20 bg-slate-950/70 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <p className="text-sm font-semibold text-cyan-200">Sua jornada até o pódio</p>
@@ -12831,7 +12831,7 @@ function DashboardView({
                 <div className="mt-5 h-3 overflow-hidden rounded-full bg-slate-800" aria-label={`${analystJourneyProgress}% dos critérios cumpridos`}>
                   <div className="h-full rounded-full bg-cyan-300 transition-[width] duration-500" style={{ width: `${analystJourneyProgress}%` }} />
                 </div>
-                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <div className="phone-analyst-checklist mt-4 grid gap-2 sm:grid-cols-3">
                   {analystPodiumChecklist.map((item, index) => (
                     <div key={`journey-${item.label}`} className={`rounded-lg border p-4 ${item.ok ? 'border-emerald-400/30 bg-emerald-400/5' : 'border-amber-300/30 bg-amber-300/5'}`}>
                       <div className="flex items-center gap-3">
