@@ -180,11 +180,18 @@ Banco atual:
 - 10 ativos
 - Ismael Chagas Bessa: inativo
 
-### Gap confirmado
+### Menores aprendizes
 
-`Ana Julia` aparece em `clickdesk_chat_analyst_links` para Suporte Fiscal e equipe do Marcos, porém não possui registro correspondente em `chat_analysts`.
+Regra confirmada em 07/10/2026:
 
-Não corrigir automaticamente antes de confirmar cadastro/meta/identidade definitiva.
+- `Ana Julia` é menor aprendiz;
+- `David Leodoro` é menor aprendiz;
+- os atendimentos deles não entram em produtividade, CSAT, cobertura de avaliações, pódio, 360º ou pendência de mapeamento;
+- eles não devem ser cadastrados em `chat_analysts` como analistas de performance.
+
+O vínculo ClickDesk deles permanece preservado para auditoria com `person_role = apprentice`, e os registros detalhados usam `identity_role = apprentice`.
+
+A operação agregada oficial do ClickDesk continua representando o volume total real da fila; a exclusão vale para métricas derivadas de desempenho individual/equipe a partir da base detalhada.
 
 Também existem vínculos não mapeados ou de gestão que não devem ser promovidos a analista por inferência.
 
@@ -265,7 +272,7 @@ Não alterar nesta fase.
 - concluir gate v6 de 03/10 quando houver execução autenticada disponível.
 
 ### P1 — qualidade dos dados
-- decidir/corrigir cadastro de Ana Júlia no registry;
+- manter Ana Júlia e David Leodoro classificados como menores aprendizes e fora dos indicadores de performance;
 - explicar/recuperar a lacuna da persistência individual após 02/10 via trilha de reconciliação;
 - revisar se dados do Telefone posteriores a 18/09 precisam ser lançados/importados.
 
