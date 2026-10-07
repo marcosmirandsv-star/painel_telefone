@@ -12285,10 +12285,10 @@ function DashboardView({
               <p className="workspace-eyebrow">Operação</p>
               <h2 className="section-title mt-2">Visão executiva do período</h2>
               <p className="section-subtitle">Somente indicadores consolidados da operação, sem misturar leitura individual de pessoas.</p>
-              <span className="phone-period-badge">${periodLabel}</span>
+              <span className="phone-period-badge">{periodLabel}</span>
             </div>
           </div>
-          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <div className="phone-kpi-grid mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <MetricCard label="Performance da equipe" value={formatPercent(periodTeamPerformance || 0)} tone={periodTeamPerformance >= teamPerformanceGoal ? 'success' : periodTeamPerformance >= teamPerformanceGoal - 3 ? 'warning' : 'danger'} />
             <MetricCard label="CSAT equipe N1" value={formatPercent(n1TeamAverageCsat || 0)} tone={n1TeamAverageCsat >= podiumCsatGoal ? 'success' : n1TeamAverageCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
             <MetricCard label="CSAT geral N1 + N2" value={overallPhoneCsat === null ? 'Não informado' : formatPercent(overallPhoneCsat)} tone={overallPhoneCsat === null ? undefined : overallPhoneCsat >= podiumCsatGoal ? 'success' : overallPhoneCsat >= podiumCsatGoal - 5 ? 'warning' : 'danger'} />
