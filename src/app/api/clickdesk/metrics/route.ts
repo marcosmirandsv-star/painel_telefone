@@ -31,7 +31,7 @@ type DailyMetricRow = {
   analyst_id: string | null
   area: string
   assignee_name: string
-  identity_role: 'analyst' | 'management' | 'unmapped'
+  identity_role: 'analyst' | 'management' | 'unmapped' | 'apprentice'
   attendances: number
   positive_reviews: number
   negative_reviews: number
@@ -127,6 +127,7 @@ async function loadRows(
       )
       .gte('occurred_date', filters.start)
       .lte('occurred_date', filters.end)
+      .neq('identity_role', 'apprentice')
       .order('occurred_date', { ascending: true })
       .range(offset, offset + 499)
 
@@ -271,10 +272,12 @@ export async function GET(request: Request) {
       throw new ApiError(503, 'Não foi possível consultar o status da sincronização.')
     }
 
-    const todayRows = rows.filter((row) => row.occurred_date === filters.today)
-    const performanceRows = rows.filter((row) => row.identity_role === 'analyst')
-    const managementRows = rows.filter((row) => row.identity_role === 'management')
-    const unmatchedRows = rows.filter((row) => row.identity_role === 'unmapped')
+    const apprenticeRows = rows.filter((row) => row.identity_role === 'apprentice')
+    const includedRows = rows.filter((row) => row.identity_role !== 'apprentice')
+    const todayRows = includedRows.filter((row) => row.occurred_date === filters.today)
+    const performanceRows = includedRows.filter((row) => row.identity_role === 'analyst')
+    const managementRows = includedRows.filter((row) => row.identity_role === 'management')
+    const unmatchedRows = includedRows.filter((row) => row.identity_role === 'unmapped')
 
     let sourceQuery = admin
       .from('clickdesk_chat_attendances')
@@ -334,17 +337,19 @@ export async function GET(request: Request) {
           filters.today >= filters.start && filters.today <= filters.end,
         ...aggregate(todayRows),
       },
-      accumulated: aggregate(rows),
+      accumulated: aggregate(includedRows),
       performance_accumulated: aggregate(performanceRows),
       management_support: aggregate(managementRows),
-      daily: groupDaily(rows),
+      daily: groupDaily(includedRows),
       performance_daily: groupDaily(performanceRows),
       by_analyst: groupAnalysts(performanceRows, filters.today),
       self_podium_context: selfPodiumContext,
       data_quality: {
-        grouped_rows: rows.length,
+        grouped_rows: includedRows.length,
         unmatched_grouped_rows: unmatchedRows.length,
         unmatched_attendances: aggregate(unmatchedRows).attendances,
+        excluded_apprentice_grouped_rows: apprenticeRows.length,
+        excluded_apprentice_attendances: aggregate(apprenticeRows).attendances,
       },
       latest_sync: access.isManagement
         ? latestSync.data ?? null
