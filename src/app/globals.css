@@ -3128,3 +3128,98 @@ button:disabled {
     min-height: 4.9rem;
   }
 }
+
+
+/* Telephone administrative surfaces polish */
+.phone-admin-workspace {
+  --phone-admin-border: rgba(148, 163, 184, 0.14);
+}
+
+.phone-admin-workspace .phone-admin-switcher {
+  gap: 0.9rem;
+  border-color: var(--phone-admin-border);
+  background:
+    linear-gradient(135deg, rgba(8, 47, 73, 0.16), rgba(15, 23, 42, 0.76));
+  padding: 0.9rem 1rem;
+}
+
+.phone-admin-workspace .phone-admin-switcher .section-title {
+  font-size: 1rem;
+}
+
+.phone-admin-workspace .phone-admin-switcher .section-subtitle {
+  margin-top: 0.15rem;
+  max-width: 48rem;
+  font-size: 0.78rem;
+  line-height: 1.25rem;
+}
+
+.phone-admin-workspace .phone-admin-switcher .workspace-switcher-row {
+  gap: 0.35rem;
+}
+
+.phone-admin-workspace .phone-admin-switcher .workspace-switcher-button {
+  min-height: 2.35rem;
+  padding: 0.5rem 0.8rem;
+  font-size: 0.78rem;
+}
+
+.phone-admin-workspace .phone-admin-summary-strip {
+  border-color: var(--phone-admin-border);
+  background: rgba(15, 23, 42, 0.56);
+}
+
+.phone-admin-workspace .phone-admin-summary-strip > div {
+  min-height: 4.9rem;
+  padding: 0.65rem 0.8rem;
+}
+
+.phone-admin-workspace .phone-admin-summary-strip span {
+  font-size: 0.68rem;
+}
+
+.phone-admin-workspace .phone-admin-summary-strip strong {
+  font-size: 1rem;
+}
+
+.phone-admin-workspace .phone-admin-panel,
+.phone-admin-workspace .workspace-content-section {
+  border-color: var(--phone-admin-border);
+  border-radius: 1rem;
+}
+
+.phone-admin-workspace .phone-admin-panel {
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.phone-admin-workspace .phone-admin-panel .section-subtitle {
+  max-width: 48rem;
+}
+
+.phone-admin-workspace .form-workspace-card {
+  border-color: var(--phone-admin-border);
+  border-radius: 1rem;
+}
+
+.phone-admin-workspace table thead {
+  color: rgb(148 163 184);
+}
+
+.phone-admin-workspace table tbody tr {
+  transition: background-color 140ms ease;
+}
+
+.phone-admin-workspace table tbody tr:hover {
+  background: rgba(30, 41, 59, 0.36);
+}
+
+@media (max-width: 767px) {
+  .phone-admin-workspace .phone-admin-switcher,
+  .phone-admin-workspace .phone-admin-panel {
+    padding: 0.9rem;
+  }
+
+  .phone-admin-workspace .phone-admin-summary-strip > div {
+    min-height: 4.5rem;
+  }
+}

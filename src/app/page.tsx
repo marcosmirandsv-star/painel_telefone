@@ -14065,8 +14065,8 @@ function EntriesView({
 
 
   return (
-    <div className="phone-entries-workspace mt-6 space-y-7">
-      <nav className="workspace-filter-panel workspace-switcher" aria-label="Áreas de lançamentos">
+    <div className="phone-entries-workspace phone-admin-workspace mt-4 space-y-5">
+      <nav className="workspace-filter-panel workspace-switcher phone-admin-switcher" aria-label="Áreas de lançamentos">
         <div>
           <p className="workspace-eyebrow">Lançamentos · Telefone</p>
           <h2 className="section-title mt-2">
@@ -15024,8 +15024,8 @@ function AnalystsView({
   }
 
   return (
-    <div className="mt-8 space-y-6">
-      <nav className="workspace-filter-panel workspace-switcher" aria-label="Áreas de analistas">
+    <div className="phone-analysts-workspace phone-admin-workspace mt-4 space-y-5">
+      <nav className="workspace-filter-panel workspace-switcher phone-admin-switcher" aria-label="Áreas de analistas">
         <div>
           <p className="workspace-eyebrow">Analistas · Telefone</p>
           <h2 className="section-title mt-2">{analystSection === 'team' ? 'Equipe cadastrada' : editingAnalystId ? 'Editar analista' : 'Incluir analista'}</h2>
@@ -15056,7 +15056,7 @@ function AnalystsView({
       </nav>
 
       {analystSection === 'team' && (
-        <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-white/10 bg-white/10 md:grid-cols-4">
+        <div className="phone-admin-summary-strip grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-white/10 bg-white/10 md:grid-cols-4">
           <div className="bg-slate-950/80 p-4 text-center">
             <span className="text-xs text-slate-500">Total</span>
             <strong className="mt-1 block text-xl tabular-nums">{analysts.length}</strong>
@@ -15076,7 +15076,7 @@ function AnalystsView({
         </div>
       )}
 
-      <section className={analystSection === 'form' ? 'panel' : 'hidden'}>
+      <section className={analystSection === 'form' ? 'panel phone-admin-panel' : 'hidden'}>
         <h2 className="section-title">
           {editingAnalystId ? 'Editar analista' : 'Incluir analista'}
         </h2>
@@ -15142,7 +15142,7 @@ function AnalystsView({
         </form>
       </section>
 
-      <section className={analystSection === 'team' ? 'panel' : 'hidden'}>
+      <section className={analystSection === 'team' ? 'panel phone-admin-panel' : 'hidden'}>
         <h2 className="section-title">Analistas cadastrados</h2>
         <p className="section-subtitle">
           Inative para preservar o histórico. Exclua apenas cadastros criados por engano.
@@ -15509,8 +15509,8 @@ function GoalsView({
   }
 
   return (
-    <div className="mt-8 space-y-6">
-      <nav className="workspace-filter-panel workspace-switcher" aria-label="Áreas de metas">
+    <div className="phone-goals-workspace phone-admin-workspace mt-4 space-y-5">
+      <nav className="workspace-filter-panel workspace-switcher phone-admin-switcher" aria-label="Áreas de metas">
         <div>
           <p className="workspace-eyebrow">Metas · Telefone</p>
           <h2 className="section-title mt-2">{goalSection === 'goals' ? 'Metas configuradas' : 'Impacto no sistema'}</h2>
@@ -15541,7 +15541,7 @@ function GoalsView({
       </nav>
 
       {goalSection === 'goals' && (
-        <div className="grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-white/10 bg-white/10">
+        <div className="phone-admin-summary-strip grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-white/10 bg-white/10">
           <div className="bg-slate-950/80 p-4 text-center">
             <span className="text-xs text-slate-500">Configuradas</span>
             <strong className="mt-1 block text-xl tabular-nums">{goals.length}</strong>
@@ -15557,7 +15557,7 @@ function GoalsView({
         </div>
       )}
 
-      <section className={goalSection === 'impact' ? 'panel' : 'hidden'}>
+      <section className={goalSection === 'impact' ? 'panel phone-admin-panel' : 'hidden'}>
         <h2 className="section-title">Metas e impacto no sistema</h2>
         <p className="section-subtitle">
           Estes parâmetros alimentam o dashboard, o pódio, os relatórios SARE e as leituras preditivas. O CSAT individual continua no cadastro de cada analista.
@@ -15580,7 +15580,7 @@ function GoalsView({
       </section>
 
       <div className={goalSection === 'goals' ? 'grid gap-6 xl:grid-cols-[0.8fr_1.2fr]' : 'hidden'}>
-        <section className="panel">
+        <section className="panel phone-admin-panel">
           <h2 className="section-title">
             {editingGoalId ? 'Editar meta' : 'Selecione uma meta'}
           </h2>
