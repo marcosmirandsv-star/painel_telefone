@@ -12756,7 +12756,7 @@ function DashboardView({
         </section>
       )}
 
-      {(isAnalystDashboard || managementSection === 'people') && <section className="workspace-content-section workspace-content-section-divided">
+      {(isAnalystDashboard || managementSection === 'people') && <section className="workspace-content-section workspace-content-section-divided phone-ranking-section">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h2 className="section-title">
@@ -12849,7 +12849,7 @@ function DashboardView({
           </div>
         ) : (
           <>
-            <div className="mt-6 rounded-xl border border-cyan-400/20 bg-slate-900/60 p-5">
+            <div className="phone-podium-admin mt-5 rounded-xl border border-cyan-400/20 bg-slate-900/60 p-5">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -12926,7 +12926,7 @@ function DashboardView({
               )}
             </div>
 
-            <div className="mt-6 grid gap-4 md:grid-cols-3">
+            <div className="phone-podium-grid mt-5 grid gap-3 md:grid-cols-3">
               {[0, 1, 2].map((index) => {
                 const winner = podiumWinners[index]
                 const winnerAnalyst = winner
@@ -12934,11 +12934,14 @@ function DashboardView({
                   : null
 
                 return (
-                  <div key={index} className="rounded-lg bg-slate-900 p-5">
-                    <p className="text-sm text-slate-400">{index + 1}o lugar</p>
+                  <div key={index} className={`phone-podium-card phone-podium-card-${index + 1} rounded-lg bg-slate-900 p-4`}>
+                    <div className="phone-podium-position-row">
+                      <span className="phone-podium-position">{index + 1}º</span>
+                      <span className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Pódio</span>
+                    </div>
                     {winner ? (
                       <>
-                        <div className="mt-3 flex items-center gap-3">
+                        <div className="phone-podium-person mt-3 flex items-center gap-3">
                           <AnalystAvatar
                             name={winner.analystName}
                             photoUrl={winnerAnalyst?.photo_url}
@@ -12946,10 +12949,20 @@ function DashboardView({
                           />
                           <h3 className="text-xl font-bold">{winner.analystName}</h3>
                         </div>
-                        <p className="mt-3 text-3xl font-bold text-cyan-300 tabular-nums">{formatPercent(winner.averageCsat)}</p>
-                        <p className="mt-2 text-sm text-slate-400">
-                          {formatPercent(winner.reviewPercentage)} avaliações | {formatChatCount(winner.totalTickets)} atendimentos
-                        </p>
+                        <div className="phone-podium-metrics mt-4">
+                          <div>
+                            <span>CSAT</span>
+                            <strong>{formatPercent(winner.averageCsat)}</strong>
+                          </div>
+                          <div>
+                            <span>Avaliações</span>
+                            <strong>{formatPercent(winner.reviewPercentage)}</strong>
+                          </div>
+                          <div>
+                            <span>Atend.</span>
+                            <strong>{formatChatCount(winner.totalTickets)}</strong>
+                          </div>
+                        </div>
                       </>
                     ) : (
                       <p className="mt-5 text-sm text-slate-500">Aguardando elegível</p>
@@ -12959,7 +12972,7 @@ function DashboardView({
               })}
             </div>
 
-            <div className="mt-6 overflow-x-auto">
+            <div className="phone-ranking-table mt-5 overflow-x-auto">
               <table className="min-w-full text-left text-sm">
                 <thead className="text-slate-400">
                   <tr>
@@ -12976,8 +12989,10 @@ function DashboardView({
                     const manualPosition = phoneManualPodium.find((manual) => manual.analyst_id === item.analystId)?.position
 
                     return (
-                    <tr key={item.analystId}>
-                      <td className="py-3 pr-4 font-bold text-cyan-300">{periodPodium.findIndex((rankingItem) => rankingItem.analystId === item.analystId) + 1}o</td>
+                    <tr key={item.analystId} className={item.eligible ? 'phone-ranking-row phone-ranking-row-eligible' : 'phone-ranking-row'}>
+                      <td className="py-3 pr-4">
+                        <span className="phone-ranking-position">{periodPodium.findIndex((rankingItem) => rankingItem.analystId === item.analystId) + 1}º</span>
+                      </td>
                       <td className="py-3 pr-4">{item.analystName}</td>
                       <td className="whitespace-nowrap py-3 pr-4 tabular-nums">
                         {formatPercent(item.averageCsat)} <span className="text-slate-500">/ meta {item.individualGoal}%</span>
@@ -12986,11 +13001,11 @@ function DashboardView({
                       <td className="whitespace-nowrap py-3 pr-4 tabular-nums">{formatChatCount(item.totalTickets)}</td>
                       <td className="py-3">
                         {manualPosition ? (
-                          <span className="font-semibold text-cyan-200">Pódio ajustado · {manualPosition}º lugar</span>
+                          <span className="phone-status-pill phone-status-pill-manual">Pódio ajustado · {manualPosition}º</span>
                         ) : item.eligible ? (
-                          <span className="text-emerald-300">Elegível</span>
+                          <span className="phone-status-pill phone-status-pill-success">Elegível</span>
                         ) : (
-                          <span className="text-slate-400">{formatStatusText(item.reasons.join(', '))}</span>
+                          <span className="phone-status-pill phone-status-pill-neutral">{formatStatusText(item.reasons.join(', '))}</span>
                         )}
                       </td>
                     </tr>
