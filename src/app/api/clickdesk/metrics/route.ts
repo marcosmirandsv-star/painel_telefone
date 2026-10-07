@@ -127,7 +127,6 @@ async function loadRows(
       )
       .gte('occurred_date', filters.start)
       .lte('occurred_date', filters.end)
-      .neq('identity_role', 'apprentice')
       .order('occurred_date', { ascending: true })
       .range(offset, offset + 499)
 
@@ -284,6 +283,7 @@ export async function GET(request: Request) {
       .select('timestamp_source')
       .gte('occurred_date', filters.start)
       .lte('occurred_date', filters.end)
+      .neq('identity_role', 'apprentice')
 
     if (filters.analystId) sourceQuery = sourceQuery.eq('analyst_id', filters.analystId)
     if (filters.teamId) sourceQuery = sourceQuery.eq('team_id', filters.teamId)
