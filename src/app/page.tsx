@@ -10903,7 +10903,7 @@ function ChatModuleDashboard({
         </div>
 
         {selectedChatReportMetric ? (
-          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <div className="phone-kpi-grid mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             <MetricCard label="CSAT" value={formatChatPercent(selectedChatReportMetric.csat)} />
             <MetricCard label="% de avaliações" value={formatChatPercent(selectedChatReportMetric.review_percentage)} />
             <MetricCard label="Avaliações recebidas" value={formatChatCount(selectedChatReportMetric.reviews)} />
@@ -12118,8 +12118,8 @@ function DashboardView({
   }
 
   return (
-    <div className="phone-workspace mt-6 space-y-7">
-      <section className="workspace-filter-panel">
+    <div className="phone-workspace phone-dashboard-modern mt-4 space-y-5">
+      <section className="workspace-filter-panel phone-control-panel">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h2 className="section-title">Período de análise</h2>
@@ -12144,7 +12144,7 @@ function DashboardView({
           </div>
         </div>
 
-        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <div className="phone-period-grid mt-4 grid gap-3 sm:grid-cols-2">
           <Field label="Início">
             <input
               className="form-input"
@@ -12169,7 +12169,7 @@ function DashboardView({
       </section>
 
       {!isAnalystDashboard && (
-        <nav className="workspace-filter-panel workspace-switcher" aria-label="Submenus do Dashboard do Telefone">
+        <nav className="workspace-filter-panel workspace-switcher phone-dashboard-switcher" aria-label="Submenus do Dashboard do Telefone">
           <div>
             <p className="workspace-eyebrow">Dashboard · Telefone</p>
             <h2 className="section-title mt-2">
@@ -12239,7 +12239,7 @@ function DashboardView({
 
       {isAnalystDashboard ? (
         <>
-          <section className="workspace-metric-section">
+          <section className="workspace-metric-section phone-analyst-summary">
             <div className="metric-zone-heading">
               <div>
                 <p className="workspace-eyebrow">Minha performance</p>
@@ -12279,12 +12279,13 @@ function DashboardView({
           </section>
         </>
       ) : managementSection === 'area' ? (
-        <section className="workspace-metric-section">
+        <section className="workspace-metric-section phone-overview-section">
           <div className="metric-zone-heading">
             <div>
               <p className="workspace-eyebrow">Operação</p>
               <h2 className="section-title mt-2">Visão executiva do período</h2>
               <p className="section-subtitle">Somente indicadores consolidados da operação, sem misturar leitura individual de pessoas.</p>
+              <span className="phone-period-badge">${periodLabel}</span>
             </div>
           </div>
           <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -12296,7 +12297,7 @@ function DashboardView({
           </div>
         </section>
       ) : (
-        <section className="workspace-metric-section">
+        <section className="workspace-metric-section phone-people-summary">
           <div className="metric-zone-heading">
             <div>
               <p className="workspace-eyebrow">Pessoas</p>
