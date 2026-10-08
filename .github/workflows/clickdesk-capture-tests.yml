@@ -1,0 +1,24 @@
+name: ClickDesk Captura - Testes Isolados
+
+on:
+  push:
+    branches:
+      - work/clickdesk-captura-segura-20261008
+
+permissions:
+  contents: read
+
+jobs:
+  capture-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Testar captura humana
+        run: node --experimental-transform-types --test tests/clickdesk-human-capture.test.mts
+      - name: Verificar tipos
+        run: npx tsc --noEmit
