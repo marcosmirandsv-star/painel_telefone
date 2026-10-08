@@ -43,9 +43,21 @@ test('rejects ambiguous authors', () => {
   const result = captureFirstHumanAttendance({ ...base, analysts: [...analysts, { id: 'dup', team_id: 'outros', name: 'João Vitor Almeida', identity_role: 'analyst' }] })
   assert.deepEqual(result, { ok: false, reason: 'unconfirmed_or_ambiguous_analyst' })
 })
-test('rejects missing department evidence', () => {
+test('credits verified human attendance without historical department events', () => {
   const result = captureFirstHumanAttendance({ ...base, events: [] })
-  assert.deepEqual(result, { ok: false, reason: 'missing_historical_support_area' })
+  assert.equal(result.ok, true)
+  if (result.ok) {
+    assert.equal(result.value.analyst_id, 'jv')
+    assert.equal(result.value.area_at_answer, null)
+    assert.equal(result.value.department_event_id, null)
+  }
+})
+test('source queue does not block a verified human reply', () => {
+  const result = captureFirstHumanAttendance({ ...base,
+    events: [{ id: 34, created_at: '2026-10-03T14:42:36Z', field: 'department', new: 'Comercial' }],
+  })
+  assert.equal(result.ok, true)
+  if (result.ok) assert.equal(result.value.analyst_id, 'jv')
 })
 test('selects historical department at answer, not later transfer', () => {
   const result = captureFirstHumanAttendance({ ...base, events: [...base.events, { id: 999, created_at: '2026-10-03T15:00:00Z', field: 'department', new: 'Suporte - Fiscal' }] })
