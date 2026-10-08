@@ -1,5 +1,6 @@
 import { ApiError, authorizeClickDeskSessionClient, handle, json } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
+import { summarizeOfficialResolutions, type OfficialResolutionRow } from '@/lib/clickdesk-official-resolutions'
 
 export const runtime = 'nodejs'
 
@@ -143,6 +144,29 @@ async function loadRows(
   throw new ApiError(422, 'O volume de métricas excedeu o limite de consulta.')
 }
 
+async function loadOfficialResolutions(
+  admin: Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],
+  filters: ReturnType<typeof parseFilters>,
+): Promise<OfficialResolutionRow[]> {
+  const result: OfficialResolutionRow[] = []
+  for (let offset = 0; offset < 10000; offset += 500) {
+    let query = admin.from('clickdesk_chat_daily_resolutions')
+      .select('resolved_date,team_id,analyst_id,assignee_name,area,resolved_count,source,updated_at')
+      .gte('resolved_date',filters.start)
+      .lte('resolved_date',filters.end)
+      .eq('source','clickdesk_support_reports_agents')
+      .order('resolved_date',{ascending:true})
+      .range(offset,offset+499)
+    if (filters.analystId) query = query.eq('analyst_id',filters.analystId)
+    if (filters.teamId) query = query.eq('team_id',filters.teamId)
+    const {data,error} = await query
+    if (error) throw new ApiError(503,'Relatório oficial de resoluções ClickDesk indisponível.')
+    result.push(...((data ?? []) as OfficialResolutionRow[]))
+    if ((data ?? []).length < 500) return result
+  }
+  throw new ApiError(422,'O volume de resoluções excedeu o limite seguro de consulta.')
+}
+
 function aggregate(rows: DailyMetricRow[]): Aggregate {
   const totals = rows.reduce(
     (acc, row) => {
@@ -252,8 +276,12 @@ export async function GET(request: Request) {
           teamId: null,
         }
 
-    const rows = await loadRows(access.admin, filters)
     const admin = access.admin
+    const [rows, officialResolutionRows] = await Promise.all([
+      loadRows(admin, filters),
+      loadOfficialResolutions(admin, filters),
+    ])
+    const officialResolutions = summarizeOfficialResolutions(officialResolutionRows, filters.today)
 
     const latestSync = await admin
       .from('clickdesk_chat_sync_runs')
@@ -326,6 +354,9 @@ export async function GET(request: Request) {
 
     return json({
       source: 'clickdesk_persisted',
+      // Independent official human-agent resolution count. NEVER merged into
+      // attendance, evaluation %, CSAT, podium or historical ticket totals.
+      resolution_productivity: officialResolutions,
       period: {
         start: filters.start,
         end: filters.end,
