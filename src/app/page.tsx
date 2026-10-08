@@ -477,6 +477,22 @@ type ClickDeskPersistedMetrics = {
       daily: Array<ClickDeskPersistedAggregate & { date: string }>
     }
   >
+  resolution_productivity?: {
+    source: 'clickdesk_support_reports_agents'
+    total: number
+    today: { date: string; resolved: number }
+    daily: Array<{ date: string; resolved: number }>
+    by_analyst: Array<{
+      analyst_id: string
+      team_id: string
+      assignee_name: string
+      total: number
+      today: number
+      daily: Array<{ date: string; resolved: number }>
+    }>
+    last_updated_at: string | null
+    has_records: boolean
+  }
   self_podium_context?: {
     team_average_attendances: number
     team_analysts_with_data: number
@@ -3790,6 +3806,8 @@ function ChatAnalystPortal({
 
   const ownMetric =
     metrics?.by_analyst?.find((item) => item.analyst_id === analyst.id) ?? null
+  const ownOfficialResolution = metrics?.resolution_productivity?.by_analyst
+    .find((item) => item.analyst_id === analyst.id) ?? null
   const accumulated = ownMetric
   const today = ownMetric?.today ?? null
   const daily = ownMetric?.daily ?? []
@@ -3940,7 +3958,7 @@ function ChatAnalystPortal({
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                 Resumo da competência
               </p>
-              <div className="mt-3 grid gap-4 lg:grid-cols-3">
+              <div className="mt-3 grid gap-4 lg:grid-cols-4">
                 <div className="rounded-xl border border-white/10 bg-slate-950/40 p-5">
                   <p className="text-sm text-slate-400">Atendimentos</p>
                   <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
@@ -3950,6 +3968,22 @@ function ChatAnalystPortal({
                     <span className="text-slate-500">Atendimentos hoje</span>
                     <strong className="tabular-nums text-slate-200">
                       {formatChatCount(today?.attendances ?? 0)}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-cyan-300/15 bg-slate-950/40 p-5">
+                  <p className="text-sm text-slate-400">Tickets resolvidos</p>
+                  <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
+                    {ownOfficialResolution ? formatChatCount(ownOfficialResolution.total) : '—'}
+                  </strong>
+                  <p className="mt-2 text-xs text-slate-500">Relatório oficial ClickDesk · origem do ticket irrelevante</p>
+                  <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-3 text-sm">
+                    <span className="text-slate-500">Resolvidos hoje</span>
+                    <strong className="tabular-nums text-slate-200">
+                      {ownOfficialResolution?.daily.some((day) => day.date === todayKey)
+                        ? formatChatCount(ownOfficialResolution.today)
+                        : '—'}
                     </strong>
                   </div>
                 </div>
@@ -4127,6 +4161,25 @@ function ChatAnalystPortal({
             </span>
           </div>
         </div>
+
+        {ownOfficialResolution && ownOfficialResolution.daily.length > 0 && (
+          <div className="mt-5 rounded-xl border border-cyan-300/15 bg-slate-950/30 p-4">
+            <h4 className="font-semibold text-slate-100">Resoluções por dia · ClickDesk</h4>
+            <p className="mt-1 text-xs text-slate-400">
+              Relatório oficial de tickets resolvidos pelo analista, sem filtrar a origem.
+              Este indicador é independente dos atendimentos e das avaliações.
+              Dias sem registros não representam necessariamente zero atividade.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {ownOfficialResolution.daily.map((day) => (
+                <div key={day.date} className="rounded-lg border border-white/10 bg-slate-950/45 px-4 py-3">
+                  <span className="block text-xs text-slate-400">{formatDate(day.date)}</span>
+                  <strong className="mt-1 block text-lg text-slate-100">{formatChatCount(day.resolved)} resolvidos</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {activeRoutineDays.length ? (
           <div className="mt-5 flex flex-wrap gap-2">
@@ -7192,6 +7245,11 @@ function ChatModuleDashboard({
           normalizeChatText(item.area) === normalizeChatText(chat2SelectedLiveHuman.area),
       ) ?? null
     : null
+  const chat2SelectedOfficialResolutions = (clickDeskPersistedMetrics?.resolution_productivity?.by_analyst ?? [])
+    .find((item) =>
+      (chat2SelectedPersistedAnalyst?.analyst_id && item.analyst_id === chat2SelectedPersistedAnalyst.analyst_id) ||
+      (chat2SelectedLiveHuman &&
+        normalizeChatText(item.assignee_name) === normalizeChatText(chat2SelectedLiveHuman.name))) ?? null
 
   useEffect(() => {
     const analystId = chat2SelectedPersistedAnalyst?.analyst_id
@@ -8446,7 +8504,8 @@ function ChatModuleDashboard({
                   </div>
                 </div>
 
-                <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+                <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <MetricCard label="Tickets resolvidos (oficial)" value={chat2SelectedOfficialResolutions ? formatChatCount(chat2SelectedOfficialResolutions.total) : '—'} />
                   <MetricCard label="Atendimentos na competência" value={formatChatCount(chat2LiveAttendances)} />
                   <MetricCard label="Atendimentos hoje" value={formatChatCount(chat2TodayAttendances)} />
                   <MetricCard
