@@ -929,6 +929,7 @@ Deno.serve(async (req: Request) => {
     }
 
     let reportSnapshots = 0
+    let dailyResolutionRows = 0
     let reportSnapshotError: string | null = null
     try {
       const reportRows = await collectReportSnapshotRows({
@@ -945,6 +946,52 @@ Deno.serve(async (req: Request) => {
           .upsert(reportRows, { onConflict: 'sync_run_id,department_id' })
         if (reportResult.error) throw new Error(reportResult.error.message)
         reportSnapshots = reportRows.length
+      }
+
+      const resolutionRows: Record<string, unknown>[] = []
+      for (const department of CLICKDESK_REPORT_DEPARTMENTS) {
+        const query = `from=${encodeURIComponent(start)}&to=${encodeURIComponent(start)}&department_id=${department.departmentId}`
+        const payload = reportObject(await fetchClickDesk(`/support/reports/agents?${query}`, apiKey, accountId))
+        const agents = Array.isArray(payload.agents) ? payload.agents : []
+        for (const rawAgent of agents) {
+          if (!rawAgent || typeof rawAgent !== 'object') continue
+          const agent = rawAgent as Record<string, unknown>
+          const name = primitiveString(agent.name)
+          const resolved = numericValue(agent.resolved)
+          if (!name || resolved === null || resolved <= 0) continue
+          const candidates = analystCandidates.get(normalizeLabel(name)) ?? []
+          if (candidates.length !== 1) continue
+          const analyst = candidates[0]
+          const areaLink = areaLinkByKey.get(normalizeLabel(department.departmentName)) ?? null
+          const teamId = analyst.team_id ?? areaLink?.team_id ?? null
+          if (!teamId) continue
+          resolutionRows.push({
+            resolved_date: start,
+            team_id: teamId,
+            analyst_id: analyst.id,
+            assignee_name: name,
+            area: department.departmentName,
+            resolved_count: resolved,
+            source: 'clickdesk_support_reports_agents',
+            source_department_id: department.departmentId,
+            source_period_start: start,
+            source_period_end: start,
+            evidence: {
+              agent_id: numericValue(agent.id),
+              conversations: numericValue(agent.conversations),
+              replies: numericValue(agent.replies),
+              resolved,
+            },
+            updated_at: new Date().toISOString(),
+          })
+        }
+      }
+      if (resolutionRows.length) {
+        const resolutionResult = await admin
+          .from('clickdesk_chat_daily_resolutions')
+          .upsert(resolutionRows, { onConflict: 'resolved_date,team_id,analyst_id,area' })
+        if (resolutionResult.error) throw new Error(resolutionResult.error.message)
+        dailyResolutionRows = resolutionRows.length
       }
     } catch (error) {
       reportSnapshotError =
@@ -988,6 +1035,7 @@ Deno.serve(async (req: Request) => {
           total_pages_available: totalPagesAvailable,
           pagination: paginationAudit,
           report_snapshots: reportSnapshots,
+          daily_resolution_rows: dailyResolutionRows,
           report_snapshot_error: reportSnapshotError,
         },
         finished_at: new Date().toISOString(),
@@ -1009,6 +1057,7 @@ Deno.serve(async (req: Request) => {
       unmapped_rows: unmappedRows,
       timestamp_audit: operational.audit,
       report_snapshots: reportSnapshots,
+      daily_resolution_rows: dailyResolutionRows,
       report_snapshot_error: reportSnapshotError,
     })
   } catch (error) {
