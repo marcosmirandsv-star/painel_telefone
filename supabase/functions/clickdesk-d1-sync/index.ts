@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { verifyHumanTicketCoverage } from './coverage.ts'
 
 const CLICKDESK_BASE_URL = 'https://api.desk.click.app/api/v1'
 const BUSINESS_TIME_ZONE = 'America/Sao_Paulo'
@@ -929,6 +930,7 @@ Deno.serve(async (req: Request) => {
     }
 
     let reportSnapshots = 0
+    let agentReceivedInReports = 0
     let dailyResolutionRows = 0
     let reportSnapshotError: string | null = null
     try {
@@ -940,6 +942,7 @@ Deno.serve(async (req: Request) => {
         runId,
         areaLinkByKey,
       })
+      agentReceivedInReports = reportRows.reduce((sum, row) => sum + (numericValue(row.agent_received) ?? 0), 0)
       if (reportRows.length) {
         const reportResult = await admin
           .from('clickdesk_chat_report_snapshots')
@@ -996,6 +999,16 @@ Deno.serve(async (req: Request) => {
     } catch (error) {
       reportSnapshotError =
         error instanceof Error ? error.message.slice(0, 500) : 'Unexpected report snapshot error'
+    }
+
+    // Persist official report snapshots even when the ticket endpoint is empty.
+    // Then fail the attendance run, rather than falsely reporting success with 0 tickets.
+    const coverage = verifyHumanTicketCoverage({
+      ticketCollectionSize: rows.length,
+      reportAgentReceived: agentReceivedInReports,
+    })
+    if (!coverage.ok) {
+      throw new Error('ClickDesk attendance coverage failure: ticket collection empty while official agent reports show ' + agentReceivedInReports + ' received; no attendance data confirmed')
     }
 
     const analystRows = attendanceRows.filter((row) => row.identity_role === 'analyst').length
