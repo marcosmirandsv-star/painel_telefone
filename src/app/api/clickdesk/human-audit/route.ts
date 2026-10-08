@@ -46,9 +46,9 @@ export async function POST(request: Request) {
     const key = process.env.CLICKDESK_API_KEY?.trim()
     const account = process.env.CLICKDESK_ACCOUNT_ID?.trim()
     if (!key || !account) throw new ApiError(503, 'ClickDesk não configurado')
-    const { data: people, error } = await admin.from('analysts').select('id,team_id,name,active,identity_role')
+    const { data: people, error } = await admin.from('chat_analysts').select('id,team_id,name,active')
     if (error) throw new ApiError(503, 'Cadastro de analistas indisponível')
-    const analysts: AnalystIdentity[] = (people ?? []).map((p: Record<string, unknown>) => ({ id:str(p.id), team_id:str(p.team_id), name:str(p.name), identity_role:str(p.identity_role), active:p.active !== false }))
+    const analysts: AnalystIdentity[] = (people ?? []).map((p: Record<string, unknown>) => ({ id:str(p.id), team_id:str(p.team_id), name:str(p.name), identity_role: /^(ana julia|ana júlia|david)(\\s|$)/i.test(str(p.name)) ? 'apprentice' : 'analyst', active:p.active !== false }))
     const results: Array<Record<string, unknown>> = []
     for (const id of CONTROLS) {
       try {
