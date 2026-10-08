@@ -40,8 +40,8 @@ export type HumanCaptureResult = {
   analyst_id: string
   team_id: string
   author: string
-  area_at_answer: string
-  department_event_id: string
+  area_at_answer: string | null
+  department_event_id: string | null
 }
 export type CaptureDecision =
   | { ok: true; value: HumanCaptureResult }
@@ -63,11 +63,6 @@ function normalizeName(value: string): string {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR')
     .replace(/[^a-z0-9]+/g, ' ').trim().replace(/\s+/g, ' ')
 }
-function targetArea(value: string | null): boolean {
-  if (!value) return false
-  const name = normalizeName(value)
-  return name.includes('suporte') && (name.includes('erp') || name.includes('fiscal'))
-}
 export function captureFirstHumanAttendance(input: HumanCaptureInput): CaptureDecision {
   if (!input.ticket_id || !Number.isFinite(time(input.ticket_created_at)))
     return { ok: false, reason: 'invalid_ticket' }
@@ -82,12 +77,12 @@ export function captureFirstHumanAttendance(input: HumanCaptureInput): CaptureDe
   const candidates = input.analysts.filter(a =>
     a.active !== false && normalizeName(a.name) === normalizeName(first.author!) && a.identity_role === 'analyst')
   if (candidates.length !== 1) return { ok: false, reason: 'unconfirmed_or_ambiguous_analyst' }
-  // No fallback to current owner/queue: only historical department events.
+  // Department is optional context: a human answer counts regardless of source queue.
+  // Never infer historical area from the ticket's current department.
   const events = input.events
     .filter(e => e.field === 'department' && Number.isFinite(time(e.created_at)) && time(e.created_at) <= time(first.created_at))
     .sort((a, b) => time(b.created_at) - time(a.created_at) || String(b.id).localeCompare(String(a.id)))
   const department = events[0]
-  if (!department || !targetArea(department.new)) return { ok: false, reason: 'missing_historical_support_area' }
   return { ok: true, value: {
     ticket_id: input.ticket_id,
     ticket_created_at: new Date(input.ticket_created_at).toISOString(),
@@ -98,7 +93,7 @@ export function captureFirstHumanAttendance(input: HumanCaptureInput): CaptureDe
     analyst_id: candidates[0].id,
     team_id: candidates[0].team_id,
     author: candidates[0].name,
-    area_at_answer: department.new!,
-    department_event_id: String(department.id),
+    area_at_answer: department?.new ?? null,
+    department_event_id: department ? String(department.id) : null,
   } }
 }
