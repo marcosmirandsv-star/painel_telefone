@@ -77,3 +77,25 @@ test('requires absolute timestamps', () => {
   const result = captureFirstHumanAttendance({ ...base, messages: [{ ...base.messages[0], created_at: '2026-10-03T14:44:05' }] })
   assert.deepEqual(result, { ok: false, reason: 'no_public_human_message' })
 })
+
+test('credits registered analyst after prior public answer from Comercial', () => {
+  const messages = [
+    { id: 33, created_at: '2026-10-03T14:42:00Z', author_type: 'agent', visibility: 'public', author: 'Agente Comercial' },
+    ...base.messages,
+  ]
+  const result = captureFirstHumanAttendance({ ...base, messages })
+  assert.equal(result.ok,true)
+  if (result.ok) {
+    assert.equal(result.value.analyst_id,'jv')
+    assert.equal(result.value.first_public_human_message_id,'2596142')
+  }
+})
+test('does not award an apprentice but credits subsequent qualified analyst', () => {
+  const messages = [
+    { id: 36, created_at: '2026-10-03T14:42:00Z', author_type: 'agent', visibility: 'public', author: 'Ana Júlia' },
+    ...base.messages,
+  ]
+  const result = captureFirstHumanAttendance({ ...base, messages })
+  assert.equal(result.ok,true)
+  if (result.ok) assert.equal(result.value.analyst_id,'jv')
+})
