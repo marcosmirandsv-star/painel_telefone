@@ -70,13 +70,23 @@ export function captureFirstHumanAttendance(input: HumanCaptureInput): CaptureDe
     .filter(m => m.author_type === 'agent' && m.visibility === 'public' && Number.isFinite(time(m.created_at)))
     .sort((a, b) => time(a.created_at) - time(b.created_at) || String(a.id).localeCompare(String(b.id)))
   if (!publicHuman.length) return { ok: false, reason: 'no_public_human_message' }
-  const first = publicHuman[0]
-  if (!first.author?.trim() || !String(first.id).trim()) return { ok: false, reason: 'missing_author_or_message_id' }
-  if (time(first.created_at) < time(input.ticket_created_at))
-    return { ok: false, reason: 'message_before_ticket_creation' }
-  const candidates = input.analysts.filter(a =>
-    a.active !== false && normalizeName(a.name) === normalizeName(first.author!) && a.identity_role === 'analyst')
-  if (candidates.length !== 1) return { ok: false, reason: 'unconfirmed_or_ambiguous_analyst' }
+  // A ticket may have received a public response in Comercial/Financeiro
+  // before reaching our team. Credit the first verified response written by
+  // a registered, non-apprentice analyst, not necessarily the first human
+  // response on the entire ticket.
+  const verified = publicHuman
+    .filter(m => m.author?.trim() && String(m.id).trim() &&
+      time(m.created_at) >= time(input.ticket_created_at))
+    .map(message => ({
+      message,
+      analysts: input.analysts.filter(a =>
+        a.active !== false && a.identity_role === 'analyst' &&
+        normalizeName(a.name) === normalizeName(message.author!)),
+    }))
+    .find(candidate => candidate.analysts.length === 1)
+  if (!verified) return { ok: false, reason: 'unconfirmed_or_ambiguous_analyst' }
+  const first = verified.message
+  const candidates = verified.analysts
   // Department is optional context: a human answer counts regardless of source queue.
   // Never infer historical area from the ticket's current department.
   const events = input.events
