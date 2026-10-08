@@ -1,6 +1,7 @@
 import { ApiError, authorizeManagerSessionClient, handle, json } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 import { captureFirstHumanAttendance, type AnalystIdentity, type HumanMessage, type DepartmentEvent } from '@/lib/clickdesk-human-capture'
+import { buildTicketProductivityEvidence } from '@/lib/clickdesk-ticket-productivity'
 
 export const runtime = 'nodejs'
 
@@ -58,7 +59,7 @@ export async function POST(request: Request) {
         const events = collection(eventsPayload).map(normalizeEvent)
         const messages = collection(messagesPayload).map(normalizeMessage)
         const decision = captureFirstHumanAttendance({ ticket_id:id, ticket_created_at:iso(ticket.created_at), analysts, events, messages })
-        results.push({ ticket_id:id, ok:decision.ok, ...(decision.ok ? {date:decision.value.human_answered_date,author:decision.value.author,area:decision.value.area_at_answer,first_message_id:decision.value.first_public_human_message_id} : {reason:decision.reason}), events_count:events.length, messages_count:messages.length })
+        results.push({ ticket_id:id, ok:decision.ok, ...(decision.ok ? {date:decision.value.human_answered_date,author:decision.value.author,area:decision.value.area_at_answer,first_message_id:decision.value.first_public_human_message_id,productivity_evidence:buildTicketProductivityEvidence(decision.value,ticket)} : {reason:decision.reason}), events_count:events.length, messages_count:messages.length })
       } catch { results.push({ticket_id:id,ok:false,reason:'read_failed'}) }
     }
     const accepted = results.filter(r=>r.ok)
