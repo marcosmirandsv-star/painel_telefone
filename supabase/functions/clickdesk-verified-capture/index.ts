@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { lastHumanRatingOwner } from "./last-human-rating.ts";
 
 const BASE="https://api.desk.click.app/api/v1";
 const HOMO="vvtorcvchnqhcredhorv.supabase.co";
@@ -134,17 +135,39 @@ Deno.serve(async(req:Request)=>{
        perAnalyst.set(str(match.id),{ticket_id:id,analyst_id:match.id,team_id:match.team_id,
         analyst_name:name,first_message_id:messageId,first_answered_at:new Date(t).toISOString(),
         occurred_date:day(t),satisfaction_label:null,rating_attribution:"unverified",
+        rating_last_message_id:null,rating_last_answered_at:null,
         evidence_source:"clickdesk_public_agent_message"});
     }
-    // A customer evaluation belongs to the TICKET. It is deliberately
-    // not multiplied among human contributors without confirmed resolver evidence.
+    // The client evaluation belongs to the LAST human who served the ticket.
+    // Use the public agent message author across ALL teams. Current owner, bot
+    // hand-off, status and message count never stand in for actual authorship.
+    // Earlier contributors remain credited for their verified work, but not
+    // for this ticket-level evaluation.
+    const rating=statusRating(ticket);
+    const lastHuman=lastHumanRatingOwner(messages);
+    const ownerCandidates=lastHuman.ok?(byName.get(norm(lastHuman.author_name))??[]):[];
+    const matchedOwner=ownerCandidates.length===1?ownerCandidates[0]:null;
+    const creditedRow=matchedOwner?perAnalyst.get(str(matchedOwner.id)):null;
+    const ratingAssigned=Boolean(rating && lastHuman.ok && creditedRow &&
+      !/^(ana julia|david)( |$)/.test(norm(str(matchedOwner?.name))));
+    if(ratingAssigned && lastHuman.ok && creditedRow){
+      creditedRow.satisfaction_label=rating;
+      creditedRow.rating_attribution="last_public_human_answer";
+      creditedRow.rating_last_message_id=lastHuman.message_id;
+      creditedRow.rating_last_answered_at=new Date(lastHuman.answered_at).toISOString();
+    }
     const within=[...perAnalyst.values()].filter(x=>x.occurred_date>=start&&x.occurred_date<=end);
     const ownerRaw=ticket.owner??ticket.assignee??ticket.agent;
     const owner=str(ownerRaw)||str(obj(ownerRaw).name);
     return {rows:within,audit:{ticket_id:id,messages_scanned:messages.length,
-       verified_analysts:within.map(x=>x.analyst_name),rating_on_ticket:statusRating(ticket),
+       verified_analysts:within.map(x=>x.analyst_name),rating_on_ticket:rating,
        ticket_status:str(ticket.status),ticket_owner:owner||null,
-       unresolved_rating_attribution:true}};
+       last_public_human:lastHuman.ok?lastHuman.author_name:null,
+       rating_assigned:ratingAssigned && within.some(x=>x.analyst_id===matchedOwner?.id),
+       rating_assignment_reason:!rating?"ticket_unrated":!lastHuman.ok?lastHuman.reason:
+         !matchedOwner?"last_human_not_uniquely_registered":
+         !creditedRow?"last_human_no_verified_contribution":
+         "last_public_human_answer"}};
    }catch(e){return {error:{ticket_id:id,message:e instanceof Error?e.message:"ticket_read_failed"}}}
   }));
   for(const out of outcomes){if("error" in out)errors.push(out.error as R);else{
@@ -154,8 +177,10 @@ Deno.serve(async(req:Request)=>{
  const preview={ok:errors.length===0,action:"process",dry_run:dry,requested:unique.length,
   processed:ticketAudit.length,contributions:records.length,unique_tickets:new Set(records.map(x=>x.ticket_id)).size,
   errors,rows:records,rows_written:0,
+  rated_tickets:ticketAudit.filter(x=>x.rating_on_ticket==="positive"||x.rating_on_ticket==="negative").length,
+  ratings_attributed:records.filter(x=>x.rating_attribution==="last_public_human_answer").length,
   ticket_audit:dry?ticketAudit:undefined,
-  rating_note:"ticket rating not assigned without verified resolver"};
+  rating_note:"Each customer rating belongs exclusively to the last verified public human agent across all queues; ambiguous authors stay unassigned."};
  if(dry||errors.length)return Response.json(preview,{status:errors.length?422:200});
  const {error:saveError}=await admin.from("clickdesk_chat_verified_contributions")
   .upsert(records,{onConflict:"ticket_id,analyst_id"});
