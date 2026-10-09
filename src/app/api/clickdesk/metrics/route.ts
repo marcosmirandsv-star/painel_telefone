@@ -179,6 +179,8 @@ async function loadVerifiedContributions(
       .select('ticket_id,analyst_id,team_id,analyst_name,occurred_date,verified_at,satisfaction_label')
       .gte('occurred_date',filters.start).lte('occurred_date',filters.end)
       .order('occurred_date',{ascending:true})
+      .order('ticket_id',{ascending:true})
+      .order('analyst_id',{ascending:true})
       .range(offset,offset+499)
     if(filters.analystId)query=query.eq('analyst_id',filters.analystId)
     if(filters.teamId)query=query.eq('team_id',filters.teamId)
