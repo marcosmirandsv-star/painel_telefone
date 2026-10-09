@@ -3995,6 +3995,17 @@ function ChatAnalystPortal({
           </div>
         )}
 
+        {!loading && !metrics?.erro && ownVerifiedContribution?.daily.some(
+          (item) => !daily.some((legacy) => legacy.date === item.date),
+        ) && (
+          <div className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-xs leading-5 text-amber-100">
+            Os atendimentos humanos verificados já incluem a nova captura. CSAT,
+            percentual de avaliações e posição do pódio ainda seguem a base de
+            avaliações anterior e não devem ser utilizados como fechamento definitivo
+            até a recuperação das avaliações do período.
+          </div>
+        )}
+
         {!loading && !metrics?.erro && (
           <>
             <div className="mt-6">
