@@ -3811,6 +3811,13 @@ function ChatAnalystPortal({
   const accumulated = ownMetric
   const today = ownMetric?.today ?? null
   const daily = ownMetric?.daily ?? []
+  // A resolved ticket from the official report does not prove an attendance was
+  // captured by the separate ticket ingestion. Show the gap without fabricating
+  // attendances or changing the underlying CSAT / podium calculations.
+  const ownResolutionDaysMissingAttendance = (ownOfficialResolution?.daily ?? [])
+    .filter((day) => day.resolved > 0 &&
+      !daily.some((record) => record.date === day.date && record.attendances > 0))
+    .map((day) => day.date)
   const csat = accumulated?.csat ?? null
   const reviewPercentage = accumulated?.review_percentage ?? null
   const csatGoal = Number(analyst.csat_goal)
@@ -3952,6 +3959,17 @@ function ChatAnalystPortal({
           </p>
         )}
 
+        {!loading && !metrics?.erro && ownResolutionDaysMissingAttendance.length > 0 && (
+          <div className="mt-5 rounded-lg border border-amber-300/25 bg-amber-300/5 px-4 py-3 text-sm leading-6 text-amber-100" role="status">
+            <strong>Atendimentos em conferência.</strong>{' '}
+            O relatório oficial do ClickDesk registra tickets resolvidos em{' '}
+            {ownResolutionDaysMissingAttendance.map((day) => formatDate(day)).join(', ')},
+            mas a captura detalhada de atendimentos ainda não confirmou esses dias.
+            Os números de atendimentos podem estar parciais. As resoluções oficiais
+            aparecem abaixo em indicador separado; nenhuma contagem foi somada ou estimada.
+          </div>
+        )}
+
         {!loading && !metrics?.erro && (
           <>
             <div className="mt-6">
@@ -3964,10 +3982,15 @@ function ChatAnalystPortal({
                   <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
                     {formatChatCount(accumulated?.attendances ?? 0)}
                   </strong>
+                  {ownResolutionDaysMissingAttendance.length > 0 && (
+                    <p className="mt-2 text-xs text-amber-200">Volume parcial — faltam dias de captura detalhada.</p>
+                  )}
                   <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-3 text-sm">
                     <span className="text-slate-500">Atendimentos hoje</span>
                     <strong className="tabular-nums text-slate-200">
-                      {formatChatCount(today?.attendances ?? 0)}
+                      {ownResolutionDaysMissingAttendance.includes(todayKey)
+                        ? '—'
+                        : formatChatCount(today?.attendances ?? 0)}
                     </strong>
                   </div>
                 </div>
