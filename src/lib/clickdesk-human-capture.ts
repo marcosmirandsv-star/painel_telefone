@@ -107,3 +107,56 @@ export function captureFirstHumanAttendance(input: HumanCaptureInput): CaptureDe
     department_event_id: department ? String(department.id) : null,
   } }
 }
+
+/**
+ * One verified human attendance per (ticket ID, analyst ID), regardless of
+ * ticket origin, prior IA, or department changes. Distinct human agents may
+ * each contribute to the same ticket, but repeat messages/cycles by one agent
+ * must never multiply their ticket count.
+ *
+ * These are contributions, NOT resolved counts, customer evaluations or CSAT.
+ * Resolution is credited from the independent official agents report.
+ */
+export function captureVerifiedHumanContributions(input: HumanCaptureInput): HumanCaptureResult[] {
+  if (!input.ticket_id || !Number.isFinite(time(input.ticket_created_at))) return []
+  const analysts = new Map<string, AnalystIdentity[]>()
+  for (const analyst of input.analysts) {
+    if (analyst.identity_role !== 'analyst' || analyst.active === false) continue
+    const key = normalizeName(analyst.name)
+    analysts.set(key, [...(analysts.get(key) ?? []), analyst])
+  }
+  const messages = input.messages
+    .filter(m => m.author_type === 'agent' && m.visibility === 'public' &&
+      !!m.author?.trim() && !!String(m.id).trim() &&
+      Number.isFinite(time(m.created_at)) &&
+      time(m.created_at) >= time(input.ticket_created_at))
+    .sort((a,b) => time(a.created_at) - time(b.created_at) ||
+      String(a.id).localeCompare(String(b.id)))
+  const departments = input.events
+    .filter(e => e.field === 'department' && Number.isFinite(time(e.created_at)))
+    .sort((a,b) => time(a.created_at) - time(b.created_at) ||
+      String(a.id).localeCompare(String(b.id)))
+  const seen = new Set<string>()
+  const results: HumanCaptureResult[] = []
+  for (const message of messages) {
+    const candidate = analysts.get(normalizeName(message.author!)) ?? []
+    if (candidate.length !== 1 || seen.has(candidate[0].id)) continue
+    const analyst = candidate[0]
+    seen.add(analyst.id)
+    const areaEvent = departments.filter(e => time(e.created_at) <= time(message.created_at)).at(-1)
+    results.push({
+      ticket_id: input.ticket_id,
+      ticket_created_at: new Date(input.ticket_created_at).toISOString(),
+      ticket_created_date: localDate(input.ticket_created_at),
+      first_public_human_message_id: String(message.id),
+      human_answered_at: new Date(message.created_at).toISOString(),
+      human_answered_date: localDate(message.created_at),
+      analyst_id: analyst.id,
+      team_id: analyst.team_id,
+      author: analyst.name,
+      area_at_answer: areaEvent?.new ?? null,
+      department_event_id: areaEvent ? String(areaEvent.id) : null,
+    })
+  }
+  return results
+}
