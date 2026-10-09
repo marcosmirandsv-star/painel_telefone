@@ -24,3 +24,24 @@ test('missing dates are absent, never invented as zero attendance',()=>{
  assert.equal(summary.daily.length,1)
  assert.equal(summary.coverage_status,'partial_until_queue_finished')
 })
+
+test('verified customer satisfaction belongs only to the final human and never duplicates a ticket',()=>{
+ const source=[
+  {...rows[0],satisfaction_label:null},
+  {...rows[0],satisfaction_label:null},
+  {...rows[2],satisfaction_label:'positive'},
+  {...rows[3],satisfaction_label:'negative'},
+  {...rows[4],satisfaction_label:'positive'},
+ ]
+ const summary=summarizeVerifiedContributions(source,'2026-10-08')
+ assert.deepEqual(summary.evaluations,{
+  positive_reviews:1,negative_reviews:1,reviews:2,csat:50,review_percentage:66.67,
+ })
+ assert.deepEqual(summary.by_analyst.find(x=>x.analyst_id==='carlos')?.evaluations,{
+  positive_reviews:0,negative_reviews:1,reviews:1,csat:0,review_percentage:50,
+ })
+ assert.deepEqual(summary.by_analyst.find(x=>x.analyst_id==='paulo')?.evaluations,{
+  positive_reviews:1,negative_reviews:0,reviews:1,csat:100,review_percentage:100,
+ })
+ assert.equal(summary.evaluations.reviews,2)
+})
