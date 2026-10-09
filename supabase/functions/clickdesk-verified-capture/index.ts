@@ -182,9 +182,13 @@ Deno.serve(async(req:Request)=>{
   ticket_audit:dry?ticketAudit:undefined,
   rating_note:"Each customer rating belongs exclusively to the last verified public human agent across all queues; ambiguous authors stay unassigned."};
  if(dry||errors.length)return Response.json(preview,{status:errors.length?422:200});
- const {error:saveError}=await admin.from("clickdesk_chat_verified_contributions")
-  .upsert(records,{onConflict:"ticket_id,analyst_id"});
+ if(records.length===0)return Response.json({...preview,dry_run:false,rows_written:0,rows:[]});
+ // A single database transaction clears any older rated contributor and writes
+ // the newly verified last public human. Re-openings cannot double-award CSAT.
+ const {data:savedCount,error:saveError}=await admin.rpc(
+   "clickdesk_save_verified_contributions",{p_rows:records});
  if(saveError)return Response.json({...preview,ok:false,error:saveError.message},{status:503});
- return Response.json({...preview,dry_run:false,rows_written:records.length,rows:records.map(x=>({
+ return Response.json({...preview,dry_run:false,rows_written:Number(savedCount) || records.length,
+  rows:records.map(x=>({
   ticket_id:x.ticket_id,analyst_id:x.analyst_id,occurred_date:x.occurred_date}))});
 });
