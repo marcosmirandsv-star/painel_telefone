@@ -4030,10 +4030,11 @@ function ChatAnalystPortal({
           (item) => !daily.some((legacy) => legacy.date === item.date),
         ) && (
           <div className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-xs leading-5 text-amber-100">
-            Os atendimentos e avaliações já identificados na nova captura estão
-            apresentados separadamente. O CSAT e o pódio da base anterior permanecem
-            com seus cálculos originais. Um atendimento sem avaliação é válido e não
-            indica falta de solicitação nem reduz o CSAT.
+            Os atendimentos e avaliações identificados na nova captura estão
+            apresentados separadamente, como amostra por ticket e analista. O CSAT
+            e o pódio da base anterior mantêm seus cálculos originais. Um atendimento
+            sem avaliação é válido; não indica falta de solicitação nem reduz o CSAT.
+            Os índices da amostra não substituem o fechamento oficial.
           </div>
         )}
 
@@ -4093,7 +4094,7 @@ function ChatAnalystPortal({
                     </span>
                   </div>
                   <p className="mt-2 text-xs text-slate-400">
-                    CSAT verificado (indicador paralelo):{' '}
+                    CSAT da captura (amostra, não oficial):{' '}
                     <strong className="text-slate-100">
                       {ownVerifiedContribution?.evaluations.csat == null
                         ? '—'
@@ -4303,6 +4304,9 @@ function ChatAnalystPortal({
             <h4 className="font-semibold text-slate-100">Atendimentos humanos confirmados por dia · ClickDesk</h4>
             <p className="mt-1 text-xs text-slate-400">
               Ticket único por analista, mediante mensagem pública identificada.
+              Avaliações são vinculadas ao último atendente humano; as notas não
+              recebidas não entram no CSAT. Esta é uma amostra recuperada, não o
+              fechamento oficial de avaliações por equipe.
               {metrics?.verified_productivity?.coverage_status === 'queue_drained'
                 ? ' A fila histórica consultada está processada. Outras origens e avaliações continuam independentes.'
                 : ' Histórico parcial enquanto a recuperação estiver em andamento.'}
