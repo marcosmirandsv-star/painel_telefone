@@ -45,3 +45,44 @@ test('verified customer satisfaction belongs only to the final human and never d
  })
  assert.equal(summary.evaluations.reviews,2)
 })
+
+test('ended human work without customer review counts as attendance and not CSAT failure', () => {
+ const summary=summarizeVerifiedContributions([
+  {ticket_id:'unrated1',analyst_id:'carlos',team_id:'notas',analyst_name:'Carlos Lemos',
+   occurred_date:'2026-10-08',verified_at:'2026-10-09T15:00:00Z',satisfaction_label:null},
+  {ticket_id:'unrated2',analyst_id:'carlos',team_id:'notas',analyst_name:'Carlos Lemos',
+   occurred_date:'2026-10-08',verified_at:'2026-10-09T15:01:00Z',satisfaction_label:null},
+ ], '2026-10-08')
+ assert.equal(summary.total,2)
+ assert.deepEqual(summary.evaluations,{
+  positive_reviews:0,negative_reviews:0,reviews:0,csat:null,review_percentage:0,
+ })
+ assert.deepEqual(summary.by_analyst[0]?.ratings_daily,[{
+  date:'2026-10-08',positive_reviews:0,negative_reviews:0,reviews:0,
+  csat:null,review_percentage:0,
+ }])
+ assert.deepEqual(summary.ratings_daily,summary.by_analyst[0]?.ratings_daily)
+})
+test('day-by-day evaluation totals follow the credited analyst service day', () => {
+ const sample:VerifiedContributionRow[]=[
+  {ticket_id:'first',analyst_id:'a',team_id:'t',analyst_name:'Paulo Victor',
+   occurred_date:'2026-10-07',verified_at:null,satisfaction_label:'positive'},
+  {ticket_id:'second',analyst_id:'a',team_id:'t',analyst_name:'Paulo Victor',
+   occurred_date:'2026-10-07',verified_at:null,satisfaction_label:null},
+  {ticket_id:'third',analyst_id:'a',team_id:'t',analyst_name:'Paulo Victor',
+   occurred_date:'2026-10-08',verified_at:null,satisfaction_label:'negative'},
+ ]
+ const summary=summarizeVerifiedContributions(sample,'2026-10-08')
+ assert.deepEqual(summary.by_analyst[0]?.ratings_daily,[
+  {date:'2026-10-07',positive_reviews:1,negative_reviews:0,reviews:1,csat:100,review_percentage:50},
+  {date:'2026-10-08',positive_reviews:0,negative_reviews:1,reviews:1,csat:0,review_percentage:100},
+ ])
+})
+test('repeated unreviewed row cannot obscure a reviewed contribution', () => {
+ const original:VerifiedContributionRow={ticket_id:'one',analyst_id:'a',team_id:'t',analyst_name:'Carlos Lemos',
+ occurred_date:'2026-10-07',verified_at:null,satisfaction_label:null}
+ const summary=summarizeVerifiedContributions([original,{...original,satisfaction_label:'positive'}],'2026-10-07')
+ assert.equal(summary.total,1)
+ assert.equal(summary.evaluations.reviews,1)
+ assert.equal(summary.by_analyst[0]?.evaluations.csat,100)
+})
