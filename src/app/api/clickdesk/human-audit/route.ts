@@ -1,6 +1,6 @@
 import { ApiError, authorizeManagerSessionClient, handle, json } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
-import { captureFirstHumanAttendance, type AnalystIdentity } from '@/lib/clickdesk-human-capture'
+import { captureFirstHumanAttendance, captureVerifiedHumanContributions, type AnalystIdentity } from '@/lib/clickdesk-human-capture'
 import { extractRestRecords, normalizeRestMessage, normalizeRestEvent, unwrapRestTicket } from '@/lib/clickdesk-rest-evidence'
 import { buildTicketProductivityEvidence } from '@/lib/clickdesk-ticket-productivity'
 
@@ -41,8 +41,10 @@ export async function POST(request: Request) {
         const [eventsPayload, messagesPayload] = await Promise.all([get('/tickets/' + id + '/events', key, account), get('/tickets/' + id + '/messages', key, account)])
         const events = extractRestRecords(eventsPayload).map(normalizeRestEvent)
         const messages = extractRestRecords(messagesPayload).map(normalizeRestMessage)
-        const decision = captureFirstHumanAttendance({ ticket_id:id, ticket_created_at:str(ticket.created_at), analysts, events, messages })
-        results.push({ ticket_id:id, ok:decision.ok, ...(decision.ok ? {date:decision.value.human_answered_date,author:decision.value.author,area:decision.value.area_at_answer,first_message_id:decision.value.first_public_human_message_id,productivity_evidence:buildTicketProductivityEvidence(decision.value,ticket)} : {reason:decision.reason}), events_count:events.length, messages_count:messages.length })
+        const input = { ticket_id:id, ticket_created_at:str(ticket.created_at), analysts, events, messages }
+        const decision = captureFirstHumanAttendance(input)
+        const contributions = captureVerifiedHumanContributions(input)
+        results.push({ ticket_id:id, ok:decision.ok, ...(decision.ok ? {date:decision.value.human_answered_date,author:decision.value.author,area:decision.value.area_at_answer,first_message_id:decision.value.first_public_human_message_id,productivity_evidence:buildTicketProductivityEvidence(decision.value,ticket)} : {reason:decision.reason}), contributions: contributions.map(item => ({ analyst_id:item.analyst_id,analyst_name:item.author,answered_date:item.human_answered_date,verified_message_id:item.first_public_human_message_id,ticket_id:item.ticket_id })), unique_contributing_analysts:contributions.length, events_count:events.length, messages_count:messages.length })
       } catch (error) { results.push({ticket_id:id,ok:false,reason:'read_failed',detail:error instanceof Error ? error.message.slice(0,100) : 'unexpected_error'}) }
     }
     const accepted = results.filter(r=>r.ok)
