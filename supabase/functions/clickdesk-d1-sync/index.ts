@@ -1,5 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { verifyHumanTicketCoverage } from './coverage.ts'
+import { clickdeskDiscoveryPath, extractClickdeskRows, ticketDiscoveryLastPage } from './discovery.ts'
 
 const CLICKDESK_BASE_URL = 'https://api.desk.click.app/api/v1'
 const BUSINESS_TIME_ZONE = 'America/Sao_Paulo'
@@ -94,13 +95,7 @@ function primitiveString(value: unknown) {
 }
 
 function extractCollection(payload: unknown): unknown[] {
-  if (Array.isArray(payload)) return payload
-  if (!payload || typeof payload !== 'object') return []
-  const source = payload as Record<string, unknown>
-  for (const key of ['data', 'items', 'results', 'tickets', 'conversations', 'messages']) {
-    if (Array.isArray(source[key])) return source[key] as unknown[]
-  }
-  return []
+  return extractClickdeskRows(payload)
 }
 
 function findFirstByKeyPattern(value: unknown, pattern: RegExp, depth = 0): string | null {
@@ -211,31 +206,6 @@ function summarizePayload(payload: unknown): TicketRow[] {
       }
     })
     .filter((item): item is TicketRow => Boolean(item))
-}
-
-function readPaginationNumber(payload: unknown, wantedKey: string, depth = 0): number | null {
-  if (!payload || typeof payload !== 'object' || depth > 4) return null
-  if (Array.isArray(payload)) {
-    for (const item of payload) {
-      const found = readPaginationNumber(item, wantedKey, depth + 1)
-      if (found !== null) return found
-    }
-    return null
-  }
-
-  const source = payload as Record<string, unknown>
-  for (const [key, raw] of Object.entries(source)) {
-    if (key !== wantedKey) continue
-    if (typeof raw === 'number' && Number.isFinite(raw)) return raw
-    if (typeof raw === 'string' && /^\d+$/.test(raw)) return Number(raw)
-  }
-
-  for (const raw of Object.values(source)) {
-    if (!raw || typeof raw !== 'object') continue
-    const found = readPaginationNumber(raw, wantedKey, depth + 1)
-    if (found !== null) return found
-  }
-  return null
 }
 
 function businessDate(timestamp: string) {
@@ -465,12 +435,15 @@ async function fetchRecentHumanPages(
   accountId: string,
   periodStart: string,
 ) {
+  // Tickets are discovered by their entire team-stage listing, not by the broken
+  // attendance=human list. Proven historical coverage still needs per-ticket
+  // message authorship and a bounded backfill; discovery alone is not productivity.
   const first = await fetchClickDesk(
-    '/tickets?inbox=conversations&attendance=human&page=1',
+    clickdeskDiscoveryPath(1),
     apiKey,
     accountId,
   )
-  const lastPage = Math.max(1, readPaginationNumber(first, 'last_page') ?? 1)
+  const lastPage = ticketDiscoveryLastPage(first)
   const pagesToScan = Math.min(lastPage, MAX_INTRADAY_HUMAN_PAGES)
 
   const payloads: unknown[] = [first]
@@ -482,7 +455,7 @@ async function fetchRecentHumanPages(
     const batch = await Promise.all(
       pages.map((page) =>
         fetchClickDesk(
-          `/tickets?inbox=conversations&attendance=human&page=${page}`,
+          clickdeskDiscoveryPath(page),
           apiKey,
           accountId,
         ),
