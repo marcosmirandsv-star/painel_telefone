@@ -477,6 +477,23 @@ type ClickDeskPersistedMetrics = {
       daily: Array<ClickDeskPersistedAggregate & { date: string }>
     }
   >
+  verified_productivity?: {
+    source: 'clickdesk_public_agent_message'
+    total: number
+    today: { date: string; count: number }
+    daily: Array<{ date: string; count: number }>
+    by_analyst: Array<{
+      analyst_id: string
+      team_id: string
+      analyst_name: string
+      total: number
+      today: number
+      daily: Array<{ date: string; count: number }>
+    }>
+    last_verified_at: string | null
+    has_records: boolean
+    coverage_status: 'partial_until_queue_finished'
+  }
   resolution_productivity?: {
     source: 'clickdesk_support_reports_agents'
     total: number
@@ -3808,6 +3825,8 @@ function ChatAnalystPortal({
     metrics?.by_analyst?.find((item) => item.analyst_id === analyst.id) ?? null
   const ownOfficialResolution = metrics?.resolution_productivity?.by_analyst
     .find((item) => item.analyst_id === analyst.id) ?? null
+  const ownVerifiedContribution = metrics?.verified_productivity?.by_analyst
+    .find((item) => item.analyst_id === analyst.id) ?? null
   const accumulated = ownMetric
   const today = ownMetric?.today ?? null
   const daily = ownMetric?.daily ?? []
@@ -3976,9 +3995,9 @@ function ChatAnalystPortal({
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                 Resumo da competência
               </p>
-              <div className="mt-3 grid gap-4 lg:grid-cols-4">
+              <div className="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
                 <div className="rounded-xl border border-white/10 bg-slate-950/40 p-5">
-                  <p className="text-sm text-slate-400">Atendimentos</p>
+                  <p className="text-sm text-slate-400">Atendimentos (base anterior)</p>
                   <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
                     {formatChatCount(accumulated?.attendances ?? 0)}
                   </strong>
@@ -3991,6 +4010,24 @@ function ChatAnalystPortal({
                       {ownResolutionDaysMissingAttendance.includes(todayKey)
                         ? '—'
                         : formatChatCount(today?.attendances ?? 0)}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-cyan-300/20 bg-slate-950/40 p-5">
+                  <p className="text-sm text-slate-400">Atendimentos humanos verificados</p>
+                  <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
+                    {ownVerifiedContribution ? formatChatCount(ownVerifiedContribution.total) : '—'}
+                  </strong>
+                  <p className="mt-2 text-xs text-slate-400">
+                    Ticket + analista · nova captura · histórico em recuperação.
+                  </p>
+                  <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-3 text-sm">
+                    <span className="text-slate-500">Verificados hoje</span>
+                    <strong className="tabular-nums text-slate-200">
+                      {ownVerifiedContribution?.daily.some((day) => day.date === todayKey)
+                        ? formatChatCount(ownVerifiedContribution.today)
+                        : '—'}
                     </strong>
                   </div>
                 </div>
@@ -4184,6 +4221,23 @@ function ChatAnalystPortal({
             </span>
           </div>
         </div>
+
+        {ownVerifiedContribution && ownVerifiedContribution.daily.length > 0 && (
+          <div className="mt-5 rounded-xl border border-cyan-300/20 bg-slate-950/30 p-4">
+            <h4 className="font-semibold text-slate-100">Atendimentos humanos confirmados por dia · ClickDesk</h4>
+            <p className="mt-1 text-xs text-slate-400">
+              Ticket único por analista, mediante mensagem pública identificada. Histórico parcial enquanto a recuperação estiver em andamento.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {ownVerifiedContribution.daily.map((day) => (
+                <div key={day.date} className="rounded-lg border border-white/10 bg-slate-950/45 px-4 py-3">
+                  <span className="block text-xs text-slate-400">{formatDate(day.date)}</span>
+                  <strong className="mt-1 block text-lg text-slate-100">{formatChatCount(day.count)} atend.</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {ownOfficialResolution && ownOfficialResolution.daily.length > 0 && (
           <div className="mt-5 rounded-xl border border-cyan-300/15 bg-slate-950/30 p-4">
