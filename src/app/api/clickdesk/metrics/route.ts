@@ -176,7 +176,7 @@ async function loadVerifiedContributions(
   const collected:VerifiedContributionRow[]=[]
   for(let offset=0;offset<10000;offset+=500){
     let query=admin.from('clickdesk_chat_verified_contributions')
-      .select('ticket_id,analyst_id,team_id,analyst_name,occurred_date,verified_at')
+      .select('ticket_id,analyst_id,team_id,analyst_name,occurred_date,verified_at,satisfaction_label')
       .gte('occurred_date',filters.start).lte('occurred_date',filters.end)
       .order('occurred_date',{ascending:true})
       .range(offset,offset+499)
