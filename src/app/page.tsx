@@ -479,6 +479,22 @@ type ClickDeskPersistedMetrics = {
   >
   verified_productivity?: {
     source: 'clickdesk_public_agent_message'
+    evaluation_source: 'clickdesk_ticket_rating_last_public_human'
+    evaluations: {
+      positive_reviews:number
+      negative_reviews:number
+      reviews:number
+      csat:number|null
+      review_percentage:number|null
+    }
+    ratings_daily: Array<{
+      date:string
+      positive_reviews:number
+      negative_reviews:number
+      reviews:number
+      csat:number|null
+      review_percentage:number|null
+    }> 
     total: number
     today: { date: string; count: number }
     daily: Array<{ date: string; count: number }>
@@ -489,6 +505,13 @@ type ClickDeskPersistedMetrics = {
       total: number
       today: number
       daily: Array<{ date: string; count: number }>
+      evaluations: {
+        positive_reviews:number
+        negative_reviews:number
+        reviews:number
+        csat:number|null
+        review_percentage:number|null
+      }
     }>
     last_verified_at: string | null
     has_records: boolean
@@ -4049,6 +4072,32 @@ function ChatAnalystPortal({
                         : '—'}
                     </strong>
                   </div>
+                  <div className="mt-3 border-t border-white/10 pt-3 text-xs text-slate-400">
+                    <span>Avaliações atribuídas ao último atendente: </span>
+                    <strong className="text-slate-200">
+                      {ownVerifiedContribution?.evaluations.reviews ?? 0}
+                    </strong>
+                    <span className="ml-2 text-emerald-300">
+                      +{ownVerifiedContribution?.evaluations.positive_reviews ?? 0}
+                    </span>
+                    <span className="ml-2 text-rose-300">
+                      -{ownVerifiedContribution?.evaluations.negative_reviews ?? 0}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-400">
+                    CSAT verificado (indicador paralelo):{' '}
+                    <strong className="text-slate-100">
+                      {ownVerifiedContribution?.evaluations.csat == null
+                        ? '—'
+                        : `${ownVerifiedContribution.evaluations.csat.toFixed(2)}%`}
+                    </strong>
+                    {' '}· Taxa de avaliação:{' '}
+                    <strong className="text-slate-100">
+                      {ownVerifiedContribution?.evaluations.review_percentage == null
+                        ? '—'
+                        : `${ownVerifiedContribution.evaluations.review_percentage.toFixed(2)}%`}
+                    </strong>
+                  </p>
                 </div>
 
                 <div className="rounded-xl border border-cyan-300/15 bg-slate-950/40 p-5">
