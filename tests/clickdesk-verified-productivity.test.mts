@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { summarizeVerifiedContributions } from '../src/lib/clickdesk-verified-productivity.ts'
+import { summarizeVerifiedContributions, type VerifiedContributionRow } from '../src/lib/clickdesk-verified-productivity.ts'
 
 const rows=[
  {ticket_id:'1',analyst_id:'carlos',team_id:'notas',analyst_name:'Carlos Lemos',occurred_date:'2026-10-07',verified_at:'2026-10-09T15:30:00Z'},
@@ -26,7 +26,7 @@ test('missing dates are absent, never invented as zero attendance',()=>{
 })
 
 test('verified customer satisfaction belongs only to the final human and never duplicates a ticket',()=>{
- const source=[
+ const source:VerifiedContributionRow[]=[
   {...rows[0],satisfaction_label:null},
   {...rows[0],satisfaction_label:null},
   {...rows[2],satisfaction_label:'positive'},
