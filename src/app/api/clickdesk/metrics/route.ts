@@ -307,6 +307,18 @@ export async function GET(request: Request) {
     ])
     const officialResolutions = summarizeOfficialResolutions(officialResolutionRows, filters.today)
     const verifiedProductivity = summarizeVerifiedContributions(verifiedRows, filters.today)
+    // The supplementary verified source may be partial until the staging queue drains.
+    // Queue status is not a substitute for proving coverage of other ClickDesk stages.
+    const verifiedQueueResult = await admin.from('clickdesk_chat_capture_queue')
+      .select('ticket_id', { count: 'exact', head: true })
+      .in('status',['pending','queued','error'])
+      .lte('period_start',filters.end)
+      .gte('period_end',filters.start)
+    if (verifiedQueueResult.error) throw new ApiError(503,'Status da recuperação ClickDesk indisponível.')
+    const verifiedCoverageStatus =
+      (verifiedQueueResult.count ?? 0) === 0 && verifiedRows.length > 0
+        ? 'queue_drained'
+        : 'partial_until_queue_finished'
 
     const latestSync = await admin
       .from('clickdesk_chat_sync_runs')
@@ -382,7 +394,7 @@ export async function GET(request: Request) {
       // Independent official human-agent resolution count. NEVER merged into
       // attendance, evaluation %, CSAT, podium or historical ticket totals.
       resolution_productivity: officialResolutions,
-      verified_productivity: verifiedProductivity,
+      verified_productivity: { ...verifiedProductivity, coverage_status: verifiedCoverageStatus },
       period: {
         start: filters.start,
         end: filters.end,
