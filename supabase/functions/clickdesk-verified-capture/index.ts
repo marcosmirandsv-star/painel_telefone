@@ -87,14 +87,15 @@ Deno.serve(async(req:Request)=>{
    const payload=await get("/tickets?inbox=all&view=all&stage=team&sort=id&dir=desc&per_page=500&page="+page,key,account);
    const total=pageCount(payload),tickets=array(payload);
    if(page>total||tickets.length===0)return Response.json({error:"page_out_of_bounds_or_empty",page,total},{status:422});
-   const candidates=tickets.map(x=>obj(x)).filter(t=>{
+   const candidateDetails=tickets.map(x=>obj(x)).filter(t=>{
     const created=day(str(t.created_at)||str(t.createdAt));
     const updated=day(str(t.updated_at)||str(t.updatedAt)||str(t.closed_at)||str(t.created_at));
     return created&&updated&&created<=end&&updated>=start;
-   }).map(ticketId).filter(Boolean);
+   }).map(t=>({ticket_id:ticketId(t),source_updated_at:str(t.updated_at)||str(t.updatedAt)||str(t.closed_at)||str(t.created_at)}))
+     .filter(x=>x.ticket_id&&safeTimestamp(x.source_updated_at));
    const updatedDays=tickets.map(x=>day(str(obj(x).updated_at))).filter(Boolean).sort();
    return Response.json({ok:true,action:"discover",page,total_pages:total,scanned:tickets.length,
-    candidates:[...new Set(candidates)],oldest_updated_day:updatedDays[0]??null,
+    candidates:[...new Set(candidateDetails.map(x=>x.ticket_id))],candidate_details:candidateDetails,oldest_updated_day:updatedDays[0]??null,
     newest_updated_day:updatedDays.at(-1)??null,dry_run:true,rows_written:0});
   }catch(e){return Response.json({error:e instanceof Error?e.message:"discovery_failed"},{status:503})}
  }
