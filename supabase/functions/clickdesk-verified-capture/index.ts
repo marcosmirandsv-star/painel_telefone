@@ -107,7 +107,7 @@ Deno.serve(async(req:Request)=>{
    if(!dry)return Response.json({error:"rating_probe_dry_run_only"},{status:400});
    const ids=body.ticket_ids;
    if(!Array.isArray(ids)||ids.length<1||ids.length>4||
-     ids.some(x=>!/^\\d+$/.test(str(x))))return Response.json({error:"invalid_ticket_ids"},{status:400});
+     ids.some(x=>!/^\d+$/.test(str(x))))return Response.json({error:"invalid_ticket_ids"},{status:400});
    const safeFields=(item:unknown,depth=0):R=>{
      if(depth>3)return {};
      const r=obj(item),out:R={};
