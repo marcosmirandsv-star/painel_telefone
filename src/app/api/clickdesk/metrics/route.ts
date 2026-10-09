@@ -1,6 +1,7 @@
 import { ApiError, authorizeClickDeskSessionClient, handle, json } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 import { summarizeOfficialResolutions, type OfficialResolutionRow } from '@/lib/clickdesk-official-resolutions'
+import { summarizeVerifiedContributions, type VerifiedContributionRow } from '@/lib/clickdesk-verified-productivity'
 
 export const runtime = 'nodejs'
 
@@ -167,6 +168,28 @@ async function loadOfficialResolutions(
   throw new ApiError(422,'O volume de resoluções excedeu o limite seguro de consulta.')
 }
 
+
+async function loadVerifiedContributions(
+  admin: Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],
+  filters: ReturnType<typeof parseFilters>,
+): Promise<VerifiedContributionRow[]> {
+  const collected:VerifiedContributionRow[]=[]
+  for(let offset=0;offset<10000;offset+=500){
+    let query=admin.from('clickdesk_chat_verified_contributions')
+      .select('ticket_id,analyst_id,team_id,analyst_name,occurred_date,verified_at')
+      .gte('occurred_date',filters.start).lte('occurred_date',filters.end)
+      .order('occurred_date',{ascending:true})
+      .range(offset,offset+499)
+    if(filters.analystId)query=query.eq('analyst_id',filters.analystId)
+    if(filters.teamId)query=query.eq('team_id',filters.teamId)
+    const {data,error}=await query
+    if(error)throw new ApiError(503,'Base de participações humanas verificadas indisponível.')
+    collected.push(...((data??[]) as VerifiedContributionRow[]))
+    if((data??[]).length<500)return collected
+  }
+  throw new ApiError(422,'Volume de participações verificadas excedeu o limite seguro.')
+}
+
 function aggregate(rows: DailyMetricRow[]): Aggregate {
   const totals = rows.reduce(
     (acc, row) => {
@@ -277,11 +300,13 @@ export async function GET(request: Request) {
         }
 
     const admin = access.admin
-    const [rows, officialResolutionRows] = await Promise.all([
+    const [rows, officialResolutionRows, verifiedRows] = await Promise.all([
       loadRows(admin, filters),
       loadOfficialResolutions(admin, filters),
+      loadVerifiedContributions(admin, filters),
     ])
     const officialResolutions = summarizeOfficialResolutions(officialResolutionRows, filters.today)
+    const verifiedProductivity = summarizeVerifiedContributions(verifiedRows, filters.today)
 
     const latestSync = await admin
       .from('clickdesk_chat_sync_runs')
@@ -357,6 +382,7 @@ export async function GET(request: Request) {
       // Independent official human-agent resolution count. NEVER merged into
       // attendance, evaluation %, CSAT, podium or historical ticket totals.
       resolution_productivity: officialResolutions,
+      verified_productivity: verifiedProductivity,
       period: {
         start: filters.start,
         end: filters.end,
