@@ -512,6 +512,14 @@ type ClickDeskPersistedMetrics = {
         csat:number|null
         review_percentage:number|null
       }
+      ratings_daily: Array<{
+        date:string
+        positive_reviews:number
+        negative_reviews:number
+        reviews:number
+        csat:number|null
+        review_percentage:number|null
+      }>
     }>
     last_verified_at: string | null
     has_records: boolean
@@ -4011,10 +4019,10 @@ function ChatAnalystPortal({
             <strong>Atendimentos em conferência.</strong>{' '}
             O relatório oficial do ClickDesk registra tickets resolvidos em{' '}
             {ownResolutionDaysMissingAttendance.map((day) => formatDate(day)).join(', ')},
-            mas a captura detalhada de atendimentos ainda não confirmou esses dias.
-            Os números da base anterior estão parciais. Consulte também os atendimentos
-            humanos verificados por ticket e analista, apresentados separadamente.
-            Nenhuma contagem foi somada ou estimada.
+            mas a base anterior não possui atendimentos registrados nesses dias.
+            Consulte os atendimentos humanos da captura verificada, apresentados
+            separadamente. Resoluções, atendimentos e avaliações não foram somados
+            nem estimados.
           </div>
         )}
 
@@ -4022,10 +4030,10 @@ function ChatAnalystPortal({
           (item) => !daily.some((legacy) => legacy.date === item.date),
         ) && (
           <div className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-xs leading-5 text-amber-100">
-            Os atendimentos humanos verificados já incluem a nova captura. CSAT,
-            percentual de avaliações e posição do pódio ainda seguem a base de
-            avaliações anterior e não devem ser utilizados como fechamento definitivo
-            até a recuperação das avaliações do período.
+            Os atendimentos e avaliações já identificados na nova captura estão
+            apresentados separadamente. O CSAT e o pódio da base anterior permanecem
+            com seus cálculos originais. Um atendimento sem avaliação é válido e não
+            indica falta de solicitação nem reduz o CSAT.
           </div>
         )}
 
@@ -4125,7 +4133,7 @@ function ChatAnalystPortal({
                 }`}>
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="text-sm text-slate-400">CSAT</p>
+                      <p className="text-sm text-slate-400">CSAT (base anterior)</p>
                       <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
                         {csat === null ? '—' : formatChatPercent(csat)}
                       </strong>
@@ -4304,9 +4312,28 @@ function ChatAnalystPortal({
                 <div key={day.date} className="rounded-lg border border-white/10 bg-slate-950/45 px-4 py-3">
                   <span className="block text-xs text-slate-400">{formatDate(day.date)}</span>
                   <strong className="mt-1 block text-lg text-slate-100">{formatChatCount(day.count)} atend.</strong>
+                  {(() => {
+                    const assessed = ownVerifiedContribution.ratings_daily.find((item) => item.date === day.date)
+                    return (
+                      <div className="mt-2 space-y-1 text-xs text-slate-400">
+                        <p>
+                          Avaliações: {assessed?.reviews ?? 0}
+                          <span className="ml-1 text-emerald-300">+{assessed?.positive_reviews ?? 0}</span>
+                          <span className="ml-1 text-rose-300">-{assessed?.negative_reviews ?? 0}</span>
+                        </p>
+                        <p>CSAT: {assessed?.csat == null ? '—' : `${assessed.csat.toFixed(2)}%`}</p>
+                        <p>% avaliados: {assessed?.review_percentage == null ? '—' : `${assessed.review_percentage.toFixed(2)}%`}</p>
+                      </div>
+                    )
+                  })()}
                 </div>
               ))}
             </div>
+            <p className="mt-3 text-xs text-slate-500">
+              Ticket encerrado sem avaliação permanece como atendimento válido.
+              A ausência de nota não significa que o analista deixou de solicitar pesquisa.
+              Avaliações vão somente ao último atendente humano verificado.
+            </p>
           </div>
         )}
 
