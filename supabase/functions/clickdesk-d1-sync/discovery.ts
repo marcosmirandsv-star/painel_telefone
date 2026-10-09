@@ -38,7 +38,11 @@ export function ticketDiscoveryLastPage(payload: unknown): number {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload))
     throw new Error('Missing ClickDesk ticket pagination')
   const source = payload as Record<string, unknown>
-  const meta = [source, source.meta, source.pagination, (source.data as Record<string,unknown> | null)?.meta]
+  const data = source.data && typeof source.data === 'object' && !Array.isArray(source.data)
+    ? source.data as Record<string,unknown> : {}
+  const m = source.meta && typeof source.meta === 'object' && !Array.isArray(source.meta)
+    ? source.meta as Record<string,unknown> : {}
+  const meta = [source, m, source.pagination, m.pagination, data.meta, data.pagination]
   for (const item of meta) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue
     const record = item as Record<string, unknown>
