@@ -19,7 +19,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Testar captura humana
-        run: node --experimental-transform-types --test tests/clickdesk-human-capture.test.mts tests/clickdesk-audit-controls.test.mts tests/clickdesk-audit-events.test.mts tests/clickdesk-coverage.test.mts tests/clickdesk-official-resolutions.test.mts tests/clickdesk-ticket-productivity.test.mts tests/clickdesk-rest-evidence.test.mts tests/clickdesk-discovery.test.mts tests/clickdesk-human-contributions.test.mts tests/clickdesk-human-message.test.mts
+        run: node --experimental-transform-types --test tests/clickdesk-human-capture.test.mts tests/clickdesk-audit-controls.test.mts tests/clickdesk-audit-events.test.mts tests/clickdesk-coverage.test.mts tests/clickdesk-official-resolutions.test.mts tests/clickdesk-ticket-productivity.test.mts tests/clickdesk-rest-evidence.test.mts tests/clickdesk-discovery.test.mts tests/clickdesk-human-contributions.test.mts tests/clickdesk-human-message.test.mts tests/clickdesk-verified-productivity.test.mts
       - name: Verificar tipos (baseline legado isolado)
         shell: bash
         run: |
