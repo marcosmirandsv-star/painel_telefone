@@ -1,6 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { verifyHumanTicketCoverage } from './coverage.ts'
 import { clickdeskDiscoveryPath, extractClickdeskRows, ticketDiscoveryLastPage } from './discovery.ts'
+import { firstPublicReplyByAssignee } from './human-message.ts'
 
 const CLICKDESK_BASE_URL = 'https://api.desk.click.app/api/v1'
 const BUSINESS_TIME_ZONE = 'America/Sao_Paulo'
@@ -221,62 +222,6 @@ function businessDate(timestamp: string) {
   return values.year && values.month && values.day
     ? `${values.year}-${values.month}-${values.day}`
     : null
-}
-
-function readMessageTimestamp(source: Record<string, unknown>) {
-  for (const key of [
-    'created_at',
-    'createdAt',
-    'sent_at',
-    'sentAt',
-    'occurred_at',
-    'occurredAt',
-    'timestamp',
-    'date',
-    'updated_at',
-    'updatedAt',
-  ]) {
-    const value = primitiveString(source[key])
-    if (value && !Number.isNaN(Date.parse(value))) return value
-  }
-  return null
-}
-
-function containsAssigneeIdentity(value: unknown, assigneeKey: string, depth = 0): boolean {
-  if (!value || typeof value !== 'object' || depth > 5) return false
-  if (Array.isArray(value)) {
-    return value.some((item) => containsAssigneeIdentity(item, assigneeKey, depth + 1))
-  }
-  const source = value as Record<string, unknown>
-  for (const [key, raw] of Object.entries(source)) {
-    if (!/(author|sender|agent|attendant|assignee|responsible|user|owner|name)/i.test(key)) {
-      continue
-    }
-    const direct = primitiveString(raw)
-    if (direct && normalizeLabel(direct) === assigneeKey) return true
-    if (raw && typeof raw === 'object' && containsAssigneeIdentity(raw, assigneeKey, depth + 1)) {
-      return true
-    }
-  }
-  return false
-}
-
-function detectsHumanRole(value: unknown, depth = 0): boolean {
-  if (!value || typeof value !== 'object' || depth > 5) return false
-  if (Array.isArray(value)) return value.some((item) => detectsHumanRole(item, depth + 1))
-  const source = value as Record<string, unknown>
-  for (const [key, raw] of Object.entries(source)) {
-    if (!/(role|type|source|author|sender|actor)/i.test(key)) continue
-    const direct = primitiveString(raw)
-    if (direct) {
-      const normalized = normalizeLabel(direct)
-      if (/(^| )(human|agent|attendant|atendente|analista|support)( |$)/.test(normalized)) {
-        return true
-      }
-    }
-    if (raw && typeof raw === 'object' && detectsHumanRole(raw, depth + 1)) return true
-  }
-  return false
 }
 
 async function fetchClickDesk(path: string, apiKey: string, accountId: string) {
@@ -520,65 +465,31 @@ async function resolveOperationalRows(
 ) {
   const result: OperationalRow[] = []
   let firstAssignee = 0
-  let firstHuman = 0
-  let fallback = 0
+  let skippedUnverified = 0
 
+  // Only actual, public, explicitly attributed human responses count.
+  // No private notes, role-only messages or fallback to ticket.updated_at.
   for (let index = 0; index < candidates.length; index += 8) {
     const batch = candidates.slice(index, index + 8)
     const resolved = await Promise.all(
       batch.map(async (row): Promise<OperationalRow | null> => {
-        let timestamp: string | null = null
-        let source = 'unknown'
-        try {
-          const payload = await fetchClickDesk(
-            `/tickets/${encodeURIComponent(row.id)}/messages`,
-            apiKey,
-            accountId,
-          )
-          const messages = extractCollection(payload)
-          const assigneeKey = normalizeLabel(row.assignee ?? '')
-          const assigneeTimes: string[] = []
-          const humanTimes: string[] = []
-
-          for (const message of messages) {
-            if (!message || typeof message !== 'object') continue
-            const msg = message as Record<string, unknown>
-            const time = readMessageTimestamp(msg)
-            if (!time) continue
-            if (assigneeKey && containsAssigneeIdentity(msg, assigneeKey)) assigneeTimes.push(time)
-            if (detectsHumanRole(msg)) humanTimes.push(time)
-          }
-
-          assigneeTimes.sort((a, b) => Date.parse(a) - Date.parse(b))
-          humanTimes.sort((a, b) => Date.parse(a) - Date.parse(b))
-
-          if (assigneeTimes[0]) {
-            timestamp = assigneeTimes[0]
-            source = 'first_assignee_message'
-            firstAssignee += 1
-          } else if (humanTimes[0]) {
-            timestamp = humanTimes[0]
-            source = 'first_human_role_message'
-            firstHuman += 1
-          }
-        } catch {
-          // fallback explícito abaixo
+        const payload = await fetchClickDesk(
+          `/tickets/${encodeURIComponent(row.id)}/messages`,
+          apiKey, accountId,
+        )
+        const messages = extractCollection(payload)
+        const reply = firstPublicReplyByAssignee(messages, row.assignee ?? '')
+        if (!reply) {
+          skippedUnverified += 1
+          return null
         }
-
-        if (!timestamp && row.updatedAt) {
-          timestamp = row.updatedAt
-          source = 'fallback_updated_at'
-          fallback += 1
-        }
-
-        if (!timestamp) return null
-        const occurredDate = businessDate(timestamp)
+        const occurredDate = businessDate(reply.timestamp)
         if (!occurredDate || occurredDate < start || occurredDate > end) return null
-
+        firstAssignee += 1
         return {
           ...row,
-          operationalTimestamp: timestamp,
-          operationalTimestampSource: source,
+          operationalTimestamp: reply.timestamp,
+          operationalTimestampSource: 'first_verified_public_assignee_message',
           occurredDate,
         }
       }),
@@ -589,11 +500,12 @@ async function resolveOperationalRows(
   return {
     rows: result,
     audit: {
-      rule: 'first_assignee_message -> first_human_role_message -> explicit_fallback',
+      rule: 'public_agent_author_exact_assignee; no updated_at or AI fallback',
       first_assignee_message: firstAssignee,
-      first_human_role_message: firstHuman,
-      fallback,
-      validated: fallback === 0,
+      first_human_role_message: 0,
+      fallback: 0,
+      skipped_unverified: skippedUnverified,
+      validated: true,
     },
   }
 }
@@ -717,12 +629,19 @@ Deno.serve(async (req: Request) => {
       ]),
     )
 
-    const targetCandidates = rows.filter(
-      (row) =>
-        Boolean(row.area && isTargetArea(row.area)) &&
-        Boolean(row.assignee?.trim()) &&
-        (!row.updatedAt || (businessDate(row.updatedAt) ?? today) >= start),
-    )
+    // Productivity follows registered human analysts and their public replies,
+    // NOT the incoming department, transfer route or bot handoff.
+    const targetCandidates = rows.filter((row) => {
+      const key = normalizeLabel(row.assignee ?? '')
+      const rosterMatches = analystCandidates.get(key) ?? []
+      const excludedApprentice = /^(ana julia|david)( |$)/.test(key)
+      const isManager = teams.some(team =>
+        team.manager_name && normalizeLabel(team.manager_name) === key)
+      return Boolean(key) && rosterMatches.length === 1 &&
+        rosterMatches[0].active !== false &&
+        !excludedApprentice && !isManager &&
+        (!row.updatedAt || (businessDate(row.updatedAt) ?? today) >= start)
+    })
 
     let operational: {
       rows: OperationalRow[]
@@ -769,6 +688,7 @@ Deno.serve(async (req: Request) => {
         const existing = existingByTicket.get(row.id)
         if (
           existing &&
+          existing.timestamp_source === 'first_verified_public_assignee_message' &&
           existing.occurred_date >= start &&
           existing.occurred_date <= end
         ) {
@@ -817,7 +737,7 @@ Deno.serve(async (req: Request) => {
     >()
     for (const row of targetRows) {
       const assigneeName = row.assignee?.trim() ?? ''
-      const areaName = row.area?.trim() ?? ''
+      const areaName = row.area?.trim() || 'Fila não identificada'
       const assigneeKey = normalizeLabel(assigneeName)
       const areaKey = normalizeLabel(areaName)
       identities.set(identityKey(assigneeKey, areaKey), {
@@ -867,7 +787,7 @@ Deno.serve(async (req: Request) => {
     const now = new Date().toISOString()
     const attendanceRows = targetRows.map((row) => {
       const assigneeName = row.assignee?.trim() ?? ''
-      const areaName = row.area?.trim() ?? ''
+      const areaName = row.area?.trim() || 'Fila não identificada'
       const assigneeKey = normalizeLabel(assigneeName)
       const areaKey = normalizeLabel(areaName)
       const linked = linkByKey.get(identityKey(assigneeKey, areaKey)) ?? null
