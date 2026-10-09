@@ -32,7 +32,7 @@ export function extractRestRecords(payload: unknown): unknown[] {
     const value = source[key]
     if (Array.isArray(value)) return value
     const nested = object(value)
-    for (const subkey of ['data', 'items', 'results']) {
+    for (const subkey of ['data', 'items', 'results', 'tickets', 'events', 'messages']) {
       if (Array.isArray(nested[subkey])) return nested[subkey] as unknown[]
     }
   }
