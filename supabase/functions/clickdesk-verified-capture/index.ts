@@ -139,8 +139,11 @@ Deno.serve(async(req:Request)=>{
     // A customer evaluation belongs to the TICKET. It is deliberately
     // not multiplied among human contributors without confirmed resolver evidence.
     const within=[...perAnalyst.values()].filter(x=>x.occurred_date>=start&&x.occurred_date<=end);
+    const ownerRaw=ticket.owner??ticket.assignee??ticket.agent;
+    const owner=str(ownerRaw)||str(obj(ownerRaw).name);
     return {rows:within,audit:{ticket_id:id,messages_scanned:messages.length,
        verified_analysts:within.map(x=>x.analyst_name),rating_on_ticket:statusRating(ticket),
+       ticket_status:str(ticket.status),ticket_owner:owner||null,
        unresolved_rating_attribution:true}};
    }catch(e){return {error:{ticket_id:id,message:e instanceof Error?e.message:"ticket_read_failed"}}}
   }));
@@ -150,7 +153,9 @@ Deno.serve(async(req:Request)=>{
  }
  const preview={ok:errors.length===0,action:"process",dry_run:dry,requested:unique.length,
   processed:ticketAudit.length,contributions:records.length,unique_tickets:new Set(records.map(x=>x.ticket_id)).size,
-  errors,rows:records,rows_written:0,rating_note:"ticket rating not assigned without verified resolver"};
+  errors,rows:records,rows_written:0,
+  ticket_audit:dry?ticketAudit:undefined,
+  rating_note:"ticket rating not assigned without verified resolver"};
  if(dry||errors.length)return Response.json(preview,{status:errors.length?422:200});
  const {error:saveError}=await admin.from("clickdesk_chat_verified_contributions")
   .upsert(records,{onConflict:"ticket_id,analyst_id"});
