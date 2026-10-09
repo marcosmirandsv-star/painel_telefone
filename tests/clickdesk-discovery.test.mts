@@ -20,6 +20,7 @@ test('reads 500-ticket collection and known pagination envelope', () => {
   assert.equal(extractClickdeskRows(payload).length,500)
   assert.equal(ticketDiscoveryLastPage(payload),20)
   assert.equal(ticketDiscoveryLastPage({last_page:'20',data:tickets}),20)
+  assert.equal(ticketDiscoveryLastPage({data:{data:tickets},meta:{pagination:{last_page:20}}}),20)
 })
 
 test('does not misreport failed parsing or absent pagination as no tickets', () => {
