@@ -492,7 +492,7 @@ type ClickDeskPersistedMetrics = {
     }>
     last_verified_at: string | null
     has_records: boolean
-    coverage_status: 'partial_until_queue_finished'
+    coverage_status: 'partial_until_queue_finished' | 'queue_drained'
   }
   resolution_productivity?: {
     source: 'clickdesk_support_reports_agents'
@@ -3860,7 +3860,12 @@ function ChatAnalystPortal({
     podiumContext.position !== null &&
     podiumContext.position <= 3
   const historyPoints = history?.points ?? []
-  const todayKey = new Date().toISOString().slice(0, 10)
+  const todayParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit',
+  }).formatToParts(now)
+  const todayKey = ['year','month','day']
+    .map((key) => todayParts.find((part) => part.type===key)?.value ?? '')
+    .join('-')
   const visibleDayCount =
     now.getFullYear() === year && now.getMonth() + 1 === monthNumber
       ? now.getDate()
@@ -3984,8 +3989,9 @@ function ChatAnalystPortal({
             O relatório oficial do ClickDesk registra tickets resolvidos em{' '}
             {ownResolutionDaysMissingAttendance.map((day) => formatDate(day)).join(', ')},
             mas a captura detalhada de atendimentos ainda não confirmou esses dias.
-            Os números de atendimentos podem estar parciais. As resoluções oficiais
-            aparecem abaixo em indicador separado; nenhuma contagem foi somada ou estimada.
+            Os números da base anterior estão parciais. Consulte também os atendimentos
+            humanos verificados por ticket e analista, apresentados separadamente.
+            Nenhuma contagem foi somada ou estimada.
           </div>
         )}
 
@@ -4020,7 +4026,9 @@ function ChatAnalystPortal({
                     {ownVerifiedContribution ? formatChatCount(ownVerifiedContribution.total) : '—'}
                   </strong>
                   <p className="mt-2 text-xs text-slate-400">
-                    Ticket + analista · nova captura · histórico em recuperação.
+                    Ticket + analista · nova captura · {metrics?.verified_productivity?.coverage_status === 'queue_drained'
+                      ? 'fila de captura conferida'
+                      : 'histórico em recuperação'}.
                   </p>
                   <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-3 text-sm">
                     <span className="text-slate-500">Verificados hoje</span>
@@ -4226,7 +4234,10 @@ function ChatAnalystPortal({
           <div className="mt-5 rounded-xl border border-cyan-300/20 bg-slate-950/30 p-4">
             <h4 className="font-semibold text-slate-100">Atendimentos humanos confirmados por dia · ClickDesk</h4>
             <p className="mt-1 text-xs text-slate-400">
-              Ticket único por analista, mediante mensagem pública identificada. Histórico parcial enquanto a recuperação estiver em andamento.
+              Ticket único por analista, mediante mensagem pública identificada.
+              {metrics?.verified_productivity?.coverage_status === 'queue_drained'
+                ? ' A fila histórica consultada está processada. Outras origens e avaliações continuam independentes.'
+                : ' Histórico parcial enquanto a recuperação estiver em andamento.'}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {ownVerifiedContribution.daily.map((day) => (
