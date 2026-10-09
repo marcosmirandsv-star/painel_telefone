@@ -97,8 +97,48 @@ Deno.serve(async(req:Request)=>{
    const updatedDays=tickets.map(x=>day(str(obj(x).updated_at))).filter(Boolean).sort();
    return Response.json({ok:true,action:"discover",page,total_pages:total,scanned:tickets.length,
     candidates:[...new Set(candidateDetails.map(x=>x.ticket_id))],candidate_details:candidateDetails,oldest_updated_day:updatedDays[0]??null,
-    newest_updated_day:updatedDays.at(-1)??null,dry_run:true,rows_written:0});
+    newest_updated_day:updatedDays.at(-1)??null,dry_run:true,rows_written:0,
+    rated_in_listing:tickets.filter(x=>statusRating(obj(x))!==null).length,
+    satisfaction_present_in_listing:tickets.filter(x=>obj(x).satisfaction!==undefined&&obj(x).satisfaction!==null).length,
+    rating_present_in_listing:tickets.filter(x=>obj(x).rating!==undefined&&obj(x).rating!==null).length});
   }catch(e){return Response.json({error:e instanceof Error?e.message:"discovery_failed"},{status:503})}
+ }
+ if(action==="rating_probe"){
+   if(!dry)return Response.json({error:"rating_probe_dry_run_only"},{status:400});
+   const ids=body.ticket_ids;
+   if(!Array.isArray(ids)||ids.length<1||ids.length>4||
+     ids.some(x=>!/^\\d+$/.test(str(x))))return Response.json({error:"invalid_ticket_ids"},{status:400});
+   const safeFields=(item:unknown,depth=0):R=>{
+     if(depth>3)return {};
+     const r=obj(item),out:R={};
+     for(const [k,v] of Object.entries(r)){
+       if(/rating|satisfaction|csat|survey|review|feedback|avaliacao|evaluation|assessment|score/i.test(k)){
+         const vv=obj(v);
+         out[k]=Object.keys(vv).length?{
+          _type:"object",keys:Object.keys(vv).slice(0,20),
+          fields:Object.fromEntries(Object.entries(vv).filter(([name,value])=>
+            /rating|score|value|label|type|sentiment|positive|negative/i.test(name)
+            && (typeof value==="number"||typeof value==="boolean"||
+             (typeof value==="string"&&value.length<=32))
+          ).slice(0,15))
+         }:typeof v==="string"&&v.length<=32?v:typeof v==="number"?v:typeof v==="boolean"?v:typeof v;
+       }else if(depth<2 && v && typeof v==="object"&&!Array.isArray(v)){
+         const nested=safeFields(v,depth+1);
+         if(Object.keys(nested).length)out[k]=nested;
+       }
+     }
+     return out;
+   };
+   const results=[];
+   for(const ticket_id of ids.map(str)){
+     try{
+       const raw=await get("/tickets/"+ticket_id,key,account),ticket=unwrap(raw);
+       results.push({ticket_id,rating:statusRating(ticket),ticket_keys:Object.keys(ticket),
+         rating_related_fields:safeFields(ticket),wrapper_rating_related_fields:safeFields(raw)});
+     }catch(e){results.push({ticket_id,error:e instanceof Error?e.message:"unknown"})}
+   }
+   return Response.json({ok:true,action:"rating_probe",diagnostic_only:true,
+     persistence_enabled:false,results});
  }
  if(action!=="process")return Response.json({error:"invalid_action"},{status:400});
  const ids=body.ticket_ids;
