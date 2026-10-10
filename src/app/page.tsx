@@ -7525,7 +7525,7 @@ function ChatModuleDashboard({
     .filter((item) => !chat2LegacyLiveRows.some((legacy) =>
       normalizeChatText(legacy.name) === normalizeChatText(item.analyst_name)))
     .map((item) => ({
-      area: chatTeams.find((team) => team.id === item.team_id)?.name ?? 'Equipe cadastrada',
+      area: teams.find((team) => team.id === item.team_id)?.name ?? 'Equipe cadastrada',
       name: item.analyst_name,
       count: item.total,
       journey_confirmed: item.total,
