@@ -8162,6 +8162,117 @@ function ChatModuleDashboard({
 
 
       {chatActiveTab === 'overview' && (
+        <section className="rounded-2xl border border-emerald-300/20 bg-emerald-300/[0.04] px-5 py-5 sm:px-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-200">
+                ClickDesk · captura humana verificada
+              </p>
+              <h3 className="mt-2 text-lg font-semibold text-slate-100">
+                Atendimentos recuperados · {chat2SelectedPeriod.label}
+              </h3>
+              <p className="mt-1 text-xs leading-5 text-slate-400">
+                Fonte complementar: ticket + analista com mensagem pública identificada.
+                Tickets sem avaliação permanecem atendimentos válidos. Este CSAT de
+                amostra não substitui o indicador oficial nem altera o pódio.
+              </p>
+            </div>
+            <span className="rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-400">
+              {selectedTeamName}
+            </span>
+          </div>
+          {clickDeskPersistedMetrics?.erro ? (
+            <div role="alert" className="mt-4 rounded-lg border border-rose-300/30 bg-rose-300/10 px-4 py-3 text-sm text-rose-100">
+              Não foi possível ler a captura de homologação: {clickDeskPersistedMetrics.erro}
+              Nenhum zero foi considerado como resultado do período.
+            </div>
+          ) : clickDeskPersistedMetrics?.verified_productivity?.has_records ? (
+            <>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-xl bg-slate-950/45 p-4">
+                  <p className="text-xs text-slate-400">Atendimentos humanos</p>
+                  <strong className="mt-1 block text-2xl tabular-nums">
+                    {formatChatCount(clickDeskPersistedMetrics.verified_productivity.total)}
+                  </strong>
+                </div>
+                <div className="rounded-xl bg-slate-950/45 p-4">
+                  <p className="text-xs text-slate-400">Avaliações recebidas</p>
+                  <strong className="mt-1 block text-2xl tabular-nums">
+                    {formatChatCount(clickDeskPersistedMetrics.verified_productivity.evaluations.reviews)}
+                  </strong>
+                  <p className="mt-1 text-xs text-slate-400">
+                    <span className="text-emerald-300">+{clickDeskPersistedMetrics.verified_productivity.evaluations.positive_reviews}</span>
+                    {' / '}
+                    <span className="text-rose-300">-{clickDeskPersistedMetrics.verified_productivity.evaluations.negative_reviews}</span>
+                  </p>
+                </div>
+                <div className="rounded-xl bg-slate-950/45 p-4">
+                  <p className="text-xs text-slate-400">CSAT · amostra verificada</p>
+                  <strong className="mt-1 block text-2xl tabular-nums">
+                    {clickDeskPersistedMetrics.verified_productivity.evaluations.csat === null
+                      ? '—'
+                      : formatChatPercent(clickDeskPersistedMetrics.verified_productivity.evaluations.csat)}
+                  </strong>
+                </div>
+                <div className="rounded-xl bg-slate-950/45 p-4">
+                  <p className="text-xs text-slate-400">% com avaliação recebida</p>
+                  <strong className="mt-1 block text-2xl tabular-nums">
+                    {clickDeskPersistedMetrics.verified_productivity.evaluations.review_percentage === null
+                      ? '—'
+                      : formatChatPercent(clickDeskPersistedMetrics.verified_productivity.evaluations.review_percentage)}
+                  </strong>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {clickDeskPersistedMetrics.verified_productivity.daily.map((day) => (
+                  <span key={day.date} className="rounded-lg border border-white/10 bg-slate-950/35 px-3 py-2 text-xs text-slate-300">
+                    {formatDate(day.date)} · <strong>{formatChatCount(day.count)}</strong> atend.
+                  </span>
+                ))}
+              </div>
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[570px] text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10 text-left text-xs text-slate-400">
+                      <th className="pb-3 font-medium">Analista</th>
+                      <th className="pb-3 text-right font-medium">Atend.</th>
+                      <th className="pb-3 text-right font-medium">Positivas</th>
+                      <th className="pb-3 text-right font-medium">Negativas</th>
+                      <th className="pb-3 text-right font-medium">CSAT da amostra</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clickDeskPersistedMetrics.verified_productivity.by_analyst.map((person) => (
+                      <tr key={person.analyst_id} className="border-b border-white/5">
+                        <td className="py-2 pr-3 text-slate-200">{person.analyst_name}</td>
+                        <td className="py-2 text-right tabular-nums">{formatChatCount(person.total)}</td>
+                        <td className="py-2 text-right tabular-nums">{person.evaluations.positive_reviews}</td>
+                        <td className="py-2 text-right tabular-nums">{person.evaluations.negative_reviews}</td>
+                        <td className="py-2 text-right tabular-nums">
+                          {person.evaluations.csat === null ? '—' : formatChatPercent(person.evaluations.csat)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-3 text-xs text-slate-500">
+                {clickDeskPersistedMetrics.verified_productivity.coverage_status === 'queue_drained'
+                  ? 'Fila conhecida processada. A ausência de uma nota não indica erro nem falta de solicitação.'
+                  : 'Alguns lotes podem estar em processamento; o resultado será atualizado.'}
+              </p>
+            </>
+          ) : (
+            <p className="mt-4 text-sm text-slate-400">
+              {clickDeskPersistedMetrics === null
+                ? 'Consultando os atendimentos verificados na homologação...'
+                : 'Não há registros verificados para o período e a equipe selecionados.'}
+            </p>
+          )}
+        </section>
+      )}
+
+      {chatActiveTab === 'overview' && (
         <section className="overflow-hidden rounded-2xl border border-cyan-300/15 bg-slate-950/35 shadow-[0_22px_70px_rgba(2,8,23,0.28)]">
           <div className="border-b border-white/10 px-5 py-4 sm:px-6">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
