@@ -311,14 +311,14 @@ export async function GET(request: Request) {
     const verifiedProductivity = summarizeVerifiedContributions(verifiedRows, filters.today)
     // The supplementary verified source may be partial until the staging queue drains.
     // Queue status is not a substitute for proving coverage of other ClickDesk stages.
-    const verifiedQueueResult = await admin.from('clickdesk_chat_capture_queue')
-      .select('ticket_id', { count: 'exact', head: true })
-      .in('status',['pending','queued','error'])
-      .lte('period_start',filters.end)
-      .gte('period_end',filters.start)
-    if (verifiedQueueResult.error) throw new ApiError(503,'Status da recuperação ClickDesk indisponível.')
+    // Ticket IDs in the operations queue remain inaccessible to end users.
+    // A strictly aggregate-only, authenticated RPC reports the pending count.
+    const verifiedQueueResult = await admin.rpc('clickdesk_verified_capture_incomplete_count')
+    if (verifiedQueueResult.error || typeof verifiedQueueResult.data !== 'number') {
+      throw new ApiError(503,'Status da recuperação ClickDesk indisponível.')
+    }
     const verifiedCoverageStatus =
-      (verifiedQueueResult.count ?? 0) === 0 && verifiedRows.length > 0
+      verifiedQueueResult.data === 0 && verifiedRows.length > 0
         ? 'queue_drained'
         : 'partial_until_queue_finished'
 
