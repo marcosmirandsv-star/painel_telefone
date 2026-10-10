@@ -7545,12 +7545,21 @@ function ChatModuleDashboard({
     }
   }, [chat2SelectedPersistedAnalyst?.analyst_id])
 
+  const chat2SelectedVerifiedAnalyst = (clickDeskPersistedMetrics?.verified_productivity?.by_analyst ?? [])
+    .find((item) =>
+      (chat2SelectedPersistedAnalyst?.analyst_id && item.analyst_id === chat2SelectedPersistedAnalyst.analyst_id) ||
+      (chat2SelectedLiveHuman && normalizeChatText(item.analyst_name) === normalizeChatText(chat2SelectedLiveHuman.name)),
+    ) ?? null
+  const chat2SelectedVerifiedDays = new Map(
+    (chat2SelectedVerifiedAnalyst?.daily ?? []).map((day) => [day.date, day.count]),
+  )
   const chat2HistoryPoints = clickDeskAnalystHistory?.points ?? []
   const chat2DailyMap = new Map(
     (chat2SelectedPersistedAnalyst?.daily ?? []).map((item) => [item.date, item]),
   )
   const chat2DailyCoverageDates = [
     ...(clickDeskPersistedMetrics?.performance_daily ?? []).map((item) => item.date),
+    ...(chat2SelectedVerifiedAnalyst?.daily ?? []).map((item) => item.date),
     ...(clickDeskPersistedMetrics?.daily ?? []).map((item) => item.date),
     ...((clickDeskPersistedMetrics?.by_analyst ?? []).flatMap((item) => item.daily.map((day) => day.date))),
   ].filter(Boolean)
@@ -8986,7 +8995,7 @@ function ChatModuleDashboard({
                         <p className="text-sm font-semibold uppercase tracking-[0.14em] text-cyan-300">Régua diária</p>
                         <h4 className="mt-1 text-lg font-bold">Atendimentos por dia</h4>
                         <p className="mt-1 text-sm text-slate-400">
-                          Clique em um dia para detalhar o resultado sem perder o acumulado da competência.
+                          Os registros da base anterior e as contribuições humanas recuperadas são exibidos separadamente; não alteram os indicadores oficiais.
                         </p>
                       </div>
                       <label className="min-w-52 text-sm text-slate-400">
@@ -8999,7 +9008,7 @@ function ChatModuleDashboard({
                           <option value="all">Competência inteira</option>
                           {chat2DailyRuler.map((item) => (
                             <option key={item.date} value={item.date} disabled={!item.covered}>
-                              {formatDate(item.date)} · {item.covered ? `${formatChatCount(item.attendances)} atendimento(s)` : 'sem base diária'}
+                              {formatDate(item.date)} · {chat2SelectedVerifiedDays.has(item.date) ? `${formatChatCount(chat2SelectedVerifiedDays.get(item.date) ?? 0)} contribuições verificadas` : item.covered ? `${formatChatCount(item.attendances)} registro(s) da base anterior` : 'sem base diária'}
                             </option>
                           ))}
                         </select>
@@ -9009,14 +9018,15 @@ function ChatModuleDashboard({
                     <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
                       {chat2DailyRuler.map((item) => {
                         const selected = chat2DailyDateFilter === item.date
+                        const verifiedCount = chat2SelectedVerifiedDays.get(item.date)
                         return (
                           <button
                             key={item.date}
                             type="button"
-                            disabled={!item.covered}
-                            onClick={() => item.covered && setChat2DailyDateFilter(selected ? 'all' : item.date)}
+                            disabled={!item.covered && verifiedCount === undefined}
+                            onClick={() => (item.covered || verifiedCount !== undefined) && setChat2DailyDateFilter(selected ? 'all' : item.date)}
                             className={`min-w-16 rounded-lg border px-3 py-3 text-center transition ${
-                              !item.covered
+                              !item.covered && verifiedCount === undefined
                                 ? 'cursor-not-allowed border-white/5 bg-slate-950/25 text-slate-600'
                                 : selected
                                   ? 'border-cyan-300/60 bg-cyan-300/10 text-cyan-100'
@@ -9030,8 +9040,9 @@ function ChatModuleDashboard({
                           >
                             <span className="block text-xs text-slate-500">{item.date.slice(8, 10)}</span>
                             <strong className="mt-1 block text-lg tabular-nums">
-                              {item.covered ? formatChatCount(item.attendances) : '—'}
+                              {verifiedCount !== undefined ? formatChatCount(verifiedCount) : item.covered ? formatChatCount(item.attendances) : '—'}
                             </strong>
+                            <span className="mt-1 block text-[10px] text-slate-400">{verifiedCount !== undefined ? 'humano verificado' : 'base anterior'}</span>
                           </button>
                         )
                       })}
