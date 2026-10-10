@@ -1328,7 +1328,7 @@ function CentralOverview({
           </div>
           <div className="mt-4 rounded-lg bg-slate-950/35 px-3 py-2 text-xs text-slate-400">
             {phoneHasData
-              ? `Fonte: lançamento manual semanal · período encerrado há ${phonePeriodAgeDays} dia(s)`
+              ? `Fonte: lançamentos manuais existentes neste ambiente · período encerrado há ${phonePeriodAgeDays} dia(s). Sem integração automática com a 5.5`
               : 'Nenhum lançamento semanal disponível.'}
           </div>
           <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-4 text-xs">
@@ -1351,7 +1351,7 @@ function CentralOverview({
                 </span>
               </div>
               <div className="mt-5 grid grid-cols-3 gap-3">
-                <div><span className="text-xs text-slate-500">CSAT</span><strong className="mt-1 block text-lg">{snapshot?.csat_pct === null || snapshot?.csat_pct === undefined ? '—' : formatPercent(snapshot.csat_pct)}</strong></div>
+                <div><span className="text-xs text-slate-500">CSAT</span><strong className="mt-1 block text-lg">{snapshot?.csat_pct === null || snapshot?.csat_pct === undefined ? '—' : formatPercent(snapshot.csat_pct)}</strong><span className="mt-1 block text-[11px] text-slate-500">{snapshot ? `${snapshot.csat_total} avaliação(ões)` : 'Sem amostra'}</span></div>
                 <div><span className="text-xs text-slate-500">Entraram</span><strong className="mt-1 block text-lg">{snapshot ? formatChatCount(snapshot.report_created) : '—'}</strong></div>
                 <div><span className="text-xs text-slate-500">Resolvidos</span><strong className="mt-1 block text-lg">{snapshot ? formatChatCount(snapshot.report_resolved) : '—'}</strong></div>
               </div>
@@ -7546,12 +7546,16 @@ function ChatModuleDashboard({
   }, [chat2SelectedPersistedAnalyst?.analyst_id])
 
   const chat2SelectedVerifiedAnalyst = (clickDeskPersistedMetrics?.verified_productivity?.by_analyst ?? [])
+    .filter((item) => selectedTeamId === 'all' || item.team_id === selectedTeamId)
     .find((item) =>
       (chat2SelectedPersistedAnalyst?.analyst_id && item.analyst_id === chat2SelectedPersistedAnalyst.analyst_id) ||
       (chat2SelectedLiveHuman && normalizeChatText(item.analyst_name) === normalizeChatText(chat2SelectedLiveHuman.name)),
     ) ?? null
   const chat2SelectedVerifiedDays = new Map(
     (chat2SelectedVerifiedAnalyst?.daily ?? []).map((day) => [day.date, day.count]),
+  )
+  const chat2SelectedVerifiedRatingsByDay = new Map(
+    (chat2SelectedVerifiedAnalyst?.ratings_daily ?? []).map((day) => [day.date, day]),
   )
   const chat2HistoryPoints = clickDeskAnalystHistory?.points ?? []
   const chat2DailyMap = new Map(
@@ -7706,23 +7710,14 @@ function ChatModuleDashboard({
   const chat2OperationVerifiedDays = new Map(
     (clickDeskPersistedMetrics?.verified_productivity?.daily ?? []).map((day) => [day.date, day.count]),
   )
-  const chat2OperationDailySource = (() => {
-    const legacy = clickDeskPersistedMetrics?.performance_daily ?? []
-    const merged = new Map(legacy.map((day) => [day.date, day]))
-    for (const [date, count] of chat2OperationVerifiedDays) {
-      const previous = merged.get(date)
-      merged.set(date, {
-        date,
-        attendances: count,
-        positive_reviews: previous?.positive_reviews ?? 0,
-        negative_reviews: previous?.negative_reviews ?? 0,
-        reviews: previous?.reviews ?? 0,
-        csat: previous?.csat ?? null,
-        review_percentage: previous?.review_percentage ?? null,
-      })
-    }
-    return [...merged.values()].sort((a, b) => a.date.localeCompare(b.date))
-  })()
+  // Chart-only: select one series, never add verified activity to legacy totals.
+  const chat2OperationUsingVerified = chat2OperationVerifiedDays.size > 0
+  const chat2OperationDailySource = chat2OperationUsingVerified
+    ? [...chat2OperationVerifiedDays].map(([date, count]) => ({
+        date, attendances: count, positive_reviews: 0, negative_reviews: 0,
+        reviews: 0, csat: null, review_percentage: null,
+      }))
+    : (clickDeskPersistedMetrics?.performance_daily ?? [])
   const chat2OperationDailyCoverageStart =
     chat2OperationDailySource.length > 0
       ? [...chat2OperationDailySource].sort((a, b) => a.date.localeCompare(b.date))[0]?.date ?? null
@@ -9007,7 +9002,7 @@ function ChatModuleDashboard({
                         >
                           <option value="all">Competência inteira</option>
                           {chat2DailyRuler.map((item) => (
-                            <option key={item.date} value={item.date} disabled={!item.covered}>
+                            <option key={item.date} value={item.date} disabled={!item.covered && !chat2SelectedVerifiedDays.has(item.date)}>
                               {formatDate(item.date)} · {chat2SelectedVerifiedDays.has(item.date) ? `${formatChatCount(chat2SelectedVerifiedDays.get(item.date) ?? 0)} contribuições verificadas` : item.covered ? `${formatChatCount(item.attendances)} registro(s) da base anterior` : 'sem base diária'}
                             </option>
                           ))}
@@ -9033,9 +9028,11 @@ function ChatModuleDashboard({
                                   : 'border-white/10 bg-slate-950/45 text-slate-300 hover:border-white/25'
                             }`}
                             title={
-                              item.covered
-                                ? `${formatDate(item.date)} · ${formatChatCount(item.attendances)} atendimento(s)`
-                                : `${formatDate(item.date)} · sem base diária disponível`
+                              verifiedCount !== undefined
+                                ? `${formatDate(item.date)} · ${formatChatCount(verifiedCount)} contribuições humanas verificadas`
+                                : item.covered
+                                  ? `${formatDate(item.date)} · ${formatChatCount(item.attendances)} registros da base anterior`
+                                  : `${formatDate(item.date)} · sem captura comprovada`
                             }
                           >
                             <span className="block text-xs text-slate-500">{item.date.slice(8, 10)}</span>
@@ -9055,14 +9052,30 @@ function ChatModuleDashboard({
                       </div>
                     )}
 
+                    {chat2DailyDateFilter !== 'all' && chat2SelectedVerifiedDays.has(chat2DailyDateFilter) && (
+                      <div className="mt-4 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.04] p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-cyan-200">
+                          {formatDate(chat2DailyDateFilter)} · contribuição humana recuperada (não oficial)
+                        </p>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                          <div><p className="text-xs text-slate-400">Contribuições verificadas</p><strong className="text-xl">{formatChatCount(chat2SelectedVerifiedDays.get(chat2DailyDateFilter) ?? 0)}</strong></div>
+                          <div><p className="text-xs text-slate-400">Avaliações recebidas</p><strong className="text-xl">{formatChatCount(chat2SelectedVerifiedRatingsByDay.get(chat2DailyDateFilter)?.reviews ?? 0)}</strong></div>
+                          <div><p className="text-xs text-slate-400">Positivas</p><strong className="text-xl">{formatChatCount(chat2SelectedVerifiedRatingsByDay.get(chat2DailyDateFilter)?.positive_reviews ?? 0)}</strong></div>
+                          <div><p className="text-xs text-slate-400">Negativas</p><strong className="text-xl">{formatChatCount(chat2SelectedVerifiedRatingsByDay.get(chat2DailyDateFilter)?.negative_reviews ?? 0)}</strong></div>
+                          <div><p className="text-xs text-slate-400">CSAT da amostra recuperada</p><strong className="text-xl">{(() => { const value = chat2SelectedVerifiedRatingsByDay.get(chat2DailyDateFilter)?.csat; return value == null ? '—' : formatChatPercent(value) })()}</strong></div>
+                        </div>
+                        <p className="mt-2 text-xs text-slate-400">Sem avaliação não significa atendimento inválido; esta amostra não altera pódio nem metas.</p>
+                      </div>
+                    )}
                     {chat2SelectedDayMetric ? (
                       <div className="mt-4 border-t border-white/10 pt-4">
+                        <p className="mb-2 text-xs text-slate-400">Série original preservada, sem incorporar contribuições recuperadas.</p>
                         <p className="mb-3 text-sm font-semibold">
                           {formatDate(chat2SelectedDayMetric.date)} · detalhe do dia
                         </p>
                         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                           <div className="rounded-lg bg-slate-950/45 p-3">
-                            <p className="text-xs text-slate-500">Atendimentos</p>
+                            <p className="text-xs text-slate-500">Atendimentos da base anterior</p>
                             <strong className="mt-1 block text-xl tabular-nums">
                               {formatChatCount(chat2SelectedDayMetric.attendances)}
                             </strong>
@@ -10094,14 +10107,14 @@ function ChatModuleDashboard({
             <>
               <div className="mt-5 grid gap-4 xl:grid-cols-[1.45fr_0.85fr]">
                 <TrendLineChart
-                  label="Evolução diária · base anterior e contribuições humanas recuperadas"
+                  label={chat2OperationUsingVerified ? 'Contribuições humanas verificadas · evolução diária' : 'Evolução diária · base anterior'}
                   points={chat2OperationRecentDailyPoints}
                   singlePointLabel="Apenas um dia disponível para leitura."
                   latestPointLabel="Último dia"
                   highlightedPointLabel="Dia destacado"
                 />
                 <BarTrend
-                  label="Média diária por dia da semana · dados em conferência"
+                  label={chat2OperationUsingVerified ? 'Média de contribuições verificadas por dia da semana' : 'Média de atendimentos por dia da semana · base anterior'}
                   points={chat2OperationWeekdayPoints}
                 />
               </div>
@@ -10110,7 +10123,7 @@ function ChatModuleDashboard({
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Régua do mês</p>
-                    <strong className="mt-1 block text-sm text-slate-200">Volume diário visível · bases identificadas</strong>
+                    <strong className="mt-1 block text-sm text-slate-200">{chat2OperationUsingVerified ? 'Contribuições humanas verificadas por dia' : 'Volume da base anterior por dia'}</strong>
                   </div>
                   <span className="text-xs text-slate-500">
                     {chat2OperationPeakWeekday
@@ -10119,10 +10132,9 @@ function ChatModuleDashboard({
                   </span>
                 </div>
 
-                <p className="mt-2 text-xs text-slate-400">01 e 02/10 usam a base anterior; 03/10 em diante apresentam contribuições humanas verificadas quando disponíveis. Estas fontes não formam um total oficial reconciliado.</p>
+                <p className="mt-2 text-xs text-slate-400">{chat2OperationUsingVerified ? 'Série exclusiva de contribuições humanas verificadas; não representa o atendimento oficial. Datas sem captura aparecem como —.' : 'Série original sem acréscimo de contribuições recuperadas.'}</p>
                 <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
                   {chat2OperationDailyRuler.map((item) => {
-                    const recoveredDay = clickDeskPersistedMetrics?.verified_productivity?.daily.find((day) => day.date === item.date)
                     const isToday = chat2OperationTodayDate === item.date
                     const isPeak = chat2OperationPeakDay?.date === item.date
                     return (
@@ -10148,7 +10160,7 @@ function ChatModuleDashboard({
                           {item.covered ? formatChatCount(item.attendances) : '—'}
                         </strong>
                         <span className="mt-1 block text-[10px] text-slate-500">
-                          {recoveredDay ? 'humano verificado' : item.covered ? 'base anterior' : 'sem captura'}
+                          {chat2OperationUsingVerified && item.covered ? 'humano verificado' : item.covered ? 'base anterior' : 'sem base'}
                         </span>
                       </div>
                     )
