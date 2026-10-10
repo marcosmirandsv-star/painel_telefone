@@ -7691,7 +7691,29 @@ function ChatModuleDashboard({
     (sum, item) => sum + Number(item.today?.attendances ?? 0),
     0,
   )
-  const chat2OperationDailySource = clickDeskPersistedMetrics?.performance_daily ?? []
+  // Presentation only: keep official metrics intact; show recovered human
+  // contributions on the operational trend where the legacy capture is missing.
+  // The two sources are NOT a reconciled official productivity series.
+  const chat2OperationVerifiedDays = new Map(
+    (clickDeskPersistedMetrics?.verified_productivity?.daily ?? []).map((day) => [day.date, day.count]),
+  )
+  const chat2OperationDailySource = (() => {
+    const legacy = clickDeskPersistedMetrics?.performance_daily ?? []
+    const merged = new Map(legacy.map((day) => [day.date, day]))
+    for (const [date, count] of chat2OperationVerifiedDays) {
+      const previous = merged.get(date)
+      merged.set(date, {
+        date,
+        attendances: count,
+        positive_reviews: previous?.positive_reviews ?? 0,
+        negative_reviews: previous?.negative_reviews ?? 0,
+        reviews: previous?.reviews ?? 0,
+        csat: previous?.csat ?? null,
+        review_percentage: previous?.review_percentage ?? null,
+      })
+    }
+    return [...merged.values()].sort((a, b) => a.date.localeCompare(b.date))
+  })()
   const chat2OperationDailyCoverageStart =
     chat2OperationDailySource.length > 0
       ? [...chat2OperationDailySource].sort((a, b) => a.date.localeCompare(b.date))[0]?.date ?? null
@@ -10061,14 +10083,14 @@ function ChatModuleDashboard({
             <>
               <div className="mt-5 grid gap-4 xl:grid-cols-[1.45fr_0.85fr]">
                 <TrendLineChart
-                  label="Evolução diária · últimos 14 dias cobertos"
+                  label="Evolução diária · base anterior e contribuições humanas recuperadas"
                   points={chat2OperationRecentDailyPoints}
                   singlePointLabel="Apenas um dia disponível para leitura."
                   latestPointLabel="Último dia"
                   highlightedPointLabel="Dia destacado"
                 />
                 <BarTrend
-                  label="Média de atendimentos por dia da semana"
+                  label="Média diária por dia da semana · dados em conferência"
                   points={chat2OperationWeekdayPoints}
                 />
               </div>
@@ -10077,7 +10099,7 @@ function ChatModuleDashboard({
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Régua do mês</p>
-                    <strong className="mt-1 block text-sm text-slate-200">Volume consolidado por dia</strong>
+                    <strong className="mt-1 block text-sm text-slate-200">Volume diário visível · bases identificadas</strong>
                   </div>
                   <span className="text-xs text-slate-500">
                     {chat2OperationPeakWeekday
@@ -10086,7 +10108,7 @@ function ChatModuleDashboard({
                   </span>
                 </div>
 
-                <p className="mt-2 text-xs text-slate-400">A régua mostra participações humanas verificadas nos dias recuperados; nos demais, a base anterior. Não são totais oficiais reconciliados.</p>
+                <p className="mt-2 text-xs text-slate-400">01 e 02/10 usam a base anterior; 03/10 em diante apresentam contribuições humanas verificadas quando disponíveis. Estas fontes não formam um total oficial reconciliado.</p>
                 <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
                   {chat2OperationDailyRuler.map((item) => {
                     const recoveredDay = clickDeskPersistedMetrics?.verified_productivity?.daily.find((day) => day.date === item.date)
@@ -10112,7 +10134,7 @@ function ChatModuleDashboard({
                       >
                         <span className="block text-[11px] text-slate-500">{item.date.slice(8, 10)}</span>
                         <strong className="mt-1 block text-lg tabular-nums">
-                          {recoveredDay ? formatChatCount(recoveredDay.count) : item.covered ? formatChatCount(item.attendances) : '—'}
+                          {item.covered ? formatChatCount(item.attendances) : '—'}
                         </strong>
                         <span className="mt-1 block text-[10px] text-slate-500">
                           {recoveredDay ? 'humano verificado' : item.covered ? 'base anterior' : 'sem captura'}
