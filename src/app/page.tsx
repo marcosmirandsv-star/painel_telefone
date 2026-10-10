@@ -1204,6 +1204,9 @@ function CentralOverview({
   chatOverview,
   chatOverviewLoading,
   chatOverviewError,
+  verifiedChatMetrics,
+  verifiedChatLoading,
+  verifiedChatError,
   onOpenPhone,
   onOpenChat,
 }: {
@@ -1216,6 +1219,9 @@ function CentralOverview({
   chatOverview: CentralChatOverviewResponse | null
   chatOverviewLoading: boolean
   chatOverviewError: string
+  verifiedChatMetrics: ClickDeskPersistedMetrics | null
+  verifiedChatLoading: boolean
+  verifiedChatError: string
   onOpenPhone: () => void
   onOpenChat: (teamId?: string) => void
 }) {
@@ -1249,6 +1255,60 @@ function CentralOverview({
             <strong className="mt-1 block text-2xl tabular-nums">{availableSources}/{totalSources}</strong>
           </div>
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-emerald-300/25 bg-emerald-300/[0.04] p-5 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-300">Chat · captura humana recuperada</p>
+            <h3 className="mt-2 text-lg font-bold text-slate-100">Atendimentos reais na homologação</h3>
+            <p className="mt-1 text-xs leading-5 text-slate-400">
+              Fonte por ticket e analista, independente das resoluções oficiais.
+              Tickets sem avaliação continuam sendo atendimentos válidos.
+            </p>
+          </div>
+          <button type="button" onClick={() => onOpenChat()} className="secondary-button">
+            Ver analistas e dias →
+          </button>
+        </div>
+        {verifiedChatError ? (
+          <div role="alert" className="mt-4 rounded-lg border border-rose-300/30 bg-rose-300/10 px-4 py-3 text-sm text-rose-100">
+            A captura existe no banco, mas não pôde ser consultada por esta sessão: {verifiedChatError}
+          </div>
+        ) : verifiedChatMetrics?.verified_productivity?.has_records ? (
+          <>
+            <p className="mt-3 text-xs text-slate-500">
+              Período {formatDate(verifiedChatMetrics.period!.start)} até {formatDate(verifiedChatMetrics.period!.end)}
+              {' '}· CSAT da captura é apenas amostral, não altera o pódio.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+                <p className="text-xs text-slate-400">Atendimentos humanos</p>
+                <strong className="mt-1 block text-2xl tabular-nums">{formatChatCount(verifiedChatMetrics.verified_productivity.total)}</strong>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+                <p className="text-xs text-slate-400">Avaliações recebidas</p>
+                <strong className="mt-1 block text-2xl tabular-nums">{formatChatCount(verifiedChatMetrics.verified_productivity.evaluations.reviews)}</strong>
+                <p className="mt-1 text-xs text-slate-400">
+                  +{verifiedChatMetrics.verified_productivity.evaluations.positive_reviews}
+                  {' / -'}{verifiedChatMetrics.verified_productivity.evaluations.negative_reviews}
+                </p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+                <p className="text-xs text-slate-400">Analistas identificados</p>
+                <strong className="mt-1 block text-2xl tabular-nums">
+                  {formatChatCount(verifiedChatMetrics.verified_productivity.by_analyst.length)}
+                </strong>
+              </div>
+            </div>
+          </>
+        ) : (
+          <p className="mt-4 text-sm text-slate-400">
+            {verifiedChatLoading
+              ? 'Consultando a captura verificada do mês...'
+              : 'Nenhum atendimento verificado retornou para o período consultado.'}
+          </p>
+        )}
       </section>
 
       <section className="grid gap-4 xl:grid-cols-3">
@@ -1361,6 +1421,9 @@ export default function Home() {
   const [centralChatOverview, setCentralChatOverview] = useState<CentralChatOverviewResponse | null>(null)
   const [centralChatOverviewLoading, setCentralChatOverviewLoading] = useState(false)
   const [centralChatOverviewError, setCentralChatOverviewError] = useState('')
+  const [centralVerifiedChat, setCentralVerifiedChat] = useState<ClickDeskPersistedMetrics | null>(null)
+  const [centralVerifiedChatLoading, setCentralVerifiedChatLoading] = useState(false)
+  const [centralVerifiedChatError, setCentralVerifiedChatError] = useState('')
   const [activeModule, setActiveModule] = useState<AppModule>('central')
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard')
   const [chatActiveTab, setChatActiveTab] = useState<ChatActiveTab>('overview')
@@ -1669,6 +1732,46 @@ export default function Home() {
       cancelled = true
       window.clearInterval(refreshTimer)
     }
+  }, [isManagementUser, user])
+
+  // Load independently from the official snapshot: a missing historical
+  // attendance row must not hide verified real human work on the home screen.
+  useEffect(() => {
+    if (!isManagementUser || !user) {
+      setCentralVerifiedChat(null)
+      setCentralVerifiedChatError('')
+      return
+    }
+    let cancelled = false
+    async function loadVerifiedSummary() {
+      setCentralVerifiedChatLoading(true)
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) throw new Error('Sessão não disponível. Entre novamente.')
+        const response = await fetch('/api/clickdesk/metrics', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: 'no-store',
+        })
+        const data = (await response.json()) as ClickDeskPersistedMetrics
+        if (!response.ok || data.erro) {
+          throw new Error(data.erro || `Não foi possível consultar a captura (HTTP ${response.status}).`)
+        }
+        if (!cancelled) {
+          setCentralVerifiedChat(data)
+          setCentralVerifiedChatError('')
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setCentralVerifiedChat(null)
+          setCentralVerifiedChatError(getErrorMessage(error))
+        }
+      } finally {
+        if (!cancelled) setCentralVerifiedChatLoading(false)
+      }
+    }
+    void loadVerifiedSummary()
+    const timer = window.setInterval(() => void loadVerifiedSummary(), 60 * 60 * 1000)
+    return () => { cancelled = true; window.clearInterval(timer) }
   }, [isManagementUser, user])
 
   useEffect(() => {
@@ -2974,6 +3077,9 @@ export default function Home() {
             chatOverview={centralChatOverview}
             chatOverviewLoading={centralChatOverviewLoading}
             chatOverviewError={centralChatOverviewError}
+            verifiedChatMetrics={centralVerifiedChat}
+            verifiedChatLoading={centralVerifiedChatLoading}
+            verifiedChatError={centralVerifiedChatError}
             onOpenPhone={() => {
               setActiveModule('phone')
               setActiveTab('dashboard')
