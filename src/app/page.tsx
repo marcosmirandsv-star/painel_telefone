@@ -8329,12 +8329,39 @@ function ChatModuleDashboard({
                   </strong>
                 </div>
               </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                {clickDeskPersistedMetrics.verified_productivity.daily.map((day) => (
-                  <span key={day.date} className="rounded-lg border border-white/10 bg-slate-950/35 px-3 py-2 text-xs text-slate-300">
-                    {formatDate(day.date)} · <strong>{formatChatCount(day.count)}</strong> atend.
-                  </span>
-                ))}
+              <div className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-sm text-amber-100">
+                O quadro operacional tradicional pode mostrar somente 01 e 02/10 porque usa a captura anterior.
+                Os atendimentos recuperados de 03/10 em diante aparecem nesta conferência separada,
+                sem alterar a contagem oficial, o CSAT ou o pódio.
+              </div>
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[600px] text-sm" aria-label="Conferência diária de atendimentos humanos recuperados">
+                  <thead>
+                    <tr className="border-b border-white/10 text-left text-xs text-slate-400">
+                      <th className="pb-3 font-medium">Dia</th>
+                      <th className="pb-3 text-right font-medium">Atendimentos verificados</th>
+                      <th className="pb-3 text-right font-medium">Avaliações</th>
+                      <th className="pb-3 text-right font-medium">Positivas</th>
+                      <th className="pb-3 text-right font-medium">Negativas</th>
+                      <th className="pb-3 text-right font-medium">CSAT da amostra</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clickDeskPersistedMetrics.verified_productivity.daily.map((day) => {
+                      const rating = clickDeskPersistedMetrics.verified_productivity!.ratings_daily.find((item) => item.date === day.date)
+                      return (
+                        <tr key={day.date} className="border-b border-white/5">
+                          <td className="py-2 text-slate-200">{formatDate(day.date)}</td>
+                          <td className="py-2 text-right tabular-nums">{formatChatCount(day.count)}</td>
+                          <td className="py-2 text-right tabular-nums">{rating?.reviews ?? 0}</td>
+                          <td className="py-2 text-right tabular-nums">{rating?.positive_reviews ?? 0}</td>
+                          <td className="py-2 text-right tabular-nums">{rating?.negative_reviews ?? 0}</td>
+                          <td className="py-2 text-right tabular-nums">{rating?.csat == null ? '—' : formatChatPercent(rating.csat)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
               <div className="mt-4 overflow-x-auto">
                 <table className="w-full min-w-[570px] text-sm">
