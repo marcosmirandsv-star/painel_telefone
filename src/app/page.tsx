@@ -7515,10 +7515,28 @@ function ChatModuleDashboard({
     candidate_csat: item.csat,
     candidate_review_percentage: item.review_percentage,
   }))
-  const chat2LiveHumanRows =
-    chat2DiagnosticAnalystRows.length > 0
-      ? chat2DiagnosticAnalystRows
-      : chat2PersistedHumanRows
+  // The recovered capture may contain analysts who have no legacy row.
+  // Include them as selectable people without rewriting official individual KPIs.
+  const chat2VerifiedAnalystRows = (clickDeskPersistedMetrics?.verified_productivity?.by_analyst ?? [])
+    .filter((item) => selectedTeamId === 'all' || item.team_id === selectedTeamId)
+  const chat2LegacyLiveRows = chat2DiagnosticAnalystRows.length > 0
+    ? chat2DiagnosticAnalystRows : chat2PersistedHumanRows
+  const chat2VerifiedOnlyLiveRows = chat2VerifiedAnalystRows
+    .filter((item) => !chat2LegacyLiveRows.some((legacy) =>
+      normalizeChatText(legacy.name) === normalizeChatText(item.analyst_name)))
+    .map((item) => ({
+      area: chatTeams.find((team) => team.id === item.team_id)?.name ?? 'Equipe cadastrada',
+      name: item.analyst_name,
+      count: item.total,
+      journey_confirmed: item.total,
+      satisfaction_labels: {} as Record<string, number>,
+      positive_reviews: item.evaluations.positive_reviews,
+      negative_reviews: item.evaluations.negative_reviews,
+      reviews: item.evaluations.reviews,
+      candidate_csat: item.evaluations.csat,
+      candidate_review_percentage: item.evaluations.review_percentage,
+    }))
+  const chat2LiveHumanRows = [...chat2LegacyLiveRows, ...chat2VerifiedOnlyLiveRows]
   const chat2SelectedLiveHuman =
     chat2LiveHumanRows.find((item) => `${item.area}::${item.name}` === chat2LiveAnalystKey) ??
     chat2LiveHumanRows[0] ??
@@ -8870,6 +8888,31 @@ function ChatModuleDashboard({
             ) : (
               <div className="mt-5">
                 <EmptyState text="Nenhum analista com dados persistidos nesta competência." />
+              </div>
+            )}
+            {chat2VerifiedAnalystRows.length > 0 && (
+              <div className="mt-5 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.04] p-4">
+                <h4 className="text-sm font-semibold text-cyan-100">Contribuições humanas recuperadas por analista · fonte complementar</h4>
+                <p className="mt-1 text-xs text-slate-400">
+                  Esta listagem permite conferir os dias e responsáveis da captura, sem substituir a produtividade oficial nem alterar cálculos e pódio.
+                </p>
+                <div className="mt-3 divide-y divide-white/10">
+                  {chat2VerifiedAnalystRows.map((person) => (
+                    <button
+                      key={person.analyst_id}
+                      type="button"
+                      onClick={() => {
+                        const existing = chat2LiveHumanRows.find((item) =>
+                          normalizeChatText(item.name) === normalizeChatText(person.analyst_name))
+                        if (existing) setChat2LiveAnalystKey(`${existing.area}::${existing.name}`)
+                      }}
+                      className="flex w-full items-center justify-between gap-4 py-2 text-left text-sm hover:text-cyan-200"
+                    >
+                      <span className="text-slate-200">{person.analyst_name}</span>
+                      <span className="shrink-0 text-slate-300">{formatChatCount(person.total)} contribuições · {person.daily.length} dia(s)</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </section>
