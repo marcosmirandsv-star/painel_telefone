@@ -10086,8 +10086,10 @@ function ChatModuleDashboard({
                   </span>
                 </div>
 
+                <p className="mt-2 text-xs text-slate-400">A régua mostra participações humanas verificadas nos dias recuperados; nos demais, a base anterior. Não são totais oficiais reconciliados.</p>
                 <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
                   {chat2OperationDailyRuler.map((item) => {
+                    const recoveredDay = clickDeskPersistedMetrics?.verified_productivity?.daily.find((day) => day.date === item.date)
                     const isToday = chat2OperationTodayDate === item.date
                     const isPeak = chat2OperationPeakDay?.date === item.date
                     return (
@@ -10110,10 +10112,10 @@ function ChatModuleDashboard({
                       >
                         <span className="block text-[11px] text-slate-500">{item.date.slice(8, 10)}</span>
                         <strong className="mt-1 block text-lg tabular-nums">
-                          {item.covered ? formatChatCount(item.attendances) : '—'}
+                          {recoveredDay ? formatChatCount(recoveredDay.count) : item.covered ? formatChatCount(item.attendances) : '—'}
                         </strong>
                         <span className="mt-1 block text-[10px] text-slate-500">
-                          {isPeak ? 'pico' : isToday ? 'hoje' : ''}
+                          {recoveredDay ? 'humano verificado' : item.covered ? 'base anterior' : 'sem captura'}
                         </span>
                       </div>
                     )
