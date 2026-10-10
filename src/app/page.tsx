@@ -1261,10 +1261,10 @@ function CentralOverview({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-300">Chat · captura humana recuperada</p>
-            <h3 className="mt-2 text-lg font-bold text-slate-100">Atendimentos reais na homologação</h3>
+            <h3 className="mt-2 text-lg font-bold text-slate-100">Contribuições humanas verificadas na homologação</h3>
             <p className="mt-1 text-xs leading-5 text-slate-400">
-              Fonte por ticket e analista, independente das resoluções oficiais.
-              Tickets sem avaliação continuam sendo atendimentos válidos.
+              Registro de participação pública por ticket e analista, separado das resoluções e dos atendimentos oficiais.
+              A ausência de avaliação não invalida a contribuição registrada.
             </p>
           </div>
           <button type="button" onClick={() => onOpenChat()} className="secondary-button">
@@ -1283,7 +1283,7 @@ function CentralOverview({
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
-                <p className="text-xs text-slate-400">Atendimentos humanos</p>
+                <p className="text-xs text-slate-400">Contribuições humanas verificadas</p>
                 <strong className="mt-1 block text-2xl tabular-nums">{formatChatCount(verifiedChatMetrics.verified_productivity.total)}</strong>
               </div>
               <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
@@ -8319,11 +8319,11 @@ function ChatModuleDashboard({
                 ClickDesk · captura humana verificada
               </p>
               <h3 className="mt-2 text-lg font-semibold text-slate-100">
-                Atendimentos recuperados · {chat2SelectedPeriod.label}
+                Contribuições humanas recuperadas · {chat2SelectedPeriod.label}
               </h3>
               <p className="mt-1 text-xs leading-5 text-slate-400">
-                Fonte complementar: ticket + analista com mensagem pública identificada.
-                Tickets sem avaliação permanecem atendimentos válidos. Este CSAT de
+                Fonte complementar: participação humana verificada por ticket e analista.
+                Ausência de avaliação não invalida a participação. Este CSAT de
                 amostra não substitui o indicador oficial nem altera o pódio.
               </p>
             </div>
@@ -8340,7 +8340,7 @@ function ChatModuleDashboard({
             <>
               <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="rounded-xl bg-slate-950/45 p-4">
-                  <p className="text-xs text-slate-400">Atendimentos humanos</p>
+                  <p className="text-xs text-slate-400">Contribuições humanas verificadas</p>
                   <strong className="mt-1 block text-2xl tabular-nums">
                     {formatChatCount(clickDeskPersistedMetrics.verified_productivity.total)}
                   </strong>
