@@ -4014,6 +4014,7 @@ function ChatAnalystPortal({
 
     setOpenQualitativeTicketId(null)
     setSelectedRoutineDate(date)
+    setDailyTickets(null)
     setDailyTicketsLoading(true)
 
     try {
@@ -4109,23 +4110,31 @@ function ChatAnalystPortal({
   const todayKey = ['year','month','day']
     .map((key) => todayParts.find((part) => part.type===key)?.value ?? '')
     .join('-')
-  const visibleDayCount =
-    now.getFullYear() === year && now.getMonth() + 1 === monthNumber
-      ? now.getDate()
-      : Number(monthEnd.slice(-2))
-  const ruler = Array.from({ length: visibleDayCount }, (_, index) => {
-    const day = String(index + 1).padStart(2, '0')
-    const date = `${monthKey}-${day}`
-    const source = daily.find((item) => item.date === date)
+  // One navigable list for both sources. Prefer verified evidence on an
+  // overlapping date; never add verified contributions to legacy attendance.
+  // This is presentation only: official CSAT, participation and podium are unchanged.
+  const verifiedRoutineDays = new Map(
+    (ownVerifiedContribution?.daily ?? [])
+      .filter((item) => item.date.startsWith(monthKey) && item.count > 0)
+      .map((item) => [item.date, item]),
+  )
+  const legacyRoutineDays = new Map(
+    daily.filter((item) => item.date.startsWith(monthKey) && item.attendances > 0)
+      .map((item) => [item.date, item]),
+  )
+  const routineDates = [...new Set([...legacyRoutineDays.keys(), ...verifiedRoutineDays.keys()])]
+    .sort((a, b) => a.localeCompare(b))
+  const activeRoutineDays = routineDates.map((date) => {
+    const verified = verifiedRoutineDays.get(date)
+    const legacy = legacyRoutineDays.get(date)
+    const rating = ownVerifiedContribution?.ratings_daily.find((item) => item.date === date)
     return {
       date,
-      day,
-      attendances: source?.attendances ?? 0,
-      reviews: source?.reviews ?? 0,
-      csat: source?.csat ?? null,
+      source: verified ? 'verified' as const : 'legacy' as const,
+      count: verified?.count ?? legacy?.attendances ?? 0,
+      reviews: verified ? (rating?.reviews ?? 0) : (legacy?.reviews ?? 0),
     }
   })
-  const activeRoutineDays = ruler.filter((item) => item.attendances > 0)
 
   return (
     <div className="analyst-portal mt-6 space-y-5">
@@ -4496,7 +4505,7 @@ function ChatAnalystPortal({
             </p>
             <h3 className="mt-2 text-2xl font-bold">Dias com atendimento</h3>
             <p className="section-subtitle">
-              A visão foi compactada. Clique em um dia para ver os seus tickets persistidos no ClickDesk.
+              Selecione um dia na régua para consultar seus tickets. A base anterior e as contribuições recuperadas ficam identificadas, sem somar indicadores oficiais.
             </p>
           </div>
           <div className="flex flex-wrap gap-2 self-start">
@@ -4514,7 +4523,7 @@ function ChatAnalystPortal({
 
         {ownVerifiedContribution && ownVerifiedContribution.daily.length > 0 && (
           <div className="mt-5 rounded-xl border border-cyan-300/20 bg-slate-950/30 p-4">
-            <h4 className="font-semibold text-slate-100">Atendimentos humanos confirmados por dia · ClickDesk</h4>
+            <h4 className="font-semibold text-slate-100">Contribuições humanas verificadas por dia · ClickDesk</h4>
             <p className="mt-1 text-xs text-slate-400">
               Ticket único por analista, mediante mensagem pública identificada.
               Avaliações são vinculadas ao último atendente humano; as notas não
@@ -4526,12 +4535,7 @@ function ChatAnalystPortal({
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {ownVerifiedContribution.daily.map((day) => (
-                <button
-                  key={day.date}
-                  type="button"
-                  onClick={() => void loadDailyTickets(day.date)}
-                  className={`rounded-lg border px-4 py-3 text-left transition ${selectedRoutineDate === day.date ? 'border-cyan-300/50 bg-cyan-300/10' : 'border-white/10 bg-slate-950/45 hover:border-cyan-300/30'}`}
-                >
+                <div key={day.date} className="rounded-lg border border-white/10 bg-slate-950/45 px-4 py-3">
                   <span className="block text-xs text-slate-400">{formatDate(day.date)}</span>
                   <strong className="mt-1 block text-lg text-slate-100">{formatChatCount(day.count)} contribuições verificadas</strong>
                   {(() => {
@@ -4548,7 +4552,7 @@ function ChatAnalystPortal({
                       </div>
                     )
                   })()}
-                </button>
+                </div>
               ))}
             </div>
             <p className="mt-3 text-xs text-slate-500">
@@ -4579,7 +4583,9 @@ function ChatAnalystPortal({
         )}
 
         {activeRoutineDays.length ? (
-          <div className="mt-5 flex flex-wrap gap-2">
+          <div className="mt-5">
+            <p className="mb-3 text-sm font-semibold text-slate-100">Régua diária · selecione para abrir os tickets</p>
+            <div className="flex flex-wrap gap-2">
             {activeRoutineDays.map((item) => {
               const selected = selectedRoutineDate === item.date
               return (
@@ -4597,17 +4603,21 @@ function ChatAnalystPortal({
                     {formatDate(item.date)}
                   </span>
                   <strong className="mt-1 block text-lg tabular-nums text-slate-100">
-                    {formatChatCount(item.attendances)} atend.
+                    {formatChatCount(item.count)}
                   </strong>
+                  <span className="mt-1 block text-xs text-slate-400">
+                    {item.source === 'verified' ? 'Contribuições verificadas' : 'Atendimentos · base anterior'}
+                  </span>
                   <span className="mt-1 block text-xs text-slate-500">
                     {formatChatCount(item.reviews)} {item.reviews === 1 ? 'avaliação' : 'avaliações'}
                   </span>
                 </button>
               )
             })}
+            </div>
           </div>
         ) : (
-          <EmptyState text="Ainda não há dias com atendimentos persistidos nesta competência." />
+          <EmptyState text="Nenhum dia possui atividade humana registrada nas fontes disponíveis nesta competência. Isso não comprova ausência de trabalho." />
         )}
 
         {selectedRoutineDate && (
