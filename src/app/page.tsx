@@ -632,12 +632,17 @@ type ClickDeskDailyTicket = {
   satisfaction_label: string | null
   journey_status: string | null
   timestamp_source: string | null
+  first_message_id?: string | null
+  rating_attribution?: string | null
 }
 
 type ClickDeskDailyTicketResponse = {
   source?: string
+  evidence?: string
+  official_metrics_unchanged?: boolean
   date?: string
   analyst_id?: string
+  count?: number
   tickets?: ClickDeskDailyTicket[]
   erro?: string
 }
@@ -4419,9 +4424,14 @@ function ChatAnalystPortal({
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {ownVerifiedContribution.daily.map((day) => (
-                <div key={day.date} className="rounded-lg border border-white/10 bg-slate-950/45 px-4 py-3">
+                <button
+                  key={day.date}
+                  type="button"
+                  onClick={() => void loadDailyTickets(day.date)}
+                  className={`rounded-lg border px-4 py-3 text-left transition ${selectedRoutineDate === day.date ? 'border-cyan-300/50 bg-cyan-300/10' : 'border-white/10 bg-slate-950/45 hover:border-cyan-300/30'}`}
+                >
                   <span className="block text-xs text-slate-400">{formatDate(day.date)}</span>
-                  <strong className="mt-1 block text-lg text-slate-100">{formatChatCount(day.count)} atend.</strong>
+                  <strong className="mt-1 block text-lg text-slate-100">{formatChatCount(day.count)} contribuições verificadas</strong>
                   {(() => {
                     const assessed = ownVerifiedContribution.ratings_daily.find((item) => item.date === day.date)
                     return (
@@ -4436,7 +4446,7 @@ function ChatAnalystPortal({
                       </div>
                     )
                   })()}
-                </div>
+                </button>
               ))}
             </div>
             <p className="mt-3 text-xs text-slate-500">
@@ -4503,7 +4513,7 @@ function ChatAnalystPortal({
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-300">
-                  Tickets do dia
+                  {dailyTickets?.source === 'clickdesk_verified_contributions' ? 'Tickets com contribuição humana verificada' : 'Tickets do dia · base anterior'}
                 </p>
                 <h4 className="mt-1 text-lg font-bold">{formatDate(selectedRoutineDate)}</h4>
               </div>
@@ -4528,6 +4538,7 @@ function ChatAnalystPortal({
               </p>
             ) : dailyTickets?.tickets?.length ? (
               <div className="mt-4 space-y-2">
+                <p className="text-xs text-slate-400">{dailyTickets.source === 'clickdesk_verified_contributions' ? 'Listagem recuperada, com autoria comprovada por mensagem pública. Não modifica a produtividade oficial.' : 'Registros da captura anterior.'}</p>
                 {dailyTickets.tickets.map((ticket) => {
                   const time = new Intl.DateTimeFormat('pt-BR', {
                     hour: '2-digit',
@@ -4799,6 +4810,8 @@ function ChatModuleDashboard({
   const [chat2LiveAnalystKey, setChat2LiveAnalystKey] = useState('')
   const [chat2PeriodKey, setChat2PeriodKey] = useState('')
   const [chat2DailyDateFilter, setChat2DailyDateFilter] = useState('all')
+  const [chat2SelectedDayTickets, setChat2SelectedDayTickets] = useState<ClickDeskDailyTicketResponse | null>(null)
+  const [chat2SelectedDayTicketsLoading, setChat2SelectedDayTicketsLoading] = useState(false)
   const [clickDeskTestLoading, setClickDeskTestLoading] = useState(false)
   const [clickDeskTestResult, setClickDeskTestResult] = useState<ClickDeskTestResult | null>(null)
   const [clickDeskConversationLoading, setClickDeskConversationLoading] = useState(false)
@@ -7575,6 +7588,50 @@ function ChatModuleDashboard({
   const chat2SelectedVerifiedRatingsByDay = new Map(
     (chat2SelectedVerifiedAnalyst?.ratings_daily ?? []).map((day) => [day.date, day]),
   )
+  useEffect(() => {
+    const analystId = chat2SelectedVerifiedAnalyst?.analyst_id
+    if (
+      chatActiveTab !== 'prototype' ||
+      chat2DailyDateFilter === 'all' ||
+      !analystId ||
+      !chat2SelectedVerifiedDays.has(chat2DailyDateFilter)
+    ) {
+      setChat2SelectedDayTickets(null)
+      setChat2SelectedDayTicketsLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setChat2SelectedDayTickets(null)
+    setChat2SelectedDayTicketsLoading(true)
+
+    async function loadVerifiedDayEvidence() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) throw new Error('Faça login novamente para consultar os tickets.')
+        const params = new URLSearchParams({
+          date: chat2DailyDateFilter,
+          analyst_id: analystId!,
+        })
+        const response = await fetch(`/api/clickdesk/tickets?${params}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: 'no-store',
+        })
+        const result = (await response.json()) as ClickDeskDailyTicketResponse
+        if (!response.ok) throw new Error(result.erro ?? 'Falha ao consultar os tickets.')
+        if (!cancelled) setChat2SelectedDayTickets(result)
+      } catch (error) {
+        if (!cancelled) {
+          setChat2SelectedDayTickets({ erro: getErrorMessage(error) })
+        }
+      } finally {
+        if (!cancelled) setChat2SelectedDayTicketsLoading(false)
+      }
+    }
+
+    void loadVerifiedDayEvidence()
+    return () => { cancelled = true }
+  }, [chatActiveTab, chat2DailyDateFilter, chat2SelectedVerifiedAnalyst?.analyst_id])
   const chat2HistoryPoints = clickDeskAnalystHistory?.points ?? []
   const chat2DailyMap = new Map(
     (chat2SelectedPersistedAnalyst?.daily ?? []).map((item) => [item.date, item]),
@@ -9108,6 +9165,32 @@ function ChatModuleDashboard({
                           <div><p className="text-xs text-slate-400">CSAT da amostra recuperada</p><strong className="text-xl">{(() => { const value = chat2SelectedVerifiedRatingsByDay.get(chat2DailyDateFilter)?.csat; return value == null ? '—' : formatChatPercent(value) })()}</strong></div>
                         </div>
                         <p className="mt-2 text-xs text-slate-400">Sem avaliação não significa atendimento inválido; esta amostra não altera pódio nem metas.</p>
+                        <div className="mt-4 border-t border-cyan-300/15 pt-3">
+                          <p className="text-sm font-semibold text-slate-100">Tickets que comprovam essas contribuições</p>
+                          {chat2SelectedDayTicketsLoading ? (
+                            <p className="mt-2 text-xs text-slate-400">Consultando os registros identificados...</p>
+                          ) : chat2SelectedDayTickets?.erro ? (
+                            <p className="mt-2 text-xs text-amber-200">{chat2SelectedDayTickets.erro}</p>
+                          ) : chat2SelectedDayTickets?.source === 'clickdesk_verified_contributions' ? (
+                            <>
+                              <p className="mt-2 text-xs text-slate-400">
+                                {formatChatCount(chat2SelectedDayTickets.tickets?.length ?? 0)} ticket(s) com mensagem pública humana comprovada. Fonte complementar, sem alteração nos indicadores oficiais.
+                              </p>
+                              <div className="mt-3 grid max-h-72 gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
+                                {(chat2SelectedDayTickets.tickets ?? []).map((ticket) => (
+                                  <div key={ticket.ticket_id} className="rounded-lg border border-white/10 bg-slate-950/45 p-3 text-xs">
+                                    <strong className="text-slate-100">Ticket #{ticket.ticket_id}</strong>
+                                    <p className="mt-1 text-slate-400">{new Intl.DateTimeFormat('pt-BR',{hour:'2-digit',minute:'2-digit',timeZone:'America/Sao_Paulo'}).format(new Date(ticket.occurred_at))}</p>
+                                    <p className="mt-1 text-slate-400">{ticket.satisfaction_label === 'positive' ? 'Avaliação positiva' : ticket.satisfaction_label === 'negative' ? 'Avaliação negativa' : 'Sem avaliação atribuída'}</p>
+                                    {ticket.first_message_id && <p className="mt-1 text-slate-500">Mensagem pública: {ticket.first_message_id}</p>}
+                                  </div>
+                                ))}
+                              </div>
+                            </>
+                          ) : (
+                            <p className="mt-2 text-xs text-amber-200">A captura diária não pôde ser conciliada com o detalhamento. Não apresentar zero como atendimento comprovado.</p>
+                          )}
+                        </div>
                       </div>
                     ) : chat2SelectedDayMetric?.covered ? (
                       <div className="mt-4 border-t border-white/10 pt-4">
