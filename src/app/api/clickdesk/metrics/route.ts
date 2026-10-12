@@ -1,5 +1,7 @@
 import { ApiError, authorizeClickDeskSessionClient, handle, json } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
+import { summarizeOfficialResolutions, type OfficialResolutionRow } from '@/lib/clickdesk-official-resolutions'
+import { summarizeVerifiedContributions, type VerifiedContributionRow } from '@/lib/clickdesk-verified-productivity'
 
 export const runtime = 'nodejs'
 
@@ -143,6 +145,53 @@ async function loadRows(
   throw new ApiError(422, 'O volume de métricas excedeu o limite de consulta.')
 }
 
+async function loadOfficialResolutions(
+  admin: Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],
+  filters: ReturnType<typeof parseFilters>,
+): Promise<OfficialResolutionRow[]> {
+  const result: OfficialResolutionRow[] = []
+  for (let offset = 0; offset < 10000; offset += 500) {
+    let query = admin.from('clickdesk_chat_daily_resolutions')
+      .select('resolved_date,team_id,analyst_id,assignee_name,area,resolved_count,source,updated_at')
+      .gte('resolved_date',filters.start)
+      .lte('resolved_date',filters.end)
+      .eq('source','clickdesk_support_reports_agents')
+      .order('resolved_date',{ascending:true})
+      .range(offset,offset+499)
+    if (filters.analystId) query = query.eq('analyst_id',filters.analystId)
+    if (filters.teamId) query = query.eq('team_id',filters.teamId)
+    const {data,error} = await query
+    if (error) throw new ApiError(503,'Relatório oficial de resoluções ClickDesk indisponível.')
+    result.push(...((data ?? []) as OfficialResolutionRow[]))
+    if ((data ?? []).length < 500) return result
+  }
+  throw new ApiError(422,'O volume de resoluções excedeu o limite seguro de consulta.')
+}
+
+
+async function loadVerifiedContributions(
+  admin: Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],
+  filters: ReturnType<typeof parseFilters>,
+): Promise<VerifiedContributionRow[]> {
+  const collected:VerifiedContributionRow[]=[]
+  for(let offset=0;offset<10000;offset+=500){
+    let query=admin.from('clickdesk_chat_verified_contributions')
+      .select('ticket_id,analyst_id,team_id,analyst_name,occurred_date,verified_at,satisfaction_label')
+      .gte('occurred_date',filters.start).lte('occurred_date',filters.end)
+      .order('occurred_date',{ascending:true})
+      .order('ticket_id',{ascending:true})
+      .order('analyst_id',{ascending:true})
+      .range(offset,offset+499)
+    if(filters.analystId)query=query.eq('analyst_id',filters.analystId)
+    if(filters.teamId)query=query.eq('team_id',filters.teamId)
+    const {data,error}=await query
+    if(error)throw new ApiError(503,'Base de participações humanas verificadas indisponível.')
+    collected.push(...((data??[]) as VerifiedContributionRow[]))
+    if((data??[]).length<500)return collected
+  }
+  throw new ApiError(422,'Volume de participações verificadas excedeu o limite seguro.')
+}
+
 function aggregate(rows: DailyMetricRow[]): Aggregate {
   const totals = rows.reduce(
     (acc, row) => {
@@ -252,8 +301,26 @@ export async function GET(request: Request) {
           teamId: null,
         }
 
-    const rows = await loadRows(access.admin, filters)
     const admin = access.admin
+    const [rows, officialResolutionRows, verifiedRows] = await Promise.all([
+      loadRows(admin, filters),
+      loadOfficialResolutions(admin, filters),
+      loadVerifiedContributions(admin, filters),
+    ])
+    const officialResolutions = summarizeOfficialResolutions(officialResolutionRows, filters.today)
+    const verifiedProductivity = summarizeVerifiedContributions(verifiedRows, filters.today)
+    // The supplementary verified source may be partial until the staging queue drains.
+    // Queue status is not a substitute for proving coverage of other ClickDesk stages.
+    // Ticket IDs in the operations queue remain inaccessible to end users.
+    // A strictly aggregate-only, authenticated RPC reports the pending count.
+    const verifiedQueueResult = await admin.rpc('clickdesk_verified_capture_incomplete_count')
+    if (verifiedQueueResult.error || typeof verifiedQueueResult.data !== 'number') {
+      throw new ApiError(503,'Status da recuperação ClickDesk indisponível.')
+    }
+    const verifiedCoverageStatus =
+      verifiedQueueResult.data === 0 && verifiedRows.length > 0
+        ? 'queue_drained'
+        : 'partial_until_queue_finished'
 
     const latestSync = await admin
       .from('clickdesk_chat_sync_runs')
@@ -326,6 +393,10 @@ export async function GET(request: Request) {
 
     return json({
       source: 'clickdesk_persisted',
+      // Independent official human-agent resolution count. NEVER merged into
+      // attendance, evaluation %, CSAT, podium or historical ticket totals.
+      resolution_productivity: officialResolutions,
+      verified_productivity: { ...verifiedProductivity, coverage_status: verifiedCoverageStatus },
       period: {
         start: filters.start,
         end: filters.end,

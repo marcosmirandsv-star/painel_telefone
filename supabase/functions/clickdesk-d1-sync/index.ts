@@ -1,4 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { verifyHumanTicketCoverage } from './coverage.ts'
+import { clickdeskDiscoveryPath, extractClickdeskRows, ticketDiscoveryLastPage } from './discovery.ts'
+import { firstPublicReplyByAssignee } from './human-message.ts'
 
 const CLICKDESK_BASE_URL = 'https://api.desk.click.app/api/v1'
 const BUSINESS_TIME_ZONE = 'America/Sao_Paulo'
@@ -93,13 +96,7 @@ function primitiveString(value: unknown) {
 }
 
 function extractCollection(payload: unknown): unknown[] {
-  if (Array.isArray(payload)) return payload
-  if (!payload || typeof payload !== 'object') return []
-  const source = payload as Record<string, unknown>
-  for (const key of ['data', 'items', 'results', 'tickets', 'conversations', 'messages']) {
-    if (Array.isArray(source[key])) return source[key] as unknown[]
-  }
-  return []
+  return extractClickdeskRows(payload)
 }
 
 function findFirstByKeyPattern(value: unknown, pattern: RegExp, depth = 0): string | null {
@@ -212,31 +209,6 @@ function summarizePayload(payload: unknown): TicketRow[] {
     .filter((item): item is TicketRow => Boolean(item))
 }
 
-function readPaginationNumber(payload: unknown, wantedKey: string, depth = 0): number | null {
-  if (!payload || typeof payload !== 'object' || depth > 4) return null
-  if (Array.isArray(payload)) {
-    for (const item of payload) {
-      const found = readPaginationNumber(item, wantedKey, depth + 1)
-      if (found !== null) return found
-    }
-    return null
-  }
-
-  const source = payload as Record<string, unknown>
-  for (const [key, raw] of Object.entries(source)) {
-    if (key !== wantedKey) continue
-    if (typeof raw === 'number' && Number.isFinite(raw)) return raw
-    if (typeof raw === 'string' && /^\d+$/.test(raw)) return Number(raw)
-  }
-
-  for (const raw of Object.values(source)) {
-    if (!raw || typeof raw !== 'object') continue
-    const found = readPaginationNumber(raw, wantedKey, depth + 1)
-    if (found !== null) return found
-  }
-  return null
-}
-
 function businessDate(timestamp: string) {
   const date = new Date(timestamp)
   if (Number.isNaN(date.getTime())) return null
@@ -250,62 +222,6 @@ function businessDate(timestamp: string) {
   return values.year && values.month && values.day
     ? `${values.year}-${values.month}-${values.day}`
     : null
-}
-
-function readMessageTimestamp(source: Record<string, unknown>) {
-  for (const key of [
-    'created_at',
-    'createdAt',
-    'sent_at',
-    'sentAt',
-    'occurred_at',
-    'occurredAt',
-    'timestamp',
-    'date',
-    'updated_at',
-    'updatedAt',
-  ]) {
-    const value = primitiveString(source[key])
-    if (value && !Number.isNaN(Date.parse(value))) return value
-  }
-  return null
-}
-
-function containsAssigneeIdentity(value: unknown, assigneeKey: string, depth = 0): boolean {
-  if (!value || typeof value !== 'object' || depth > 5) return false
-  if (Array.isArray(value)) {
-    return value.some((item) => containsAssigneeIdentity(item, assigneeKey, depth + 1))
-  }
-  const source = value as Record<string, unknown>
-  for (const [key, raw] of Object.entries(source)) {
-    if (!/(author|sender|agent|attendant|assignee|responsible|user|owner|name)/i.test(key)) {
-      continue
-    }
-    const direct = primitiveString(raw)
-    if (direct && normalizeLabel(direct) === assigneeKey) return true
-    if (raw && typeof raw === 'object' && containsAssigneeIdentity(raw, assigneeKey, depth + 1)) {
-      return true
-    }
-  }
-  return false
-}
-
-function detectsHumanRole(value: unknown, depth = 0): boolean {
-  if (!value || typeof value !== 'object' || depth > 5) return false
-  if (Array.isArray(value)) return value.some((item) => detectsHumanRole(item, depth + 1))
-  const source = value as Record<string, unknown>
-  for (const [key, raw] of Object.entries(source)) {
-    if (!/(role|type|source|author|sender|actor)/i.test(key)) continue
-    const direct = primitiveString(raw)
-    if (direct) {
-      const normalized = normalizeLabel(direct)
-      if (/(^| )(human|agent|attendant|atendente|analista|support)( |$)/.test(normalized)) {
-        return true
-      }
-    }
-    if (raw && typeof raw === 'object' && detectsHumanRole(raw, depth + 1)) return true
-  }
-  return false
 }
 
 async function fetchClickDesk(path: string, apiKey: string, accountId: string) {
@@ -464,12 +380,15 @@ async function fetchRecentHumanPages(
   accountId: string,
   periodStart: string,
 ) {
+  // Tickets are discovered by their entire team-stage listing, not by the broken
+  // attendance=human list. Proven historical coverage still needs per-ticket
+  // message authorship and a bounded backfill; discovery alone is not productivity.
   const first = await fetchClickDesk(
-    '/tickets?inbox=conversations&attendance=human&page=1',
+    clickdeskDiscoveryPath(1),
     apiKey,
     accountId,
   )
-  const lastPage = Math.max(1, readPaginationNumber(first, 'last_page') ?? 1)
+  const lastPage = ticketDiscoveryLastPage(first)
   const pagesToScan = Math.min(lastPage, MAX_INTRADAY_HUMAN_PAGES)
 
   const payloads: unknown[] = [first]
@@ -481,7 +400,7 @@ async function fetchRecentHumanPages(
     const batch = await Promise.all(
       pages.map((page) =>
         fetchClickDesk(
-          `/tickets?inbox=conversations&attendance=human&page=${page}`,
+          clickdeskDiscoveryPath(page),
           apiKey,
           accountId,
         ),
@@ -546,65 +465,31 @@ async function resolveOperationalRows(
 ) {
   const result: OperationalRow[] = []
   let firstAssignee = 0
-  let firstHuman = 0
-  let fallback = 0
+  let skippedUnverified = 0
 
+  // Only actual, public, explicitly attributed human responses count.
+  // No private notes, role-only messages or fallback to ticket.updated_at.
   for (let index = 0; index < candidates.length; index += 8) {
     const batch = candidates.slice(index, index + 8)
     const resolved = await Promise.all(
       batch.map(async (row): Promise<OperationalRow | null> => {
-        let timestamp: string | null = null
-        let source = 'unknown'
-        try {
-          const payload = await fetchClickDesk(
-            `/tickets/${encodeURIComponent(row.id)}/messages`,
-            apiKey,
-            accountId,
-          )
-          const messages = extractCollection(payload)
-          const assigneeKey = normalizeLabel(row.assignee ?? '')
-          const assigneeTimes: string[] = []
-          const humanTimes: string[] = []
-
-          for (const message of messages) {
-            if (!message || typeof message !== 'object') continue
-            const msg = message as Record<string, unknown>
-            const time = readMessageTimestamp(msg)
-            if (!time) continue
-            if (assigneeKey && containsAssigneeIdentity(msg, assigneeKey)) assigneeTimes.push(time)
-            if (detectsHumanRole(msg)) humanTimes.push(time)
-          }
-
-          assigneeTimes.sort((a, b) => Date.parse(a) - Date.parse(b))
-          humanTimes.sort((a, b) => Date.parse(a) - Date.parse(b))
-
-          if (assigneeTimes[0]) {
-            timestamp = assigneeTimes[0]
-            source = 'first_assignee_message'
-            firstAssignee += 1
-          } else if (humanTimes[0]) {
-            timestamp = humanTimes[0]
-            source = 'first_human_role_message'
-            firstHuman += 1
-          }
-        } catch {
-          // fallback explícito abaixo
+        const payload = await fetchClickDesk(
+          `/tickets/${encodeURIComponent(row.id)}/messages`,
+          apiKey, accountId,
+        )
+        const messages = extractCollection(payload)
+        const reply = firstPublicReplyByAssignee(messages, row.assignee ?? '')
+        if (!reply) {
+          skippedUnverified += 1
+          return null
         }
-
-        if (!timestamp && row.updatedAt) {
-          timestamp = row.updatedAt
-          source = 'fallback_updated_at'
-          fallback += 1
-        }
-
-        if (!timestamp) return null
-        const occurredDate = businessDate(timestamp)
+        const occurredDate = businessDate(reply.timestamp)
         if (!occurredDate || occurredDate < start || occurredDate > end) return null
-
+        firstAssignee += 1
         return {
           ...row,
-          operationalTimestamp: timestamp,
-          operationalTimestampSource: source,
+          operationalTimestamp: reply.timestamp,
+          operationalTimestampSource: 'first_verified_public_assignee_message',
           occurredDate,
         }
       }),
@@ -615,11 +500,12 @@ async function resolveOperationalRows(
   return {
     rows: result,
     audit: {
-      rule: 'first_assignee_message -> first_human_role_message -> explicit_fallback',
+      rule: 'public_agent_author_exact_assignee; no updated_at or AI fallback',
       first_assignee_message: firstAssignee,
-      first_human_role_message: firstHuman,
-      fallback,
-      validated: fallback === 0,
+      first_human_role_message: 0,
+      fallback: 0,
+      skipped_unverified: skippedUnverified,
+      validated: true,
     },
   }
 }
@@ -743,12 +629,19 @@ Deno.serve(async (req: Request) => {
       ]),
     )
 
-    const targetCandidates = rows.filter(
-      (row) =>
-        Boolean(row.area && isTargetArea(row.area)) &&
-        Boolean(row.assignee?.trim()) &&
-        (!row.updatedAt || (businessDate(row.updatedAt) ?? today) >= start),
-    )
+    // Productivity follows registered human analysts and their public replies,
+    // NOT the incoming department, transfer route or bot handoff.
+    const targetCandidates = rows.filter((row) => {
+      const key = normalizeLabel(row.assignee ?? '')
+      const rosterMatches = analystCandidates.get(key) ?? []
+      const excludedApprentice = /^(ana julia|david)( |$)/.test(key)
+      const isManager = teams.some(team =>
+        team.manager_name && normalizeLabel(team.manager_name) === key)
+      return Boolean(key) && rosterMatches.length === 1 &&
+        rosterMatches[0].active !== false &&
+        !excludedApprentice && !isManager &&
+        (!row.updatedAt || (businessDate(row.updatedAt) ?? today) >= start)
+    })
 
     let operational: {
       rows: OperationalRow[]
@@ -795,6 +688,7 @@ Deno.serve(async (req: Request) => {
         const existing = existingByTicket.get(row.id)
         if (
           existing &&
+          existing.timestamp_source === 'first_verified_public_assignee_message' &&
           existing.occurred_date >= start &&
           existing.occurred_date <= end
         ) {
@@ -843,7 +737,7 @@ Deno.serve(async (req: Request) => {
     >()
     for (const row of targetRows) {
       const assigneeName = row.assignee?.trim() ?? ''
-      const areaName = row.area?.trim() ?? ''
+      const areaName = row.area?.trim() || 'Fila não identificada'
       const assigneeKey = normalizeLabel(assigneeName)
       const areaKey = normalizeLabel(areaName)
       identities.set(identityKey(assigneeKey, areaKey), {
@@ -893,7 +787,7 @@ Deno.serve(async (req: Request) => {
     const now = new Date().toISOString()
     const attendanceRows = targetRows.map((row) => {
       const assigneeName = row.assignee?.trim() ?? ''
-      const areaName = row.area?.trim() ?? ''
+      const areaName = row.area?.trim() || 'Fila não identificada'
       const assigneeKey = normalizeLabel(assigneeName)
       const areaKey = normalizeLabel(areaName)
       const linked = linkByKey.get(identityKey(assigneeKey, areaKey)) ?? null
@@ -929,6 +823,8 @@ Deno.serve(async (req: Request) => {
     }
 
     let reportSnapshots = 0
+    let agentReceivedInReports = 0
+    let dailyResolutionRows = 0
     let reportSnapshotError: string | null = null
     try {
       const reportRows = await collectReportSnapshotRows({
@@ -939,6 +835,7 @@ Deno.serve(async (req: Request) => {
         runId,
         areaLinkByKey,
       })
+      agentReceivedInReports = reportRows.reduce((sum, row) => sum + (numericValue(row.agent_received) ?? 0), 0)
       if (reportRows.length) {
         const reportResult = await admin
           .from('clickdesk_chat_report_snapshots')
@@ -946,9 +843,65 @@ Deno.serve(async (req: Request) => {
         if (reportResult.error) throw new Error(reportResult.error.message)
         reportSnapshots = reportRows.length
       }
+
+      const resolutionRows: Record<string, unknown>[] = []
+      for (const department of CLICKDESK_REPORT_DEPARTMENTS) {
+        const query = `from=${encodeURIComponent(start)}&to=${encodeURIComponent(start)}&department_id=${department.departmentId}`
+        const payload = reportObject(await fetchClickDesk(`/support/reports/agents?${query}`, apiKey, accountId))
+        const agents = Array.isArray(payload.agents) ? payload.agents : []
+        for (const rawAgent of agents) {
+          if (!rawAgent || typeof rawAgent !== 'object') continue
+          const agent = rawAgent as Record<string, unknown>
+          const name = primitiveString(agent.name)
+          const resolved = numericValue(agent.resolved)
+          if (!name || resolved === null || resolved <= 0) continue
+          const candidates = analystCandidates.get(normalizeLabel(name)) ?? []
+          if (candidates.length !== 1) continue
+          const analyst = candidates[0]
+          const areaLink = areaLinkByKey.get(normalizeLabel(department.departmentName)) ?? null
+          const teamId = analyst.team_id ?? areaLink?.team_id ?? null
+          if (!teamId) continue
+          resolutionRows.push({
+            resolved_date: start,
+            team_id: teamId,
+            analyst_id: analyst.id,
+            assignee_name: name,
+            area: department.departmentName,
+            resolved_count: resolved,
+            source: 'clickdesk_support_reports_agents',
+            source_department_id: department.departmentId,
+            source_period_start: start,
+            source_period_end: start,
+            evidence: {
+              agent_id: numericValue(agent.id),
+              conversations: numericValue(agent.conversations),
+              replies: numericValue(agent.replies),
+              resolved,
+            },
+            updated_at: new Date().toISOString(),
+          })
+        }
+      }
+      if (resolutionRows.length) {
+        const resolutionResult = await admin
+          .from('clickdesk_chat_daily_resolutions')
+          .upsert(resolutionRows, { onConflict: 'resolved_date,team_id,analyst_id,area' })
+        if (resolutionResult.error) throw new Error(resolutionResult.error.message)
+        dailyResolutionRows = resolutionRows.length
+      }
     } catch (error) {
       reportSnapshotError =
         error instanceof Error ? error.message.slice(0, 500) : 'Unexpected report snapshot error'
+    }
+
+    // Persist official report snapshots even when the ticket endpoint is empty.
+    // Then fail the attendance run, rather than falsely reporting success with 0 tickets.
+    const coverage = verifyHumanTicketCoverage({
+      ticketCollectionSize: rows.length,
+      reportAgentReceived: agentReceivedInReports,
+    })
+    if (!coverage.ok) {
+      throw new Error('ClickDesk attendance coverage failure: ticket collection empty while official agent reports show ' + agentReceivedInReports + ' received; no attendance data confirmed')
     }
 
     const analystRows = attendanceRows.filter((row) => row.identity_role === 'analyst').length
@@ -988,6 +941,7 @@ Deno.serve(async (req: Request) => {
           total_pages_available: totalPagesAvailable,
           pagination: paginationAudit,
           report_snapshots: reportSnapshots,
+          daily_resolution_rows: dailyResolutionRows,
           report_snapshot_error: reportSnapshotError,
         },
         finished_at: new Date().toISOString(),
@@ -1009,6 +963,7 @@ Deno.serve(async (req: Request) => {
       unmapped_rows: unmappedRows,
       timestamp_audit: operational.audit,
       report_snapshots: reportSnapshots,
+      daily_resolution_rows: dailyResolutionRows,
       report_snapshot_error: reportSnapshotError,
     })
   } catch (error) {
