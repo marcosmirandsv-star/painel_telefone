@@ -2,6 +2,7 @@ import { ApiError, authorizeClickDeskSessionClient, handle, json } from '@/lib/i
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 import { summarizeOfficialResolutions, type OfficialResolutionRow } from '@/lib/clickdesk-official-resolutions'
 import { summarizeVerifiedContributions, type VerifiedContributionRow } from '@/lib/clickdesk-verified-productivity'
+import { summarizeIdentifiedTickets } from '@/lib/clickdesk-identified-tickets'
 
 export const runtime = 'nodejs'
 
@@ -192,6 +193,25 @@ async function loadVerifiedContributions(
   throw new ApiError(422,'Volume de participações verificadas excedeu o limite seguro.')
 }
 
+async function loadIndividualTickets(
+ admin:Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],
+ filters:ReturnType<typeof parseFilters>,
+){
+ if(!filters.analystId)return []
+ const rows:Array<{ticket_id:string;occurred_date:string}>=[]
+ for(let offset=0;offset<10000;offset+=500){
+  const {data,error}=await admin.from('clickdesk_chat_attendances')
+   .select('clickdesk_ticket_id,occurred_date')
+   .eq('analyst_id',filters.analystId).eq('identity_role','analyst')
+   .gte('occurred_date',filters.start).lte('occurred_date',filters.end)
+   .order('occurred_date',{ascending:true}).order('clickdesk_ticket_id',{ascending:true})
+   .range(offset,offset+499)
+  if(error)throw new ApiError(503,'Falha ao conferir os atendimentos individuais.')
+  rows.push(...(data??[]).map(v=>({ticket_id:v.clickdesk_ticket_id,occurred_date:v.occurred_date})))
+  if((data??[]).length<500)return rows
+ }
+ throw new ApiError(422,'Consulta individual excedeu o limite seguro.')
+}
 function aggregate(rows: DailyMetricRow[]): Aggregate {
   const totals = rows.reduce(
     (acc, row) => {
@@ -309,6 +329,9 @@ export async function GET(request: Request) {
     ])
     const officialResolutions = summarizeOfficialResolutions(officialResolutionRows, filters.today)
     const verifiedProductivity = summarizeVerifiedContributions(verifiedRows, filters.today)
+    const identifiedAtt = !access.isManagement && filters.analystId
+      ? summarizeIdentifiedTickets(await loadIndividualTickets(admin,filters),verifiedRows.map(r=>({ticket_id:r.ticket_id,occurred_date:r.occurred_date})))
+      : null
     // The supplementary verified source may be partial until the staging queue drains.
     // Queue status is not a substitute for proving coverage of other ClickDesk stages.
     // Ticket IDs in the operations queue remain inaccessible to end users.
@@ -397,6 +420,7 @@ export async function GET(request: Request) {
       // attendance, evaluation %, CSAT, podium or historical ticket totals.
       resolution_productivity: officialResolutions,
       verified_productivity: { ...verifiedProductivity, coverage_status: verifiedCoverageStatus },
+      identified_attendances: identifiedAtt,
       period: {
         start: filters.start,
         end: filters.end,
