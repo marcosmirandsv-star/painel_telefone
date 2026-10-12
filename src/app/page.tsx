@@ -656,12 +656,13 @@ type ClickDeskTicketPreviewResponse = {
   transcript_status?: 'available' | 'unavailable'
   transcript_source?: 'messages' | 'transcript' | null
   diagnostic?: string
+  attempt_diagnostics?: string[]
   transcript?: string | null
   note?: string
   erro?: string
 }
 
-function ClickDeskTicketPreview({ ticketId, onClose }: { ticketId: string; onClose: () => void }) {
+function ClickDeskTicketPreview({ ticketId, analystId, onClose }: { ticketId: string; analystId: string; onClose: () => void }) {
   const [result, setResult] = useState<ClickDeskTicketPreviewResponse | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -673,7 +674,7 @@ function ClickDeskTicketPreview({ ticketId, onClose }: { ticketId: string; onClo
       try {
         const { data: { session } } = await supabase.auth.getSession()
         if (!session?.access_token) throw new Error('Sessão expirada. Entre novamente.')
-        const response = await fetch(`/api/clickdesk/ticket-preview?ticket_id=${encodeURIComponent(ticketId)}`, {
+        const response = await fetch(`/api/clickdesk/ticket-preview?ticket_id=${encodeURIComponent(ticketId)}&analyst_id=${encodeURIComponent(analystId)}`, {
           headers: { Authorization: `Bearer ${session.access_token}` },
           cache: 'no-store',
         })
@@ -688,7 +689,7 @@ function ClickDeskTicketPreview({ ticketId, onClose }: { ticketId: string; onClo
     }
     void fetchPreview()
     return () => { active = false }
-  }, [ticketId])
+  }, [ticketId, analystId])
 
   return (
     <div role="dialog" aria-modal="true" aria-label={`Ticket ${ticketId}`} className="fixed inset-0 z-[100] overflow-y-auto bg-slate-950/90 p-4 sm:p-8">
@@ -730,6 +731,11 @@ function ClickDeskTicketPreview({ ticketId, onClose }: { ticketId: string; onClo
                         : result.diagnostic === 'messages_empty'
                           ? 'API retornou lista vazia de mensagens.'
                           : 'A API não retornou texto legível ou a conexão falhou.'}
+                  </span>
+                )}
+                {result.attempt_diagnostics && result.attempt_diagnostics.length > 0 && (
+                  <span className="mt-2 block text-xs text-slate-400">
+                    Retorno técnico das consultas: {result.attempt_diagnostics.join(' · ')}
                   </span>
                 )}
               </p>
@@ -4123,7 +4129,7 @@ function ChatAnalystPortal({
 
   return (
     <div className="analyst-portal mt-6 space-y-5">
-      {openedTicketId && <ClickDeskTicketPreview ticketId={openedTicketId} onClose={() => setOpenedTicketId(null)} />}
+      {openedTicketId && <ClickDeskTicketPreview ticketId={openedTicketId} analystId={analyst.id} onClose={() => setOpenedTicketId(null)} />}
       <section className="panel analyst-portal-hero">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
@@ -9299,7 +9305,7 @@ function ChatModuleDashboard({
                                   </div>
                                 ))}
                               </div>
-                              {chat2OpenedTicketId && <ClickDeskTicketPreview ticketId={chat2OpenedTicketId} onClose={() => setChat2OpenedTicketId(null)} />}
+                              {chat2OpenedTicketId && <ClickDeskTicketPreview ticketId={chat2OpenedTicketId} analystId={chat2SelectedVerifiedAnalyst?.analyst_id ?? ''} onClose={() => setChat2OpenedTicketId(null)} />}
                             </>
                           ) : (
                             <p className="mt-2 text-xs text-amber-200">A captura diária não pôde ser conciliada com o detalhamento. Não apresentar zero como atendimento comprovado.</p>
