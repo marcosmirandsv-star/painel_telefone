@@ -4539,6 +4539,13 @@ function ChatAnalystPortal({
             ) : dailyTickets?.tickets?.length ? (
               <div className="mt-4 space-y-2">
                 <p className="text-xs text-slate-400">{dailyTickets.source === 'clickdesk_verified_contributions' ? 'Listagem recuperada, com autoria comprovada por mensagem pública. Não modifica a produtividade oficial.' : 'Registros da captura anterior.'}</p>
+                {dailyTickets.source === 'clickdesk_verified_contributions' &&
+                  ownVerifiedContribution?.daily.some((day) =>
+                    day.date === selectedRoutineDate && day.count !== dailyTickets.tickets?.length) && (
+                  <p className="rounded-lg border border-amber-300/25 bg-amber-300/10 p-2 text-xs text-amber-100">
+                    Divergência entre o total verificado e os tickets listados neste dia. Avise a gestão para conferir a base.
+                  </p>
+                )}
                 {dailyTickets.tickets.map((ticket) => {
                   const time = new Intl.DateTimeFormat('pt-BR', {
                     hour: '2-digit',
@@ -9176,6 +9183,11 @@ function ChatModuleDashboard({
                               <p className="mt-2 text-xs text-slate-400">
                                 {formatChatCount(chat2SelectedDayTickets.tickets?.length ?? 0)} ticket(s) com mensagem pública humana comprovada. Fonte complementar, sem alteração nos indicadores oficiais.
                               </p>
+                              {(chat2SelectedDayTickets.tickets?.length ?? 0) !== (chat2SelectedVerifiedDays.get(chat2DailyDateFilter) ?? 0) && (
+                                <p className="mt-2 rounded-lg border border-amber-300/25 bg-amber-300/10 p-2 text-xs text-amber-100">
+                                  Divergência de captura: a régua e a lista de tickets não coincidem. Não considerar este detalhamento validado.
+                                </p>
+                              )}
                               <div className="mt-3 grid max-h-72 gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
                                 {(chat2SelectedDayTickets.tickets ?? []).map((ticket) => (
                                   <div key={ticket.ticket_id} className="rounded-lg border border-white/10 bg-slate-950/45 p-3 text-xs">
