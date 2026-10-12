@@ -16,6 +16,7 @@ export type VerifiedContributionRow = {
   analyst_name: string
   occurred_date: string
   verified_at: string | null
+  rating_attribution?: string | null
   satisfaction_label?: 'positive' | 'negative' | null
 }
 

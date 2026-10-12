@@ -3,6 +3,7 @@ import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 import { summarizeOfficialResolutions, type OfficialResolutionRow } from '@/lib/clickdesk-official-resolutions'
 import { summarizeVerifiedContributions, type VerifiedContributionRow } from '@/lib/clickdesk-verified-productivity'
 import { summarizeIdentifiedTickets } from '@/lib/clickdesk-identified-tickets'
+import { reconcileLiveTeam, type HumanTicket } from '@/lib/clickdesk-live-reconciliation'
 
 export const runtime = 'nodejs'
 
@@ -177,7 +178,7 @@ async function loadVerifiedContributions(
   const collected:VerifiedContributionRow[]=[]
   for(let offset=0;offset<10000;offset+=500){
     let query=admin.from('clickdesk_chat_verified_contributions')
-      .select('ticket_id,analyst_id,team_id,analyst_name,occurred_date,verified_at,satisfaction_label')
+      .select('ticket_id,analyst_id,team_id,analyst_name,occurred_date,verified_at,satisfaction_label,rating_attribution')
       .gte('occurred_date',filters.start).lte('occurred_date',filters.end)
       .order('occurred_date',{ascending:true})
       .order('ticket_id',{ascending:true})
@@ -211,6 +212,23 @@ async function loadIndividualTickets(
   if((data??[]).length<500)return rows
  }
  throw new ApiError(422,'Consulta individual excedeu o limite seguro.')
+}
+async function loadTeamEvidence(admin:Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],filters:ReturnType<typeof parseFilters>,teamId:string):Promise<HumanTicket[]>{
+ const rows:HumanTicket[]=[]
+ for(let offset=0;offset<10000;offset+=500){
+  const {data,error}=await admin.from('clickdesk_chat_attendances')
+   .select('clickdesk_ticket_id,analyst_id,occurred_date,satisfaction_label')
+   .eq('team_id',teamId).eq('identity_role','analyst')
+   .gte('occurred_date',filters.start).lte('occurred_date',filters.end)
+   .order('occurred_date',{ascending:true}).order('clickdesk_ticket_id',{ascending:true})
+   .range(offset,offset+499)
+  if(error)throw new ApiError(503,'Base anterior indisponível para conciliação.')
+  rows.push(...(data??[]).filter(x=>x.analyst_id).map(x=>({ticket_id:x.clickdesk_ticket_id,analyst_id:x.analyst_id as string,occurred_date:x.occurred_date,satisfaction_label:x.satisfaction_label,source:'legacy' as const})))
+  if((data??[]).length<500)return [...rows,...(await loadVerifiedContributions(admin,{...filters,teamId,analystId:null})).map(x=>({
+   ticket_id:x.ticket_id,analyst_id:x.analyst_id,occurred_date:x.occurred_date,satisfaction_label:x.satisfaction_label??null,source:'verified' as const,rating_attribution:x.rating_attribution??null
+  }))]
+ }
+ throw new ApiError(422,'Conciliação excedeu o limite seguro.')
 }
 function aggregate(rows: DailyMetricRow[]): Aggregate {
   const totals = rows.reduce(
@@ -397,6 +415,17 @@ export async function GET(request: Request) {
           source === 'updated_at',
       )
 
+    let reconciledLive: ReturnType<typeof reconcileLiveTeam> = null
+    if (!access.isManagement && filters.analystId) {
+      const profile=await admin.from('chat_analysts').select('id,team_id,active').eq('id',filters.analystId).maybeSingle()
+      if(profile.error||!profile.data?.active||!profile.data.team_id)
+        throw new ApiError(503,'Equipe do analista indisponível para conciliação.')
+      const team=await admin.from('chat_analysts').select('id,name').eq('team_id',profile.data.team_id).eq('active',true)
+      if(team.error)throw new ApiError(503,'Cadastro da equipe indisponível para conciliação.')
+      reconciledLive=reconcileLiveTeam(team.data??[],await loadTeamEvidence(admin,filters,profile.data.team_id),filters.analystId)
+      if(!reconciledLive||reconciledLive.attendances!==identifiedAtt?.total)
+        throw new ApiError(503,'Volume e avaliação não coincidiram na conferência; cálculo não publicado.')
+    }
     let selfPodiumContext: Record<string, unknown> | null = null
     if (!access.isManagement) {
       const podiumResult = await admin.rpc('get_clickdesk_self_podium_context', {
@@ -421,6 +450,7 @@ export async function GET(request: Request) {
       resolution_productivity: officialResolutions,
       verified_productivity: { ...verifiedProductivity, coverage_status: verifiedCoverageStatus },
       identified_attendances: identifiedAtt,
+      reconciled_live: reconciledLive,
       period: {
         start: filters.start,
         end: filters.end,
