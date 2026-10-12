@@ -1,34 +1,52 @@
-# Roteiro de demonstração — Central de Performance (homologação)
-**Preparação para sexta-feira, 16 de outubro de 2026.**
-Público: gerência, coordenação e supervisão do Chat (Especializado/Notas e Outros/ERP).
-Ambiente: Preview isolado. Nunca apresentar como fechamento oficial concluído.
+# Demonstração da Central de Performance — sexta-feira, 16/10/2026
 
-## Mensagem central (1 minuto)
-"A Central de Performance reúne a operação, os indicadores individuais e os sinais para gestão. Nosso propósito é que gestor e analista enxerguem a mesma apuração, com critérios transparentes e rastreabilidade."
+**Público:** gerência, coordenação e Polyana Ventura. **Ambiente:** Preview de homologação, separado da produção.
+**Objetivo:** mostrar a visão Master e a experiência individual do analista, comprovando coerência entre ambas. Duração planejada: 15–18 minutos.
 
-## Sequência demonstrativa (12 a 15 minutos)
-1. **Visão da operação (3 min).** Alterar o filtro entre Todas as equipes, Chat Notas e Chat Outros. Mostrar atendimentos atribuídos, CSAT, avaliações e leitura rápida de atenção. Explicar que o filtro não modifica as regras de cálculo.
-2. **Equipe e produtividade (3 min).** Selecionar um analista do Especializado e outro de Outros. Destacar a tabela, o detalhamento individual, metas pessoais e o critério próprio do pódio.
-3. **Meu desempenho (3 min).** Entrar com acesso de analista autorizado. Comparar o mesmo período com a visão gerencial. Verificar contagem, CSAT, % avaliações, pódio e régua diária. Não afirmar equivalência até conferir os valores lado a lado.
-4. **Análise qualitativa (2 min).** Abrir ticket previamente validado e mostrar o que a IA observou de forma verificável. Não prometer leitura integral automática do mês: coaching mensal ainda é etapa futura.
-5. **Próximas validações (2 min).** Explicar que tickets com último atendente não comprovado ficam pendentes, que o desconto de inatividade ainda não foi incorporado e que homologação não alterou a produção.
+## Preparação obrigatória (antes da reunião)
 
-## Conferências obrigatórias antes da reunião
-- [ ] Login de gerente/coordenadora e acesso aos menus.
-- [ ] Login de analista do Especializado e analista de Outros.
-- [ ] Mesmo analista, competência e valores iguais no gestor e no individual.
-- [ ] Transferência: produtividade e avaliação atribuídas ao último humano comprovado, uma única vez.
-- [ ] Ticket sem avaliação não recebe nota negativa.
-- [ ] Filtro "Todas as equipes" não mistura analistas de equipes diferentes.
-- [ ] Escala/Telefone e fechamentos oficiais não foram modificados.
-- [ ] Ticket qualitativo escolhido abre sem erro.
-- [ ] Conferir conexão de rede e acesso ao Preview antes da apresentação.
+- Abrir o Preview em **dois perfis de navegador separados** (por exemplo, janela normal para Master e janela anônima para Analista) para que as sessões não se substituam.
+- Conferir previamente as credenciais e autorizações de cada perfil sem compartilhar senhas.
+- Deixar ambas as telas na **mesma competência (outubro de 2026)** e selecionar a **mesma pessoa** (sugestão: Vanessa Silva) para a comparação.
+- Verificar com antecedência se uma pessoa de **Chat Outros/Polyana** está presente na listagem gerencial. Não presumir que o login próprio de Polyana está autorizado: validar separadamente.
+- Confirmar que o Preview está READY e que tickets escolhidos para demonstração carregam.
+- Não declarar captura atualizada até o dia da reunião sem verificar cobertura de sincronização.
 
-## Como abordar métricas provisórias
-A captura de 01–02/10 usa registros anteriores e 03–10/10 contém participações verificadas; há lacunas de cobertura e transferências que exigem investigação de autoria final. Os indicadores do mês corrente são parciais. A porcentagem de avaliações ainda não desconta tickets de inatividade, pois não há classificação confiável. Jamais chamar uma amostra ou previsão de indicador fechado.
+## Parte 1 — Perfil Master (7 minutos)
 
-## Plano de contingência
-Se houver falha de login, lentidão ou dados ausentes, não criar valores de exemplo como se fossem reais. Apresentar o processo, explicar o limite de homologação e registrar a falha para correção. Não fazer ajustes em produção durante a reunião.
+1. **Visão da operação (3 min).** Apresentar rapidamente atendimentos atribuídos, CSAT, avaliações e pontos de atenção. Alternar filtros: Todas as equipes, Chat Notas e Chat Outros. Explicar que os filtros alteram a abrangência, não a regra.
+2. **Equipe e produtividade (3 min).** Localizar Vanessa Silva e uma pessoa da equipe da Polyana. Mostrar atendimentos, CSAT, % de avaliações e pendências do último atendente.
+3. **Gestão e ações (1 min).** Demonstrar os critérios do pódio e quais indicadores pedem acompanhamento. Explicar que **meta individual de CSAT (86% ou 90%)** e **critério do pódio (mínimo 90%)** são referências diferentes.
 
-## Pergunta de fechamento
-"Que decisões vocês querem conseguir tomar nesta tela em menos de 30 segundos?" 
+## Parte 2 — Perfil Analista (5 minutos)
+
+4. Na segunda sessão, entrar com acesso de uma pessoa previamente autorizada, como Vanessa.
+5. Abrir **Chat → Meu desempenho**. Mostrar o total atribuído, CSAT, percentual de avaliações, posição/critério do pódio e régua diária.
+6. Selecionar um ticket validado e mostrar a análise qualitativa da IA. Diferenciar análise do ticket de um futuro coaching do mês inteiro.
+
+## Parte 3 — Prova de coerência (3 minutos)
+
+Colocar Master e Analista lado a lado, mesmo mês e mesma pessoa. Comparar:
+- Atendimentos atribuídos;
+- Avaliações positivas e negativas, CSAT e percentual de avaliações;
+- Critérios cumpridos no pódio e média aplicável da equipe;
+- Pendências de autoria final de tickets transferidos.
+
+**Critério de aceite:** os números dos dois perfis devem coincidir na mesma competência. Se não coincidirem, interromper essa parte, registrar a diferença e não afirmar que a paridade foi validada.
+
+## Fechamento (2 minutos)
+
+Reforçar que a Central une consulta de desempenho, rastreabilidade, gestão e desenvolvimento. Convidar os participantes a comentar quais decisões deveriam ser possíveis em 30 segundos.
+
+### Limitações que precisam ser ditas claramente
+
+- Indicadores de outubro ainda são **parciais**, não fechamento oficial.
+- Tickets transferidos **sem último atendente comprovado ficam em conferência**; uma única pessoa recebe crédito por ticket quando comprovada.
+- **Avaliação vazia não é negativa.** O desconto de inatividade ainda depende da identificação específica desses tickets e **não está implantado**.
+- A cobertura da captura verificada consultada chega até 10/10 e sincronizações recentes concluíram com zero novos registros: isso não significa zero atendimentos; precisa de validação.
+- Não houve mudança em produção, critérios de meses fechados ou cálculos do módulo Telefone.
+- A IA analisa tickets existentes, mas **não** faz ainda acompanhamento automático integral de todos os tickets de um mês.
+
+### Plano de contingência
+
+Se login, ticket, API ou comparação falharem durante a demonstração, apresentar apenas funções verificadas, registrar a divergência e não inventar valores. Não alterar dados de produção nem permissões durante a reunião.
