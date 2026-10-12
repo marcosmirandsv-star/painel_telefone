@@ -5,6 +5,7 @@ on:
     branches:
       - fix/qualitative-verified-lookup-20261012
       - ui/chat-analyst-compact-20261012
+      - work/chat-live-reconciliation-20261012
   workflow_dispatch:
 
 permissions:
@@ -27,6 +28,8 @@ jobs:
           cache: npm
       - name: Install immutable dependencies
         run: npm ci
+      - name: Last human and provisional podium regression
+        run: node --experimental-transform-types --test tests/clickdesk-live-reconciliation.test.mts
       - name: Distinct attendance and chronological ruler
         run: node --experimental-transform-types --test tests/clickdesk-identified-tickets.test.mts
       - name: Verified ticket ownership and authorization

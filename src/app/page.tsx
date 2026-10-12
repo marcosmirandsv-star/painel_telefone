@@ -477,6 +477,12 @@ type ClickDeskPersistedMetrics = {
       daily: Array<ClickDeskPersistedAggregate & { date: string }>
     }
   >
+  reconciled_live?: ClickDeskPersistedAggregate & {
+    partial_capture: true
+    inactivity_not_identified: true
+    ambiguous_rated_tickets: number
+    podium: NonNullable<ClickDeskPersistedMetrics['self_podium_context']>
+  } | null
   identified_attendances?: {
    total:number
    legacy_count:number
@@ -4089,8 +4095,9 @@ function ChatAnalystPortal({
     .filter((day) => day.resolved > 0 &&
       !daily.some((record) => record.date === day.date && record.attendances > 0))
     .map((day) => day.date)
-  const csat = accumulated?.csat ?? null
-  const reviewPercentage = accumulated?.review_percentage ?? null
+  const reconciled = metrics?.reconciled_live ?? null
+  const csat = reconciled?.csat ?? null
+  const reviewPercentage = reconciled?.review_percentage ?? null
   const csatGoal = Number(analyst.csat_goal)
   const reviewGoal = 25
   const diagnostic = buildChatPerformanceDiagnostic({
@@ -4098,20 +4105,25 @@ function ChatAnalystPortal({
     csatGoal,
     reviewPercentage,
     reviewGoal,
-    positiveReviews: accumulated?.positive_reviews ?? 0,
-    negativeReviews: accumulated?.negative_reviews ?? 0,
-    attendances: accumulated?.attendances ?? 0,
+    positiveReviews: reconciled?.positive_reviews ?? 0,
+    negativeReviews: reconciled?.negative_reviews ?? 0,
+    attendances: reconciled?.attendances ?? 0,
   })
   const meetsCsat = diagnostic.csatMet === true
   const meetsReviews = diagnostic.reviewMet === true
   const status = diagnostic.statusLabel
-  const podiumContext = metrics?.self_podium_context ?? null
+  const podiumContext = reconciled?.podium ?? null
   const podiumCriteria = podiumContext?.criteria ?? null
   const isOnPodium =
     podiumContext?.eligible === true &&
     podiumContext.position !== null &&
     podiumContext.position <= 3
-  const historyPoints = history?.points ?? []
+  const historyPoints = (history?.points ?? []).map(point =>
+    point.source === 'live' && point.month === monthKey && reconciled
+      ? {...point,attendances:reconciled.attendances,positive_reviews:reconciled.positive_reviews,
+          negative_reviews:reconciled.negative_reviews,reviews:reconciled.reviews,csat:reconciled.csat,
+          review_percentage:reconciled.review_percentage} : point,
+  )
   const todayParts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit',
   }).formatToParts(now)
@@ -4172,7 +4184,7 @@ function ChatAnalystPortal({
                         podiumContext.eligible ? 'text-emerald-300' : 'text-amber-200'
                       }`}
                     >
-                      {isOnPodium ? 'Pódio do período' : 'Posição no ranking'}
+                      {'Posição provisória no ranking'}
                     </p>
                     <strong className="mt-2 block text-2xl text-slate-100">
                       {podiumContext.position
@@ -4184,10 +4196,10 @@ function ChatAnalystPortal({
                         podiumContext.eligible ? 'text-emerald-300' : 'text-amber-200'
                       }`}
                     >
-                      {podiumContext.eligible ? 'Elegível ao pódio' : 'Não elegível ao pódio'}
+                      {podiumContext.eligible ? 'Critérios provisórios cumpridos' : 'Critérios provisórios não cumpridos'}
                     </span>
                     <span className="mt-1 block text-xs text-slate-400">
-                      {podiumCriteria.completed} de 3 critérios cumpridos
+                      {podiumCriteria.completed} de 3 critérios · dados parciais
                     </span>
                   </div>
                   <div className="text-right">
@@ -4205,7 +4217,7 @@ function ChatAnalystPortal({
             <p className="text-slate-400">Situação atual</p>
             <strong className="mt-1 block text-cyan-100">{status}</strong>
             <span className="mt-1 block text-xs text-slate-400">
-              {Number(meetsCsat) + Number(meetsReviews)} de 2 metas atingidas
+              CSAT: {meetsCsat ? 'atingida' : 'abaixo'} · Avaliações: {meetsReviews ? 'atingida' : 'abaixo'} · parcial
             </span>
           </div>
         </div>
@@ -4228,26 +4240,27 @@ function ChatAnalystPortal({
               <div className="rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-4">
                 <p className="text-sm text-slate-300">Atendimentos identificados</p>
                 <strong className="mt-1 block text-4xl tabular-nums text-slate-100">
-                  {metrics?.identified_attendances ? formatChatCount(metrics.identified_attendances.total) : '—'}
+                  {reconciled ? formatChatCount(reconciled.attendances) : '—'}
                 </strong>
                 <p className="mt-2 text-xs text-amber-200">Parcial · não é fechamento oficial</p>
               </div>
               <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
                 <p className="text-sm text-slate-400">CSAT</p>
                 <strong className="mt-1 block text-3xl tabular-nums">{csat === null ? '—' : formatChatPercent(csat)}</strong>
-                <p className="mt-2 text-xs text-slate-400">Meta {formatChatPercent(csatGoal)} · base anterior</p>
+                <p className="mt-2 text-xs text-slate-400">Meta pessoal {formatChatPercent(csatGoal)} · somente notas avaliadas · parcial</p>
               </div>
               <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
                 <p className="text-sm text-slate-400">Avaliações</p>
                 <strong className="mt-1 block text-3xl tabular-nums">{reviewPercentage === null ? '—' : formatChatPercent(reviewPercentage)}</strong>
-                <p className="mt-2 text-xs text-slate-400">Meta {formatChatPercent(reviewGoal)} · base anterior</p>
+                <p className="mt-2 text-xs text-slate-400">Meta {formatChatPercent(reviewGoal)} · volume bruto, sem desconto de inatividade</p>
               </div>
             </div>
             <details className="mt-3 rounded-lg border border-white/10 bg-slate-950/30 px-4 py-3">
               <summary className="cursor-pointer text-sm text-slate-200">Entenda os números, metas e pódio</summary>
               <p className="mt-3 text-xs leading-5 text-slate-400">
-                O total reúne tickets distintos identificados nas duas capturas; repetições são desconsideradas.
-                Não altera o CSAT, as avaliações ou o pódio, que seguem suas regras atuais.
+                O volume considera um atendimento por ticket e analista humano verificado. A avaliação pertence
+                ao último atendente humano; ticket sem nota não conta como avaliação ruim.
+                Índices parciais da competência, sem classificação de inatividade. Fechamentos oficiais preservados.
               </p>
               <p className="mt-2 text-xs text-slate-400">
                 Registros anteriores: {metrics?.identified_attendances?.legacy_count ?? '—'} ·
@@ -4255,13 +4268,19 @@ function ChatAnalystPortal({
                 Duplicidades: {metrics?.identified_attendances?.overlap_count ?? '—'}.
                 Resolvidos (indicador independente): {ownOfficialResolution?.total ?? '—'}.
               </p>
+              <p className="mt-3 text-xs text-slate-400">
+                Avaliações: {reconciled?.positive_reviews ?? '—'} boas e {reconciled?.negative_reviews ?? '—'} ruins.
+                Tickets sem nota: {reconciled ? reconciled.attendances - reconciled.reviews : '—'}.
+                {reconciled?.ambiguous_rated_tickets ? ' Avaliações com autoria ambígua não foram somadas.' : ''}
+              </p>
               <div className="mt-3"><ChatPerformanceDiagnosticPanel diagnostic={diagnostic} /></div>
               {podiumCriteria && podiumContext && (
                 <p className="mt-3 text-sm text-slate-300">
-                  Pódio: {podiumCriteria.completed} de 3 critérios cumpridos ·
-                  CSAT mínimo {formatChatPercent(podiumCriteria.csat_min)} ·
-                  avaliações mínimas {formatChatPercent(podiumCriteria.review_min)} ·
-                  média de atendimentos {formatChatCount(podiumCriteria.volume_min)}.
+                  Pódio provisório: {podiumCriteria.completed} de 3 critérios · dados parciais ·
+                  CSAT ({formatChatPercent(podiumCriteria.csat_min)}): {podiumCriteria.csat_met ? 'atingido' : 'não atingido'} ·
+                  avaliações ({formatChatPercent(podiumCriteria.review_min)}): {podiumCriteria.review_met ? 'atingido' : 'não atingido'} ·
+                  volume ({formatChatCount(podiumCriteria.volume_min)}): {podiumCriteria.volume_met ? 'atingido' : 'não atingido'}.
+                  A participação ainda não desconta inatividades.
                 </p>
               )}
             </details>
@@ -4534,7 +4553,7 @@ function ChatAnalystPortal({
                       <p className="mt-1 text-xs text-slate-500">
                         {item.source === 'official'
                           ? 'Resultado mensal preservado'
-                          : 'Base viva persistida do ClickDesk'}
+                          : 'Dados parciais do mês · sem desconto de inatividade'}
                       </p>
                     </div>
                     <div className="grid grid-cols-3 gap-4 text-right">
