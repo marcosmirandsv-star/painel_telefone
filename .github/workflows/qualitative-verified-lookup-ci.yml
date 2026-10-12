@@ -7,6 +7,7 @@ on:
       - ui/chat-analyst-compact-20261012
       - work/chat-live-reconciliation-20261012
       - fix/chat-unified-parity-20261012
+      - ui/demo-gestao-20261012
   workflow_dispatch:
 
 permissions:
@@ -29,6 +30,8 @@ jobs:
           cache: npm
       - name: Install immutable dependencies
         run: npm ci
+      - name: Cross-team responsibility and manager parity regression
+        run: node --experimental-transform-types --test tests/chat-demo-parity.test.mts
       - name: Last human and provisional podium regression
         run: node --experimental-transform-types --test tests/clickdesk-live-reconciliation.test.mts
       - name: Distinct attendance and chronological ruler

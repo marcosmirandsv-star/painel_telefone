@@ -8106,6 +8106,19 @@ function ChatModuleDashboard({
   const unifiedCsat = unifiedReviews ? round(unifiedPositive/unifiedReviews*100) : null
   const unifiedReviewShare = unifiedAttended ? round(unifiedReviews/unifiedAttended*100) : null
   const unifiedPending = unifiedRoster.reduce((sum,row)=>sum+row.pending_owner_tickets,0)
+  const unifiedCsatAttention = unifiedRoster.filter(row =>
+    row.csat !== null &&
+    row.csat < Number(analysts.find(a=>a.id===row.analyst_id)?.csat_goal ?? 90)
+  )
+  const unifiedReviewAttention = unifiedRoster.filter(row =>
+    row.attendances>0 && row.review_percentage !== null && row.review_percentage<25
+  )
+  const unifiedWithoutRating = unifiedRoster.filter(row => row.attendances>0 && row.csat===null)
+  const unifiedPodiumReady = unifiedRoster.filter(row=>row.podium.eligible)
+  const unifiedPodiumAttention = unifiedRoster.filter(row=>
+    row.attendances>0 && !row.podium.eligible
+  ).sort((a,b)=>b.podium.criteria.completed-a.podium.criteria.completed ||
+    a.analyst_name.localeCompare(b.analyst_name,'pt-BR'))
   const unifiedTeamName = (id:string)=>teams.find(x=>x.id===id)?.name ?? 'Equipe do Chat'
   const unifiedCsatGoal = unifiedSelected
     ? Number(analysts.find(x=>x.id===unifiedSelected.analyst_id)?.csat_goal ?? 90)
@@ -8257,6 +8270,74 @@ function ChatModuleDashboard({
                 {formatChatCount(unifiedPending)} participação(ões) vinculadas a tickets cujo último
                 atendente ainda precisa de comprovação; esses tickets não foram distribuídos por suposição.
               </p>
+              {chatActiveTab==='overview' && (
+                <div className="mt-5 rounded-xl border border-white/10 bg-slate-950/25 p-4">
+                  <h3 className="font-semibold text-slate-100">O que merece atenção?</h3>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-lg border border-white/10 p-3">
+                      <p className="text-xs text-slate-400">CSAT abaixo da meta individual</p>
+                      <strong className="mt-1 block text-2xl tabular-nums">{unifiedCsatAttention.length}</strong>
+                    </div>
+                    <div className="rounded-lg border border-white/10 p-3">
+                      <p className="text-xs text-slate-400">Avaliações abaixo de 25%</p>
+                      <strong className="mt-1 block text-2xl tabular-nums">{unifiedReviewAttention.length}</strong>
+                    </div>
+                    <div className="rounded-lg border border-white/10 p-3">
+                      <p className="text-xs text-slate-400">Pessoas sem avaliações</p>
+                      <strong className="mt-1 block text-2xl tabular-nums">{unifiedWithoutRating.length}</strong>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-slate-300">
+                    {unifiedCsatAttention.length>0 || unifiedReviewAttention.length>0
+                      ? 'Há indicadores individuais que merecem acompanhamento. Consulte Equipe e produtividade para identificar as pessoas e examinar os tickets.'
+                      : 'Nenhum indicador mensurável está abaixo dessas referências nesta captura. Confirme a cobertura antes de concluir o período.'}
+                  </p>
+                  <p className="mt-2 text-xs text-slate-500">
+                    Diagnóstico parcial, sem classificação de inatividade nem atribuição presumida de transferências.
+                    {unifiedPodiumReady.length>0
+                      ? ` ${unifiedPodiumReady.length} analista(s) cumprem provisoriamente os três critérios do pódio.`
+                      : ''}
+                  </p>
+                </div>
+              )}
+              {chatActiveTab==='podium' && (
+                <div className="mt-5 rounded-xl border border-white/10 bg-slate-950/25 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="font-semibold text-slate-100">Prioridades de acompanhamento</h3>
+                    <span className="text-sm text-slate-400">
+                      {unifiedPodiumReady.length} de {unifiedRoster.filter(x=>x.attendances>0).length} com os três critérios
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">
+                    CSAT mínimo de 90% para o pódio, avaliações de 25% e volume igual ou superior à média da equipe.
+                    A meta individual de CSAT pode ser 86% ou 90%, conforme o cadastro.
+                  </p>
+                  <div className="mt-3 divide-y divide-white/10">
+                    {unifiedPodiumAttention.slice(0,10).map(row=>(
+                      <div key={row.analyst_id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                        <div>
+                          <strong className="text-sm text-slate-100">{row.analyst_name}</strong>
+                          <p className="mt-1 text-xs text-slate-400">
+                            {row.podium.criteria.completed} de 3 critérios ·
+                            {' '}{!row.podium.criteria.csat_met?'CSAT ':''}
+                            {!row.podium.criteria.review_met?'avaliações ':''}
+                            {!row.podium.criteria.volume_met?'volume ':''}
+                          </p>
+                        </div>
+                        <span className="text-xs text-amber-200">
+                          {row.pending_owner_tickets ? `${row.pending_owner_tickets} participação(ões) em conferência` : 'Parcial'}
+                        </span>
+                      </div>
+                    ))}
+                    {unifiedPodiumAttention.length===0 && (
+                      <p className="py-3 text-sm text-slate-400">
+                        Nenhum analista com atividade mensurada fora dos três critérios nesta captura.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+              {chatActiveTab==='prototype' && (
               <div className="mt-5 overflow-x-auto rounded-xl border border-white/10">
                 <table className="w-full min-w-[750px] text-sm">
                   <thead className="bg-slate-950/40 text-left text-xs text-slate-400">
@@ -8287,7 +8368,8 @@ function ChatModuleDashboard({
                   </tbody>
                 </table>
               </div>
-              {unifiedSelected && (
+              )}
+              {chatActiveTab==='prototype' && unifiedSelected && (
                 <div className="mt-4 rounded-xl border border-cyan-400/20 bg-slate-950/30 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <strong className="text-slate-100">{unifiedSelected.analyst_name} · leitura individual</strong>
