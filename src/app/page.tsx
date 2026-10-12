@@ -654,6 +654,8 @@ type ClickDeskTicketPreviewResponse = {
   first_message_id?: string
   satisfaction_label?: string | null
   transcript_status?: 'available' | 'unavailable'
+  transcript_source?: 'messages' | 'transcript' | null
+  diagnostic?: string
   transcript?: string | null
   note?: string
   erro?: string
@@ -713,12 +715,23 @@ function ClickDeskTicketPreview({ ticketId, onClose }: { ticketId: string; onClo
             <p className="mt-4 text-xs text-slate-400">{result.note}</p>
             {result.transcript_status === 'available' && result.transcript ? (
               <div className="mt-4">
-                <h4 className="text-sm font-semibold text-slate-100">Conversa recuperada do ClickDesk</h4>
+                <h4 className="text-sm font-semibold text-slate-100">Mensagens recuperadas do ClickDesk</h4>
                 <pre className="mt-2 max-h-[55vh] overflow-auto whitespace-pre-wrap break-words rounded-xl border border-white/10 bg-slate-950/60 p-4 font-sans text-sm leading-6 text-slate-200">{result.transcript}</pre>
               </div>
             ) : (
               <p className="mt-4 rounded-lg border border-amber-300/15 bg-amber-300/5 p-3 text-sm text-amber-100">
-                Conteúdo integral da conversa indisponível nesta consulta. Os identificadores acima continuam auditáveis; nenhuma mensagem foi inventada.
+                Não foi possível carregar as mensagens nesta consulta. A autoria permanece comprovada, mas a conversa ainda não está validada.
+                {result.diagnostic && (
+                  <span className="mt-2 block text-xs text-amber-200">
+                    Diagnóstico: {result.diagnostic === 'missing_server_credentials'
+                      ? 'Credenciais de leitura do ClickDesk ausentes na homologação.'
+                      : result.diagnostic.startsWith('messages_http_') || result.diagnostic.startsWith('transcript_http_')
+                        ? `API ClickDesk indisponível ou recusou a rota (${result.diagnostic}).`
+                        : result.diagnostic === 'messages_empty'
+                          ? 'API retornou lista vazia de mensagens.'
+                          : 'A API não retornou texto legível ou a conexão falhou.'}
+                  </span>
+                )}
               </p>
             )}
           </>
