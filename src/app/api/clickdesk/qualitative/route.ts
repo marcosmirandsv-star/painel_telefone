@@ -717,6 +717,19 @@ export async function POST(request: Request) {
           .select('ticket_id,analyst_id,occurred_date,satisfaction_label')
           .eq('ticket_id', ticketId)
 
+        if (!sessionAccess.isManagement && !sessionAccess.chatAnalystId) {
+          throw new ApiError(403, 'Acesso individual sem analista vinculado.')
+        }
+        const verified = await (
+          sessionAccess.isManagement
+            ? verifiedQuery
+            : verifiedQuery.eq('analyst_id', sessionAccess.chatAnalystId!)
+        ).limit(2)
+
+        if (verified.error) {
+          throw new ApiError(503, 'Não foi possível validar a captura humana verificada.')
+        }
+
         const selection = selectVerifiedQualitativeTicket(
           ticketId,
           verified.data ?? [],
