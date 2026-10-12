@@ -12,7 +12,7 @@ export async function GET(request: Request) {
       throw new ApiError(404, 'Consulta disponível somente na homologação.')
     }
     const params = new URL(request.url).searchParams
-    if ([...params.keys()].some((key) => key !== 'ticket_id') || params.getAll('ticket_id').length !== 1) {
+    if ([...params.keys()].some((key) => !['ticket_id','analyst_id'].includes(key)) || params.getAll('ticket_id').length !== 1 || params.getAll('analyst_id').length !== 1) {
       throw new ApiError(400, 'Informe apenas ticket_id.')
     }
     const ticketId = params.get('ticket_id') ?? ''
@@ -20,15 +20,19 @@ export async function GET(request: Request) {
       throw new ApiError(400, 'ID de ticket inválido.')
     }
 
+    const requestedAnalystId = params.get('analyst_id') ?? ''
+    if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(requestedAnalystId)) {
+      throw new ApiError(400, 'Analista inválido.')
+    }
     const access = await authorizeClickDeskSessionClient(request)
+    if (!access.isManagement && requestedAnalystId !== access.chatAnalystId) {
+      throw new ApiError(403, 'O acesso individual só permite consultar a própria autoria.')
+    }
     let ownership = access.admin
       .from('clickdesk_chat_verified_contributions')
       .select('ticket_id,analyst_id,analyst_name,first_answered_at,first_message_id,satisfaction_label')
       .eq('ticket_id', ticketId)
-    if (!access.isManagement) {
-      if (!access.chatAnalystId) throw new ApiError(403, 'Acesso individual não vinculado.')
-      ownership = ownership.eq('analyst_id', access.chatAnalystId)
-    }
+      .eq('analyst_id', requestedAnalystId)
     const evidence = await ownership.limit(1).maybeSingle()
     if (evidence.error) throw new ApiError(503, 'Não foi possível confirmar a autoria.')
     if (!evidence.data) throw new ApiError(404, 'Ticket não encontrado na captura verificada ou fora do seu acesso.')
@@ -38,6 +42,7 @@ export async function GET(request: Request) {
     let transcript: string | null = null
     let transcriptStatus: 'available' | 'unavailable' = 'unavailable'
     let transcriptSource: 'messages' | 'transcript' | null = null
+    const attemptDiagnostics: string[] = []
     let diagnostic: string = !apiKey || !accountId
       ? 'missing_server_credentials'
       : 'not_loaded'
@@ -62,6 +67,7 @@ export async function GET(request: Request) {
           )
           if (!response.ok) {
             diagnostic = `${source}_http_${response.status}`
+            attemptDiagnostics.push(diagnostic)
             continue
           }
           const payload: unknown = await response.json()
@@ -69,9 +75,11 @@ export async function GET(request: Request) {
             const records = extractRestRecords(payload)
             transcript = extractTranscriptText(records).slice(0, 20000) || null
             diagnostic = records.length > 0 ? 'messages_no_readable_text' : 'messages_empty'
+            if (!transcript) attemptDiagnostics.push(diagnostic)
           } else {
             transcript = extractTranscriptText(payload).slice(0, 20000) || null
             diagnostic = 'transcript_no_readable_text'
+            if (!transcript) attemptDiagnostics.push(diagnostic)
           }
           if (transcript) {
             transcriptSource = source
@@ -82,6 +90,7 @@ export async function GET(request: Request) {
           diagnostic = error instanceof Error && error.name === 'AbortError'
             ? `${source}_timeout`
             : `${source}_unavailable`
+          attemptDiagnostics.push(diagnostic)
         } finally {
           clearTimeout(timeout)
         }
@@ -93,12 +102,14 @@ export async function GET(request: Request) {
       readonly: true,
       ticket_id: ticketId,
       analyst_name: evidence.data.analyst_name,
+      analyst_id: requestedAnalystId,
       first_answered_at: evidence.data.first_answered_at,
       first_message_id: evidence.data.first_message_id,
       satisfaction_label: evidence.data.satisfaction_label,
       transcript_status: transcriptStatus,
       transcript_source: transcriptSource,
       diagnostic,
+      attempt_diagnostics: attemptDiagnostics,
       transcript,
       note: transcriptStatus === 'unavailable'
         ? diagnostic === 'missing_server_credentials'
