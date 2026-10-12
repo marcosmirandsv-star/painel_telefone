@@ -477,6 +477,14 @@ type ClickDeskPersistedMetrics = {
       daily: Array<ClickDeskPersistedAggregate & { date: string }>
     }
   >
+  identified_attendances?: {
+   total:number
+   legacy_count:number
+   verified_count:number
+   overlap_count:number
+   official:false
+   daily:Array<{date:string;count:number;source:'legacy'|'verified'|'mixed'}>
+  } | null
   verified_productivity?: {
     source: 'clickdesk_public_agent_message'
     evaluation_source: 'clickdesk_ticket_rating_last_public_human'
@@ -4110,31 +4118,8 @@ function ChatAnalystPortal({
   const todayKey = ['year','month','day']
     .map((key) => todayParts.find((part) => part.type===key)?.value ?? '')
     .join('-')
-  // One navigable list for both sources. Prefer verified evidence on an
-  // overlapping date; never add verified contributions to legacy attendance.
-  // This is presentation only: official CSAT, participation and podium are unchanged.
-  const verifiedRoutineDays = new Map(
-    (ownVerifiedContribution?.daily ?? [])
-      .filter((item) => item.date.startsWith(monthKey) && item.count > 0)
-      .map((item) => [item.date, item]),
-  )
-  const legacyRoutineDays = new Map(
-    daily.filter((item) => item.date.startsWith(monthKey) && item.attendances > 0)
-      .map((item) => [item.date, item]),
-  )
-  const routineDates = [...new Set([...legacyRoutineDays.keys(), ...verifiedRoutineDays.keys()])]
-    .sort((a, b) => a.localeCompare(b))
-  const activeRoutineDays = routineDates.map((date) => {
-    const verified = verifiedRoutineDays.get(date)
-    const legacy = legacyRoutineDays.get(date)
-    const rating = ownVerifiedContribution?.ratings_daily.find((item) => item.date === date)
-    return {
-      date,
-      source: verified ? 'verified' as const : 'legacy' as const,
-      count: verified?.count ?? legacy?.attendances ?? 0,
-      reviews: verified ? (rating?.reviews ?? 0) : (legacy?.reviews ?? 0),
-    }
-  })
+  // Deduplicated individual consultation only; official CSAT and podium remain separate.
+  const activeRoutineDays = metrics?.identified_attendances?.daily ?? []
 
   return (
     <div className="analyst-portal mt-6 space-y-5">
@@ -4236,262 +4221,50 @@ function ChatAnalystPortal({
           </p>
         )}
 
-        {!loading && !metrics?.erro && ownResolutionDaysMissingAttendance.length > 0 && (
-          <div className="mt-5 rounded-lg border border-amber-300/25 bg-amber-300/5 px-4 py-3 text-sm leading-6 text-amber-100" role="status">
-            <strong>Atendimentos em conferência.</strong>{' '}
-            O relatório oficial do ClickDesk registra tickets resolvidos em{' '}
-            {ownResolutionDaysMissingAttendance.map((day) => formatDate(day)).join(', ')},
-            mas a base anterior não possui atendimentos registrados nesses dias.
-            Consulte os atendimentos humanos da captura verificada, apresentados
-            separadamente. Resoluções, atendimentos e avaliações não foram somados
-            nem estimados.
-          </div>
-        )}
-
-        {!loading && !metrics?.erro && ownVerifiedContribution?.daily.some(
-          (item) => !daily.some((legacy) => legacy.date === item.date),
-        ) && (
-          <div className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-xs leading-5 text-amber-100">
-            Os atendimentos e avaliações identificados na nova captura estão
-            apresentados separadamente, como amostra por ticket e analista. O CSAT
-            e o pódio da base anterior mantêm seus cálculos originais. Um atendimento
-            sem avaliação é válido; não indica falta de solicitação nem reduz o CSAT.
-            Os índices da amostra não substituem o fechamento oficial.
-          </div>
-        )}
-
         {!loading && !metrics?.erro && (
           <>
-            <div className="mt-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                Resumo da competência
-              </p>
-              <div className="mt-3 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-                <div className="rounded-xl border border-white/10 bg-slate-950/40 p-5">
-                  <p className="text-sm text-slate-400">Atendimentos (base anterior)</p>
-                  <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
-                    {formatChatCount(accumulated?.attendances ?? 0)}
-                  </strong>
-                  {ownResolutionDaysMissingAttendance.length > 0 && (
-                    <p className="mt-2 text-xs text-amber-200">Volume parcial — faltam dias de captura detalhada.</p>
-                  )}
-                  <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-3 text-sm">
-                    <span className="text-slate-500">Atendimentos hoje</span>
-                    <strong className="tabular-nums text-slate-200">
-                      {ownResolutionDaysMissingAttendance.includes(todayKey)
-                        ? '—'
-                        : formatChatCount(today?.attendances ?? 0)}
-                    </strong>
-                  </div>
-                </div>
 
-                <div className="rounded-xl border border-cyan-300/20 bg-slate-950/40 p-5">
-                  <p className="text-sm text-slate-400">Atendimentos humanos verificados</p>
-                  <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
-                    {ownVerifiedContribution ? formatChatCount(ownVerifiedContribution.total) : '—'}
-                  </strong>
-                  <p className="mt-2 text-xs text-slate-400">
-                    Ticket + analista · nova captura · {metrics?.verified_productivity?.coverage_status === 'queue_drained'
-                      ? 'fila de captura conferida'
-                      : 'histórico em recuperação'}.
-                  </p>
-                  <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-3 text-sm">
-                    <span className="text-slate-500">Verificados hoje</span>
-                    <strong className="tabular-nums text-slate-200">
-                      {ownVerifiedContribution?.daily.some((day) => day.date === todayKey)
-                        ? formatChatCount(ownVerifiedContribution.today)
-                        : '—'}
-                    </strong>
-                  </div>
-                  <div className="mt-3 border-t border-white/10 pt-3 text-xs text-slate-400">
-                    <span>Avaliações atribuídas ao último atendente: </span>
-                    <strong className="text-slate-200">
-                      {ownVerifiedContribution?.evaluations.reviews ?? 0}
-                    </strong>
-                    <span className="ml-2 text-emerald-300">
-                      +{ownVerifiedContribution?.evaluations.positive_reviews ?? 0}
-                    </span>
-                    <span className="ml-2 text-rose-300">
-                      -{ownVerifiedContribution?.evaluations.negative_reviews ?? 0}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs text-slate-400">
-                    CSAT da captura (amostra, não oficial):{' '}
-                    <strong className="text-slate-100">
-                      {ownVerifiedContribution?.evaluations.csat == null
-                        ? '—'
-                        : `${ownVerifiedContribution.evaluations.csat.toFixed(2)}%`}
-                    </strong>
-                    {' '}· Taxa de avaliação:{' '}
-                    <strong className="text-slate-100">
-                      {ownVerifiedContribution?.evaluations.review_percentage == null
-                        ? '—'
-                        : `${ownVerifiedContribution.evaluations.review_percentage.toFixed(2)}%`}
-                    </strong>
-                  </p>
-                </div>
-
-                <div className="rounded-xl border border-cyan-300/15 bg-slate-950/40 p-5">
-                  <p className="text-sm text-slate-400">Tickets resolvidos</p>
-                  <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
-                    {ownOfficialResolution ? formatChatCount(ownOfficialResolution.total) : '—'}
-                  </strong>
-                  <p className="mt-2 text-xs text-slate-500">Relatório oficial ClickDesk · origem do ticket irrelevante</p>
-                  <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-3 text-sm">
-                    <span className="text-slate-500">Resolvidos hoje</span>
-                    <strong className="tabular-nums text-slate-200">
-                      {ownOfficialResolution?.daily.some((day) => day.date === todayKey)
-                        ? formatChatCount(ownOfficialResolution.today)
-                        : '—'}
-                    </strong>
-                  </div>
-                </div>
-
-                <div className={`rounded-xl border p-5 ${
-                  csat === null
-                    ? 'border-white/10 bg-slate-950/40'
-                    : meetsCsat
-                      ? 'border-emerald-400/20 bg-emerald-400/5'
-                      : 'border-amber-300/20 bg-amber-300/5'
-                }`}>
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm text-slate-400">CSAT (base anterior)</p>
-                      <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
-                        {csat === null ? '—' : formatChatPercent(csat)}
-                      </strong>
-                    </div>
-                    <span className="rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300">
-                      Meta {formatChatPercent(csatGoal)}
-                    </span>
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-slate-400">
-                    {csat === null
-                      ? 'Ainda sem avaliações suficientes para calcular o indicador.'
-                      : diagnostic.csatDelta !== null && diagnostic.csatDelta >= 0
-                        ? `${formatDelta(diagnostic.csatDelta, ' p.p.')} acima da meta.`
-                        : `${formatDelta(Math.abs(diagnostic.csatDelta ?? 0), ' p.p.').replace('+', '')} abaixo da meta.`}
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-4 border-t border-white/10 pt-3 text-sm">
-                    <a className="text-slate-500 hover:text-emerald-200" href="#minha-rotina">
-                      Positivas <strong className="text-slate-200">{formatChatCount(accumulated?.positive_reviews ?? 0)}</strong>
-                      <span className="ml-1 text-xs">ver tickets</span>
-                    </a>
-                    <a className="text-slate-500 hover:text-amber-100" href="#minha-rotina">
-                      Negativas <strong className="text-slate-200">{formatChatCount(accumulated?.negative_reviews ?? 0)}</strong>
-                      <span className="ml-1 text-xs">entender</span>
-                    </a>
-                  </div>
-                </div>
-
-                <div className={`rounded-xl border p-5 ${
-                  reviewPercentage === null
-                    ? 'border-white/10 bg-slate-950/40'
-                    : meetsReviews
-                      ? 'border-emerald-400/20 bg-emerald-400/5'
-                      : 'border-amber-300/20 bg-amber-300/5'
-                }`}>
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm text-slate-400">% de avaliações</p>
-                      <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
-                        {reviewPercentage === null ? '—' : formatChatPercent(reviewPercentage)}
-                      </strong>
-                    </div>
-                    <span className="rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300">
-                      Meta {formatChatPercent(reviewGoal)}
-                    </span>
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-slate-400">
-                    {reviewPercentage === null
-                      ? 'Ainda sem base para calcular participação nas avaliações.'
-                      : diagnostic.reviewDelta !== null && diagnostic.reviewDelta >= 0
-                        ? `${formatDelta(diagnostic.reviewDelta, ' p.p.')} acima da meta.`
-                        : `${formatDelta(Math.abs(diagnostic.reviewDelta ?? 0), ' p.p.').replace('+', '')} abaixo da meta.`}
-                  </p>
-                  <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-3 text-sm">
-                    <span className="text-slate-500">Avaliações recebidas</span>
-                    <strong className="tabular-nums text-slate-200">
-                      {formatChatCount(accumulated?.reviews ?? 0)}
-                    </strong>
-                  </div>
-                </div>
+            <div className="mt-5 grid gap-3 md:grid-cols-3">
+              <div className="rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-4">
+                <p className="text-sm text-slate-300">Atendimentos identificados</p>
+                <strong className="mt-1 block text-4xl tabular-nums text-slate-100">
+                  {metrics?.identified_attendances ? formatChatCount(metrics.identified_attendances.total) : '—'}
+                </strong>
+                <p className="mt-2 text-xs text-amber-200">Parcial · não é fechamento oficial</p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+                <p className="text-sm text-slate-400">CSAT</p>
+                <strong className="mt-1 block text-3xl tabular-nums">{csat === null ? '—' : formatChatPercent(csat)}</strong>
+                <p className="mt-2 text-xs text-slate-400">Meta {formatChatPercent(csatGoal)} · base anterior</p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+                <p className="text-sm text-slate-400">Avaliações</p>
+                <strong className="mt-1 block text-3xl tabular-nums">{reviewPercentage === null ? '—' : formatChatPercent(reviewPercentage)}</strong>
+                <p className="mt-2 text-xs text-slate-400">Meta {formatChatPercent(reviewGoal)} · base anterior</p>
               </div>
             </div>
-
-            <ChatPerformanceDiagnosticPanel diagnostic={diagnostic} />
-
-            {podiumContext && podiumCriteria && (
-              <div className="mt-5 rounded-xl border border-cyan-400/15 bg-slate-950/35 p-4">
-                <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-300">
-                      Caminho para o pódio
-                    </p>
-                    <h4 className="mt-1 text-lg font-bold text-slate-100">
-                      {podiumCriteria.completed} de 3 critérios cumpridos
-                    </h4>
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    Média do time: {formatChatCount(podiumContext.team_average_attendances)} atendimentos
-                  </p>
-                </div>
-
-                <div className="mt-4 grid gap-2 md:grid-cols-3">
-                  <div className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-3 ${
-                    podiumCriteria.csat_met
-                      ? 'border-emerald-400/25 bg-emerald-400/5'
-                      : 'border-amber-300/25 bg-amber-300/5'
-                  }`}>
-                    <div>
-                      <p className="text-xs text-slate-500">CSAT</p>
-                      <strong className="text-slate-100">
-                        {csat === null ? '—' : formatChatPercent(csat)}
-                      </strong>
-                    </div>
-                    <span className="text-xs text-slate-400">
-                      meta {formatChatPercent(podiumCriteria.csat_min)}
-                    </span>
-                  </div>
-
-                  <div className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-3 ${
-                    podiumCriteria.review_met
-                      ? 'border-emerald-400/25 bg-emerald-400/5'
-                      : 'border-amber-300/25 bg-amber-300/5'
-                  }`}>
-                    <div>
-                      <p className="text-xs text-slate-500">Avaliações</p>
-                      <strong className="text-slate-100">
-                        {reviewPercentage === null ? '—' : formatChatPercent(reviewPercentage)}
-                      </strong>
-                    </div>
-                    <span className="text-xs text-slate-400">
-                      meta {formatChatPercent(podiumCriteria.review_min)}
-                    </span>
-                  </div>
-
-                  <div className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-3 ${
-                    podiumCriteria.volume_met
-                      ? 'border-emerald-400/25 bg-emerald-400/5'
-                      : 'border-amber-300/25 bg-amber-300/5'
-                  }`}>
-                    <div>
-                      <p className="text-xs text-slate-500">Volume</p>
-                      <strong className="text-slate-100">
-                        {formatChatCount(accumulated?.attendances ?? 0)}
-                      </strong>
-                    </div>
-                    <span className="text-xs text-slate-400">
-                      média {formatChatCount(podiumCriteria.volume_min)}
-                    </span>
-                  </div>
-                </div>
-
-                <p className="mt-3 text-xs leading-5 text-slate-500">
-                  A posição no ranking aparece junto do seu perfil. O pódio só é reconhecido quando os três critérios são cumpridos.
+            <details className="mt-3 rounded-lg border border-white/10 bg-slate-950/30 px-4 py-3">
+              <summary className="cursor-pointer text-sm text-slate-200">Entenda os números, metas e pódio</summary>
+              <p className="mt-3 text-xs leading-5 text-slate-400">
+                O total reúne tickets distintos identificados nas duas capturas; repetições são desconsideradas.
+                Não altera o CSAT, as avaliações ou o pódio, que seguem suas regras atuais.
+              </p>
+              <p className="mt-2 text-xs text-slate-400">
+                Registros anteriores: {metrics?.identified_attendances?.legacy_count ?? '—'} ·
+                Registros recuperados: {metrics?.identified_attendances?.verified_count ?? '—'} ·
+                Duplicidades: {metrics?.identified_attendances?.overlap_count ?? '—'}.
+                Resolvidos (indicador independente): {ownOfficialResolution?.total ?? '—'}.
+              </p>
+              <div className="mt-3"><ChatPerformanceDiagnosticPanel diagnostic={diagnostic} /></div>
+              {podiumCriteria && podiumContext && (
+                <p className="mt-3 text-sm text-slate-300">
+                  Pódio: {podiumCriteria.completed} de 3 critérios cumpridos ·
+                  CSAT mínimo {formatChatPercent(podiumCriteria.csat_min)} ·
+                  avaliações mínimas {formatChatPercent(podiumCriteria.review_min)} ·
+                  média de atendimentos {formatChatCount(podiumCriteria.volume_min)}.
                 </p>
-              </div>
-            )}
+              )}
+            </details>
 
           </>
         )}
@@ -4505,86 +4278,20 @@ function ChatAnalystPortal({
             </p>
             <h3 className="mt-2 text-2xl font-bold">Dias com atendimento</h3>
             <p className="section-subtitle">
-              Selecione um dia na régua para consultar seus tickets. A base anterior e as contribuições recuperadas ficam identificadas, sem somar indicadores oficiais.
+              Selecione um dia para abrir os tickets e consultar a análise com IA.
             </p>
           </div>
           <div className="flex flex-wrap gap-2 self-start">
             <span className="rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-xs text-slate-400">
               {activeRoutineDays.length} {activeRoutineDays.length === 1 ? 'dia com atividade' : 'dias com atividade'}
             </span>
-            <span className="rounded-md border border-amber-300/15 bg-amber-300/5 px-3 py-2 text-xs text-amber-100">
-              {formatChatCount(accumulated?.negative_reviews ?? 0)} negativas no mês
-            </span>
-            <span className="rounded-md border border-emerald-400/15 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-200">
-              {formatChatCount(accumulated?.positive_reviews ?? 0)} positivas no mês
-            </span>
+
           </div>
         </div>
 
-        {ownVerifiedContribution && ownVerifiedContribution.daily.length > 0 && (
-          <div className="mt-5 rounded-xl border border-cyan-300/20 bg-slate-950/30 p-4">
-            <h4 className="font-semibold text-slate-100">Contribuições humanas verificadas por dia · ClickDesk</h4>
-            <p className="mt-1 text-xs text-slate-400">
-              Ticket único por analista, mediante mensagem pública identificada.
-              Avaliações são vinculadas ao último atendente humano; as notas não
-              recebidas não entram no CSAT. Esta é uma amostra recuperada, não o
-              fechamento oficial de avaliações por equipe.
-              {metrics?.verified_productivity?.coverage_status === 'queue_drained'
-                ? ' A fila histórica consultada está processada. Outras origens e avaliações continuam independentes.'
-                : ' Histórico parcial enquanto a recuperação estiver em andamento.'}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {ownVerifiedContribution.daily.map((day) => (
-                <div key={day.date} className="rounded-lg border border-white/10 bg-slate-950/45 px-4 py-3">
-                  <span className="block text-xs text-slate-400">{formatDate(day.date)}</span>
-                  <strong className="mt-1 block text-lg text-slate-100">{formatChatCount(day.count)} contribuições verificadas</strong>
-                  {(() => {
-                    const assessed = ownVerifiedContribution.ratings_daily.find((item) => item.date === day.date)
-                    return (
-                      <div className="mt-2 space-y-1 text-xs text-slate-400">
-                        <p>
-                          Avaliações: {assessed?.reviews ?? 0}
-                          <span className="ml-1 text-emerald-300">+{assessed?.positive_reviews ?? 0}</span>
-                          <span className="ml-1 text-rose-300">-{assessed?.negative_reviews ?? 0}</span>
-                        </p>
-                        <p>CSAT: {assessed?.csat == null ? '—' : `${assessed.csat.toFixed(2)}%`}</p>
-                        <p>% avaliados: {assessed?.review_percentage == null ? '—' : `${assessed.review_percentage.toFixed(2)}%`}</p>
-                      </div>
-                    )
-                  })()}
-                </div>
-              ))}
-            </div>
-            <p className="mt-3 text-xs text-slate-500">
-              Ticket encerrado sem avaliação permanece como atendimento válido.
-              A ausência de nota não significa que o analista deixou de solicitar pesquisa.
-              Avaliações vão somente ao último atendente humano verificado.
-            </p>
-          </div>
-        )}
-
-        {ownOfficialResolution && ownOfficialResolution.daily.length > 0 && (
-          <div className="mt-5 rounded-xl border border-cyan-300/15 bg-slate-950/30 p-4">
-            <h4 className="font-semibold text-slate-100">Resoluções por dia · ClickDesk</h4>
-            <p className="mt-1 text-xs text-slate-400">
-              Relatório oficial de tickets resolvidos pelo analista, sem filtrar a origem.
-              Este indicador é independente dos atendimentos e das avaliações.
-              Dias sem registros não representam necessariamente zero atividade.
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {ownOfficialResolution.daily.map((day) => (
-                <div key={day.date} className="rounded-lg border border-white/10 bg-slate-950/45 px-4 py-3">
-                  <span className="block text-xs text-slate-400">{formatDate(day.date)}</span>
-                  <strong className="mt-1 block text-lg text-slate-100">{formatChatCount(day.resolved)} resolvidos</strong>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {activeRoutineDays.length ? (
           <div className="mt-5">
-            <p className="mb-3 text-sm font-semibold text-slate-100">Régua diária · selecione para abrir os tickets</p>
+            <p className="mb-3 text-sm font-semibold text-slate-100">Atendimentos por dia · ordem cronológica</p>
             <div className="flex flex-wrap gap-2">
             {activeRoutineDays.map((item) => {
               const selected = selectedRoutineDate === item.date
@@ -4605,12 +4312,7 @@ function ChatAnalystPortal({
                   <strong className="mt-1 block text-lg tabular-nums text-slate-100">
                     {formatChatCount(item.count)}
                   </strong>
-                  <span className="mt-1 block text-xs text-slate-400">
-                    {item.source === 'verified' ? 'Contribuições verificadas' : 'Atendimentos · base anterior'}
-                  </span>
-                  <span className="mt-1 block text-xs text-slate-500">
-                    {formatChatCount(item.reviews)} {item.reviews === 1 ? 'avaliação' : 'avaliações'}
-                  </span>
+                  <span className="mt-1 block text-xs text-slate-400">atendimentos</span>
                 </button>
               )
             })}
@@ -4625,7 +4327,7 @@ function ChatAnalystPortal({
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-300">
-                  {dailyTickets?.source === 'clickdesk_verified_contributions' ? 'Tickets com contribuição humana verificada' : 'Tickets do dia · base anterior'}
+                  Tickets identificados no dia
                 </p>
                 <h4 className="mt-1 text-lg font-bold">{formatDate(selectedRoutineDate)}</h4>
               </div>
@@ -4756,6 +4458,8 @@ function ChatAnalystPortal({
       </section>
 
       <section className="panel">
+        <details>
+          <summary className="cursor-pointer text-sm font-semibold text-slate-200">Minha evolução · ver histórico</summary>
         <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
           Minha evolução
         </p>
@@ -4861,6 +4565,7 @@ function ChatAnalystPortal({
         ) : (
           <EmptyState text="Seu histórico ClickDesk será formado a partir das competências disponíveis." />
         )}
+        </details>
       </section>
     </div>
   )

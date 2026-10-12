@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - fix/qualitative-verified-lookup-20261012
+      - ui/chat-analyst-compact-20261012
   workflow_dispatch:
 
 permissions:
@@ -26,6 +27,8 @@ jobs:
           cache: npm
       - name: Install immutable dependencies
         run: npm ci
+      - name: Distinct attendance and chronological ruler
+        run: node --experimental-transform-types --test tests/clickdesk-identified-tickets.test.mts
       - name: Verified ticket ownership and authorization
         run: node --experimental-transform-types --test tests/clickdesk-qualitative-verified-lookup.test.mts
       - name: Existing qualitative and access regression
