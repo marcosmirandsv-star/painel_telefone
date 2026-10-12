@@ -8,6 +8,7 @@ import {
   json,
 } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
+import { selectVerifiedQualitativeTicket } from '@/lib/clickdesk-qualitative-lookup'
 import {
   extractTranscriptText,
   isQualitativeTranscriptSufficient,
@@ -716,35 +717,16 @@ export async function POST(request: Request) {
           .select('ticket_id,analyst_id,occurred_date,satisfaction_label')
           .eq('ticket_id', ticketId)
 
-        if (!sessionAccess.isManagement && !sessionAccess.chatAnalystId) {
-          throw new ApiError(403, 'Acesso individual sem analista vinculado.')
+        const selection = selectVerifiedQualitativeTicket(
+          ticketId,
+          verified.data ?? [],
+          sessionAccess.isManagement,
+          sessionAccess.chatAnalystId,
+        )
+        if (!selection.ok) {
+          throw new ApiError(selection.status, selection.error)
         }
-
-        const verified = await (
-          sessionAccess.isManagement
-            ? verifiedQuery
-            : verifiedQuery.eq('analyst_id', sessionAccess.chatAnalystId!)
-        ).limit(2)
-
-        if (verified.error) {
-          throw new ApiError(503, 'Não foi possível validar a captura humana verificada.')
-        }
-        if (!verified.data?.length) {
-          throw new ApiError(404, 'Atendimento não encontrado na sua base individual ou na captura verificada.')
-        }
-        if (sessionAccess.isManagement && verified.data.length > 1) {
-          throw new ApiError(422, 'O ticket possui mais de um analista verificado; informe a autoria antes da análise.')
-        }
-
-        const contribution = verified.data[0]
-        persistedData = {
-          clickdesk_ticket_id: String(contribution.ticket_id),
-          analyst_id: contribution.analyst_id,
-          area: null,
-          satisfaction_label: contribution.satisfaction_label,
-          occurred_date: contribution.occurred_date,
-          identity_role: 'analyst',
-        }
+        persistedData = selection.ticket
       } else {
         if (
           !sessionAccess.isManagement &&
@@ -764,6 +746,14 @@ export async function POST(request: Request) {
           )
           .eq('clickdesk_ticket_id', ticketId)
           .maybeSingle()
+
+        if (
+          !cached.error &&
+          cached.data &&
+          cached.data.analyst_id !== persistedData.analyst_id
+        ) {
+          throw new ApiError(409, 'Já existe uma análise vinculada a outro analista para este ticket.')
+        }
 
         if (
           !cached.error &&
