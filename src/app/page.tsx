@@ -647,6 +647,87 @@ type ClickDeskDailyTicketResponse = {
   erro?: string
 }
 
+type ClickDeskTicketPreviewResponse = {
+  ticket_id?: string
+  analyst_name?: string
+  first_answered_at?: string
+  first_message_id?: string
+  satisfaction_label?: string | null
+  transcript_status?: 'available' | 'unavailable'
+  transcript?: string | null
+  note?: string
+  erro?: string
+}
+
+function ClickDeskTicketPreview({ ticketId, onClose }: { ticketId: string; onClose: () => void }) {
+  const [result, setResult] = useState<ClickDeskTicketPreviewResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let active = true
+    setResult(null)
+    setLoading(true)
+    async function fetchPreview() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) throw new Error('Sessão expirada. Entre novamente.')
+        const response = await fetch(`/api/clickdesk/ticket-preview?ticket_id=${encodeURIComponent(ticketId)}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: 'no-store',
+        })
+        const data = (await response.json()) as ClickDeskTicketPreviewResponse
+        if (!response.ok) throw new Error(data.erro || 'Não foi possível abrir o ticket.')
+        if (active) setResult(data)
+      } catch (error) {
+        if (active) setResult({ erro: getErrorMessage(error) })
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void fetchPreview()
+    return () => { active = false }
+  }, [ticketId])
+
+  return (
+    <div role="dialog" aria-modal="true" aria-label={`Ticket ${ticketId}`} className="fixed inset-0 z-[100] overflow-y-auto bg-slate-950/90 p-4 sm:p-8">
+      <div className="mx-auto max-w-3xl rounded-2xl border border-white/15 bg-slate-900 p-5 shadow-2xl sm:p-7">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">Consulta de ticket · somente leitura</p>
+            <h3 className="mt-2 text-xl font-bold text-slate-100">Ticket #{ticketId}</h3>
+          </div>
+          <button type="button" className="small-button" onClick={onClose}>Fechar</button>
+        </div>
+        {loading ? (
+          <p className="mt-5 text-sm text-slate-300">Carregando evidências e conversa...</p>
+        ) : result?.erro ? (
+          <p className="mt-5 rounded-lg border border-amber-300/20 bg-amber-300/5 p-4 text-sm text-amber-100">{result.erro}</p>
+        ) : result ? (
+          <>
+            <div className="mt-5 grid gap-3 rounded-xl border border-white/10 p-4 text-sm sm:grid-cols-2">
+              <p><span className="text-slate-400">Analista identificado:</span> {result.analyst_name || '—'}</p>
+              <p><span className="text-slate-400">Primeira resposta pública:</span> {result.first_answered_at ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(new Date(result.first_answered_at)) : '—'}</p>
+              <p><span className="text-slate-400">Mensagem de evidência:</span> {result.first_message_id || '—'}</p>
+              <p><span className="text-slate-400">Avaliação atribuída:</span> {result.satisfaction_label === 'positive' ? 'Positiva' : result.satisfaction_label === 'negative' ? 'Negativa' : 'Sem avaliação'}</p>
+            </div>
+            <p className="mt-4 text-xs text-slate-400">{result.note}</p>
+            {result.transcript_status === 'available' && result.transcript ? (
+              <div className="mt-4">
+                <h4 className="text-sm font-semibold text-slate-100">Conversa recuperada do ClickDesk</h4>
+                <pre className="mt-2 max-h-[55vh] overflow-auto whitespace-pre-wrap break-words rounded-xl border border-white/10 bg-slate-950/60 p-4 font-sans text-sm leading-6 text-slate-200">{result.transcript}</pre>
+              </div>
+            ) : (
+              <p className="mt-4 rounded-lg border border-amber-300/15 bg-amber-300/5 p-3 text-sm text-amber-100">
+                Conteúdo integral da conversa indisponível nesta consulta. Os identificadores acima continuam auditáveis; nenhuma mensagem foi inventada.
+              </p>
+            )}
+          </>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 type ClickDeskEvaluatedSampleTicket = ClickDeskDailyTicket & {
   occurred_date: string
   has_analysis: boolean
@@ -3757,6 +3838,7 @@ function ChatAnalystPortal({
   const [selectedRoutineDate, setSelectedRoutineDate] = useState<string | null>(null)
   const [dailyTickets, setDailyTickets] = useState<ClickDeskDailyTicketResponse | null>(null)
   const [dailyTicketsLoading, setDailyTicketsLoading] = useState(false)
+  const [openedTicketId, setOpenedTicketId] = useState<string | null>(null)
   const [qualitativeByTicket, setQualitativeByTicket] = useState<Record<string, ClickDeskQualitativeResponse>>({})
   const [qualitativeLoadingTicketId, setQualitativeLoadingTicketId] = useState('')
   const [openQualitativeTicketId, setOpenQualitativeTicketId] = useState<string | null>(null)
@@ -4028,6 +4110,7 @@ function ChatAnalystPortal({
 
   return (
     <div className="analyst-portal mt-6 space-y-5">
+      {openedTicketId && <ClickDeskTicketPreview ticketId={openedTicketId} onClose={() => setOpenedTicketId(null)} />}
       <section className="panel analyst-portal-hero">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
@@ -4571,7 +4654,9 @@ function ChatAnalystPortal({
                     >
                       <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto] sm:items-center">
                         <div>
-                          <strong className="text-slate-100">Ticket #{ticket.ticket_id}</strong>
+                          <button type="button" className="font-semibold text-cyan-300 underline-offset-2 hover:underline" onClick={() => setOpenedTicketId(ticket.ticket_id)}>
+                            Ticket #{ticket.ticket_id} · Abrir
+                          </button>
                           <p className="mt-1 text-xs text-slate-500">{ticket.area}</p>
                         </div>
                         <span className="text-sm tabular-nums text-slate-400">{time}</span>
@@ -4819,6 +4904,7 @@ function ChatModuleDashboard({
   const [chat2DailyDateFilter, setChat2DailyDateFilter] = useState('all')
   const [chat2SelectedDayTickets, setChat2SelectedDayTickets] = useState<ClickDeskDailyTicketResponse | null>(null)
   const [chat2SelectedDayTicketsLoading, setChat2SelectedDayTicketsLoading] = useState(false)
+  const [chat2OpenedTicketId, setChat2OpenedTicketId] = useState<string | null>(null)
   const [clickDeskTestLoading, setClickDeskTestLoading] = useState(false)
   const [clickDeskTestResult, setClickDeskTestResult] = useState<ClickDeskTestResult | null>(null)
   const [clickDeskConversationLoading, setClickDeskConversationLoading] = useState(false)
@@ -9191,13 +9277,16 @@ function ChatModuleDashboard({
                               <div className="mt-3 grid max-h-72 gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
                                 {(chat2SelectedDayTickets.tickets ?? []).map((ticket) => (
                                   <div key={ticket.ticket_id} className="rounded-lg border border-white/10 bg-slate-950/45 p-3 text-xs">
-                                    <strong className="text-slate-100">Ticket #{ticket.ticket_id}</strong>
+                                    <button type="button" className="font-semibold text-cyan-300 underline-offset-2 hover:underline" onClick={() => setChat2OpenedTicketId(ticket.ticket_id)}>
+                                      Ticket #{ticket.ticket_id} · Abrir
+                                    </button>
                                     <p className="mt-1 text-slate-400">{new Intl.DateTimeFormat('pt-BR',{hour:'2-digit',minute:'2-digit',timeZone:'America/Sao_Paulo'}).format(new Date(ticket.occurred_at))}</p>
                                     <p className="mt-1 text-slate-400">{ticket.satisfaction_label === 'positive' ? 'Avaliação positiva' : ticket.satisfaction_label === 'negative' ? 'Avaliação negativa' : 'Sem avaliação atribuída'}</p>
                                     {ticket.first_message_id && <p className="mt-1 text-slate-500">Mensagem pública: {ticket.first_message_id}</p>}
                                   </div>
                                 ))}
                               </div>
+                              {chat2OpenedTicketId && <ClickDeskTicketPreview ticketId={chat2OpenedTicketId} onClose={() => setChat2OpenedTicketId(null)} />}
                             </>
                           ) : (
                             <p className="mt-2 text-xs text-amber-200">A captura diária não pôde ser conciliada com o detalhamento. Não apresentar zero como atendimento comprovado.</p>
