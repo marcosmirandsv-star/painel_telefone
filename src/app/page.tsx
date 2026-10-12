@@ -7595,7 +7595,7 @@ function ChatModuleDashboard({
     const limit = new Date(`${clickDeskPersistedMetrics.period.end}T00:00:00Z`)
     while (cursor <= limit) {
       const date = cursor.toISOString().slice(0, 10)
-      const covered = chat2DailyCoverageStart ? date >= chat2DailyCoverageStart : true
+      const covered = Boolean(chat2DailyCoverageStart && date >= chat2DailyCoverageStart && chat2DailyMap.has(date))
       const persistedDay = chat2DailyMap.get(date)
       chat2DailyRuler.push(
         persistedDay
@@ -7760,7 +7760,7 @@ function ChatModuleDashboard({
     const limit = new Date(`${chat2OperationPeriodEnd}T00:00:00Z`)
     while (cursor <= limit) {
       const date = cursor.toISOString().slice(0, 10)
-      const covered = chat2OperationDailyCoverageStart ? date >= chat2OperationDailyCoverageStart : false
+      const covered = Boolean(chat2OperationDailyCoverageStart && date >= chat2OperationDailyCoverageStart && chat2OperationDailyMap.has(date))
       const persistedDay = chat2OperationDailyMap.get(date)
       chat2OperationDailyRuler.push(
         persistedDay
@@ -9082,7 +9082,7 @@ function ChatModuleDashboard({
                             <strong className="mt-1 block text-lg tabular-nums">
                               {verifiedCount !== undefined ? formatChatCount(verifiedCount) : item.covered ? formatChatCount(item.attendances) : '—'}
                             </strong>
-                            <span className="mt-1 block text-[10px] text-slate-400">{verifiedCount !== undefined ? 'humano verificado' : 'base anterior'}</span>
+                            <span className="mt-1 block text-[10px] text-slate-400">{verifiedCount !== undefined ? 'humano verificado' : item.covered ? 'base anterior' : 'sem captura'}</span>
                           </button>
                         )
                       })}
@@ -9095,7 +9095,7 @@ function ChatModuleDashboard({
                       </div>
                     )}
 
-                    {chat2DailyDateFilter !== 'all' && chat2SelectedVerifiedDays.has(chat2DailyDateFilter) && (
+                    {chat2DailyDateFilter !== 'all' && chat2SelectedVerifiedDays.has(chat2DailyDateFilter) ? (
                       <div className="mt-4 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.04] p-4">
                         <p className="text-xs font-semibold uppercase tracking-wider text-cyan-200">
                           {formatDate(chat2DailyDateFilter)} · contribuição humana recuperada (não oficial)
@@ -9109,8 +9109,7 @@ function ChatModuleDashboard({
                         </div>
                         <p className="mt-2 text-xs text-slate-400">Sem avaliação não significa atendimento inválido; esta amostra não altera pódio nem metas.</p>
                       </div>
-                    )}
-                    {chat2SelectedDayMetric ? (
+                    ) : chat2SelectedDayMetric?.covered ? (
                       <div className="mt-4 border-t border-white/10 pt-4">
                         <p className="mb-2 text-xs text-slate-400">Série original preservada, sem incorporar contribuições recuperadas.</p>
                         <p className="mb-3 text-sm font-semibold">
@@ -9153,7 +9152,7 @@ function ChatModuleDashboard({
                       </div>
                     ) : (
                       <p className="mt-3 text-xs text-slate-500">
-                        Depois do início da cobertura diária, dias sem atendimento aparecem como 0. Datas anteriores à base disponível aparecem como —.
+                        Não existe dado diário comprovado para esta data na fonte selecionada. Ausência de captura não significa zero atendimentos.
                       </p>
                     )}
                   </div>
