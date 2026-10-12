@@ -1,6 +1,7 @@
 import { ApiError, authorizeClickDeskSessionClient, handle, json } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 import { extractTranscriptText } from '@/lib/clickdesk-qualitative'
+import { extractRestRecords } from '@/lib/clickdesk-rest-evidence'
 
 export const runtime = 'nodejs'
 
@@ -36,31 +37,54 @@ export async function GET(request: Request) {
     const accountId = process.env.CLICKDESK_ACCOUNT_ID?.trim()
     let transcript: string | null = null
     let transcriptStatus: 'available' | 'unavailable' = 'unavailable'
+    let transcriptSource: 'messages' | 'transcript' | null = null
+    let diagnostic: string = !apiKey || !accountId
+      ? 'missing_server_credentials'
+      : 'not_loaded'
 
     if (apiKey && accountId) {
-      const controller = new AbortController()
-      const timeout = setTimeout(() => controller.abort(), 12000)
-      try {
-        const response = await fetch(`https://api.desk.click.app/api/v1/tickets/${ticketId}/transcript`, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'X-Account-Id': accountId,
-            Accept: 'application/json',
-          },
-          cache: 'no-store',
-          signal: controller.signal,
-        })
-        if (response.ok) {
+      // The same read-only /tickets/{id}/messages route used by the
+      // historical verification is checked before the legacy /transcript
+      // route. No ticket mutation, AI request or database update.
+      const headers = {
+        Authorization: `Bearer ${apiKey}`,
+        'X-Account-Id': accountId,
+        Accept: 'application/json',
+      }
+      for (const source of ['messages', 'transcript'] as const) {
+        if (transcriptStatus === 'available') break
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 12000)
+        try {
+          const response = await fetch(
+            `https://api.desk.click.app/api/v1/tickets/${ticketId}/${source}`,
+            { method: 'GET', headers, cache: 'no-store', signal: controller.signal },
+          )
+          if (!response.ok) {
+            diagnostic = `${source}_http_${response.status}`
+            continue
+          }
           const payload: unknown = await response.json()
-          transcript = extractTranscriptText(payload).slice(0, 20000) || null
-          if (transcript) transcriptStatus = 'available'
+          if (source === 'messages') {
+            const records = extractRestRecords(payload)
+            transcript = extractTranscriptText(records).slice(0, 20000) || null
+            diagnostic = records.length > 0 ? 'messages_no_readable_text' : 'messages_empty'
+          } else {
+            transcript = extractTranscriptText(payload).slice(0, 20000) || null
+            diagnostic = 'transcript_no_readable_text'
+          }
+          if (transcript) {
+            transcriptSource = source
+            transcriptStatus = 'available'
+            diagnostic = 'ok'
+          }
+        } catch (error) {
+          diagnostic = error instanceof Error && error.name === 'AbortError'
+            ? `${source}_timeout`
+            : `${source}_unavailable`
+        } finally {
+          clearTimeout(timeout)
         }
-      } catch {
-        // Evidence from the verified database remains available even if the
-        // external transcript cannot be retrieved; do not fabricate messages.
-      } finally {
-        clearTimeout(timeout)
       }
     }
 
@@ -73,10 +97,14 @@ export async function GET(request: Request) {
       first_message_id: evidence.data.first_message_id,
       satisfaction_label: evidence.data.satisfaction_label,
       transcript_status: transcriptStatus,
+      transcript_source: transcriptSource,
+      diagnostic,
       transcript,
       note: transcriptStatus === 'unavailable'
-        ? 'A autoria está verificada, mas o conteúdo da conversa não pôde ser carregado neste momento.'
-        : 'Conversa consultada somente para leitura; nenhuma análise foi executada.',
+        ? diagnostic === 'missing_server_credentials'
+          ? 'A visualização está sem credenciais de leitura do ClickDesk configuradas neste ambiente.'
+          : 'A autoria está verificada, mas a API não disponibilizou o texto da conversa nesta consulta.'
+        : 'Mensagens recuperadas para leitura. A completude do histórico depende da paginação da API ClickDesk, ainda não confirmada.',
     })
   })
 }
