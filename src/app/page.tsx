@@ -477,10 +477,23 @@ type ClickDeskPersistedMetrics = {
       daily: Array<ClickDeskPersistedAggregate & { date: string }>
     }
   >
+  reconciled_roster?: Array<ClickDeskPersistedAggregate & {
+    analyst_id: string
+    analyst_name: string
+    team_id: string
+    pending_owner_tickets: number
+    transferred_to_another_human: number
+    podium: NonNullable<ClickDeskPersistedMetrics['self_podium_context']>
+    daily: Array<{date:string;count:number}>
+  }> | null
   reconciled_live?: ClickDeskPersistedAggregate & {
     partial_capture: true
     inactivity_not_identified: true
-    ambiguous_rated_tickets: number
+    pending_owner_tickets: number
+    transferred_to_another_human: number
+    unresolved_tickets_in_capture: number
+    owned_tickets: Array<{ticket_id:string;date:string}>
+    daily: Array<{date:string;count:number}>
     podium: NonNullable<ClickDeskPersistedMetrics['self_podium_context']>
   } | null
   identified_attendances?: {
@@ -4131,7 +4144,10 @@ function ChatAnalystPortal({
     .map((key) => todayParts.find((part) => part.type===key)?.value ?? '')
     .join('-')
   // Deduplicated individual consultation only; official CSAT and podium remain separate.
-  const activeRoutineDays = metrics?.identified_attendances?.daily ?? []
+  const activeRoutineDays = reconciled?.daily ?? []
+  const ownedDailyTickets = (dailyTickets?.tickets ?? []).filter(ticket =>
+    reconciled?.owned_tickets.some(own => own.ticket_id === ticket.ticket_id && own.date === selectedRoutineDate)
+  )
 
   return (
     <div className="analyst-portal mt-6 space-y-5">
@@ -4242,7 +4258,7 @@ function ChatAnalystPortal({
                 <strong className="mt-1 block text-4xl tabular-nums text-slate-100">
                   {reconciled ? formatChatCount(reconciled.attendances) : '—'}
                 </strong>
-                <p className="mt-2 text-xs text-amber-200">Parcial · não é fechamento oficial</p>
+                <p className="mt-2 text-xs text-amber-200">Parcial · último atendente ainda em conferência</p>
               </div>
               <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
                 <p className="text-sm text-slate-400">CSAT</p>
@@ -4258,7 +4274,7 @@ function ChatAnalystPortal({
             <details className="mt-3 rounded-lg border border-white/10 bg-slate-950/30 px-4 py-3">
               <summary className="cursor-pointer text-sm text-slate-200">Entenda os números, metas e pódio</summary>
               <p className="mt-3 text-xs leading-5 text-slate-400">
-                O volume considera um atendimento por ticket e analista humano verificado. A avaliação pertence
+                Cada ticket é atribuído somente ao último atendente humano comprovado. A avaliação pertence
                 ao último atendente humano; ticket sem nota não conta como avaliação ruim.
                 Índices parciais da competência, sem classificação de inatividade. Fechamentos oficiais preservados.
               </p>
@@ -4271,7 +4287,7 @@ function ChatAnalystPortal({
               <p className="mt-3 text-xs text-slate-400">
                 Avaliações: {reconciled?.positive_reviews ?? '—'} boas e {reconciled?.negative_reviews ?? '—'} ruins.
                 Tickets sem nota: {reconciled ? reconciled.attendances - reconciled.reviews : '—'}.
-                {reconciled?.ambiguous_rated_tickets ? ' Avaliações com autoria ambígua não foram somadas.' : ''}
+                {reconciled?.pending_owner_tickets ? `${reconciled.pending_owner_tickets} tickets aguardam comprovação do último atendente.` : ''}
               </p>
               <div className="mt-3"><ChatPerformanceDiagnosticPanel diagnostic={diagnostic} /></div>
               {podiumCriteria && podiumContext && (
@@ -4369,17 +4385,10 @@ function ChatAnalystPortal({
               <p className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-sm text-amber-100">
                 {dailyTickets.erro}
               </p>
-            ) : dailyTickets?.tickets?.length ? (
+            ) : ownedDailyTickets.length ? (
               <div className="mt-4 space-y-2">
-                <p className="text-xs text-slate-400">{dailyTickets.source === 'clickdesk_verified_contributions' ? 'Listagem recuperada, com autoria comprovada por mensagem pública. Não modifica a produtividade oficial.' : 'Registros da captura anterior.'}</p>
-                {dailyTickets.source === 'clickdesk_verified_contributions' &&
-                  ownVerifiedContribution?.daily.some((day) =>
-                    day.date === selectedRoutineDate && day.count !== dailyTickets.tickets?.length) && (
-                  <p className="rounded-lg border border-amber-300/25 bg-amber-300/10 p-2 text-xs text-amber-100">
-                    Divergência entre o total verificado e os tickets listados neste dia. Avise a gestão para conferir a base.
-                  </p>
-                )}
-                {dailyTickets.tickets.map((ticket) => {
+                <p className="text-xs text-slate-400">Tickets atribuídos ao responsável final na captura disponível.</p>
+                {ownedDailyTickets.map((ticket) => {
                   const time = new Intl.DateTimeFormat('pt-BR', {
                     hour: '2-digit',
                     minute: '2-digit',
@@ -4395,7 +4404,6 @@ function ChatAnalystPortal({
                   const qualitativeResult = qualitativeByTicket[ticket.ticket_id]
                   const qualitativeLoading = qualitativeLoadingTicketId === ticket.ticket_id
                   const qualitativeOpen = openQualitativeTicketId === ticket.ticket_id
-                  const evaluated = ticket.satisfaction_label === 'positive' || ticket.satisfaction_label === 'negative'
 
                   return (
                     <div
@@ -4419,8 +4427,7 @@ function ChatAnalystPortal({
                         }`}>
                           {satisfaction}
                         </span>
-                        {evaluated ? (
-                          QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS ? (
+                        {QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS ? (
                             <button
                               type="button"
                               className="small-button"
@@ -4445,10 +4452,7 @@ function ChatAnalystPortal({
                             </button>
                           ) : (
                             <span className="text-xs font-semibold text-violet-200">IA em preparação</span>
-                          )
-                        ) : (
-                          <span className="text-xs text-slate-600">Sem análise</span>
-                        )}
+                          )}
                       </div>
 
                       {QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS && qualitativeResult && qualitativeOpen && (
@@ -4469,7 +4473,7 @@ function ChatAnalystPortal({
               </div>
             ) : (
               <p className="mt-4 text-sm text-slate-400">
-                Nenhum ticket persistido foi encontrado para este dia.
+                Nenhum ticket atribuído ao responsável final foi localizado neste dia.
               </p>
             )}
           </div>
@@ -4652,6 +4656,7 @@ function ChatModuleDashboard({
   const [chatReportQualitativeStatus, setChatReportQualitativeStatus] = useState('')
   const [selectedChatReportMetricId, setSelectedChatReportMetricId] = useState('')
   const [chat2AnalystId, setChat2AnalystId] = useState('')
+  const [unifiedSelectedAnalystId, setUnifiedSelectedAnalystId] = useState('')
   const [chat2LiveAnalystKey, setChat2LiveAnalystKey] = useState('')
   const [chat2PeriodKey, setChat2PeriodKey] = useState('')
   const [chat2DailyDateFilter, setChat2DailyDateFilter] = useState('all')
@@ -8088,6 +8093,23 @@ function ChatModuleDashboard({
     chat2SelectedMetric && Number(chat2SelectedMetric.reviews) > 0
       ? round((Number(chat2SelectedMetric.negative_reviews) / Number(chat2SelectedMetric.reviews)) * 100)
       : 0
+  // One server-calculated ledger for both the analyst and management portals.
+  // Team filters affect visibility, never the responsibility or rating formula.
+  const unifiedCurrentMonth = chat2SelectedPeriod.key === chat2Periods[0]?.key
+  const unifiedRoster = clickDeskPersistedMetrics?.reconciled_roster ?? []
+  const unifiedSelected = unifiedRoster.find(row=>row.analyst_id===unifiedSelectedAnalystId)
+    ?? unifiedRoster[0] ?? null
+  const unifiedAttended = unifiedRoster.reduce((sum,row)=>sum+row.attendances,0)
+  const unifiedPositive = unifiedRoster.reduce((sum,row)=>sum+row.positive_reviews,0)
+  const unifiedNegative = unifiedRoster.reduce((sum,row)=>sum+row.negative_reviews,0)
+  const unifiedReviews = unifiedPositive+unifiedNegative
+  const unifiedCsat = unifiedReviews ? round(unifiedPositive/unifiedReviews*100) : null
+  const unifiedReviewShare = unifiedAttended ? round(unifiedReviews/unifiedAttended*100) : null
+  const unifiedPending = unifiedRoster.reduce((sum,row)=>sum+row.pending_owner_tickets,0)
+  const unifiedTeamName = (id:string)=>teams.find(x=>x.id===id)?.name ?? 'Equipe do Chat'
+  const unifiedCsatGoal = unifiedSelected
+    ? Number(analysts.find(x=>x.id===unifiedSelected.analyst_id)?.csat_goal ?? 90)
+    : 90
   const operation360Totals = clickDeskOperation360?.totals
   const operation360Coverage = clickDeskOperation360?.coverage
   const operation360Preliminary = clickDeskOperation360?.preliminary_patterns
@@ -8187,7 +8209,112 @@ function ChatModuleDashboard({
 
 
 
-      {chatActiveTab === 'overview' && (
+
+      {unifiedCurrentMonth && (chatActiveTab === 'overview' || chatActiveTab === 'prototype' || chatActiveTab === 'podium') && (
+        <section className="panel">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-300">Chat · painel unificado</p>
+              <h2 className="mt-2 text-xl font-bold text-slate-100">
+                {chatActiveTab === 'overview' ? 'Resultado da operação' :
+                  chatActiveTab === 'prototype' ? 'Desempenho dos analistas' : 'Critérios do pódio'}
+              </h2>
+              <p className="mt-2 text-sm text-slate-400">
+                {selectedTeamName} · {chat2SelectedPeriod.label}. Os números individuais seguem a mesma
+                conciliação de ticket e responsável final utilizada no acesso do analista.
+              </p>
+            </div>
+            <span className="rounded-lg border border-amber-300/20 px-3 py-2 text-xs text-amber-200">
+              Apuração parcial · inatividade ainda não identificada
+            </span>
+          </div>
+          {clickDeskPersistedMetrics?.erro ? (
+            <p role="alert" className="mt-4 rounded-lg border border-amber-300/20 p-3 text-sm text-amber-100">
+              Não foi possível conferir a base: {clickDeskPersistedMetrics.erro}. Indicadores não foram substituídos por zeros.
+            </p>
+          ) : clickDeskPersistedMetrics?.reconciled_roster ? (
+            <>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-lg border border-white/10 bg-slate-950/40 p-4">
+                  <p className="text-sm text-slate-400">Atendimentos atribuídos</p>
+                  <strong className="mt-1 block text-3xl tabular-nums">{formatChatCount(unifiedAttended)}</strong>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-slate-950/40 p-4">
+                  <p className="text-sm text-slate-400">CSAT</p>
+                  <strong className="mt-1 block text-3xl tabular-nums">{unifiedCsat===null?'—':formatChatPercent(unifiedCsat)}</strong>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-slate-950/40 p-4">
+                  <p className="text-sm text-slate-400">Avaliações recebidas</p>
+                  <strong className="mt-1 block text-3xl tabular-nums">{formatChatCount(unifiedReviews)}</strong>
+                  <p className="mt-1 text-xs text-slate-500">{unifiedPositive} positivas · {unifiedNegative} negativas</p>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-slate-950/40 p-4">
+                  <p className="text-sm text-slate-400">% com avaliação</p>
+                  <strong className="mt-1 block text-3xl tabular-nums">{unifiedReviewShare===null?'—':formatChatPercent(unifiedReviewShare)}</strong>
+                </div>
+              </div>
+              <p className="mt-3 text-xs text-amber-200">
+                {formatChatCount(unifiedPending)} participação(ões) vinculadas a tickets cujo último
+                atendente ainda precisa de comprovação; esses tickets não foram distribuídos por suposição.
+              </p>
+              <div className="mt-5 overflow-x-auto rounded-xl border border-white/10">
+                <table className="w-full min-w-[750px] text-sm">
+                  <thead className="bg-slate-950/40 text-left text-xs text-slate-400">
+                    <tr>
+                      <th className="px-3 py-3">Analista</th>
+                      <th className="px-3 py-3 text-right">Atendimentos</th>
+                      <th className="px-3 py-3 text-right">CSAT</th>
+                      <th className="px-3 py-3 text-right">% avaliações</th>
+                      <th className="px-3 py-3 text-right">Pódio</th>
+                      <th className="px-3 py-3 text-right">Conferência</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/10">
+                    {[...unifiedRoster].sort((a,b)=>a.analyst_name.localeCompare(b.analyst_name,'pt-BR')).map(row=>(
+                      <tr key={row.analyst_id} className={unifiedSelected?.analyst_id===row.analyst_id?'bg-cyan-400/5':''}>
+                        <td className="px-3 py-3">
+                          <button type="button" className="text-left font-semibold text-cyan-200 hover:underline"
+                            onClick={()=>setUnifiedSelectedAnalystId(row.analyst_id)}>{row.analyst_name}</button>
+                          <p className="mt-1 text-xs text-slate-500">{unifiedTeamName(row.team_id)}</p>
+                        </td>
+                        <td className="px-3 py-3 text-right tabular-nums">{formatChatCount(row.attendances)}</td>
+                        <td className="px-3 py-3 text-right tabular-nums">{row.csat===null?'—':formatChatPercent(row.csat)}</td>
+                        <td className="px-3 py-3 text-right tabular-nums">{row.review_percentage===null?'—':formatChatPercent(row.review_percentage)}</td>
+                        <td className="px-3 py-3 text-right tabular-nums">{row.podium.criteria.completed}/3</td>
+                        <td className="px-3 py-3 text-right tabular-nums">{row.pending_owner_tickets||'—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {unifiedSelected && (
+                <div className="mt-4 rounded-xl border border-cyan-400/20 bg-slate-950/30 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <strong className="text-slate-100">{unifiedSelected.analyst_name} · leitura individual</strong>
+                    <span className="text-xs text-slate-400">Média do time: {formatChatCount(unifiedSelected.podium.team_average_attendances)}</span>
+                  </div>
+                  <div className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
+                    <p>CSAT · meta individual {formatChatPercent(unifiedCsatGoal)}:
+                      <strong className="ml-1">{unifiedSelected.csat!==null&&unifiedSelected.csat>=unifiedCsatGoal?'atingida':'não atingida'}</strong></p>
+                    <p>Avaliações · meta 25%:
+                      <strong className="ml-1">{unifiedSelected.review_percentage!==null&&unifiedSelected.review_percentage>=25?'atingida':'não atingida'}</strong></p>
+                    <p>Volume · média da equipe:
+                      <strong className="ml-1">{unifiedSelected.podium.criteria.volume_met?'atingido':'não atingido'}</strong></p>
+                  </div>
+                  <p className="mt-3 text-xs text-slate-500">
+                    Critério de pódio usa CSAT mínimo de 90%, avaliações de 25% e média do time.
+                    Os indicadores de hoje permanecem em conferência até validar os últimos atendentes sem avaliação.
+                  </p>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="mt-4 text-sm text-slate-400">Carregando a apuração única do Chat...</p>
+          )}
+        </section>
+      )}
+
+      {chatActiveTab === 'overview' && !unifiedCurrentMonth && (
         <section className="workspace-page-heading">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -8214,7 +8341,7 @@ function ChatModuleDashboard({
       )}
 
 
-      {chatActiveTab === 'overview' && (
+      {chatActiveTab === 'overview' && !unifiedCurrentMonth && (
         <section className="rounded-2xl border border-emerald-300/20 bg-emerald-300/[0.04] px-5 py-5 sm:px-6">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -8352,7 +8479,7 @@ function ChatModuleDashboard({
         </section>
       )}
 
-      {chatActiveTab === 'overview' && (
+      {chatActiveTab === 'overview' && !unifiedCurrentMonth && (
         <section className="overflow-hidden rounded-2xl border border-cyan-300/15 bg-slate-950/35 shadow-[0_22px_70px_rgba(2,8,23,0.28)]">
           <div className="border-b border-white/10 px-5 py-4 sm:px-6">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -8646,7 +8773,7 @@ function ChatModuleDashboard({
         </section>
       )}
 
-      {chatActiveTab === 'prototype' && (
+      {chatActiveTab === 'prototype' && !unifiedCurrentMonth && (
         <section className="workspace-page-heading">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -8700,7 +8827,7 @@ function ChatModuleDashboard({
         </section>
       )}
 
-      {chatActiveTab === 'podium' && (
+      {chatActiveTab === 'podium' && !unifiedCurrentMonth && (
         <section className="workspace-page-heading">
           <p className="workspace-eyebrow">Gestão e ações</p>
           <h2 className="mt-2 text-2xl font-bold">Onde agir e o que acompanhar?</h2>
@@ -8716,7 +8843,7 @@ function ChatModuleDashboard({
         </section>
       )}
 
-      {chatActiveTab === 'prototype' && (
+      {chatActiveTab === 'prototype' && !unifiedCurrentMonth && (
         <div className="space-y-7">
           <section className="workspace-content-section">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -9923,7 +10050,7 @@ function ChatModuleDashboard({
         ]}
       />
 
-      <section className={chatActiveTab === 'overview' ? 'workspace-content-section' : 'hidden'}>
+      <section className={chatActiveTab === 'overview' && !unifiedCurrentMonth ? 'workspace-content-section' : 'hidden'}>
         <div className="grid gap-5 xl:grid-cols-[1.05fr_1.95fr]">
           <div className="rounded-xl border border-white/10 bg-slate-950/35 p-5">
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Leitura da operação</p>
@@ -10212,7 +10339,7 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <section id="chat-management-priorities" className={chatActiveTab === 'podium' ? 'workspace-content-section' : 'hidden'}>
+      <section id="chat-management-priorities" className={chatActiveTab === 'podium' && !unifiedCurrentMonth ? 'workspace-content-section' : 'hidden'}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Gestão e ações</p>
@@ -10291,7 +10418,7 @@ function ChatModuleDashboard({
         )}
       </section>
 
-      <details className={chatActiveTab === 'podium' ? 'workspace-collapsible' : 'hidden'}>
+      <details className={chatActiveTab === 'podium' && !unifiedCurrentMonth ? 'workspace-collapsible' : 'hidden'}>
         <summary className="cursor-pointer list-none">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -10352,7 +10479,7 @@ function ChatModuleDashboard({
 
       <details
         id="chat-qualitative-validation"
-        className={chatActiveTab === 'podium' ? 'workspace-collapsible' : 'hidden'}
+        className={chatActiveTab === 'podium' && !unifiedCurrentMonth ? 'workspace-collapsible' : 'hidden'}
         open={chatQualitativeFocusAnalystId ? true : undefined}
       >
         <summary className="cursor-pointer list-none">
@@ -11024,7 +11151,7 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <section className={chatActiveTab === 'overview' ? 'panel' : 'hidden'}>
+      <section className={chatActiveTab === 'overview' && !unifiedCurrentMonth ? 'panel' : 'hidden'}>
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Histórico anterior · Zendesk</p>
           <h2 className="mt-2 text-2xl font-bold">Série preservada dos fechamentos anteriores</h2>

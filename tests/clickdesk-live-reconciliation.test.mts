@@ -1,25 +1,44 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {reconcileLiveTeam,type HumanTicket} from '../src/lib/clickdesk-live-reconciliation.ts'
-const r=(ticket_id:string,analyst_id:string,satisfaction_label:string|null,source:'legacy'|'verified'='verified'):HumanTicket=>({ticket_id,analyst_id,occurred_date:'2026-10-09',satisfaction_label,source,rating_attribution:source==='verified'&&satisfaction_label?'last_public_human_answer':null})
-const team=[{id:'vanessa',name:'Vanessa Silva'},{id:'joao',name:'João Pedro'},{id:'ana',name:'Ana Júlia'}]
-test('multi-agent volume per analyst; rating solely on last agent',()=>{
- const a=reconcileLiveTeam(team,[r('1','vanessa',null),r('1','joao','positive'),r('2','vanessa','negative'),r('3','vanessa',null),r('4','ana','positive')],'vanessa')
- assert.equal(a?.attendances,3);assert.equal(a?.reviews,1);assert.equal(a?.csat,0);assert.equal(a?.review_percentage,33.33);assert.equal(a?.podium.total_ranked,2)
+const make=(ticket_id:string,analyst_id:string,satisfaction_label:string|null,source:'legacy'|'verified'='verified',final=false):HumanTicket=>({
+ ticket_id,analyst_id,occurred_date:'2026-10-09',satisfaction_label,source,
+ rating_attribution:final?'last_public_human_answer':null,
 })
-test('deduplicate same ticket+analyst across legacy and verified',()=>{
- const a=reconcileLiveTeam(team,[r('1','vanessa','positive','legacy'),r('1','vanessa','positive')],'vanessa')
- assert.equal(a?.attendances,1);assert.equal(a?.positive_reviews,1)
+const people=[{id:'joao',name:'João Pedro'},{id:'vanessa',name:'Vanessa Silva'},{id:'ana',name:'Ana Júlia'}]
+test('transfer credits the final human only, with the evaluation',()=>{
+ const rows=[make('1','joao',null),make('1','vanessa','positive','verified',true)]
+ const x=reconcileLiveTeam(people,rows,'vanessa')
+ const y=reconcileLiveTeam(people,rows,'joao')
+ assert.equal(x?.attendances,1);assert.equal(x?.reviews,1);assert.equal(x?.positive_reviews,1)
+ assert.equal(y?.attendances,0);assert.equal(y?.transferred_to_another_human,1)
 })
-test('unrated is valid, never inferred negative or inactivity',()=>{
- const a=reconcileLiveTeam(team,[r('1','vanessa',null)],'vanessa')
- assert.equal(a?.csat,null);assert.equal(a?.review_percentage,0);assert.equal(a?.inactivity_not_identified,true)
+test('unrated ticket with a single known human counts one service but no rating',()=>{
+ const r=reconcileLiveTeam(people,[make('2','vanessa',null)],'vanessa')
+ assert.equal(r?.attendances,1);assert.equal(r?.reviews,0);assert.equal(r?.csat,null)
 })
-test('team mean considers all volume, not evaluated tickets',()=>{
- const a=reconcileLiveTeam(team,[...Array.from({length:3},(_,i)=>r('v'+i,'vanessa',null)),...Array.from({length:5},(_,i)=>r('j'+i,'joao',null))],'vanessa')
- assert.equal(a?.podium.team_average_attendances,4);assert.equal(a?.podium.criteria.volume_met,false)
+test('multi human unrated is pending: first answer is not last answer',()=>{
+ const rows=[make('3','joao',null),make('3','vanessa',null)]
+ for(const person of ['vanessa','joao']){
+  const r=reconcileLiveTeam(people,rows,person)
+  assert.equal(r?.attendances,0);assert.equal(r?.pending_owner_tickets,1)
+ }
 })
-test('ambiguous ratings withheld',()=>{
- const a=reconcileLiveTeam(team,[r('1','vanessa','positive','legacy'),r('1','joao','negative','legacy')],'vanessa')
- assert.equal(a?.reviews,0);assert.equal(a?.ambiguous_rated_tickets,1)
+test('legacy rating alone does not establish final human after a transfer',()=>{
+ const r=reconcileLiveTeam(people,[make('4','joao','negative','legacy'),make('4','vanessa',null)],'joao')
+ assert.equal(r?.attendances,0);assert.equal(r?.pending_owner_tickets,1)
+})
+test('same ticket in legacy and verified is not double counted',()=>{
+ const r=reconcileLiveTeam(people,[make('5','vanessa','positive','legacy'),make('5','vanessa',null)],'vanessa')
+ assert.equal(r?.attendances,1);assert.equal(r?.positive_reviews,1)
+})
+test('exclude apprentices from individual metrics',()=>{
+ const r=reconcileLiveTeam(people,[make('6','ana',null),make('7','vanessa',null)],'vanessa')
+ assert.equal(r?.attendances,1);assert.equal(r?.podium.team_average_attendances,1)
+})
+test('team volume reference counts final owner only',()=>{
+ const rows=[...Array.from({length:3},(_,i)=>make('v'+i,'vanessa',null)),
+ ...Array.from({length:5},(_,i)=>make('j'+i,'joao',null))]
+ const r=reconcileLiveTeam(people,rows,'vanessa')
+ assert.equal(r?.podium.team_average_attendances,4);assert.equal(r?.podium.criteria.volume_met,false)
 })

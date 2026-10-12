@@ -6,6 +6,7 @@ on:
       - fix/qualitative-verified-lookup-20261012
       - ui/chat-analyst-compact-20261012
       - work/chat-live-reconciliation-20261012
+      - fix/chat-unified-parity-20261012
   workflow_dispatch:
 
 permissions:

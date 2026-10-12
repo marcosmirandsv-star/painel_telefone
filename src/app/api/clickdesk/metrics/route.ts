@@ -1,4 +1,4 @@
-import { ApiError, authorizeClickDeskSessionClient, handle, json } from '@/lib/integration-server'
+import { ApiError, adminClient, authorizeClickDeskSessionClient, handle, json } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 import { summarizeOfficialResolutions, type OfficialResolutionRow } from '@/lib/clickdesk-official-resolutions'
 import { summarizeVerifiedContributions, type VerifiedContributionRow } from '@/lib/clickdesk-verified-productivity'
@@ -218,13 +218,13 @@ async function loadTeamEvidence(admin:Awaited<ReturnType<typeof authorizeClickDe
  for(let offset=0;offset<10000;offset+=500){
   const {data,error}=await admin.from('clickdesk_chat_attendances')
    .select('clickdesk_ticket_id,analyst_id,occurred_date,satisfaction_label')
-   .eq('team_id',teamId).eq('identity_role','analyst')
+   .neq('identity_role','unmapped')
    .gte('occurred_date',filters.start).lte('occurred_date',filters.end)
    .order('occurred_date',{ascending:true}).order('clickdesk_ticket_id',{ascending:true})
    .range(offset,offset+499)
   if(error)throw new ApiError(503,'Base anterior indisponível para conciliação.')
   rows.push(...(data??[]).filter(x=>x.analyst_id).map(x=>({ticket_id:x.clickdesk_ticket_id,analyst_id:x.analyst_id as string,occurred_date:x.occurred_date,satisfaction_label:x.satisfaction_label,source:'legacy' as const})))
-  if((data??[]).length<500)return [...rows,...(await loadVerifiedContributions(admin,{...filters,teamId,analystId:null})).map(x=>({
+  if((data??[]).length<500)return [...rows,...(await loadVerifiedContributions(admin,{...filters,teamId:null,analystId:null})).map(x=>({
    ticket_id:x.ticket_id,analyst_id:x.analyst_id,occurred_date:x.occurred_date,satisfaction_label:x.satisfaction_label??null,source:'verified' as const,rating_attribution:x.rating_attribution??null
   }))]
  }
@@ -415,17 +415,44 @@ export async function GET(request: Request) {
           source === 'updated_at',
       )
 
-    let reconciledLive: ReturnType<typeof reconcileLiveTeam> = null
-    if (!access.isManagement && filters.analystId) {
-      const profile=await admin.from('chat_analysts').select('id,team_id,active').eq('id',filters.analystId).maybeSingle()
-      if(profile.error||!profile.data?.active||!profile.data.team_id)
-        throw new ApiError(503,'Equipe do analista indisponível para conciliação.')
-      const team=await admin.from('chat_analysts').select('id,name').eq('team_id',profile.data.team_id).eq('active',true)
-      if(team.error)throw new ApiError(503,'Cadastro da equipe indisponível para conciliação.')
-      reconciledLive=reconcileLiveTeam(team.data??[],await loadTeamEvidence(admin,filters,profile.data.team_id),filters.analystId)
-      if(!reconciledLive||reconciledLive.attendances!==identifiedAtt?.total)
-        throw new ApiError(503,'Volume e avaliação não coincidiram na conferência; cálculo não publicado.')
+    // Authorize the human user FIRST. Service access is used only server-side to
+    // identify cross-team transfers; never return another analyst's raw tickets
+    // to an individual. The same pure ledger serves every Chat team.
+    const securedAdmin = adminClient()
+    const profiles = await securedAdmin.from('chat_analysts')
+      .select('id,name,team_id,active')
+    if(profiles.error)throw new ApiError(503,'Cadastro do Chat indisponível para conciliação.')
+    const people=(profiles.data??[]).filter(p=>p.id && p.team_id)
+    const globalEvidence=await loadTeamEvidence(securedAdmin,{...filters,analystId:null,teamId:null},'all')
+    const sharedLedger=new Map<string,NonNullable<ReturnType<typeof reconcileLiveTeam>>>()
+    for(const person of people.filter(p=>p.active)){
+      const group=people.filter(p=>p.team_id===person.team_id)
+      const result=reconcileLiveTeam(group,globalEvidence,person.id)
+      if(result)sharedLedger.set(person.id,result)
     }
+    const reconciledLive=!access.isManagement && filters.analystId
+      ? sharedLedger.get(filters.analystId)??null
+      : null
+    if(!access.isManagement && !reconciledLive)
+      throw new ApiError(503,'Indicadores individuais em conferência.')
+    const reconciledRoster=access.isManagement
+      ? people.filter(p=>p.active &&
+          (!filters.teamId || p.team_id===filters.teamId) &&
+          (!filters.analystId || p.id===filters.analystId))
+        .map(p=>{
+          const live=sharedLedger.get(p.id)
+          if(!live)return null
+          return {
+            analyst_id:p.id,analyst_name:p.name,team_id:p.team_id,
+            attendances:live.attendances,positive_reviews:live.positive_reviews,
+            negative_reviews:live.negative_reviews,reviews:live.reviews,
+            csat:live.csat,review_percentage:live.review_percentage,
+            pending_owner_tickets:live.pending_owner_tickets,
+            transferred_to_another_human:live.transferred_to_another_human,
+            podium:live.podium,daily:live.daily,
+          }
+        }).filter((x):x is NonNullable<typeof x>=>x!==null)
+      : null
     let selfPodiumContext: Record<string, unknown> | null = null
     if (!access.isManagement) {
       const podiumResult = await admin.rpc('get_clickdesk_self_podium_context', {
@@ -451,6 +478,7 @@ export async function GET(request: Request) {
       verified_productivity: { ...verifiedProductivity, coverage_status: verifiedCoverageStatus },
       identified_attendances: identifiedAtt,
       reconciled_live: reconciledLive,
+      reconciled_roster: reconciledRoster,
       period: {
         start: filters.start,
         end: filters.end,

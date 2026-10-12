@@ -1,47 +1,71 @@
-export type HumanTicket = { ticket_id: string; analyst_id: string; occurred_date: string; satisfaction_label: string | null; source: 'legacy' | 'verified'; rating_attribution?: string | null }
-export type TeamAnalyst = { id: string; name: string }
-const pct=(a:number,b:number)=>b>0?Math.round(a/b*10000)/100:null
+/** A ticket is credited to one proven final human, with or without rating.
+ * Unrated transfers with unknown final responder are pending, never guessed. */
+export type HumanTicket={ticket_id:string;analyst_id:string;occurred_date:string;satisfaction_label:string|null;source:'legacy'|'verified';rating_attribution?:string|null}
+export type TeamAnalyst={id:string;name:string}
+const percentage=(a:number,b:number)=>b?Math.round(10000*a/b)/100:null
 const rated=(x:string|null)=>x==='positive'||x==='negative'
-export function reconcileLiveTeam(analysts:TeamAnalyst[], input:HumanTicket[], ownId:string){
- const validIds=new Set(analysts.filter(a=>!/^(ana julia|david)( |$)/i.test(a.name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim())).map(a=>a.id))
- if(!validIds.has(ownId))return null
- const pairs=new Map<string,HumanTicket>()
- for(const r of input){
-  if(!r.ticket_id||!validIds.has(r.analyst_id)||!/^20\d{2}-\d{2}-\d{2}$/.test(r.occurred_date))continue
-  const key=r.ticket_id+'::'+r.analyst_id,existing=pairs.get(key)
-  if(!existing||r.source==='verified'&&existing.source==='legacy')pairs.set(key,r)
+const apprentice=(name:string)=>/^(ana julia|david)( |$)/i.test(name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim())
+
+export function reconcileLiveTeam(analysts:TeamAnalyst[],rows:HumanTicket[],ownId:string){
+ const allowed=new Set(analysts.filter(a=>!apprentice(a.name)).map(a=>a.id))
+ if(!allowed.has(ownId))return null
+ const all=new Map<string,Map<string,{old?:HumanTicket;verified?:HumanTicket}>>()
+ for(const row of rows){
+  if(!row.ticket_id||!row.analyst_id||!/^20\d{2}-\d{2}-\d{2}$/.test(row.occurred_date))continue
+  const perPerson=all.get(row.ticket_id)??new Map()
+  const prior=perPerson.get(row.analyst_id)??{}
+  if(row.source==='verified')prior.verified=row;else prior.old=row
+  perPerson.set(row.analyst_id,prior)
+  all.set(row.ticket_id,perPerson)
  }
- const byTicket=new Map<string,HumanTicket[]>()
- const volumes=new Map<string,number>()
- for(const r of pairs.values()){
-  const a=byTicket.get(r.ticket_id)??[];a.push(r);byTicket.set(r.ticket_id,a)
-  volumes.set(r.analyst_id,(volumes.get(r.analyst_id)??0)+1)
+ const assignments=new Map<string,Array<{ticket_id:string;date:string}>>()
+ const positives=new Map<string,number>(),negatives=new Map<string,number>()
+ const pending=new Map<string,number>(),transferred=new Map<string,number>()
+ let unresolved=0
+ for(const [ticket_id,persons] of all){
+  const members=[...persons].map(([id,source])=>({id,source}))
+  const finalRated=members.filter(m=>rated(m.source.verified?.satisfaction_label??null)&&m.source.verified?.rating_attribution==='last_public_human_answer')
+  const owner=finalRated.length===1?finalRated[0]:finalRated.length===0&&members.length===1?members[0]:null
+  if(!owner){
+   unresolved++
+   for(const p of members)if(allowed.has(p.id))pending.set(p.id,(pending.get(p.id)??0)+1)
+   continue
+  }
+  for(const p of members)if(p.id!==owner.id&&allowed.has(p.id))transferred.set(p.id,(transferred.get(p.id)??0)+1)
+  if(!allowed.has(owner.id))continue
+  const best=owner.source.verified??owner.source.old!
+  const lst=assignments.get(owner.id)??[]
+  lst.push({ticket_id,date:best.occurred_date});assignments.set(owner.id,lst)
+  const score=finalRated.length===1?owner.source.verified?.satisfaction_label??null:
+    owner.source.verified?.satisfaction_label??owner.source.old?.satisfaction_label??null
+  if(score==='positive')positives.set(owner.id,(positives.get(owner.id)??0)+1)
+  if(score==='negative')negatives.set(owner.id,(negatives.get(owner.id)??0)+1)
  }
- const evaluations=new Map<string,{good:number;bad:number}>()
- let ambiguous=0
- for(const items of byTicket.values()){
-  const verified=items.filter(r=>r.source==='verified'&&rated(r.satisfaction_label)&&r.rating_attribution==='last_public_human_answer')
-  const legacy=items.filter(r=>r.source==='legacy'&&rated(r.satisfaction_label))
-  const chosen=verified.length?verified:legacy
-  if(chosen.length>1){ambiguous++;continue}
-  if(!chosen.length)continue
-  const r=chosen[0],c=evaluations.get(r.analyst_id)??{good:0,bad:0}
-  if(r.satisfaction_label==='positive')c.good++;else c.bad++
-  evaluations.set(r.analyst_id,c)
- }
- const all=[...validIds].map(analyst_id=>{
-  const total=volumes.get(analyst_id)??0
-  const good=evaluations.get(analyst_id)?.good??0,bad=evaluations.get(analyst_id)?.bad??0
-  return {analyst_id,attendances:total,positive_reviews:good,negative_reviews:bad,reviews:good+bad,csat:pct(good,good+bad),review_percentage:pct(good+bad,total)}
+ const team=[...allowed].map(analyst_id=>{
+  const attendances=assignments.get(analyst_id)?.length??0
+  const positive_reviews=positives.get(analyst_id)??0,negative_reviews=negatives.get(analyst_id)??0
+  const reviews=positive_reviews+negative_reviews
+  return {analyst_id,attendances,positive_reviews,negative_reviews,reviews,
+   csat:percentage(positive_reviews,reviews),review_percentage:percentage(reviews,attendances)}
  })
- const scored=all.filter(x=>x.attendances>0)
- const avg=scored.length?Math.round(scored.reduce((n,v)=>n+v.attendances,0)/scored.length*100)/100:0
- const eligible=(r:typeof all[number])=>(r.csat??0)>=90&&(r.review_percentage??0)>=25&&r.attendances>=avg
- const ranked=scored.slice().sort((a,b)=>Number(eligible(b))-Number(eligible(a))||(b.csat??0)-(a.csat??0)||(b.review_percentage??0)-(a.review_percentage??0)||b.attendances-a.attendances||a.analyst_id.localeCompare(b.analyst_id))
- const own=all.find(x=>x.analyst_id===ownId)!
- const csat_met=(own.csat??0)>=90,review_met=(own.review_percentage??0)>=25,volume_met=own.attendances>=avg&&own.attendances>0
- return {...own,partial_capture:true as const,inactivity_not_identified:true as const,ambiguous_rated_tickets:ambiguous,podium:{
-  position:ranked.findIndex(x=>x.analyst_id===ownId)+1||null,total_ranked:ranked.length,eligible:eligible(own),team_average_attendances:avg,
-  criteria:{csat_min:90,review_min:25,volume_min:avg,csat_met,review_met,volume_met,completed:Number(csat_met)+Number(review_met)+Number(volume_met)}
- }}
+ const active=team.filter(x=>x.attendances>0)
+ const avg=active.length?Math.round(active.reduce((n,x)=>n+x.attendances,0)*100/active.length)/100:0
+ const eligible=(x:typeof team[number])=>(x.csat??0)>=90&&(x.review_percentage??0)>=25&&x.attendances>=avg
+ const ranked=active.slice().sort((a,b)=>Number(eligible(b))-Number(eligible(a))||(b.csat??0)-(a.csat??0)||(b.review_percentage??0)-(a.review_percentage??0)||b.attendances-a.attendances||a.analyst_id.localeCompare(b.analyst_id))
+ const own=team.find(x=>x.analyst_id===ownId)!
+ const owned_tickets=(assignments.get(ownId)??[]).sort((a,b)=>a.date.localeCompare(b.date)||a.ticket_id.localeCompare(b.ticket_id))
+ const grouped=new Map<string,number>()
+ for(const r of owned_tickets)grouped.set(r.date,(grouped.get(r.date)??0)+1)
+ const csat_met=(own.csat??0)>=90,review_met=(own.review_percentage??0)>=25,volume_met=own.attendances>0&&own.attendances>=avg
+ return {...own,owned_tickets,daily:[...grouped].sort(([a],[b])=>a.localeCompare(b)).map(([date,count])=>({date,count})),
+  pending_owner_tickets:pending.get(ownId)??0,
+  transferred_to_another_human:transferred.get(ownId)??0,
+  unresolved_tickets_in_capture:unresolved,
+  partial_capture:true as const,inactivity_not_identified:true as const,
+  podium:{position:ranked.findIndex(x=>x.analyst_id===ownId)+1||null,total_ranked:ranked.length,
+   eligible:eligible(own),team_average_attendances:avg,
+   criteria:{csat_min:90,review_min:25,volume_min:avg,csat_met,review_met,volume_met,
+    completed:Number(csat_met)+Number(review_met)+Number(volume_met)}
+  }
+ }
 }
