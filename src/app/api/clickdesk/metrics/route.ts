@@ -1,5 +1,9 @@
-import { ApiError, authorizeClickDeskSessionClient, handle, json } from '@/lib/integration-server'
+import { ApiError, adminClient, authorizeClickDeskSessionClient, handle, json } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
+import { summarizeOfficialResolutions, type OfficialResolutionRow } from '@/lib/clickdesk-official-resolutions'
+import { summarizeVerifiedContributions, type VerifiedContributionRow } from '@/lib/clickdesk-verified-productivity'
+import { summarizeIdentifiedTickets } from '@/lib/clickdesk-identified-tickets'
+import { reconcileLiveTeam, type HumanTicket } from '@/lib/clickdesk-live-reconciliation'
 
 export const runtime = 'nodejs'
 
@@ -143,6 +147,89 @@ async function loadRows(
   throw new ApiError(422, 'O volume de métricas excedeu o limite de consulta.')
 }
 
+async function loadOfficialResolutions(
+  admin: Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],
+  filters: ReturnType<typeof parseFilters>,
+): Promise<OfficialResolutionRow[]> {
+  const result: OfficialResolutionRow[] = []
+  for (let offset = 0; offset < 10000; offset += 500) {
+    let query = admin.from('clickdesk_chat_daily_resolutions')
+      .select('resolved_date,team_id,analyst_id,assignee_name,area,resolved_count,source,updated_at')
+      .gte('resolved_date',filters.start)
+      .lte('resolved_date',filters.end)
+      .eq('source','clickdesk_support_reports_agents')
+      .order('resolved_date',{ascending:true})
+      .range(offset,offset+499)
+    if (filters.analystId) query = query.eq('analyst_id',filters.analystId)
+    if (filters.teamId) query = query.eq('team_id',filters.teamId)
+    const {data,error} = await query
+    if (error) throw new ApiError(503,'Relatório oficial de resoluções ClickDesk indisponível.')
+    result.push(...((data ?? []) as OfficialResolutionRow[]))
+    if ((data ?? []).length < 500) return result
+  }
+  throw new ApiError(422,'O volume de resoluções excedeu o limite seguro de consulta.')
+}
+
+
+async function loadVerifiedContributions(
+  admin: Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],
+  filters: ReturnType<typeof parseFilters>,
+): Promise<VerifiedContributionRow[]> {
+  const collected:VerifiedContributionRow[]=[]
+  for(let offset=0;offset<10000;offset+=500){
+    let query=admin.from('clickdesk_chat_verified_contributions')
+      .select('ticket_id,analyst_id,team_id,analyst_name,occurred_date,verified_at,satisfaction_label,rating_attribution')
+      .gte('occurred_date',filters.start).lte('occurred_date',filters.end)
+      .order('occurred_date',{ascending:true})
+      .order('ticket_id',{ascending:true})
+      .order('analyst_id',{ascending:true})
+      .range(offset,offset+499)
+    if(filters.analystId)query=query.eq('analyst_id',filters.analystId)
+    if(filters.teamId)query=query.eq('team_id',filters.teamId)
+    const {data,error}=await query
+    if(error)throw new ApiError(503,'Base de participações humanas verificadas indisponível.')
+    collected.push(...((data??[]) as VerifiedContributionRow[]))
+    if((data??[]).length<500)return collected
+  }
+  throw new ApiError(422,'Volume de participações verificadas excedeu o limite seguro.')
+}
+
+async function loadIndividualTickets(
+ admin:Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],
+ filters:ReturnType<typeof parseFilters>,
+){
+ if(!filters.analystId)return []
+ const rows:Array<{ticket_id:string;occurred_date:string}>=[]
+ for(let offset=0;offset<10000;offset+=500){
+  const {data,error}=await admin.from('clickdesk_chat_attendances')
+   .select('clickdesk_ticket_id,occurred_date')
+   .eq('analyst_id',filters.analystId).eq('identity_role','analyst')
+   .gte('occurred_date',filters.start).lte('occurred_date',filters.end)
+   .order('occurred_date',{ascending:true}).order('clickdesk_ticket_id',{ascending:true})
+   .range(offset,offset+499)
+  if(error)throw new ApiError(503,'Falha ao conferir os atendimentos individuais.')
+  rows.push(...(data??[]).map(v=>({ticket_id:v.clickdesk_ticket_id,occurred_date:v.occurred_date})))
+  if((data??[]).length<500)return rows
+ }
+ throw new ApiError(422,'Consulta individual excedeu o limite seguro.')
+}
+async function loadTeamEvidence(admin:Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],filters:ReturnType<typeof parseFilters>,teamId:string):Promise<HumanTicket[]>{
+ const rows:HumanTicket[]=[]
+ for(let offset=0;offset<10000;offset+=500){
+  const {data,error}=await admin.from('clickdesk_chat_attendances')
+   .select('clickdesk_ticket_id,analyst_id,occurred_date,satisfaction_label')
+   .neq('identity_role','unmapped')
+   .gte('occurred_date',filters.start).lte('occurred_date',filters.end)
+   .order('occurred_date',{ascending:true}).order('clickdesk_ticket_id',{ascending:true})
+   .range(offset,offset+499)
+  if(error)throw new ApiError(503,'Base anterior indisponível para conciliação.')
+  rows.push(...(data??[]).filter(x=>x.analyst_id).map(x=>({ticket_id:x.clickdesk_ticket_id,analyst_id:x.analyst_id as string,occurred_date:x.occurred_date,satisfaction_label:x.satisfaction_label,source:'legacy' as const})))
+  if((data??[]).length<500)return [...rows,...(await loadVerifiedContributions(admin,{...filters,teamId:null,analystId:null})).map(x=>({
+   ticket_id:x.ticket_id,analyst_id:x.analyst_id,occurred_date:x.occurred_date,satisfaction_label:x.satisfaction_label??null,source:'verified' as const,rating_attribution:x.rating_attribution??null
+  }))]
+ }
+ throw new ApiError(422,'Conciliação excedeu o limite seguro.')
+}
 function aggregate(rows: DailyMetricRow[]): Aggregate {
   const totals = rows.reduce(
     (acc, row) => {
@@ -252,8 +339,29 @@ export async function GET(request: Request) {
           teamId: null,
         }
 
-    const rows = await loadRows(access.admin, filters)
     const admin = access.admin
+    const [rows, officialResolutionRows, verifiedRows] = await Promise.all([
+      loadRows(admin, filters),
+      loadOfficialResolutions(admin, filters),
+      loadVerifiedContributions(admin, filters),
+    ])
+    const officialResolutions = summarizeOfficialResolutions(officialResolutionRows, filters.today)
+    const verifiedProductivity = summarizeVerifiedContributions(verifiedRows, filters.today)
+    const identifiedAtt = !access.isManagement && filters.analystId
+      ? summarizeIdentifiedTickets(await loadIndividualTickets(admin,filters),verifiedRows.map(r=>({ticket_id:r.ticket_id,occurred_date:r.occurred_date})))
+      : null
+    // The supplementary verified source may be partial until the staging queue drains.
+    // Queue status is not a substitute for proving coverage of other ClickDesk stages.
+    // Ticket IDs in the operations queue remain inaccessible to end users.
+    // A strictly aggregate-only, authenticated RPC reports the pending count.
+    const verifiedQueueResult = await admin.rpc('clickdesk_verified_capture_incomplete_count')
+    if (verifiedQueueResult.error || typeof verifiedQueueResult.data !== 'number') {
+      throw new ApiError(503,'Status da recuperação ClickDesk indisponível.')
+    }
+    const verifiedCoverageStatus =
+      verifiedQueueResult.data === 0 && verifiedRows.length > 0
+        ? 'queue_drained'
+        : 'partial_until_queue_finished'
 
     const latestSync = await admin
       .from('clickdesk_chat_sync_runs')
@@ -307,6 +415,44 @@ export async function GET(request: Request) {
           source === 'updated_at',
       )
 
+    // Authorize the human user FIRST. Service access is used only server-side to
+    // identify cross-team transfers; never return another analyst's raw tickets
+    // to an individual. The same pure ledger serves every Chat team.
+    const securedAdmin = adminClient()
+    const profiles = await securedAdmin.from('chat_analysts')
+      .select('id,name,team_id,active')
+    if(profiles.error)throw new ApiError(503,'Cadastro do Chat indisponível para conciliação.')
+    const people=(profiles.data??[]).filter(p=>p.id && p.team_id)
+    const globalEvidence=await loadTeamEvidence(securedAdmin,{...filters,analystId:null,teamId:null},'all')
+    const sharedLedger=new Map<string,NonNullable<ReturnType<typeof reconcileLiveTeam>>>()
+    for(const person of people.filter(p=>p.active)){
+      const group=people.filter(p=>p.team_id===person.team_id)
+      const result=reconcileLiveTeam(group,globalEvidence,person.id)
+      if(result)sharedLedger.set(person.id,result)
+    }
+    const reconciledLive=!access.isManagement && filters.analystId
+      ? sharedLedger.get(filters.analystId)??null
+      : null
+    if(!access.isManagement && !reconciledLive)
+      throw new ApiError(503,'Indicadores individuais em conferência.')
+    const reconciledRoster=access.isManagement
+      ? people.filter(p=>p.active &&
+          (!filters.teamId || p.team_id===filters.teamId) &&
+          (!filters.analystId || p.id===filters.analystId))
+        .map(p=>{
+          const live=sharedLedger.get(p.id)
+          if(!live)return null
+          return {
+            analyst_id:p.id,analyst_name:p.name,team_id:p.team_id,
+            attendances:live.attendances,positive_reviews:live.positive_reviews,
+            negative_reviews:live.negative_reviews,reviews:live.reviews,
+            csat:live.csat,review_percentage:live.review_percentage,
+            pending_owner_tickets:live.pending_owner_tickets,
+            transferred_to_another_human:live.transferred_to_another_human,
+            podium:live.podium,daily:live.daily,
+          }
+        }).filter((x):x is NonNullable<typeof x>=>x!==null)
+      : null
     let selfPodiumContext: Record<string, unknown> | null = null
     if (!access.isManagement) {
       const podiumResult = await admin.rpc('get_clickdesk_self_podium_context', {
@@ -326,6 +472,13 @@ export async function GET(request: Request) {
 
     return json({
       source: 'clickdesk_persisted',
+      // Independent official human-agent resolution count. NEVER merged into
+      // attendance, evaluation %, CSAT, podium or historical ticket totals.
+      resolution_productivity: officialResolutions,
+      verified_productivity: { ...verifiedProductivity, coverage_status: verifiedCoverageStatus },
+      identified_attendances: identifiedAtt,
+      reconciled_live: reconciledLive,
+      reconciled_roster: reconciledRoster,
       period: {
         start: filters.start,
         end: filters.end,

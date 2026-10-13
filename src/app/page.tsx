@@ -477,6 +477,97 @@ type ClickDeskPersistedMetrics = {
       daily: Array<ClickDeskPersistedAggregate & { date: string }>
     }
   >
+  reconciled_roster?: Array<ClickDeskPersistedAggregate & {
+    analyst_id: string
+    analyst_name: string
+    team_id: string
+    pending_owner_tickets: number
+    transferred_to_another_human: number
+    podium: NonNullable<ClickDeskPersistedMetrics['self_podium_context']>
+    daily: Array<{date:string;count:number}>
+  }> | null
+  reconciled_live?: ClickDeskPersistedAggregate & {
+    partial_capture: true
+    inactivity_not_identified: true
+    pending_owner_tickets: number
+    transferred_to_another_human: number
+    unresolved_tickets_in_capture: number
+    owned_tickets: Array<{ticket_id:string;date:string}>
+    daily: Array<{date:string;count:number}>
+    podium: NonNullable<ClickDeskPersistedMetrics['self_podium_context']>
+  } | null
+  identified_attendances?: {
+   total:number
+   legacy_count:number
+   verified_count:number
+   overlap_count:number
+   official:false
+   daily:Array<{date:string;count:number;source:'legacy'|'verified'|'mixed'}>
+  } | null
+  verified_productivity?: {
+    source: 'clickdesk_public_agent_message'
+    evaluation_source: 'clickdesk_ticket_rating_last_public_human'
+    evaluations: {
+      positive_reviews:number
+      negative_reviews:number
+      reviews:number
+      csat:number|null
+      review_percentage:number|null
+    }
+    ratings_daily: Array<{
+      date:string
+      positive_reviews:number
+      negative_reviews:number
+      reviews:number
+      csat:number|null
+      review_percentage:number|null
+    }> 
+    total: number
+    today: { date: string; count: number }
+    daily: Array<{ date: string; count: number }>
+    by_analyst: Array<{
+      analyst_id: string
+      team_id: string
+      analyst_name: string
+      total: number
+      today: number
+      daily: Array<{ date: string; count: number }>
+      evaluations: {
+        positive_reviews:number
+        negative_reviews:number
+        reviews:number
+        csat:number|null
+        review_percentage:number|null
+      }
+      ratings_daily: Array<{
+        date:string
+        positive_reviews:number
+        negative_reviews:number
+        reviews:number
+        csat:number|null
+        review_percentage:number|null
+      }>
+    }>
+    last_verified_at: string | null
+    has_records: boolean
+    coverage_status: 'partial_until_queue_finished' | 'queue_drained'
+  }
+  resolution_productivity?: {
+    source: 'clickdesk_support_reports_agents'
+    total: number
+    today: { date: string; resolved: number }
+    daily: Array<{ date: string; resolved: number }>
+    by_analyst: Array<{
+      analyst_id: string
+      team_id: string
+      assignee_name: string
+      total: number
+      today: number
+      daily: Array<{ date: string; resolved: number }>
+    }>
+    last_updated_at: string | null
+    has_records: boolean
+  }
   self_podium_context?: {
     team_average_attendances: number
     team_analysts_with_data: number
@@ -568,14 +659,119 @@ type ClickDeskDailyTicket = {
   satisfaction_label: string | null
   journey_status: string | null
   timestamp_source: string | null
+  first_message_id?: string | null
+  rating_attribution?: string | null
 }
 
 type ClickDeskDailyTicketResponse = {
   source?: string
+  evidence?: string
+  official_metrics_unchanged?: boolean
   date?: string
   analyst_id?: string
+  count?: number
   tickets?: ClickDeskDailyTicket[]
   erro?: string
+}
+
+type ClickDeskTicketPreviewResponse = {
+  ticket_id?: string
+  analyst_name?: string
+  first_answered_at?: string
+  first_message_id?: string
+  satisfaction_label?: string | null
+  transcript_status?: 'available' | 'unavailable'
+  transcript_source?: 'messages' | 'transcript' | null
+  diagnostic?: string
+  attempt_diagnostics?: string[]
+  transcript?: string | null
+  note?: string
+  erro?: string
+}
+
+function ClickDeskTicketPreview({ ticketId, analystId, onClose }: { ticketId: string; analystId: string; onClose: () => void }) {
+  const [result, setResult] = useState<ClickDeskTicketPreviewResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let active = true
+    setResult(null)
+    setLoading(true)
+    async function fetchPreview() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) throw new Error('Sessão expirada. Entre novamente.')
+        const response = await fetch(`/api/clickdesk/ticket-preview?ticket_id=${encodeURIComponent(ticketId)}&analyst_id=${encodeURIComponent(analystId)}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: 'no-store',
+        })
+        const data = (await response.json()) as ClickDeskTicketPreviewResponse
+        if (!response.ok) throw new Error(data.erro || 'Não foi possível abrir o ticket.')
+        if (active) setResult(data)
+      } catch (error) {
+        if (active) setResult({ erro: getErrorMessage(error) })
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    void fetchPreview()
+    return () => { active = false }
+  }, [ticketId, analystId])
+
+  return (
+    <div role="dialog" aria-modal="true" aria-label={`Ticket ${ticketId}`} className="fixed inset-0 z-[100] overflow-y-auto bg-slate-950/90 p-4 sm:p-8">
+      <div className="mx-auto max-w-3xl rounded-2xl border border-white/15 bg-slate-900 p-5 shadow-2xl sm:p-7">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">Consulta de ticket · somente leitura</p>
+            <h3 className="mt-2 text-xl font-bold text-slate-100">Ticket #{ticketId}</h3>
+          </div>
+          <button type="button" className="small-button" onClick={onClose}>Fechar</button>
+        </div>
+        {loading ? (
+          <p className="mt-5 text-sm text-slate-300">Carregando evidências e conversa...</p>
+        ) : result?.erro ? (
+          <p className="mt-5 rounded-lg border border-amber-300/20 bg-amber-300/5 p-4 text-sm text-amber-100">{result.erro}</p>
+        ) : result ? (
+          <>
+            <div className="mt-5 grid gap-3 rounded-xl border border-white/10 p-4 text-sm sm:grid-cols-2">
+              <p><span className="text-slate-400">Analista identificado:</span> {result.analyst_name || '—'}</p>
+              <p><span className="text-slate-400">Primeira resposta pública:</span> {result.first_answered_at ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo' }).format(new Date(result.first_answered_at)) : '—'}</p>
+              <p><span className="text-slate-400">Mensagem de evidência:</span> {result.first_message_id || '—'}</p>
+              <p><span className="text-slate-400">Avaliação atribuída:</span> {result.satisfaction_label === 'positive' ? 'Positiva' : result.satisfaction_label === 'negative' ? 'Negativa' : 'Sem avaliação'}</p>
+            </div>
+            <p className="mt-4 text-xs text-slate-400">{result.note}</p>
+            {result.transcript_status === 'available' && result.transcript ? (
+              <div className="mt-4">
+                <h4 className="text-sm font-semibold text-slate-100">Mensagens recuperadas do ClickDesk</h4>
+                <pre className="mt-2 max-h-[55vh] overflow-auto whitespace-pre-wrap break-words rounded-xl border border-white/10 bg-slate-950/60 p-4 font-sans text-sm leading-6 text-slate-200">{result.transcript}</pre>
+              </div>
+            ) : (
+              <p className="mt-4 rounded-lg border border-amber-300/15 bg-amber-300/5 p-3 text-sm text-amber-100">
+                Não foi possível carregar as mensagens nesta consulta. A autoria permanece comprovada, mas a conversa ainda não está validada.
+                {result.diagnostic && (
+                  <span className="mt-2 block text-xs text-amber-200">
+                    Diagnóstico: {result.diagnostic === 'missing_server_credentials'
+                      ? 'Credenciais de leitura do ClickDesk ausentes na homologação.'
+                      : result.diagnostic.startsWith('messages_http_') || result.diagnostic.startsWith('transcript_http_')
+                        ? `API ClickDesk indisponível ou recusou a rota (${result.diagnostic}).`
+                        : result.diagnostic === 'messages_empty'
+                          ? 'API retornou lista vazia de mensagens.'
+                          : 'A API não retornou texto legível ou a conexão falhou.'}
+                  </span>
+                )}
+                {result.attempt_diagnostics && result.attempt_diagnostics.length > 0 && (
+                  <span className="mt-2 block text-xs text-slate-400">
+                    Retorno técnico das consultas: {result.attempt_diagnostics.join(' · ')}
+                  </span>
+                )}
+              </p>
+            )}
+          </>
+        ) : null}
+      </div>
+    </div>
+  )
 }
 
 type ClickDeskEvaluatedSampleTicket = ClickDeskDailyTicket & {
@@ -1140,6 +1336,9 @@ function CentralOverview({
   chatOverview,
   chatOverviewLoading,
   chatOverviewError,
+  verifiedChatMetrics,
+  verifiedChatLoading,
+  verifiedChatError,
   onOpenPhone,
   onOpenChat,
 }: {
@@ -1152,6 +1351,9 @@ function CentralOverview({
   chatOverview: CentralChatOverviewResponse | null
   chatOverviewLoading: boolean
   chatOverviewError: string
+  verifiedChatMetrics: ClickDeskPersistedMetrics | null
+  verifiedChatLoading: boolean
+  verifiedChatError: string
   onOpenPhone: () => void
   onOpenChat: (teamId?: string) => void
 }) {
@@ -1187,6 +1389,60 @@ function CentralOverview({
         </div>
       </section>
 
+      <section className="rounded-2xl border border-emerald-300/25 bg-emerald-300/[0.04] p-5 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-300">Chat · captura humana recuperada</p>
+            <h3 className="mt-2 text-lg font-bold text-slate-100">Contribuições humanas verificadas na homologação</h3>
+            <p className="mt-1 text-xs leading-5 text-slate-400">
+              Registro de participação pública por ticket e analista, separado das resoluções e dos atendimentos oficiais.
+              A ausência de avaliação não invalida a contribuição registrada.
+            </p>
+          </div>
+          <button type="button" onClick={() => onOpenChat()} className="secondary-button">
+            Ver analistas e dias →
+          </button>
+        </div>
+        {verifiedChatError ? (
+          <div role="alert" className="mt-4 rounded-lg border border-rose-300/30 bg-rose-300/10 px-4 py-3 text-sm text-rose-100">
+            A captura existe no banco, mas não pôde ser consultada por esta sessão: {verifiedChatError}
+          </div>
+        ) : verifiedChatMetrics?.verified_productivity?.has_records ? (
+          <>
+            <p className="mt-3 text-xs text-slate-500">
+              Período {formatDate(verifiedChatMetrics.period!.start)} até {formatDate(verifiedChatMetrics.period!.end)}
+              {' '}· CSAT da captura é apenas amostral, não altera o pódio.
+            </p>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+                <p className="text-xs text-slate-400">Contribuições humanas verificadas</p>
+                <strong className="mt-1 block text-2xl tabular-nums">{formatChatCount(verifiedChatMetrics.verified_productivity.total)}</strong>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+                <p className="text-xs text-slate-400">Avaliações recebidas</p>
+                <strong className="mt-1 block text-2xl tabular-nums">{formatChatCount(verifiedChatMetrics.verified_productivity.evaluations.reviews)}</strong>
+                <p className="mt-1 text-xs text-slate-400">
+                  +{verifiedChatMetrics.verified_productivity.evaluations.positive_reviews}
+                  {' / -'}{verifiedChatMetrics.verified_productivity.evaluations.negative_reviews}
+                </p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+                <p className="text-xs text-slate-400">Analistas identificados</p>
+                <strong className="mt-1 block text-2xl tabular-nums">
+                  {formatChatCount(verifiedChatMetrics.verified_productivity.by_analyst.length)}
+                </strong>
+              </div>
+            </div>
+          </>
+        ) : (
+          <p className="mt-4 text-sm text-slate-400">
+            {verifiedChatLoading
+              ? 'Consultando a captura verificada do mês...'
+              : 'Nenhum atendimento verificado retornou para o período consultado.'}
+          </p>
+        )}
+      </section>
+
       <section className="grid gap-4 xl:grid-cols-3">
         <button type="button" onClick={onOpenPhone} className="rounded-2xl border border-white/10 bg-slate-900/55 p-5 text-left transition hover:border-cyan-300/35">
           <div className="flex items-start justify-between gap-3">
@@ -1204,7 +1460,7 @@ function CentralOverview({
           </div>
           <div className="mt-4 rounded-lg bg-slate-950/35 px-3 py-2 text-xs text-slate-400">
             {phoneHasData
-              ? `Fonte: lançamento manual semanal · período encerrado há ${phonePeriodAgeDays} dia(s)`
+              ? `Fonte: lançamentos manuais existentes neste ambiente · período encerrado há ${phonePeriodAgeDays} dia(s). Sem integração automática com a 5.5`
               : 'Nenhum lançamento semanal disponível.'}
           </div>
           <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-4 text-xs">
@@ -1227,7 +1483,7 @@ function CentralOverview({
                 </span>
               </div>
               <div className="mt-5 grid grid-cols-3 gap-3">
-                <div><span className="text-xs text-slate-500">CSAT</span><strong className="mt-1 block text-lg">{snapshot?.csat_pct === null || snapshot?.csat_pct === undefined ? '—' : formatPercent(snapshot.csat_pct)}</strong></div>
+                <div><span className="text-xs text-slate-500">CSAT</span><strong className="mt-1 block text-lg">{snapshot?.csat_pct === null || snapshot?.csat_pct === undefined ? '—' : formatPercent(snapshot.csat_pct)}</strong><span className="mt-1 block text-[11px] text-slate-500">{snapshot ? `${snapshot.csat_total} avaliação(ões)` : 'Sem amostra'}</span></div>
                 <div><span className="text-xs text-slate-500">Entraram</span><strong className="mt-1 block text-lg">{snapshot ? formatChatCount(snapshot.report_created) : '—'}</strong></div>
                 <div><span className="text-xs text-slate-500">Resolvidos</span><strong className="mt-1 block text-lg">{snapshot ? formatChatCount(snapshot.report_resolved) : '—'}</strong></div>
               </div>
@@ -1297,6 +1553,9 @@ export default function Home() {
   const [centralChatOverview, setCentralChatOverview] = useState<CentralChatOverviewResponse | null>(null)
   const [centralChatOverviewLoading, setCentralChatOverviewLoading] = useState(false)
   const [centralChatOverviewError, setCentralChatOverviewError] = useState('')
+  const [centralVerifiedChat, setCentralVerifiedChat] = useState<ClickDeskPersistedMetrics | null>(null)
+  const [centralVerifiedChatLoading, setCentralVerifiedChatLoading] = useState(false)
+  const [centralVerifiedChatError, setCentralVerifiedChatError] = useState('')
   const [activeModule, setActiveModule] = useState<AppModule>('central')
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard')
   const [chatActiveTab, setChatActiveTab] = useState<ChatActiveTab>('overview')
@@ -1605,6 +1864,46 @@ export default function Home() {
       cancelled = true
       window.clearInterval(refreshTimer)
     }
+  }, [isManagementUser, user])
+
+  // Load independently from the official snapshot: a missing historical
+  // attendance row must not hide verified real human work on the home screen.
+  useEffect(() => {
+    if (!isManagementUser || !user) {
+      setCentralVerifiedChat(null)
+      setCentralVerifiedChatError('')
+      return
+    }
+    let cancelled = false
+    async function loadVerifiedSummary() {
+      setCentralVerifiedChatLoading(true)
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) throw new Error('Sessão não disponível. Entre novamente.')
+        const response = await fetch('/api/clickdesk/metrics', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: 'no-store',
+        })
+        const data = (await response.json()) as ClickDeskPersistedMetrics
+        if (!response.ok || data.erro) {
+          throw new Error(data.erro || `Não foi possível consultar a captura (HTTP ${response.status}).`)
+        }
+        if (!cancelled) {
+          setCentralVerifiedChat(data)
+          setCentralVerifiedChatError('')
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setCentralVerifiedChat(null)
+          setCentralVerifiedChatError(getErrorMessage(error))
+        }
+      } finally {
+        if (!cancelled) setCentralVerifiedChatLoading(false)
+      }
+    }
+    void loadVerifiedSummary()
+    const timer = window.setInterval(() => void loadVerifiedSummary(), 60 * 60 * 1000)
+    return () => { cancelled = true; window.clearInterval(timer) }
   }, [isManagementUser, user])
 
   useEffect(() => {
@@ -2910,6 +3209,9 @@ export default function Home() {
             chatOverview={centralChatOverview}
             chatOverviewLoading={centralChatOverviewLoading}
             chatOverviewError={centralChatOverviewError}
+            verifiedChatMetrics={centralVerifiedChat}
+            verifiedChatLoading={centralVerifiedChatLoading}
+            verifiedChatError={centralVerifiedChatError}
             onOpenPhone={() => {
               setActiveModule('phone')
               setActiveTab('dashboard')
@@ -3582,6 +3884,7 @@ function ChatAnalystPortal({
   const [selectedRoutineDate, setSelectedRoutineDate] = useState<string | null>(null)
   const [dailyTickets, setDailyTickets] = useState<ClickDeskDailyTicketResponse | null>(null)
   const [dailyTicketsLoading, setDailyTicketsLoading] = useState(false)
+  const [openedTicketId, setOpenedTicketId] = useState<string | null>(null)
   const [qualitativeByTicket, setQualitativeByTicket] = useState<Record<string, ClickDeskQualitativeResponse>>({})
   const [qualitativeLoadingTicketId, setQualitativeLoadingTicketId] = useState('')
   const [openQualitativeTicketId, setOpenQualitativeTicketId] = useState<string | null>(null)
@@ -3738,6 +4041,7 @@ function ChatAnalystPortal({
 
     setOpenQualitativeTicketId(null)
     setSelectedRoutineDate(date)
+    setDailyTickets(null)
     setDailyTicketsLoading(true)
 
     try {
@@ -3790,11 +4094,23 @@ function ChatAnalystPortal({
 
   const ownMetric =
     metrics?.by_analyst?.find((item) => item.analyst_id === analyst.id) ?? null
+  const ownOfficialResolution = metrics?.resolution_productivity?.by_analyst
+    .find((item) => item.analyst_id === analyst.id) ?? null
+  const ownVerifiedContribution = metrics?.verified_productivity?.by_analyst
+    .find((item) => item.analyst_id === analyst.id) ?? null
   const accumulated = ownMetric
   const today = ownMetric?.today ?? null
   const daily = ownMetric?.daily ?? []
-  const csat = accumulated?.csat ?? null
-  const reviewPercentage = accumulated?.review_percentage ?? null
+  // A resolved ticket from the official report does not prove an attendance was
+  // captured by the separate ticket ingestion. Show the gap without fabricating
+  // attendances or changing the underlying CSAT / podium calculations.
+  const ownResolutionDaysMissingAttendance = (ownOfficialResolution?.daily ?? [])
+    .filter((day) => day.resolved > 0 &&
+      !daily.some((record) => record.date === day.date && record.attendances > 0))
+    .map((day) => day.date)
+  const reconciled = metrics?.reconciled_live ?? null
+  const csat = reconciled?.csat ?? null
+  const reviewPercentage = reconciled?.review_percentage ?? null
   const csatGoal = Number(analyst.csat_goal)
   const reviewGoal = 25
   const diagnostic = buildChatPerformanceDiagnostic({
@@ -3802,41 +4118,40 @@ function ChatAnalystPortal({
     csatGoal,
     reviewPercentage,
     reviewGoal,
-    positiveReviews: accumulated?.positive_reviews ?? 0,
-    negativeReviews: accumulated?.negative_reviews ?? 0,
-    attendances: accumulated?.attendances ?? 0,
+    positiveReviews: reconciled?.positive_reviews ?? 0,
+    negativeReviews: reconciled?.negative_reviews ?? 0,
+    attendances: reconciled?.attendances ?? 0,
   })
   const meetsCsat = diagnostic.csatMet === true
   const meetsReviews = diagnostic.reviewMet === true
   const status = diagnostic.statusLabel
-  const podiumContext = metrics?.self_podium_context ?? null
+  const podiumContext = reconciled?.podium ?? null
   const podiumCriteria = podiumContext?.criteria ?? null
   const isOnPodium =
     podiumContext?.eligible === true &&
     podiumContext.position !== null &&
     podiumContext.position <= 3
-  const historyPoints = history?.points ?? []
-  const todayKey = new Date().toISOString().slice(0, 10)
-  const visibleDayCount =
-    now.getFullYear() === year && now.getMonth() + 1 === monthNumber
-      ? now.getDate()
-      : Number(monthEnd.slice(-2))
-  const ruler = Array.from({ length: visibleDayCount }, (_, index) => {
-    const day = String(index + 1).padStart(2, '0')
-    const date = `${monthKey}-${day}`
-    const source = daily.find((item) => item.date === date)
-    return {
-      date,
-      day,
-      attendances: source?.attendances ?? 0,
-      reviews: source?.reviews ?? 0,
-      csat: source?.csat ?? null,
-    }
-  })
-  const activeRoutineDays = ruler.filter((item) => item.attendances > 0)
+  const historyPoints = (history?.points ?? []).map(point =>
+    point.source === 'live' && point.month === monthKey && reconciled
+      ? {...point,attendances:reconciled.attendances,positive_reviews:reconciled.positive_reviews,
+          negative_reviews:reconciled.negative_reviews,reviews:reconciled.reviews,csat:reconciled.csat,
+          review_percentage:reconciled.review_percentage} : point,
+  )
+  const todayParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit',
+  }).formatToParts(now)
+  const todayKey = ['year','month','day']
+    .map((key) => todayParts.find((part) => part.type===key)?.value ?? '')
+    .join('-')
+  // Deduplicated individual consultation only; official CSAT and podium remain separate.
+  const activeRoutineDays = reconciled?.daily ?? []
+  const ownedDailyTickets = (dailyTickets?.tickets ?? []).filter(ticket =>
+    reconciled?.owned_tickets.some(own => own.ticket_id === ticket.ticket_id && own.date === selectedRoutineDate)
+  )
 
   return (
     <div className="analyst-portal mt-6 space-y-5">
+      {openedTicketId && <ClickDeskTicketPreview ticketId={openedTicketId} analystId={analyst.id} onClose={() => setOpenedTicketId(null)} />}
       <section className="panel analyst-portal-hero">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
@@ -3885,7 +4200,7 @@ function ChatAnalystPortal({
                         podiumContext.eligible ? 'text-emerald-300' : 'text-amber-200'
                       }`}
                     >
-                      {isOnPodium ? 'Pódio do período' : 'Posição no ranking'}
+                      {'Posição provisória no ranking'}
                     </p>
                     <strong className="mt-2 block text-2xl text-slate-100">
                       {podiumContext.position
@@ -3897,10 +4212,10 @@ function ChatAnalystPortal({
                         podiumContext.eligible ? 'text-emerald-300' : 'text-amber-200'
                       }`}
                     >
-                      {podiumContext.eligible ? 'Elegível ao pódio' : 'Não elegível ao pódio'}
+                      {podiumContext.eligible ? 'Critérios provisórios cumpridos' : 'Critérios provisórios não cumpridos'}
                     </span>
                     <span className="mt-1 block text-xs text-slate-400">
-                      {podiumCriteria.completed} de 3 critérios cumpridos
+                      {podiumCriteria.completed} de 3 critérios · dados parciais
                     </span>
                   </div>
                   <div className="text-right">
@@ -3918,7 +4233,7 @@ function ChatAnalystPortal({
             <p className="text-slate-400">Situação atual</p>
             <strong className="mt-1 block text-cyan-100">{status}</strong>
             <span className="mt-1 block text-xs text-slate-400">
-              {Number(meetsCsat) + Number(meetsReviews)} de 2 metas atingidas
+              CSAT: {meetsCsat ? 'atingida' : 'abaixo'} · Avaliações: {meetsReviews ? 'atingida' : 'abaixo'} · parcial
             </span>
           </div>
         </div>
@@ -3936,169 +4251,55 @@ function ChatAnalystPortal({
 
         {!loading && !metrics?.erro && (
           <>
-            <div className="mt-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                Resumo da competência
-              </p>
-              <div className="mt-3 grid gap-4 lg:grid-cols-3">
-                <div className="rounded-xl border border-white/10 bg-slate-950/40 p-5">
-                  <p className="text-sm text-slate-400">Atendimentos</p>
-                  <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
-                    {formatChatCount(accumulated?.attendances ?? 0)}
-                  </strong>
-                  <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-3 text-sm">
-                    <span className="text-slate-500">Atendimentos hoje</span>
-                    <strong className="tabular-nums text-slate-200">
-                      {formatChatCount(today?.attendances ?? 0)}
-                    </strong>
-                  </div>
-                </div>
 
-                <div className={`rounded-xl border p-5 ${
-                  csat === null
-                    ? 'border-white/10 bg-slate-950/40'
-                    : meetsCsat
-                      ? 'border-emerald-400/20 bg-emerald-400/5'
-                      : 'border-amber-300/20 bg-amber-300/5'
-                }`}>
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm text-slate-400">CSAT</p>
-                      <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
-                        {csat === null ? '—' : formatChatPercent(csat)}
-                      </strong>
-                    </div>
-                    <span className="rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300">
-                      Meta {formatChatPercent(csatGoal)}
-                    </span>
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-slate-400">
-                    {csat === null
-                      ? 'Ainda sem avaliações suficientes para calcular o indicador.'
-                      : diagnostic.csatDelta !== null && diagnostic.csatDelta >= 0
-                        ? `${formatDelta(diagnostic.csatDelta, ' p.p.')} acima da meta.`
-                        : `${formatDelta(Math.abs(diagnostic.csatDelta ?? 0), ' p.p.').replace('+', '')} abaixo da meta.`}
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-4 border-t border-white/10 pt-3 text-sm">
-                    <a className="text-slate-500 hover:text-emerald-200" href="#minha-rotina">
-                      Positivas <strong className="text-slate-200">{formatChatCount(accumulated?.positive_reviews ?? 0)}</strong>
-                      <span className="ml-1 text-xs">ver tickets</span>
-                    </a>
-                    <a className="text-slate-500 hover:text-amber-100" href="#minha-rotina">
-                      Negativas <strong className="text-slate-200">{formatChatCount(accumulated?.negative_reviews ?? 0)}</strong>
-                      <span className="ml-1 text-xs">entender</span>
-                    </a>
-                  </div>
-                </div>
-
-                <div className={`rounded-xl border p-5 ${
-                  reviewPercentage === null
-                    ? 'border-white/10 bg-slate-950/40'
-                    : meetsReviews
-                      ? 'border-emerald-400/20 bg-emerald-400/5'
-                      : 'border-amber-300/20 bg-amber-300/5'
-                }`}>
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm text-slate-400">% de avaliações</p>
-                      <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
-                        {reviewPercentage === null ? '—' : formatChatPercent(reviewPercentage)}
-                      </strong>
-                    </div>
-                    <span className="rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300">
-                      Meta {formatChatPercent(reviewGoal)}
-                    </span>
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-slate-400">
-                    {reviewPercentage === null
-                      ? 'Ainda sem base para calcular participação nas avaliações.'
-                      : diagnostic.reviewDelta !== null && diagnostic.reviewDelta >= 0
-                        ? `${formatDelta(diagnostic.reviewDelta, ' p.p.')} acima da meta.`
-                        : `${formatDelta(Math.abs(diagnostic.reviewDelta ?? 0), ' p.p.').replace('+', '')} abaixo da meta.`}
-                  </p>
-                  <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-3 text-sm">
-                    <span className="text-slate-500">Avaliações recebidas</span>
-                    <strong className="tabular-nums text-slate-200">
-                      {formatChatCount(accumulated?.reviews ?? 0)}
-                    </strong>
-                  </div>
-                </div>
+            <div className="mt-5 grid gap-3 md:grid-cols-3">
+              <div className="rounded-xl border border-cyan-400/30 bg-cyan-400/5 p-4">
+                <p className="text-sm text-slate-300">Atendimentos identificados</p>
+                <strong className="mt-1 block text-4xl tabular-nums text-slate-100">
+                  {reconciled ? formatChatCount(reconciled.attendances) : '—'}
+                </strong>
+                <p className="mt-2 text-xs text-amber-200">Parcial · último atendente ainda em conferência</p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+                <p className="text-sm text-slate-400">CSAT</p>
+                <strong className="mt-1 block text-3xl tabular-nums">{csat === null ? '—' : formatChatPercent(csat)}</strong>
+                <p className="mt-2 text-xs text-slate-400">Meta pessoal {formatChatPercent(csatGoal)} · somente notas avaliadas · parcial</p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
+                <p className="text-sm text-slate-400">Avaliações</p>
+                <strong className="mt-1 block text-3xl tabular-nums">{reviewPercentage === null ? '—' : formatChatPercent(reviewPercentage)}</strong>
+                <p className="mt-2 text-xs text-slate-400">Meta {formatChatPercent(reviewGoal)} · volume bruto, sem desconto de inatividade</p>
               </div>
             </div>
-
-            <ChatPerformanceDiagnosticPanel diagnostic={diagnostic} />
-
-            {podiumContext && podiumCriteria && (
-              <div className="mt-5 rounded-xl border border-cyan-400/15 bg-slate-950/35 p-4">
-                <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-300">
-                      Caminho para o pódio
-                    </p>
-                    <h4 className="mt-1 text-lg font-bold text-slate-100">
-                      {podiumCriteria.completed} de 3 critérios cumpridos
-                    </h4>
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    Média do time: {formatChatCount(podiumContext.team_average_attendances)} atendimentos
-                  </p>
-                </div>
-
-                <div className="mt-4 grid gap-2 md:grid-cols-3">
-                  <div className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-3 ${
-                    podiumCriteria.csat_met
-                      ? 'border-emerald-400/25 bg-emerald-400/5'
-                      : 'border-amber-300/25 bg-amber-300/5'
-                  }`}>
-                    <div>
-                      <p className="text-xs text-slate-500">CSAT</p>
-                      <strong className="text-slate-100">
-                        {csat === null ? '—' : formatChatPercent(csat)}
-                      </strong>
-                    </div>
-                    <span className="text-xs text-slate-400">
-                      meta {formatChatPercent(podiumCriteria.csat_min)}
-                    </span>
-                  </div>
-
-                  <div className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-3 ${
-                    podiumCriteria.review_met
-                      ? 'border-emerald-400/25 bg-emerald-400/5'
-                      : 'border-amber-300/25 bg-amber-300/5'
-                  }`}>
-                    <div>
-                      <p className="text-xs text-slate-500">Avaliações</p>
-                      <strong className="text-slate-100">
-                        {reviewPercentage === null ? '—' : formatChatPercent(reviewPercentage)}
-                      </strong>
-                    </div>
-                    <span className="text-xs text-slate-400">
-                      meta {formatChatPercent(podiumCriteria.review_min)}
-                    </span>
-                  </div>
-
-                  <div className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-3 ${
-                    podiumCriteria.volume_met
-                      ? 'border-emerald-400/25 bg-emerald-400/5'
-                      : 'border-amber-300/25 bg-amber-300/5'
-                  }`}>
-                    <div>
-                      <p className="text-xs text-slate-500">Volume</p>
-                      <strong className="text-slate-100">
-                        {formatChatCount(accumulated?.attendances ?? 0)}
-                      </strong>
-                    </div>
-                    <span className="text-xs text-slate-400">
-                      média {formatChatCount(podiumCriteria.volume_min)}
-                    </span>
-                  </div>
-                </div>
-
-                <p className="mt-3 text-xs leading-5 text-slate-500">
-                  A posição no ranking aparece junto do seu perfil. O pódio só é reconhecido quando os três critérios são cumpridos.
+            <details className="mt-3 rounded-lg border border-white/10 bg-slate-950/30 px-4 py-3">
+              <summary className="cursor-pointer text-sm text-slate-200">Entenda os números, metas e pódio</summary>
+              <p className="mt-3 text-xs leading-5 text-slate-400">
+                Cada ticket é atribuído somente ao último atendente humano comprovado. A avaliação pertence
+                ao último atendente humano; ticket sem nota não conta como avaliação ruim.
+                Índices parciais da competência, sem classificação de inatividade. Fechamentos oficiais preservados.
+              </p>
+              <p className="mt-2 text-xs text-slate-400">
+                Registros anteriores: {metrics?.identified_attendances?.legacy_count ?? '—'} ·
+                Registros recuperados: {metrics?.identified_attendances?.verified_count ?? '—'} ·
+                Duplicidades: {metrics?.identified_attendances?.overlap_count ?? '—'}.
+                Resolvidos (indicador independente): {ownOfficialResolution?.total ?? '—'}.
+              </p>
+              <p className="mt-3 text-xs text-slate-400">
+                Avaliações: {reconciled?.positive_reviews ?? '—'} boas e {reconciled?.negative_reviews ?? '—'} ruins.
+                Tickets sem nota: {reconciled ? reconciled.attendances - reconciled.reviews : '—'}.
+                {reconciled?.pending_owner_tickets ? `${reconciled.pending_owner_tickets} tickets aguardam comprovação do último atendente.` : ''}
+              </p>
+              <div className="mt-3"><ChatPerformanceDiagnosticPanel diagnostic={diagnostic} /></div>
+              {podiumCriteria && podiumContext && (
+                <p className="mt-3 text-sm text-slate-300">
+                  Pódio provisório: {podiumCriteria.completed} de 3 critérios · dados parciais ·
+                  CSAT ({formatChatPercent(podiumCriteria.csat_min)}): {podiumCriteria.csat_met ? 'atingido' : 'não atingido'} ·
+                  avaliações ({formatChatPercent(podiumCriteria.review_min)}): {podiumCriteria.review_met ? 'atingido' : 'não atingido'} ·
+                  volume ({formatChatCount(podiumCriteria.volume_min)}): {podiumCriteria.volume_met ? 'atingido' : 'não atingido'}.
+                  A participação ainda não desconta inatividades.
                 </p>
-              </div>
-            )}
+              )}
+            </details>
 
           </>
         )}
@@ -4112,24 +4313,21 @@ function ChatAnalystPortal({
             </p>
             <h3 className="mt-2 text-2xl font-bold">Dias com atendimento</h3>
             <p className="section-subtitle">
-              A visão foi compactada. Clique em um dia para ver os seus tickets persistidos no ClickDesk.
+              Selecione um dia para abrir os tickets e consultar a análise com IA.
             </p>
           </div>
           <div className="flex flex-wrap gap-2 self-start">
             <span className="rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-xs text-slate-400">
               {activeRoutineDays.length} {activeRoutineDays.length === 1 ? 'dia com atividade' : 'dias com atividade'}
             </span>
-            <span className="rounded-md border border-amber-300/15 bg-amber-300/5 px-3 py-2 text-xs text-amber-100">
-              {formatChatCount(accumulated?.negative_reviews ?? 0)} negativas no mês
-            </span>
-            <span className="rounded-md border border-emerald-400/15 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-200">
-              {formatChatCount(accumulated?.positive_reviews ?? 0)} positivas no mês
-            </span>
+
           </div>
         </div>
 
         {activeRoutineDays.length ? (
-          <div className="mt-5 flex flex-wrap gap-2">
+          <div className="mt-5">
+            <p className="mb-3 text-sm font-semibold text-slate-100">Atendimentos por dia · ordem cronológica</p>
+            <div className="flex flex-wrap gap-2">
             {activeRoutineDays.map((item) => {
               const selected = selectedRoutineDate === item.date
               return (
@@ -4147,17 +4345,16 @@ function ChatAnalystPortal({
                     {formatDate(item.date)}
                   </span>
                   <strong className="mt-1 block text-lg tabular-nums text-slate-100">
-                    {formatChatCount(item.attendances)} atend.
+                    {formatChatCount(item.count)}
                   </strong>
-                  <span className="mt-1 block text-xs text-slate-500">
-                    {formatChatCount(item.reviews)} {item.reviews === 1 ? 'avaliação' : 'avaliações'}
-                  </span>
+                  <span className="mt-1 block text-xs text-slate-400">atendimentos</span>
                 </button>
               )
             })}
+            </div>
           </div>
         ) : (
-          <EmptyState text="Ainda não há dias com atendimentos persistidos nesta competência." />
+          <EmptyState text="Nenhum dia possui atividade humana registrada nas fontes disponíveis nesta competência. Isso não comprova ausência de trabalho." />
         )}
 
         {selectedRoutineDate && (
@@ -4165,7 +4362,7 @@ function ChatAnalystPortal({
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-300">
-                  Tickets do dia
+                  Tickets identificados no dia
                 </p>
                 <h4 className="mt-1 text-lg font-bold">{formatDate(selectedRoutineDate)}</h4>
               </div>
@@ -4188,9 +4385,10 @@ function ChatAnalystPortal({
               <p className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-sm text-amber-100">
                 {dailyTickets.erro}
               </p>
-            ) : dailyTickets?.tickets?.length ? (
+            ) : ownedDailyTickets.length ? (
               <div className="mt-4 space-y-2">
-                {dailyTickets.tickets.map((ticket) => {
+                <p className="text-xs text-slate-400">Tickets atribuídos ao responsável final na captura disponível.</p>
+                {ownedDailyTickets.map((ticket) => {
                   const time = new Intl.DateTimeFormat('pt-BR', {
                     hour: '2-digit',
                     minute: '2-digit',
@@ -4206,7 +4404,6 @@ function ChatAnalystPortal({
                   const qualitativeResult = qualitativeByTicket[ticket.ticket_id]
                   const qualitativeLoading = qualitativeLoadingTicketId === ticket.ticket_id
                   const qualitativeOpen = openQualitativeTicketId === ticket.ticket_id
-                  const evaluated = ticket.satisfaction_label === 'positive' || ticket.satisfaction_label === 'negative'
 
                   return (
                     <div
@@ -4215,7 +4412,9 @@ function ChatAnalystPortal({
                     >
                       <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto] sm:items-center">
                         <div>
-                          <strong className="text-slate-100">Ticket #{ticket.ticket_id}</strong>
+                          <button type="button" className="font-semibold text-cyan-300 underline-offset-2 hover:underline" onClick={() => setOpenedTicketId(ticket.ticket_id)}>
+                            Ticket #{ticket.ticket_id} · Abrir
+                          </button>
                           <p className="mt-1 text-xs text-slate-500">{ticket.area}</p>
                         </div>
                         <span className="text-sm tabular-nums text-slate-400">{time}</span>
@@ -4228,8 +4427,7 @@ function ChatAnalystPortal({
                         }`}>
                           {satisfaction}
                         </span>
-                        {evaluated ? (
-                          QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS ? (
+                        {QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS ? (
                             <button
                               type="button"
                               className="small-button"
@@ -4254,10 +4452,7 @@ function ChatAnalystPortal({
                             </button>
                           ) : (
                             <span className="text-xs font-semibold text-violet-200">IA em preparação</span>
-                          )
-                        ) : (
-                          <span className="text-xs text-slate-600">Sem análise</span>
-                        )}
+                          )}
                       </div>
 
                       {QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS && qualitativeResult && qualitativeOpen && (
@@ -4278,7 +4473,7 @@ function ChatAnalystPortal({
               </div>
             ) : (
               <p className="mt-4 text-sm text-slate-400">
-                Nenhum ticket persistido foi encontrado para este dia.
+                Nenhum ticket atribuído ao responsável final foi localizado neste dia.
               </p>
             )}
           </div>
@@ -4286,6 +4481,8 @@ function ChatAnalystPortal({
       </section>
 
       <section className="panel">
+        <details>
+          <summary className="cursor-pointer text-sm font-semibold text-slate-200">Minha evolução · ver histórico</summary>
         <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
           Minha evolução
         </p>
@@ -4360,7 +4557,7 @@ function ChatAnalystPortal({
                       <p className="mt-1 text-xs text-slate-500">
                         {item.source === 'official'
                           ? 'Resultado mensal preservado'
-                          : 'Base viva persistida do ClickDesk'}
+                          : 'Dados parciais do mês · sem desconto de inatividade'}
                       </p>
                     </div>
                     <div className="grid grid-cols-3 gap-4 text-right">
@@ -4391,6 +4588,7 @@ function ChatAnalystPortal({
         ) : (
           <EmptyState text="Seu histórico ClickDesk será formado a partir das competências disponíveis." />
         )}
+        </details>
       </section>
     </div>
   )
@@ -4458,9 +4656,13 @@ function ChatModuleDashboard({
   const [chatReportQualitativeStatus, setChatReportQualitativeStatus] = useState('')
   const [selectedChatReportMetricId, setSelectedChatReportMetricId] = useState('')
   const [chat2AnalystId, setChat2AnalystId] = useState('')
+  const [unifiedSelectedAnalystId, setUnifiedSelectedAnalystId] = useState('')
   const [chat2LiveAnalystKey, setChat2LiveAnalystKey] = useState('')
   const [chat2PeriodKey, setChat2PeriodKey] = useState('')
   const [chat2DailyDateFilter, setChat2DailyDateFilter] = useState('all')
+  const [chat2SelectedDayTickets, setChat2SelectedDayTickets] = useState<ClickDeskDailyTicketResponse | null>(null)
+  const [chat2SelectedDayTicketsLoading, setChat2SelectedDayTicketsLoading] = useState(false)
+  const [chat2OpenedTicketId, setChat2OpenedTicketId] = useState<string | null>(null)
   const [clickDeskTestLoading, setClickDeskTestLoading] = useState(false)
   const [clickDeskTestResult, setClickDeskTestResult] = useState<ClickDeskTestResult | null>(null)
   const [clickDeskConversationLoading, setClickDeskConversationLoading] = useState(false)
@@ -7177,10 +7379,28 @@ function ChatModuleDashboard({
     candidate_csat: item.csat,
     candidate_review_percentage: item.review_percentage,
   }))
-  const chat2LiveHumanRows =
-    chat2DiagnosticAnalystRows.length > 0
-      ? chat2DiagnosticAnalystRows
-      : chat2PersistedHumanRows
+  // The recovered capture may contain analysts who have no legacy row.
+  // Include them as selectable people without rewriting official individual KPIs.
+  const chat2VerifiedAnalystRows = (clickDeskPersistedMetrics?.verified_productivity?.by_analyst ?? [])
+    .filter((item) => selectedTeamId === 'all' || item.team_id === selectedTeamId)
+  const chat2LegacyLiveRows = chat2DiagnosticAnalystRows.length > 0
+    ? chat2DiagnosticAnalystRows : chat2PersistedHumanRows
+  const chat2VerifiedOnlyLiveRows = chat2VerifiedAnalystRows
+    .filter((item) => !chat2LegacyLiveRows.some((legacy) =>
+      normalizeChatText(legacy.name) === normalizeChatText(item.analyst_name)))
+    .map((item) => ({
+      area: teams.find((team) => team.id === item.team_id)?.name ?? 'Equipe cadastrada',
+      name: item.analyst_name,
+      count: item.total,
+      journey_confirmed: item.total,
+      satisfaction_labels: {} as Record<string, number>,
+      positive_reviews: item.evaluations.positive_reviews,
+      negative_reviews: item.evaluations.negative_reviews,
+      reviews: item.evaluations.reviews,
+      candidate_csat: item.evaluations.csat,
+      candidate_review_percentage: item.evaluations.review_percentage,
+    }))
+  const chat2LiveHumanRows = [...chat2LegacyLiveRows, ...chat2VerifiedOnlyLiveRows]
   const chat2SelectedLiveHuman =
     chat2LiveHumanRows.find((item) => `${item.area}::${item.name}` === chat2LiveAnalystKey) ??
     chat2LiveHumanRows[0] ??
@@ -7192,6 +7412,11 @@ function ChatModuleDashboard({
           normalizeChatText(item.area) === normalizeChatText(chat2SelectedLiveHuman.area),
       ) ?? null
     : null
+  const chat2SelectedOfficialResolutions = (clickDeskPersistedMetrics?.resolution_productivity?.by_analyst ?? [])
+    .find((item) =>
+      (chat2SelectedPersistedAnalyst?.analyst_id && item.analyst_id === chat2SelectedPersistedAnalyst.analyst_id) ||
+      (chat2SelectedLiveHuman &&
+        normalizeChatText(item.assignee_name) === normalizeChatText(chat2SelectedLiveHuman.name))) ?? null
 
   useEffect(() => {
     const analystId = chat2SelectedPersistedAnalyst?.analyst_id
@@ -7202,12 +7427,69 @@ function ChatModuleDashboard({
     }
   }, [chat2SelectedPersistedAnalyst?.analyst_id])
 
+  const chat2SelectedVerifiedAnalyst = (clickDeskPersistedMetrics?.verified_productivity?.by_analyst ?? [])
+    .filter((item) => selectedTeamId === 'all' || item.team_id === selectedTeamId)
+    .find((item) =>
+      (chat2SelectedPersistedAnalyst?.analyst_id && item.analyst_id === chat2SelectedPersistedAnalyst.analyst_id) ||
+      (chat2SelectedLiveHuman && normalizeChatText(item.analyst_name) === normalizeChatText(chat2SelectedLiveHuman.name)),
+    ) ?? null
+  const chat2SelectedVerifiedDays = new Map(
+    (chat2SelectedVerifiedAnalyst?.daily ?? []).map((day) => [day.date, day.count]),
+  )
+  const chat2SelectedVerifiedRatingsByDay = new Map(
+    (chat2SelectedVerifiedAnalyst?.ratings_daily ?? []).map((day) => [day.date, day]),
+  )
+  useEffect(() => {
+    const analystId = chat2SelectedVerifiedAnalyst?.analyst_id
+    if (
+      chatActiveTab !== 'prototype' ||
+      chat2DailyDateFilter === 'all' ||
+      !analystId ||
+      !chat2SelectedVerifiedDays.has(chat2DailyDateFilter)
+    ) {
+      setChat2SelectedDayTickets(null)
+      setChat2SelectedDayTicketsLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setChat2SelectedDayTickets(null)
+    setChat2SelectedDayTicketsLoading(true)
+
+    async function loadVerifiedDayEvidence() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) throw new Error('Faça login novamente para consultar os tickets.')
+        const params = new URLSearchParams({
+          date: chat2DailyDateFilter,
+          analyst_id: analystId!,
+        })
+        const response = await fetch(`/api/clickdesk/tickets?${params}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: 'no-store',
+        })
+        const result = (await response.json()) as ClickDeskDailyTicketResponse
+        if (!response.ok) throw new Error(result.erro ?? 'Falha ao consultar os tickets.')
+        if (!cancelled) setChat2SelectedDayTickets(result)
+      } catch (error) {
+        if (!cancelled) {
+          setChat2SelectedDayTickets({ erro: getErrorMessage(error) })
+        }
+      } finally {
+        if (!cancelled) setChat2SelectedDayTicketsLoading(false)
+      }
+    }
+
+    void loadVerifiedDayEvidence()
+    return () => { cancelled = true }
+  }, [chatActiveTab, chat2DailyDateFilter, chat2SelectedVerifiedAnalyst?.analyst_id])
   const chat2HistoryPoints = clickDeskAnalystHistory?.points ?? []
   const chat2DailyMap = new Map(
     (chat2SelectedPersistedAnalyst?.daily ?? []).map((item) => [item.date, item]),
   )
   const chat2DailyCoverageDates = [
     ...(clickDeskPersistedMetrics?.performance_daily ?? []).map((item) => item.date),
+    ...(chat2SelectedVerifiedAnalyst?.daily ?? []).map((item) => item.date),
     ...(clickDeskPersistedMetrics?.daily ?? []).map((item) => item.date),
     ...((clickDeskPersistedMetrics?.by_analyst ?? []).flatMap((item) => item.daily.map((day) => day.date))),
   ].filter(Boolean)
@@ -7221,7 +7503,7 @@ function ChatModuleDashboard({
     const limit = new Date(`${clickDeskPersistedMetrics.period.end}T00:00:00Z`)
     while (cursor <= limit) {
       const date = cursor.toISOString().slice(0, 10)
-      const covered = chat2DailyCoverageStart ? date >= chat2DailyCoverageStart : true
+      const covered = Boolean(chat2DailyCoverageStart && date >= chat2DailyCoverageStart && chat2DailyMap.has(date))
       const persistedDay = chat2DailyMap.get(date)
       chat2DailyRuler.push(
         persistedDay
@@ -7348,7 +7630,20 @@ function ChatModuleDashboard({
     (sum, item) => sum + Number(item.today?.attendances ?? 0),
     0,
   )
-  const chat2OperationDailySource = clickDeskPersistedMetrics?.performance_daily ?? []
+  // Presentation only: keep official metrics intact; show recovered human
+  // contributions on the operational trend where the legacy capture is missing.
+  // The two sources are NOT a reconciled official productivity series.
+  const chat2OperationVerifiedDays = new Map(
+    (clickDeskPersistedMetrics?.verified_productivity?.daily ?? []).map((day) => [day.date, day.count]),
+  )
+  // Chart-only: select one series, never add verified activity to legacy totals.
+  const chat2OperationUsingVerified = chat2OperationVerifiedDays.size > 0
+  const chat2OperationDailySource = chat2OperationUsingVerified
+    ? [...chat2OperationVerifiedDays].map(([date, count]) => ({
+        date, attendances: count, positive_reviews: 0, negative_reviews: 0,
+        reviews: 0, csat: null, review_percentage: null,
+      }))
+    : (clickDeskPersistedMetrics?.performance_daily ?? [])
   const chat2OperationDailyCoverageStart =
     chat2OperationDailySource.length > 0
       ? [...chat2OperationDailySource].sort((a, b) => a.date.localeCompare(b.date))[0]?.date ?? null
@@ -7373,7 +7668,7 @@ function ChatModuleDashboard({
     const limit = new Date(`${chat2OperationPeriodEnd}T00:00:00Z`)
     while (cursor <= limit) {
       const date = cursor.toISOString().slice(0, 10)
-      const covered = chat2OperationDailyCoverageStart ? date >= chat2OperationDailyCoverageStart : false
+      const covered = Boolean(chat2OperationDailyCoverageStart && date >= chat2OperationDailyCoverageStart && chat2OperationDailyMap.has(date))
       const persistedDay = chat2OperationDailyMap.get(date)
       chat2OperationDailyRuler.push(
         persistedDay
@@ -7798,6 +8093,36 @@ function ChatModuleDashboard({
     chat2SelectedMetric && Number(chat2SelectedMetric.reviews) > 0
       ? round((Number(chat2SelectedMetric.negative_reviews) / Number(chat2SelectedMetric.reviews)) * 100)
       : 0
+  // One server-calculated ledger for both the analyst and management portals.
+  // Team filters affect visibility, never the responsibility or rating formula.
+  const unifiedCurrentMonth = chat2SelectedPeriod.key === chat2Periods[0]?.key
+  const unifiedRoster = clickDeskPersistedMetrics?.reconciled_roster ?? []
+  const unifiedSelected = unifiedRoster.find(row=>row.analyst_id===unifiedSelectedAnalystId)
+    ?? unifiedRoster[0] ?? null
+  const unifiedAttended = unifiedRoster.reduce((sum,row)=>sum+row.attendances,0)
+  const unifiedPositive = unifiedRoster.reduce((sum,row)=>sum+row.positive_reviews,0)
+  const unifiedNegative = unifiedRoster.reduce((sum,row)=>sum+row.negative_reviews,0)
+  const unifiedReviews = unifiedPositive+unifiedNegative
+  const unifiedCsat = unifiedReviews ? round(unifiedPositive/unifiedReviews*100) : null
+  const unifiedReviewShare = unifiedAttended ? round(unifiedReviews/unifiedAttended*100) : null
+  const unifiedPending = unifiedRoster.reduce((sum,row)=>sum+row.pending_owner_tickets,0)
+  const unifiedCsatAttention = unifiedRoster.filter(row =>
+    row.csat !== null &&
+    row.csat < Number(analysts.find(a=>a.id===row.analyst_id)?.csat_goal ?? 90)
+  )
+  const unifiedReviewAttention = unifiedRoster.filter(row =>
+    row.attendances>0 && row.review_percentage !== null && row.review_percentage<25
+  )
+  const unifiedWithoutRating = unifiedRoster.filter(row => row.attendances>0 && row.csat===null)
+  const unifiedPodiumReady = unifiedRoster.filter(row=>row.podium.eligible)
+  const unifiedPodiumAttention = unifiedRoster.filter(row=>
+    row.attendances>0 && !row.podium.eligible
+  ).sort((a,b)=>b.podium.criteria.completed-a.podium.criteria.completed ||
+    a.analyst_name.localeCompare(b.analyst_name,'pt-BR'))
+  const unifiedTeamName = (id:string)=>teams.find(x=>x.id===id)?.name ?? 'Equipe do Chat'
+  const unifiedCsatGoal = unifiedSelected
+    ? Number(analysts.find(x=>x.id===unifiedSelected.analyst_id)?.csat_goal ?? 90)
+    : 90
   const operation360Totals = clickDeskOperation360?.totals
   const operation360Coverage = clickDeskOperation360?.coverage
   const operation360Preliminary = clickDeskOperation360?.preliminary_patterns
@@ -7897,7 +8222,181 @@ function ChatModuleDashboard({
 
 
 
-      {chatActiveTab === 'overview' && (
+
+      {unifiedCurrentMonth && (chatActiveTab === 'overview' || chatActiveTab === 'prototype' || chatActiveTab === 'podium') && (
+        <section className="panel">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-cyan-300">Chat · painel unificado</p>
+              <h2 className="mt-2 text-xl font-bold text-slate-100">
+                {chatActiveTab === 'overview' ? 'Resultado da operação' :
+                  chatActiveTab === 'prototype' ? 'Desempenho dos analistas' : 'Critérios do pódio'}
+              </h2>
+              <p className="mt-2 text-sm text-slate-400">
+                {selectedTeamName} · {chat2SelectedPeriod.label}. Os números individuais seguem a mesma
+                conciliação de ticket e responsável final utilizada no acesso do analista.
+              </p>
+            </div>
+            <span className="rounded-lg border border-amber-300/20 px-3 py-2 text-xs text-amber-200">
+              Apuração parcial · inatividade ainda não identificada
+            </span>
+          </div>
+          {clickDeskPersistedMetrics?.erro ? (
+            <p role="alert" className="mt-4 rounded-lg border border-amber-300/20 p-3 text-sm text-amber-100">
+              Não foi possível conferir a base: {clickDeskPersistedMetrics.erro}. Indicadores não foram substituídos por zeros.
+            </p>
+          ) : clickDeskPersistedMetrics?.reconciled_roster ? (
+            <>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-lg border border-white/10 bg-slate-950/40 p-4">
+                  <p className="text-sm text-slate-400">Atendimentos atribuídos</p>
+                  <strong className="mt-1 block text-3xl tabular-nums">{formatChatCount(unifiedAttended)}</strong>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-slate-950/40 p-4">
+                  <p className="text-sm text-slate-400">CSAT</p>
+                  <strong className="mt-1 block text-3xl tabular-nums">{unifiedCsat===null?'—':formatChatPercent(unifiedCsat)}</strong>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-slate-950/40 p-4">
+                  <p className="text-sm text-slate-400">Avaliações recebidas</p>
+                  <strong className="mt-1 block text-3xl tabular-nums">{formatChatCount(unifiedReviews)}</strong>
+                  <p className="mt-1 text-xs text-slate-500">{unifiedPositive} positivas · {unifiedNegative} negativas</p>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-slate-950/40 p-4">
+                  <p className="text-sm text-slate-400">% com avaliação</p>
+                  <strong className="mt-1 block text-3xl tabular-nums">{unifiedReviewShare===null?'—':formatChatPercent(unifiedReviewShare)}</strong>
+                </div>
+              </div>
+              <p className="mt-3 text-xs text-amber-200">
+                {formatChatCount(unifiedPending)} participação(ões) vinculadas a tickets cujo último
+                atendente ainda precisa de comprovação; esses tickets não foram distribuídos por suposição.
+              </p>
+              {chatActiveTab==='overview' && (
+                <div className="mt-5 rounded-xl border border-white/10 bg-slate-950/25 p-4">
+                  <h3 className="font-semibold text-slate-100">O que merece atenção?</h3>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-lg border border-white/10 p-3">
+                      <p className="text-xs text-slate-400">CSAT abaixo da meta individual</p>
+                      <strong className="mt-1 block text-2xl tabular-nums">{unifiedCsatAttention.length}</strong>
+                    </div>
+                    <div className="rounded-lg border border-white/10 p-3">
+                      <p className="text-xs text-slate-400">Avaliações abaixo de 25%</p>
+                      <strong className="mt-1 block text-2xl tabular-nums">{unifiedReviewAttention.length}</strong>
+                    </div>
+                    <div className="rounded-lg border border-white/10 p-3">
+                      <p className="text-xs text-slate-400">Pessoas sem avaliações</p>
+                      <strong className="mt-1 block text-2xl tabular-nums">{unifiedWithoutRating.length}</strong>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-slate-300">
+                    {unifiedCsatAttention.length>0 || unifiedReviewAttention.length>0
+                      ? 'Há indicadores individuais que merecem acompanhamento. Consulte Equipe e produtividade para identificar as pessoas e examinar os tickets.'
+                      : 'Nenhum indicador mensurável está abaixo dessas referências nesta captura. Confirme a cobertura antes de concluir o período.'}
+                  </p>
+                  <p className="mt-2 text-xs text-slate-500">
+                    Diagnóstico parcial, sem classificação de inatividade nem atribuição presumida de transferências.
+                    {unifiedPodiumReady.length>0
+                      ? ` ${unifiedPodiumReady.length} analista(s) cumprem provisoriamente os três critérios do pódio.`
+                      : ''}
+                  </p>
+                </div>
+              )}
+              {chatActiveTab==='podium' && (
+                <div className="mt-5 rounded-xl border border-white/10 bg-slate-950/25 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="font-semibold text-slate-100">Prioridades de acompanhamento</h3>
+                    <span className="text-sm text-slate-400">
+                      {unifiedPodiumReady.length} de {unifiedRoster.filter(x=>x.attendances>0).length} com os três critérios
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">
+                    CSAT mínimo de 90% para o pódio, avaliações de 25% e volume igual ou superior à média da equipe.
+                    A meta individual de CSAT pode ser 86% ou 90%, conforme o cadastro.
+                  </p>
+                  <div className="mt-3 divide-y divide-white/10">
+                    {unifiedPodiumAttention.slice(0,10).map(row=>(
+                      <div key={row.analyst_id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                        <div>
+                          <strong className="text-sm text-slate-100">{row.analyst_name}</strong>
+                          <p className="mt-1 text-xs text-slate-400">
+                            {row.podium.criteria.completed} de 3 critérios ·
+                            {' '}{!row.podium.criteria.csat_met?'CSAT ':''}
+                            {!row.podium.criteria.review_met?'avaliações ':''}
+                            {!row.podium.criteria.volume_met?'volume ':''}
+                          </p>
+                        </div>
+                        <span className="text-xs text-amber-200">
+                          {row.pending_owner_tickets ? `${row.pending_owner_tickets} participação(ões) em conferência` : 'Parcial'}
+                        </span>
+                      </div>
+                    ))}
+                    {unifiedPodiumAttention.length===0 && (
+                      <p className="py-3 text-sm text-slate-400">
+                        Nenhum analista com atividade mensurada fora dos três critérios nesta captura.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+              {chatActiveTab==='prototype' && (
+              <div className="mt-5 overflow-x-auto rounded-xl border border-white/10">
+                <table className="w-full min-w-[750px] text-sm">
+                  <thead className="bg-slate-950/40 text-left text-xs text-slate-400">
+                    <tr>
+                      <th className="px-3 py-3">Analista</th>
+                      <th className="px-3 py-3 text-right">Atendimentos</th>
+                      <th className="px-3 py-3 text-right">CSAT</th>
+                      <th className="px-3 py-3 text-right">% avaliações</th>
+                      <th className="px-3 py-3 text-right">Pódio</th>
+                      <th className="px-3 py-3 text-right">Conferência</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/10">
+                    {[...unifiedRoster].sort((a,b)=>a.analyst_name.localeCompare(b.analyst_name,'pt-BR')).map(row=>(
+                      <tr key={row.analyst_id} className={unifiedSelected?.analyst_id===row.analyst_id?'bg-cyan-400/5':''}>
+                        <td className="px-3 py-3">
+                          <button type="button" className="text-left font-semibold text-cyan-200 hover:underline"
+                            onClick={()=>setUnifiedSelectedAnalystId(row.analyst_id)}>{row.analyst_name}</button>
+                          <p className="mt-1 text-xs text-slate-500">{unifiedTeamName(row.team_id)}</p>
+                        </td>
+                        <td className="px-3 py-3 text-right tabular-nums">{formatChatCount(row.attendances)}</td>
+                        <td className="px-3 py-3 text-right tabular-nums">{row.csat===null?'—':formatChatPercent(row.csat)}</td>
+                        <td className="px-3 py-3 text-right tabular-nums">{row.review_percentage===null?'—':formatChatPercent(row.review_percentage)}</td>
+                        <td className="px-3 py-3 text-right tabular-nums">{row.podium.criteria.completed}/3</td>
+                        <td className="px-3 py-3 text-right tabular-nums">{row.pending_owner_tickets||'—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              )}
+              {chatActiveTab==='prototype' && unifiedSelected && (
+                <div className="mt-4 rounded-xl border border-cyan-400/20 bg-slate-950/30 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <strong className="text-slate-100">{unifiedSelected.analyst_name} · leitura individual</strong>
+                    <span className="text-xs text-slate-400">Média do time: {formatChatCount(unifiedSelected.podium.team_average_attendances)}</span>
+                  </div>
+                  <div className="mt-3 grid gap-3 text-sm sm:grid-cols-3">
+                    <p>CSAT · meta individual {formatChatPercent(unifiedCsatGoal)}:
+                      <strong className="ml-1">{unifiedSelected.csat!==null&&unifiedSelected.csat>=unifiedCsatGoal?'atingida':'não atingida'}</strong></p>
+                    <p>Avaliações · meta 25%:
+                      <strong className="ml-1">{unifiedSelected.review_percentage!==null&&unifiedSelected.review_percentage>=25?'atingida':'não atingida'}</strong></p>
+                    <p>Volume · média da equipe:
+                      <strong className="ml-1">{unifiedSelected.podium.criteria.volume_met?'atingido':'não atingido'}</strong></p>
+                  </div>
+                  <p className="mt-3 text-xs text-slate-500">
+                    Critério de pódio usa CSAT mínimo de 90%, avaliações de 25% e média do time.
+                    Os indicadores de hoje permanecem em conferência até validar os últimos atendentes sem avaliação.
+                  </p>
+                </div>
+              )}
+            </>
+          ) : (
+            <p className="mt-4 text-sm text-slate-400">Carregando a apuração única do Chat...</p>
+          )}
+        </section>
+      )}
+
+      {chatActiveTab === 'overview' && !unifiedCurrentMonth && (
         <section className="workspace-page-heading">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -7924,7 +8423,145 @@ function ChatModuleDashboard({
       )}
 
 
-      {chatActiveTab === 'overview' && (
+      {chatActiveTab === 'overview' && !unifiedCurrentMonth && (
+        <section className="rounded-2xl border border-emerald-300/20 bg-emerald-300/[0.04] px-5 py-5 sm:px-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-emerald-200">
+                ClickDesk · captura humana verificada
+              </p>
+              <h3 className="mt-2 text-lg font-semibold text-slate-100">
+                Contribuições humanas recuperadas · {chat2SelectedPeriod.label}
+              </h3>
+              <p className="mt-1 text-xs leading-5 text-slate-400">
+                Fonte complementar: participação humana verificada por ticket e analista.
+                Ausência de avaliação não invalida a participação. Este CSAT de
+                amostra não substitui o indicador oficial nem altera o pódio.
+              </p>
+            </div>
+            <span className="rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-400">
+              {selectedTeamName}
+            </span>
+          </div>
+          {clickDeskPersistedMetrics?.erro ? (
+            <div role="alert" className="mt-4 rounded-lg border border-rose-300/30 bg-rose-300/10 px-4 py-3 text-sm text-rose-100">
+              Não foi possível ler a captura de homologação: {clickDeskPersistedMetrics.erro}
+              Nenhum zero foi considerado como resultado do período.
+            </div>
+          ) : clickDeskPersistedMetrics?.verified_productivity?.has_records ? (
+            <>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-xl bg-slate-950/45 p-4">
+                  <p className="text-xs text-slate-400">Contribuições humanas verificadas</p>
+                  <strong className="mt-1 block text-2xl tabular-nums">
+                    {formatChatCount(clickDeskPersistedMetrics.verified_productivity.total)}
+                  </strong>
+                </div>
+                <div className="rounded-xl bg-slate-950/45 p-4">
+                  <p className="text-xs text-slate-400">Avaliações recebidas</p>
+                  <strong className="mt-1 block text-2xl tabular-nums">
+                    {formatChatCount(clickDeskPersistedMetrics.verified_productivity.evaluations.reviews)}
+                  </strong>
+                  <p className="mt-1 text-xs text-slate-400">
+                    <span className="text-emerald-300">+{clickDeskPersistedMetrics.verified_productivity.evaluations.positive_reviews}</span>
+                    {' / '}
+                    <span className="text-rose-300">-{clickDeskPersistedMetrics.verified_productivity.evaluations.negative_reviews}</span>
+                  </p>
+                </div>
+                <div className="rounded-xl bg-slate-950/45 p-4">
+                  <p className="text-xs text-slate-400">CSAT · amostra verificada</p>
+                  <strong className="mt-1 block text-2xl tabular-nums">
+                    {clickDeskPersistedMetrics.verified_productivity.evaluations.csat === null
+                      ? '—'
+                      : formatChatPercent(clickDeskPersistedMetrics.verified_productivity.evaluations.csat)}
+                  </strong>
+                </div>
+                <div className="rounded-xl bg-slate-950/45 p-4">
+                  <p className="text-xs text-slate-400">% com avaliação recebida</p>
+                  <strong className="mt-1 block text-2xl tabular-nums">
+                    {clickDeskPersistedMetrics.verified_productivity.evaluations.review_percentage === null
+                      ? '—'
+                      : formatChatPercent(clickDeskPersistedMetrics.verified_productivity.evaluations.review_percentage)}
+                  </strong>
+                </div>
+              </div>
+              <div className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/5 px-4 py-3 text-sm text-amber-100">
+                O quadro operacional tradicional pode mostrar somente 01 e 02/10 porque usa a captura anterior.
+                Os atendimentos recuperados de 03/10 em diante aparecem nesta conferência separada,
+                sem alterar a contagem oficial, o CSAT ou o pódio.
+              </div>
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[600px] text-sm" aria-label="Conferência diária de atendimentos humanos recuperados">
+                  <thead>
+                    <tr className="border-b border-white/10 text-left text-xs text-slate-400">
+                      <th className="pb-3 font-medium">Dia</th>
+                      <th className="pb-3 text-right font-medium">Atendimentos verificados</th>
+                      <th className="pb-3 text-right font-medium">Avaliações</th>
+                      <th className="pb-3 text-right font-medium">Positivas</th>
+                      <th className="pb-3 text-right font-medium">Negativas</th>
+                      <th className="pb-3 text-right font-medium">CSAT da amostra</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clickDeskPersistedMetrics.verified_productivity.daily.map((day) => {
+                      const rating = clickDeskPersistedMetrics.verified_productivity!.ratings_daily.find((item) => item.date === day.date)
+                      return (
+                        <tr key={day.date} className="border-b border-white/5">
+                          <td className="py-2 text-slate-200">{formatDate(day.date)}</td>
+                          <td className="py-2 text-right tabular-nums">{formatChatCount(day.count)}</td>
+                          <td className="py-2 text-right tabular-nums">{rating?.reviews ?? 0}</td>
+                          <td className="py-2 text-right tabular-nums">{rating?.positive_reviews ?? 0}</td>
+                          <td className="py-2 text-right tabular-nums">{rating?.negative_reviews ?? 0}</td>
+                          <td className="py-2 text-right tabular-nums">{rating?.csat == null ? '—' : formatChatPercent(rating.csat)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full min-w-[570px] text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10 text-left text-xs text-slate-400">
+                      <th className="pb-3 font-medium">Analista</th>
+                      <th className="pb-3 text-right font-medium">Atend.</th>
+                      <th className="pb-3 text-right font-medium">Positivas</th>
+                      <th className="pb-3 text-right font-medium">Negativas</th>
+                      <th className="pb-3 text-right font-medium">CSAT da amostra</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {clickDeskPersistedMetrics.verified_productivity.by_analyst.map((person) => (
+                      <tr key={person.analyst_id} className="border-b border-white/5">
+                        <td className="py-2 pr-3 text-slate-200">{person.analyst_name}</td>
+                        <td className="py-2 text-right tabular-nums">{formatChatCount(person.total)}</td>
+                        <td className="py-2 text-right tabular-nums">{person.evaluations.positive_reviews}</td>
+                        <td className="py-2 text-right tabular-nums">{person.evaluations.negative_reviews}</td>
+                        <td className="py-2 text-right tabular-nums">
+                          {person.evaluations.csat === null ? '—' : formatChatPercent(person.evaluations.csat)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-3 text-xs text-slate-500">
+                {clickDeskPersistedMetrics.verified_productivity.coverage_status === 'queue_drained'
+                  ? 'Fila conhecida processada. A ausência de uma nota não indica erro nem falta de solicitação.'
+                  : 'Alguns lotes podem estar em processamento; o resultado será atualizado.'}
+              </p>
+            </>
+          ) : (
+            <p className="mt-4 text-sm text-slate-400">
+              {clickDeskPersistedMetrics === null
+                ? 'Consultando os atendimentos verificados na homologação...'
+                : 'Não há registros verificados para o período e a equipe selecionados.'}
+            </p>
+          )}
+        </section>
+      )}
+
+      {chatActiveTab === 'overview' && !unifiedCurrentMonth && (
         <section className="overflow-hidden rounded-2xl border border-cyan-300/15 bg-slate-950/35 shadow-[0_22px_70px_rgba(2,8,23,0.28)]">
           <div className="border-b border-white/10 px-5 py-4 sm:px-6">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -8218,7 +8855,7 @@ function ChatModuleDashboard({
         </section>
       )}
 
-      {chatActiveTab === 'prototype' && (
+      {chatActiveTab === 'prototype' && !unifiedCurrentMonth && (
         <section className="workspace-page-heading">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -8272,7 +8909,7 @@ function ChatModuleDashboard({
         </section>
       )}
 
-      {chatActiveTab === 'podium' && (
+      {chatActiveTab === 'podium' && !unifiedCurrentMonth && (
         <section className="workspace-page-heading">
           <p className="workspace-eyebrow">Gestão e ações</p>
           <h2 className="mt-2 text-2xl font-bold">Onde agir e o que acompanhar?</h2>
@@ -8288,7 +8925,7 @@ function ChatModuleDashboard({
         </section>
       )}
 
-      {chatActiveTab === 'prototype' && (
+      {chatActiveTab === 'prototype' && !unifiedCurrentMonth && (
         <div className="space-y-7">
           <section className="workspace-content-section">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -8363,6 +9000,31 @@ function ChatModuleDashboard({
             ) : (
               <div className="mt-5">
                 <EmptyState text="Nenhum analista com dados persistidos nesta competência." />
+              </div>
+            )}
+            {chat2VerifiedAnalystRows.length > 0 && (
+              <div className="mt-5 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.04] p-4">
+                <h4 className="text-sm font-semibold text-cyan-100">Contribuições humanas recuperadas por analista · fonte complementar</h4>
+                <p className="mt-1 text-xs text-slate-400">
+                  Esta listagem permite conferir os dias e responsáveis da captura, sem substituir a produtividade oficial nem alterar cálculos e pódio.
+                </p>
+                <div className="mt-3 divide-y divide-white/10">
+                  {chat2VerifiedAnalystRows.map((person) => (
+                    <button
+                      key={person.analyst_id}
+                      type="button"
+                      onClick={() => {
+                        const existing = chat2LiveHumanRows.find((item) =>
+                          normalizeChatText(item.name) === normalizeChatText(person.analyst_name))
+                        if (existing) setChat2LiveAnalystKey(`${existing.area}::${existing.name}`)
+                      }}
+                      className="flex w-full items-center justify-between gap-4 py-2 text-left text-sm hover:text-cyan-200"
+                    >
+                      <span className="text-slate-200">{person.analyst_name}</span>
+                      <span className="shrink-0 text-slate-300">{formatChatCount(person.total)} contribuições · {person.daily.length} dia(s)</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </section>
@@ -8446,7 +9108,8 @@ function ChatModuleDashboard({
                   </div>
                 </div>
 
-                <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+                <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <MetricCard label="Tickets resolvidos (oficial)" value={chat2SelectedOfficialResolutions ? formatChatCount(chat2SelectedOfficialResolutions.total) : '—'} />
                   <MetricCard label="Atendimentos na competência" value={formatChatCount(chat2LiveAttendances)} />
                   <MetricCard label="Atendimentos hoje" value={formatChatCount(chat2TodayAttendances)} />
                   <MetricCard
@@ -8482,7 +9145,7 @@ function ChatModuleDashboard({
                         <p className="text-sm font-semibold uppercase tracking-[0.14em] text-cyan-300">Régua diária</p>
                         <h4 className="mt-1 text-lg font-bold">Atendimentos por dia</h4>
                         <p className="mt-1 text-sm text-slate-400">
-                          Clique em um dia para detalhar o resultado sem perder o acumulado da competência.
+                          Os registros da base anterior e as contribuições humanas recuperadas são exibidos separadamente; não alteram os indicadores oficiais.
                         </p>
                       </div>
                       <label className="min-w-52 text-sm text-slate-400">
@@ -8494,8 +9157,8 @@ function ChatModuleDashboard({
                         >
                           <option value="all">Competência inteira</option>
                           {chat2DailyRuler.map((item) => (
-                            <option key={item.date} value={item.date} disabled={!item.covered}>
-                              {formatDate(item.date)} · {item.covered ? `${formatChatCount(item.attendances)} atendimento(s)` : 'sem base diária'}
+                            <option key={item.date} value={item.date} disabled={!item.covered && !chat2SelectedVerifiedDays.has(item.date)}>
+                              {formatDate(item.date)} · {chat2SelectedVerifiedDays.has(item.date) ? `${formatChatCount(chat2SelectedVerifiedDays.get(item.date) ?? 0)} contribuições verificadas` : item.covered ? `${formatChatCount(item.attendances)} registro(s) da base anterior` : 'sem base diária'}
                             </option>
                           ))}
                         </select>
@@ -8505,29 +9168,33 @@ function ChatModuleDashboard({
                     <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
                       {chat2DailyRuler.map((item) => {
                         const selected = chat2DailyDateFilter === item.date
+                        const verifiedCount = chat2SelectedVerifiedDays.get(item.date)
                         return (
                           <button
                             key={item.date}
                             type="button"
-                            disabled={!item.covered}
-                            onClick={() => item.covered && setChat2DailyDateFilter(selected ? 'all' : item.date)}
+                            disabled={!item.covered && verifiedCount === undefined}
+                            onClick={() => (item.covered || verifiedCount !== undefined) && setChat2DailyDateFilter(selected ? 'all' : item.date)}
                             className={`min-w-16 rounded-lg border px-3 py-3 text-center transition ${
-                              !item.covered
+                              !item.covered && verifiedCount === undefined
                                 ? 'cursor-not-allowed border-white/5 bg-slate-950/25 text-slate-600'
                                 : selected
                                   ? 'border-cyan-300/60 bg-cyan-300/10 text-cyan-100'
                                   : 'border-white/10 bg-slate-950/45 text-slate-300 hover:border-white/25'
                             }`}
                             title={
-                              item.covered
-                                ? `${formatDate(item.date)} · ${formatChatCount(item.attendances)} atendimento(s)`
-                                : `${formatDate(item.date)} · sem base diária disponível`
+                              verifiedCount !== undefined
+                                ? `${formatDate(item.date)} · ${formatChatCount(verifiedCount)} contribuições humanas verificadas`
+                                : item.covered
+                                  ? `${formatDate(item.date)} · ${formatChatCount(item.attendances)} registros da base anterior`
+                                  : `${formatDate(item.date)} · sem captura comprovada`
                             }
                           >
                             <span className="block text-xs text-slate-500">{item.date.slice(8, 10)}</span>
                             <strong className="mt-1 block text-lg tabular-nums">
-                              {item.covered ? formatChatCount(item.attendances) : '—'}
+                              {verifiedCount !== undefined ? formatChatCount(verifiedCount) : item.covered ? formatChatCount(item.attendances) : '—'}
                             </strong>
+                            <span className="mt-1 block text-[10px] text-slate-400">{verifiedCount !== undefined ? 'humano verificado' : item.covered ? 'base anterior' : 'sem captura'}</span>
                           </button>
                         )
                       })}
@@ -8540,14 +9207,63 @@ function ChatModuleDashboard({
                       </div>
                     )}
 
-                    {chat2SelectedDayMetric ? (
+                    {chat2DailyDateFilter !== 'all' && chat2SelectedVerifiedDays.has(chat2DailyDateFilter) ? (
+                      <div className="mt-4 rounded-xl border border-cyan-300/20 bg-cyan-300/[0.04] p-4">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-cyan-200">
+                          {formatDate(chat2DailyDateFilter)} · contribuição humana recuperada (não oficial)
+                        </p>
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                          <div><p className="text-xs text-slate-400">Contribuições verificadas</p><strong className="text-xl">{formatChatCount(chat2SelectedVerifiedDays.get(chat2DailyDateFilter) ?? 0)}</strong></div>
+                          <div><p className="text-xs text-slate-400">Avaliações recebidas</p><strong className="text-xl">{formatChatCount(chat2SelectedVerifiedRatingsByDay.get(chat2DailyDateFilter)?.reviews ?? 0)}</strong></div>
+                          <div><p className="text-xs text-slate-400">Positivas</p><strong className="text-xl">{formatChatCount(chat2SelectedVerifiedRatingsByDay.get(chat2DailyDateFilter)?.positive_reviews ?? 0)}</strong></div>
+                          <div><p className="text-xs text-slate-400">Negativas</p><strong className="text-xl">{formatChatCount(chat2SelectedVerifiedRatingsByDay.get(chat2DailyDateFilter)?.negative_reviews ?? 0)}</strong></div>
+                          <div><p className="text-xs text-slate-400">CSAT da amostra recuperada</p><strong className="text-xl">{(() => { const value = chat2SelectedVerifiedRatingsByDay.get(chat2DailyDateFilter)?.csat; return value == null ? '—' : formatChatPercent(value) })()}</strong></div>
+                        </div>
+                        <p className="mt-2 text-xs text-slate-400">Sem avaliação não significa atendimento inválido; esta amostra não altera pódio nem metas.</p>
+                        <div className="mt-4 border-t border-cyan-300/15 pt-3">
+                          <p className="text-sm font-semibold text-slate-100">Tickets que comprovam essas contribuições</p>
+                          {chat2SelectedDayTicketsLoading ? (
+                            <p className="mt-2 text-xs text-slate-400">Consultando os registros identificados...</p>
+                          ) : chat2SelectedDayTickets?.erro ? (
+                            <p className="mt-2 text-xs text-amber-200">{chat2SelectedDayTickets.erro}</p>
+                          ) : chat2SelectedDayTickets?.source === 'clickdesk_verified_contributions' ? (
+                            <>
+                              <p className="mt-2 text-xs text-slate-400">
+                                {formatChatCount(chat2SelectedDayTickets.tickets?.length ?? 0)} ticket(s) com mensagem pública humana comprovada. Fonte complementar, sem alteração nos indicadores oficiais.
+                              </p>
+                              {(chat2SelectedDayTickets.tickets?.length ?? 0) !== (chat2SelectedVerifiedDays.get(chat2DailyDateFilter) ?? 0) && (
+                                <p className="mt-2 rounded-lg border border-amber-300/25 bg-amber-300/10 p-2 text-xs text-amber-100">
+                                  Divergência de captura: a régua e a lista de tickets não coincidem. Não considerar este detalhamento validado.
+                                </p>
+                              )}
+                              <div className="mt-3 grid max-h-72 gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
+                                {(chat2SelectedDayTickets.tickets ?? []).map((ticket) => (
+                                  <div key={ticket.ticket_id} className="rounded-lg border border-white/10 bg-slate-950/45 p-3 text-xs">
+                                    <button type="button" className="font-semibold text-cyan-300 underline-offset-2 hover:underline" onClick={() => setChat2OpenedTicketId(ticket.ticket_id)}>
+                                      Ticket #{ticket.ticket_id} · Abrir
+                                    </button>
+                                    <p className="mt-1 text-slate-400">{new Intl.DateTimeFormat('pt-BR',{hour:'2-digit',minute:'2-digit',timeZone:'America/Sao_Paulo'}).format(new Date(ticket.occurred_at))}</p>
+                                    <p className="mt-1 text-slate-400">{ticket.satisfaction_label === 'positive' ? 'Avaliação positiva' : ticket.satisfaction_label === 'negative' ? 'Avaliação negativa' : 'Sem avaliação atribuída'}</p>
+                                    {ticket.first_message_id && <p className="mt-1 text-slate-500">Mensagem pública: {ticket.first_message_id}</p>}
+                                  </div>
+                                ))}
+                              </div>
+                              {chat2OpenedTicketId && <ClickDeskTicketPreview ticketId={chat2OpenedTicketId} analystId={chat2SelectedVerifiedAnalyst?.analyst_id ?? ''} onClose={() => setChat2OpenedTicketId(null)} />}
+                            </>
+                          ) : (
+                            <p className="mt-2 text-xs text-amber-200">A captura diária não pôde ser conciliada com o detalhamento. Não apresentar zero como atendimento comprovado.</p>
+                          )}
+                        </div>
+                      </div>
+                    ) : chat2SelectedDayMetric?.covered ? (
                       <div className="mt-4 border-t border-white/10 pt-4">
+                        <p className="mb-2 text-xs text-slate-400">Série original preservada, sem incorporar contribuições recuperadas.</p>
                         <p className="mb-3 text-sm font-semibold">
                           {formatDate(chat2SelectedDayMetric.date)} · detalhe do dia
                         </p>
                         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                           <div className="rounded-lg bg-slate-950/45 p-3">
-                            <p className="text-xs text-slate-500">Atendimentos</p>
+                            <p className="text-xs text-slate-500">Atendimentos da base anterior</p>
                             <strong className="mt-1 block text-xl tabular-nums">
                               {formatChatCount(chat2SelectedDayMetric.attendances)}
                             </strong>
@@ -8582,7 +9298,7 @@ function ChatModuleDashboard({
                       </div>
                     ) : (
                       <p className="mt-3 text-xs text-slate-500">
-                        Depois do início da cobertura diária, dias sem atendimento aparecem como 0. Datas anteriores à base disponível aparecem como —.
+                        Não existe dado diário comprovado para esta data na fonte selecionada. Ausência de captura não significa zero atendimentos.
                       </p>
                     )}
                   </div>
@@ -9416,7 +10132,7 @@ function ChatModuleDashboard({
         ]}
       />
 
-      <section className={chatActiveTab === 'overview' ? 'workspace-content-section' : 'hidden'}>
+      <section className={chatActiveTab === 'overview' && !unifiedCurrentMonth ? 'workspace-content-section' : 'hidden'}>
         <div className="grid gap-5 xl:grid-cols-[1.05fr_1.95fr]">
           <div className="rounded-xl border border-white/10 bg-slate-950/35 p-5">
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Leitura da operação</p>
@@ -9579,14 +10295,14 @@ function ChatModuleDashboard({
             <>
               <div className="mt-5 grid gap-4 xl:grid-cols-[1.45fr_0.85fr]">
                 <TrendLineChart
-                  label="Evolução diária · últimos 14 dias cobertos"
+                  label={chat2OperationUsingVerified ? 'Contribuições humanas verificadas · evolução diária' : 'Evolução diária · base anterior'}
                   points={chat2OperationRecentDailyPoints}
                   singlePointLabel="Apenas um dia disponível para leitura."
                   latestPointLabel="Último dia"
                   highlightedPointLabel="Dia destacado"
                 />
                 <BarTrend
-                  label="Média de atendimentos por dia da semana"
+                  label={chat2OperationUsingVerified ? 'Média de contribuições verificadas por dia da semana' : 'Média de atendimentos por dia da semana · base anterior'}
                   points={chat2OperationWeekdayPoints}
                 />
               </div>
@@ -9595,7 +10311,7 @@ function ChatModuleDashboard({
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Régua do mês</p>
-                    <strong className="mt-1 block text-sm text-slate-200">Volume consolidado por dia</strong>
+                    <strong className="mt-1 block text-sm text-slate-200">{chat2OperationUsingVerified ? 'Contribuições humanas verificadas por dia' : 'Volume da base anterior por dia'}</strong>
                   </div>
                   <span className="text-xs text-slate-500">
                     {chat2OperationPeakWeekday
@@ -9604,6 +10320,7 @@ function ChatModuleDashboard({
                   </span>
                 </div>
 
+                <p className="mt-2 text-xs text-slate-400">{chat2OperationUsingVerified ? 'Série exclusiva de contribuições humanas verificadas; não representa o atendimento oficial. Datas sem captura aparecem como —.' : 'Série original sem acréscimo de contribuições recuperadas.'}</p>
                 <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
                   {chat2OperationDailyRuler.map((item) => {
                     const isToday = chat2OperationTodayDate === item.date
@@ -9631,7 +10348,7 @@ function ChatModuleDashboard({
                           {item.covered ? formatChatCount(item.attendances) : '—'}
                         </strong>
                         <span className="mt-1 block text-[10px] text-slate-500">
-                          {isPeak ? 'pico' : isToday ? 'hoje' : ''}
+                          {chat2OperationUsingVerified && item.covered ? 'humano verificado' : item.covered ? 'base anterior' : 'sem base'}
                         </span>
                       </div>
                     )
@@ -9704,7 +10421,7 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <section id="chat-management-priorities" className={chatActiveTab === 'podium' ? 'workspace-content-section' : 'hidden'}>
+      <section id="chat-management-priorities" className={chatActiveTab === 'podium' && !unifiedCurrentMonth ? 'workspace-content-section' : 'hidden'}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Gestão e ações</p>
@@ -9783,7 +10500,7 @@ function ChatModuleDashboard({
         )}
       </section>
 
-      <details className={chatActiveTab === 'podium' ? 'workspace-collapsible' : 'hidden'}>
+      <details className={chatActiveTab === 'podium' && !unifiedCurrentMonth ? 'workspace-collapsible' : 'hidden'}>
         <summary className="cursor-pointer list-none">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -9844,7 +10561,7 @@ function ChatModuleDashboard({
 
       <details
         id="chat-qualitative-validation"
-        className={chatActiveTab === 'podium' ? 'workspace-collapsible' : 'hidden'}
+        className={chatActiveTab === 'podium' && !unifiedCurrentMonth ? 'workspace-collapsible' : 'hidden'}
         open={chatQualitativeFocusAnalystId ? true : undefined}
       >
         <summary className="cursor-pointer list-none">
@@ -10516,7 +11233,7 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <section className={chatActiveTab === 'overview' ? 'panel' : 'hidden'}>
+      <section className={chatActiveTab === 'overview' && !unifiedCurrentMonth ? 'panel' : 'hidden'}>
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Histórico anterior · Zendesk</p>
           <h2 className="mt-2 text-2xl font-bold">Série preservada dos fechamentos anteriores</h2>

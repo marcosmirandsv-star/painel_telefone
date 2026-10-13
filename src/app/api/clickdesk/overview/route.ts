@@ -1,4 +1,4 @@
-import { ApiError, authorizeManager, handle, json } from '@/lib/integration-server'
+import { ApiError, authorizeManagerSessionClient, handle, json } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 
 export const runtime = 'nodejs'
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
       throw new ApiError(404, 'Visão operacional do ClickDesk disponível somente na homologação.')
     }
 
-    const { admin } = await authorizeManager(request)
+    const { admin } = await authorizeManagerSessionClient(request)
 
     const snapshotsResult = await admin
       .from('clickdesk_chat_report_snapshots')

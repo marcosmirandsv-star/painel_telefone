@@ -64,33 +64,47 @@ export async function GET(request: Request) {
       throw new ApiError(400, 'Informe analyst_id para consultar os tickets.')
     }
 
-    const result = await access.admin
-      .from('clickdesk_chat_attendances')
-      .select(
-        'clickdesk_ticket_id,occurred_at,occurred_date,area,satisfaction_label,journey_status,timestamp_source',
-      )
-      .eq('analyst_id', analystId)
-      .eq('identity_role', 'analyst')
-      .eq('occurred_date', date)
-      .order('occurred_at', { ascending: true })
-      .limit(200)
-
-    if (result.error) {
-      throw new ApiError(503, 'Não foi possível carregar os tickets do dia.')
-    }
-
+    // Return the analyst's raw day evidence from both captures. The individual
+    // view filters this against server-reconciled final ownership. Read-only.
+    const [verifiedResult, legacyResult] = await Promise.all([
+      access.admin.from('clickdesk_chat_verified_contributions')
+        .select('ticket_id,first_answered_at,first_message_id,satisfaction_label,rating_attribution')
+        .eq('analyst_id',analystId).eq('occurred_date',date)
+        .order('first_answered_at',{ascending:true}).limit(501),
+      access.admin.from('clickdesk_chat_attendances')
+        .select('clickdesk_ticket_id,occurred_at,area,satisfaction_label,journey_status,timestamp_source')
+        .eq('analyst_id',analystId).eq('identity_role','analyst').eq('occurred_date',date)
+        .order('occurred_at',{ascending:true}).limit(501),
+    ])
+    if(verifiedResult.error||legacyResult.error)
+      throw new ApiError(503,'Os tickets do dia estão temporariamente indisponíveis.')
+    if((verifiedResult.data??[]).length>500||(legacyResult.data??[]).length>500)
+      throw new ApiError(422,'Consulta do dia excedeu o limite seguro de registros.')
+    const tickets=new Map<string,{
+      ticket_id:string
+      occurred_at:string|null
+      area:string|null
+      satisfaction_label:string|null
+      journey_status:string|null
+      timestamp_source:string|null
+      first_message_id?:string|null
+      rating_attribution?:string|null
+    }>()
+    for(const x of legacyResult.data??[])tickets.set(x.clickdesk_ticket_id,{
+      ticket_id:x.clickdesk_ticket_id,occurred_at:x.occurred_at,area:x.area,
+      satisfaction_label:x.satisfaction_label,journey_status:x.journey_status,
+      timestamp_source:x.timestamp_source,
+    })
+    for(const x of verifiedResult.data??[])tickets.set(x.ticket_id,{
+      ticket_id:x.ticket_id,occurred_at:x.first_answered_at,area:null,
+      satisfaction_label:x.satisfaction_label,journey_status:null,
+      timestamp_source:'first_public_human_message',
+      first_message_id:x.first_message_id,rating_attribution:x.rating_attribution,
+    })
+    const list=[...tickets.values()].sort((a,b)=>(a.occurred_at??'').localeCompare(b.occurred_at??''))
     return json({
-      source: 'clickdesk_persisted',
-      date,
-      analyst_id: analystId,
-      tickets: (result.data ?? []).map((row) => ({
-        ticket_id: row.clickdesk_ticket_id,
-        occurred_at: row.occurred_at,
-        area: row.area,
-        satisfaction_label: row.satisfaction_label,
-        journey_status: row.journey_status,
-        timestamp_source: row.timestamp_source,
-      })),
+      source:'clickdesk_individual_evidence',official_metrics_unchanged:true,
+      date,analyst_id:analystId,count:list.length,tickets:list,
     })
   })
 }

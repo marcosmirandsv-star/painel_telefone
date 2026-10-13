@@ -8,6 +8,7 @@ import {
   json,
 } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
+import { selectVerifiedQualitativeTicket } from '@/lib/clickdesk-qualitative-lookup'
 import {
   extractTranscriptText,
   isQualitativeTranscriptSufficient,
@@ -708,17 +709,47 @@ export async function POST(request: Request) {
         throw new ApiError(503, 'Não foi possível validar o atendimento persistido.')
       }
       if (!persisted.data) {
-        throw new ApiError(404, 'Atendimento não encontrado na base persistida do Chat.')
-      }
+        // The recovered capture proves human participation independently of
+        // the legacy attendance table. Keep authorization tied to the exact
+        // contribution/analyst before allowing qualitative analysis.
+        const verifiedQuery = sessionAccess.admin
+          .from('clickdesk_chat_verified_contributions')
+          .select('ticket_id,analyst_id,occurred_date,satisfaction_label')
+          .eq('ticket_id', ticketId)
 
-      if (
-        !sessionAccess.isManagement &&
-        persisted.data.analyst_id !== sessionAccess.chatAnalystId
-      ) {
-        throw new ApiError(404, 'Atendimento não encontrado na sua base individual.')
-      }
+        if (!sessionAccess.isManagement && !sessionAccess.chatAnalystId) {
+          throw new ApiError(403, 'Acesso individual sem analista vinculado.')
+        }
+        const verified = await (
+          sessionAccess.isManagement
+            ? verifiedQuery
+            : verifiedQuery.eq('analyst_id', sessionAccess.chatAnalystId!)
+        ).limit(2)
 
-      persistedData = persisted.data as PersistedTicket
+        if (verified.error) {
+          throw new ApiError(503, 'Não foi possível validar a captura humana verificada.')
+        }
+
+        const selection = selectVerifiedQualitativeTicket(
+          ticketId,
+          verified.data ?? [],
+          sessionAccess.isManagement,
+          sessionAccess.chatAnalystId,
+        )
+        if (!selection.ok) {
+          throw new ApiError(selection.status, selection.error)
+        }
+        persistedData = selection.ticket
+      } else {
+        if (
+          !sessionAccess.isManagement &&
+          persisted.data.analyst_id !== sessionAccess.chatAnalystId
+        ) {
+          throw new ApiError(404, 'Atendimento não encontrado na sua base individual.')
+        }
+
+        persistedData = persisted.data as PersistedTicket
+      }
 
       if (!body.force) {
         const cached = await sessionAccess.admin
@@ -728,6 +759,14 @@ export async function POST(request: Request) {
           )
           .eq('clickdesk_ticket_id', ticketId)
           .maybeSingle()
+
+        if (
+          !cached.error &&
+          cached.data &&
+          cached.data.analyst_id !== persistedData.analyst_id
+        ) {
+          throw new ApiError(409, 'Já existe uma análise vinculada a outro analista para este ticket.')
+        }
 
         if (
           !cached.error &&

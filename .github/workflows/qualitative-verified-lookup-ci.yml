@@ -1,0 +1,46 @@
+name: Qualitative verified lookup regression
+
+on:
+  push:
+    branches:
+      - fix/qualitative-verified-lookup-20261012
+      - ui/chat-analyst-compact-20261012
+      - work/chat-live-reconciliation-20261012
+      - fix/chat-unified-parity-20261012
+      - ui/demo-gestao-20261012
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verified-lookup-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: test-publishable-key
+      NEXT_PUBLIC_SCHEDULE_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SCHEDULE_SUPABASE_PUBLISHABLE_KEY: test-publishable-key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install immutable dependencies
+        run: npm ci
+      - name: Cross-team responsibility and manager parity regression
+        run: node --experimental-transform-types --test tests/chat-demo-parity.test.mts
+      - name: Last human and provisional podium regression
+        run: node --experimental-transform-types --test tests/clickdesk-live-reconciliation.test.mts
+      - name: Distinct attendance and chronological ruler
+        run: node --experimental-transform-types --test tests/clickdesk-identified-tickets.test.mts
+      - name: Verified ticket ownership and authorization
+        run: node --experimental-transform-types --test tests/clickdesk-qualitative-verified-lookup.test.mts
+      - name: Existing qualitative and access regression
+        run: node --experimental-transform-types --test tests/clickdesk-qualitative.test.mts tests/access-control-regression.test.mts
+      - name: Existing verified contribution and last-human rating regression
+        run: node --experimental-transform-types --test tests/clickdesk-verified-productivity.test.mts tests/clickdesk-last-human-rating.test.mts
+      - name: Compile production-mode build with synthetic public config
+        run: npm run build
