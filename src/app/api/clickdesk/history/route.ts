@@ -5,8 +5,10 @@ import {
   json,
 } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
+import { homologationReadAdmin, loadFinalSnapshot } from '@/lib/clickdesk-final-owner-server'
 
 export const runtime = 'nodejs'
+export const maxDuration = 300
 
 type ClosureAnalyst = {
   analyst_id?: string
@@ -278,13 +280,7 @@ export async function GET(request: Request) {
     if (!officialByMonth.has(currentMonth)) {
       const { start } = monthBounds(currentMonth)
       const [liveRowsResult, teamResult] = await Promise.all([
-        admin
-          .from('clickdesk_chat_attendances')
-          .select('satisfaction_label')
-          .eq('analyst_id', analystId)
-          .eq('identity_role', 'analyst')
-          .gte('occurred_date', start)
-          .lte('occurred_date', today),
+        loadFinalSnapshot(homologationReadAdmin()),
         admin
           .from('chat_teams')
           .select('id,name')
@@ -292,14 +288,11 @@ export async function GET(request: Request) {
           .maybeSingle(),
       ])
 
-      if (liveRowsResult.error) {
-        throw new ApiError(503, 'Base viva do ClickDesk indisponível.')
-      }
       if (teamResult.error) {
         throw new ApiError(503, 'Equipe do analista indisponível.')
       }
 
-      const totals = aggregate((liveRowsResult.data ?? []) as AttendanceRow[])
+      const totals = aggregate(liveRowsResult.rows.filter(row => row.analyst_id === analystId && row.occurred_date! >= start && row.occurred_date! <= today))
 
       officialByMonth.set(currentMonth, {
         priority: 3,

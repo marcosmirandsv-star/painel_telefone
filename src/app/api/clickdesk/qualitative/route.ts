@@ -8,6 +8,7 @@ import {
   json,
 } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
+import { homologationReadAdmin, loadFinalSnapshot } from '@/lib/clickdesk-final-owner-server'
 import {
   extractTranscriptText,
   isQualitativeTranscriptSufficient,
@@ -19,6 +20,7 @@ import {
 } from '@/lib/clickdesk-qualitative'
 
 export const runtime = 'nodejs'
+export const maxDuration = 300
 
 const CLICKDESK_BASE_URL = 'https://api.desk.click.app/api/v1'
 
@@ -695,30 +697,14 @@ export async function POST(request: Request) {
         throw new ApiError(401, 'Sessão inválida.')
       }
 
-      const persisted = await sessionAccess.admin
-        .from('clickdesk_chat_attendances')
-        .select(
-          'clickdesk_ticket_id,analyst_id,area,satisfaction_label,occurred_date,identity_role',
-        )
-        .eq('clickdesk_ticket_id', ticketId)
-        .eq('identity_role', 'analyst')
-        .maybeSingle()
-
-      if (persisted.error) {
-        throw new ApiError(503, 'Não foi possível validar o atendimento persistido.')
+      const snapshot = await loadFinalSnapshot(homologationReadAdmin())
+      const final = snapshot.rows.find(row => row.ticket_id === ticketId)
+      if (!final || (!sessionAccess.isManagement && final.analyst_id !== sessionAccess.chatAnalystId)) {
+        throw new ApiError(404, 'Ticket sem autoria final comprovada para este acesso.')
       }
-      if (!persisted.data) {
-        throw new ApiError(404, 'Atendimento não encontrado na base persistida do Chat.')
-      }
+      persistedData = { clickdesk_ticket_id: ticketId, analyst_id: final.analyst_id, area: final.area,
+        satisfaction_label: final.satisfaction_label, occurred_date: final.occurred_date, identity_role: 'analyst' } as PersistedTicket
 
-      if (
-        !sessionAccess.isManagement &&
-        persisted.data.analyst_id !== sessionAccess.chatAnalystId
-      ) {
-        throw new ApiError(404, 'Atendimento não encontrado na sua base individual.')
-      }
-
-      persistedData = persisted.data as PersistedTicket
 
       if (!body.force) {
         const cached = await sessionAccess.admin
@@ -732,6 +718,9 @@ export async function POST(request: Request) {
         if (
           !cached.error &&
           cached.data &&
+          cached.data.analyst_id === persistedData.analyst_id &&
+          cached.data.occurred_date === persistedData.occurred_date &&
+          cached.data.satisfaction_label === persistedData.satisfaction_label &&
           shouldReuseQualitativeCache(
             cached.data.validation_status,
             qualitativeAnalysisVersion(cached.data.analysis),

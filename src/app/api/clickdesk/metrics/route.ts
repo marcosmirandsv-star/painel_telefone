@@ -1,7 +1,10 @@
 import { ApiError, authorizeClickDeskSessionClient, handle, json } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
+import { homologationReadAdmin, loadFinalSnapshot, scopedPending, scopedExclusions } from '@/lib/clickdesk-final-owner-server'
+import { finalPodium } from '@/lib/clickdesk-final-owner'
 
 export const runtime = 'nodejs'
+export const maxDuration = 300
 
 const BUSINESS_TIME_ZONE = 'America/Sao_Paulo'
 const CLICKDESK_SYNC_INTERVAL_MINUTES = 60
@@ -117,30 +120,15 @@ async function loadRows(
   admin: Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],
   filters: ReturnType<typeof parseFilters>,
 ) {
-  const result: DailyMetricRow[] = []
-
-  for (let offset = 0; offset < 10000; offset += 500) {
-    let query = admin
-      .from('clickdesk_chat_daily_metrics')
-      .select(
-        'occurred_date,team_id,analyst_id,area,assignee_name,attendances,positive_reviews,negative_reviews,reviews,csat,review_percentage,identity_role',
-      )
-      .gte('occurred_date', filters.start)
-      .lte('occurred_date', filters.end)
-      .order('occurred_date', { ascending: true })
-      .range(offset, offset + 499)
-
-    if (filters.analystId) query = query.eq('analyst_id', filters.analystId)
-    if (filters.teamId) query = query.eq('team_id', filters.teamId)
-
-    const { data, error } = await query
-    if (error) throw new ApiError(503, `Base ClickDesk indisponível: ${error.message}`)
-
-    result.push(...((data ?? []) as DailyMetricRow[]))
-    if ((data ?? []).length < 500) return result
-  }
-
-  throw new ApiError(422, 'O volume de métricas excedeu o limite de consulta.')
+  void admin
+  const snapshot = await loadFinalSnapshot(homologationReadAdmin())
+  const rows: DailyMetricRow[] = snapshot.rows.filter(row => row.occurred_date! >= filters.start && row.occurred_date! <= filters.end
+    && (!filters.analystId || row.analyst_id === filters.analystId) && (!filters.teamId || row.team_id === filters.teamId))
+    .map(row => ({ occurred_date: row.occurred_date!, team_id: row.team_id, analyst_id: row.analyst_id,
+      area: row.area ?? 'Fila histórica não comprovada', assignee_name: row.analyst_name!, identity_role: 'analyst' as const,
+      attendances: 1, positive_reviews: Number(row.satisfaction_label === 'positive'), negative_reviews: Number(row.satisfaction_label === 'negative'),
+      reviews: Number(row.satisfaction_label !== null), csat: null, review_percentage: null }))
+  return { rows, snapshot }
 }
 
 function aggregate(rows: DailyMetricRow[]): Aggregate {
@@ -252,7 +240,7 @@ export async function GET(request: Request) {
           teamId: null,
         }
 
-    const rows = await loadRows(access.admin, filters)
+    const { rows, snapshot } = await loadRows(access.admin, filters)
     const admin = access.admin
 
     const latestSync = await admin
@@ -278,54 +266,17 @@ export async function GET(request: Request) {
     const managementRows = includedRows.filter((row) => row.identity_role === 'management')
     const unmatchedRows = includedRows.filter((row) => row.identity_role === 'unmapped')
 
-    let sourceQuery = admin
-      .from('clickdesk_chat_attendances')
-      .select('timestamp_source')
-      .gte('occurred_date', filters.start)
-      .lte('occurred_date', filters.end)
-      .neq('identity_role', 'apprentice')
-
-    if (filters.analystId) sourceQuery = sourceQuery.eq('analyst_id', filters.analystId)
-    if (filters.teamId) sourceQuery = sourceQuery.eq('team_id', filters.teamId)
-
-    const sourceResult = await sourceQuery
-    if (sourceResult.error) {
-      throw new ApiError(503, 'Não foi possível validar a origem temporal dos atendimentos.')
-    }
-
-    const timestampSources = (sourceResult.data ?? []).reduce<Record<string, number>>((acc, row) => {
-      const source = String(row.timestamp_source || 'unknown')
-      acc[source] = (acc[source] ?? 0) + 1
-      return acc
-    }, {})
-    const dateBasisNeedsValidation =
-      Object.keys(timestampSources).length === 0 ||
-      Object.keys(timestampSources).some(
-        (source) =>
-          source === 'unknown' ||
-          source.startsWith('fallback_') ||
-          source === 'updated_at',
-      )
-
-    let selfPodiumContext: Record<string, unknown> | null = null
-    if (!access.isManagement) {
-      const podiumResult = await admin.rpc('get_clickdesk_self_podium_context', {
-        p_start: filters.start,
-        p_end: filters.end,
-      })
-
-      if (podiumResult.error) {
-        throw new ApiError(503, 'Não foi possível calcular o contexto individual do pódio.')
-      }
-
-      selfPodiumContext =
-        podiumResult.data && typeof podiumResult.data === 'object'
-          ? (podiumResult.data as Record<string, unknown>)
-          : null
-    }
+    const periodRows = snapshot.rows.filter(row => row.occurred_date! >= filters.start && row.occurred_date! <= filters.end)
+    const pending = scopedPending(snapshot, filters.analystId, filters.teamId, filters.start, filters.end)
+    const timestampSources = { last_public_human_answer: rows.reduce((n,row) => n+row.attendances,0) }
+    const dateBasisNeedsValidation = pending.length > 0
+    const selfPodiumContext = filters.analystId ? finalPodium(periodRows, snapshot.people, filters.analystId) : null
 
     return json({
-      source: 'clickdesk_persisted',
+      source: 'clickdesk_final_public_human',
+      reconciliation: { captured_at: snapshot.captured_at, cache_window_minutes:5, coverage: 'stored_candidates_only', pending, pending_count: pending.length, unique_ticket_rule: true,
+        retry_needed: snapshot.pending.some(row=>row.reason==='audit_deadline'),
+        excluded: scopedExclusions(snapshot,filters.analystId,filters.teamId,filters.start,filters.end) },
       period: {
         start: filters.start,
         end: filters.end,
@@ -365,8 +316,8 @@ export async function GET(request: Request) {
         sources: timestampSources,
         status: dateBasisNeedsValidation ? 'needs_validation' : 'validated',
         note: dateBasisNeedsValidation
-          ? 'Parte da distribuição diária ainda depende de fallback temporal. Esses registros permanecem sinalizados até o ClickDesk permitir identificar o início humano.'
-          : 'Data operacional validada: primeira mensagem do analista responsável, com primeira mensagem humana como fallback estrutural.',
+          ? 'Há tickets pendentes de autoria final ou cobertura do histórico. Eles não foram atribuídos por suposição.'
+          : 'Data operacional: última resposta pública humana, em Brasília. Cobertura limitada aos candidatos capturados; não equivale ao relatório de resoluções.',
       },
     })
   })

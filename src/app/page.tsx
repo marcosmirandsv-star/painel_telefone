@@ -18,6 +18,24 @@ import { chatBusinessDate, chatPeriodBounds, selectChatPresentationRow } from '@
 // Homologação: IA qualitativa liberada no acesso individual com governança separada da gestão.
 const QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS = true
 
+function reconciliationReason(reason: string | null) {
+  const labels: Record<string,string> = {
+    history_incomplete: 'Histórico incompleto; autoria final ainda não comprovada.',
+    final_author_not_in_eligible_registry: 'Último autor humano não identificado no cadastro elegível.',
+    final_author_ambiguous: 'Autoria da última resposta ambígua.',
+    no_public_human_answer: 'Sem resposta pública humana comprovada.',
+    final_author_apprentice: 'Último atendente é aprendiz; excluído da performance, sem crédito ao atendente anterior.',
+    final_answer_outside_period: 'Última resposta humana pertence a outro período.',
+    credited_to_final_other_analyst: 'Crédito exclusivo de outro atendente final; participação anterior não é duplicada.',
+    audit_deadline: 'Limite de tempo da consulta; aguarda nova conferência.',
+    history_read_failed: 'Não foi possível consultar o histórico.',
+    human_timestamp_missing: 'Horário da resposta humana não comprovado.',
+    message_id_conflict: 'Evidências conflitantes para a mesma mensagem.',
+    final_message_id_missing: 'Identificador da última mensagem ausente.',
+  }
+  return reason?.startsWith('clickdesk_http_') ? `Falha de leitura no ClickDesk (HTTP ${reason.slice(14)}).` : labels[reason ?? ''] ?? 'Pendente de conferência.'
+}
+
 type Goal = {
   id: string
   key: string
@@ -453,6 +471,7 @@ type ClickDeskPersistedAggregate = {
 }
 
 type ClickDeskPersistedMetrics = {
+  reconciliation?: { captured_at: string; pending_count: number; retry_needed?: boolean; pending: Array<{ ticket_id: string; reason: string | null }>; excluded?: Array<{ ticket_id: string; reason: string }> }
   source?: string
   period?: {
     start: string
@@ -3722,6 +3741,8 @@ function ChatAnalystPortal({
 
     const ownAnalystId: string = analystId
     let cancelled = false
+    let retryTimer: number | undefined
+    let deadlineRetries = 0
 
     async function loadOwnChatData() {
       setLoading(true)
@@ -3775,6 +3796,10 @@ function ChatAnalystPortal({
         if (!cancelled) {
           setMetrics(metricData)
           setHistory(historyData)
+          if(metricData.reconciliation?.retry_needed && deadlineRetries<2) {
+            deadlineRetries++
+            retryTimer=window.setTimeout(()=>{if(!cancelled)void loadOwnChatData()},5000)
+          }
         }
       } catch (error) {
         if (!cancelled) {
@@ -3795,6 +3820,7 @@ function ChatAnalystPortal({
     return () => {
       cancelled = true
       window.clearInterval(refreshTimer)
+      window.clearTimeout(retryTimer)
     }
   }, [analyst?.id, monthStart, monthEnd])
 
@@ -4059,11 +4085,17 @@ function ChatAnalystPortal({
         {!loading && !metrics?.erro && (
           <>
             <p className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-xs leading-5 text-amber-100">
-              Fonte: atendimentos persistidos ClickDesk · {formatDate(monthStart)} a {formatDate(monthEnd)} · horário de Brasília.
+              Fonte: último atendimento público humano comprovado · {formatDate(monthStart)} a {formatDate(monthEnd)} · horário de Brasília.
               {' '}A conciliação histórica está pendente. Sincronização concluída não garante cobertura completa; esta leitura não substitui o fechamento oficial.
               {ownSelection.ambiguous && ' Há mais de uma fila para seu cadastro neste período. O resumo individual fica indisponível até a conferência, sem somar ou escolher uma fila por suposição.'}
               {metrics?.date_basis?.status === 'needs_validation' && ` ${metrics.date_basis.note}`}
             </p>
+            {metrics?.reconciliation && <details className="mt-3 rounded-lg border border-white/10 p-3 text-xs text-slate-400">
+              <summary className="cursor-pointer">Conferência da autoria · {metrics.reconciliation.pending_count} ticket(s) pendente(s)</summary>
+              <p className="mt-2">Um ticket tem um único crédito. Competência definida pela última resposta pública humana em Brasília. Snapshot: {formatDateTime(metrics.reconciliation.captured_at)}. Sem resposta ou cobertura comprovada, o ticket permanece fora dos indicadores.</p>
+              <ul className="mt-2 space-y-1">{metrics.reconciliation.pending.map(item => <li key={item.ticket_id}>Ticket {item.ticket_id}: {reconciliationReason(item.reason)}</li>)}</ul>
+              <ul className="mt-2 space-y-1">{metrics.reconciliation.excluded?.map(item => <li key={item.ticket_id}>Ticket {item.ticket_id}: {reconciliationReason(item.reason)}</li>)}</ul>
+            </details>}
             <ChatSharedPerformanceSummary metric={accumulated} csatGoal={csatGoal} />
 
             <ChatPerformanceDiagnosticPanel diagnostic={diagnostic} />
@@ -4506,6 +4538,8 @@ function ChatModuleDashboard({
   const [clickDeskConversationLoading, setClickDeskConversationLoading] = useState(false)
   const [clickDeskConversationDiagnostic, setClickDeskConversationDiagnostic] = useState<ClickDeskConversationDiagnostic | null>(null)
   const [clickDeskPersistedMetrics, setClickDeskPersistedMetrics] = useState<ClickDeskPersistedMetrics | null>(null)
+  const clickDeskMetricsRequestVersion = useRef(0)
+  useEffect(() => () => { clickDeskMetricsRequestVersion.current++ }, [])
   const [clickDeskPreviousMetrics, setClickDeskPreviousMetrics] = useState<ClickDeskPersistedMetrics | null>(null)
   const [clickDeskSyncResult, setClickDeskSyncResult] = useState<ClickDeskSyncResult | null>(null)
   const [clickDeskAnalystHistory, setClickDeskAnalystHistory] = useState<ClickDeskAnalystHistory | null>(null)
@@ -4702,7 +4736,9 @@ function ChatModuleDashboard({
   async function loadClickDeskPersistedMetricsOnly(
     period: { start: string; end: string },
     teamId: string,
+    deadlineRetry = 0,
   ) {
+    const requestVersion = ++clickDeskMetricsRequestVersion.current
     try {
       const {
         data: { session },
@@ -4726,7 +4762,11 @@ function ChatModuleDashboard({
         data.erro = data.erro || 'Não foi possível carregar a base persistida do ClickDesk.'
       }
 
+      if(requestVersion !== clickDeskMetricsRequestVersion.current)return
       setClickDeskPersistedMetrics(data)
+      if(data.reconciliation?.retry_needed && deadlineRetry<2) {
+        window.setTimeout(()=>{if(requestVersion === clickDeskMetricsRequestVersion.current)void loadClickDeskPersistedMetricsOnly(period,teamId,deadlineRetry+1)},5000)
+      }
     } catch (error) {
       setClickDeskPersistedMetrics({
         erro: getErrorMessage(error),
@@ -7955,11 +7995,16 @@ function ChatModuleDashboard({
       </nav>
       {['overview', 'prototype', 'podium', 'reports'].includes(chatActiveTab) && (
         <p className="rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-xs leading-5 text-amber-100">
-          Fonte individual: atendimentos persistidos ClickDesk. A recuperação histórica é uma auditoria separada;
+          Fonte individual: último atendimento público humano comprovado. A cobertura da descoberta permanece em conferência;
           sincronização concluída ou ausência de registros não comprova cobertura completa nem zero atendimentos.
           Valores parciais não substituem o fechamento oficial. Equipe de origem e fila são dimensões diferentes.
         </p>
       )}
+      {clickDeskPersistedMetrics?.reconciliation && ['overview','prototype','reports'].includes(chatActiveTab) && <details className="rounded-lg border border-white/10 p-3 text-xs text-slate-400">
+        <summary className="cursor-pointer">Tickets pendentes de conciliação: {clickDeskPersistedMetrics.reconciliation.pending_count}</summary>
+        <p className="mt-2">Snapshot {formatDateTime(clickDeskPersistedMetrics.reconciliation.captured_at)}. Casos inconclusivos não recebem crédito arbitrário nem são tratados como resoluções ou avaliações.</p>
+        <ul className="mt-2 space-y-1">{clickDeskPersistedMetrics.reconciliation.pending.map(item => <li key={item.ticket_id}>Ticket {item.ticket_id}: {reconciliationReason(item.reason)}</li>)}</ul>
+      </details>}
       {chatActiveTab === 'overview' && (
         <section className="workspace-page-heading">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
