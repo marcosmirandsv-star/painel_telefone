@@ -13,6 +13,7 @@ import {
   type ChatPerformanceDiagnostic,
 } from '@/lib/chat-diagnostic'
 import { normalizeQualitativeAnalysis } from '@/lib/clickdesk-qualitative'
+import { chatBusinessDate, chatPeriodBounds, selectChatPresentationRow } from '@/lib/chat-presentation'
 
 // Homologação: IA qualitativa liberada no acesso individual com governança separada da gestão.
 const QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS = true
@@ -3569,6 +3570,119 @@ function QualitativeSampleTicketList({
   )
 }
 
+function ChatSharedPerformanceSummary({ metric, csatGoal }: {
+  metric: ClickDeskPersistedAggregate & { today?: ClickDeskPersistedAggregate } | null
+  csatGoal: number
+}) {
+  const accumulated = metric
+  const today = metric?.today ?? null
+  const csat = metric?.csat ?? null
+  const reviewPercentage = metric?.review_percentage ?? null
+  const reviewGoal = 25
+  const diagnostic = buildChatPerformanceDiagnostic({
+    csat, csatGoal, reviewPercentage, reviewGoal,
+    positiveReviews: metric?.positive_reviews ?? 0,
+    negativeReviews: metric?.negative_reviews ?? 0,
+    attendances: metric?.attendances ?? 0,
+  })
+  const meetsCsat = diagnostic.csatMet === true
+  const meetsReviews = diagnostic.reviewMet === true
+  if (!metric) return <EmptyState text="Sem base individual consolidada para esta competência. Ausência de captura não comprova zero atendimentos." />
+  return (
+            <div className="mt-6">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                Resumo da competência
+              </p>
+              <div className="mt-3 grid gap-4 lg:grid-cols-3">
+                <div className="rounded-xl border border-white/10 bg-slate-950/40 p-5">
+                  <p className="text-sm text-slate-400">Atendimentos</p>
+                  <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
+                    {formatChatCount(accumulated?.attendances ?? 0)}
+                  </strong>
+                  <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-3 text-sm">
+                    <span className="text-slate-500">Atendimentos hoje</span>
+                    <strong className="tabular-nums text-slate-200">
+                      {formatChatCount(today?.attendances ?? 0)}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className={`rounded-xl border p-5 ${
+                  csat === null
+                    ? 'border-white/10 bg-slate-950/40'
+                    : meetsCsat
+                      ? 'border-emerald-400/20 bg-emerald-400/5'
+                      : 'border-amber-300/20 bg-amber-300/5'
+                }`}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm text-slate-400">CSAT</p>
+                      <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
+                        {csat === null ? '—' : formatChatPercent(csat)}
+                      </strong>
+                    </div>
+                    <span className="rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300">
+                      Meta {formatChatPercent(csatGoal)}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-slate-400">
+                    {csat === null
+                      ? 'Ainda sem avaliações suficientes para calcular o indicador.'
+                      : diagnostic.csatDelta !== null && diagnostic.csatDelta >= 0
+                        ? `${formatDelta(diagnostic.csatDelta, ' p.p.')} acima da meta.`
+                        : `${formatDelta(Math.abs(diagnostic.csatDelta ?? 0), ' p.p.').replace('+', '')} abaixo da meta.`}
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-4 border-t border-white/10 pt-3 text-sm">
+                    <a className="text-slate-500 hover:text-emerald-200" href="#minha-rotina">
+                      Positivas <strong className="text-slate-200">{formatChatCount(accumulated?.positive_reviews ?? 0)}</strong>
+                      <span className="ml-1 text-xs">ver tickets</span>
+                    </a>
+                    <a className="text-slate-500 hover:text-amber-100" href="#minha-rotina">
+                      Negativas <strong className="text-slate-200">{formatChatCount(accumulated?.negative_reviews ?? 0)}</strong>
+                      <span className="ml-1 text-xs">entender</span>
+                    </a>
+                  </div>
+                </div>
+
+                <div className={`rounded-xl border p-5 ${
+                  reviewPercentage === null
+                    ? 'border-white/10 bg-slate-950/40'
+                    : meetsReviews
+                      ? 'border-emerald-400/20 bg-emerald-400/5'
+                      : 'border-amber-300/20 bg-amber-300/5'
+                }`}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-sm text-slate-400">% de avaliações</p>
+                      <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
+                        {reviewPercentage === null ? '—' : formatChatPercent(reviewPercentage)}
+                      </strong>
+                    </div>
+                    <span className="rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300">
+                      Meta {formatChatPercent(reviewGoal)}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-slate-400">
+                    {reviewPercentage === null
+                      ? 'Ainda sem base para calcular participação nas avaliações.'
+                      : diagnostic.reviewDelta !== null && diagnostic.reviewDelta >= 0
+                        ? `${formatDelta(diagnostic.reviewDelta, ' p.p.')} acima da meta.`
+                        : `${formatDelta(Math.abs(diagnostic.reviewDelta ?? 0), ' p.p.').replace('+', '')} abaixo da meta.`}
+                  </p>
+                  <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-3 text-sm">
+                    <span className="text-slate-500">Avaliações recebidas</span>
+                    <strong className="tabular-nums text-slate-200">
+                      {formatChatCount(accumulated?.reviews ?? 0)}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+
+  )
+}
+
 function ChatAnalystPortal({
   analyst,
   team,
@@ -3586,16 +3700,14 @@ function ChatAnalystPortal({
   const [qualitativeLoadingTicketId, setQualitativeLoadingTicketId] = useState('')
   const [openQualitativeTicketId, setOpenQualitativeTicketId] = useState<string | null>(null)
 
-  const now = new Date()
-  const year = now.getFullYear()
-  const monthNumber = now.getMonth() + 1
-  const monthKey = `${year}-${String(monthNumber).padStart(2, '0')}`
-  const monthStart = `${monthKey}-01`
-  const monthEnd = new Date(Date.UTC(year, monthNumber, 0)).toISOString().slice(0, 10)
+  const businessToday = chatBusinessDate()
+  const [monthKey, setMonthKey] = useState(() => businessToday.slice(0, 7))
+  const { start: monthStart, end: monthEnd } = chatPeriodBounds(monthKey)
   const monthLabel = new Intl.DateTimeFormat('pt-BR', {
     month: 'long',
     year: 'numeric',
-  }).format(now)
+    timeZone: 'America/Sao_Paulo',
+  }).format(new Date(`${monthStart}T12:00:00Z`))
   const displayMonthLabel =
     monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1)
 
@@ -3788,8 +3900,8 @@ function ChatAnalystPortal({
     )
   }
 
-  const ownMetric =
-    metrics?.by_analyst?.find((item) => item.analyst_id === analyst.id) ?? null
+  const ownSelection = selectChatPresentationRow(metrics?.by_analyst ?? [], analyst.id)
+  const ownMetric = ownSelection.row
   const accumulated = ownMetric
   const today = ownMetric?.today ?? null
   const daily = ownMetric?.daily ?? []
@@ -3816,10 +3928,10 @@ function ChatAnalystPortal({
     podiumContext.position !== null &&
     podiumContext.position <= 3
   const historyPoints = history?.points ?? []
-  const todayKey = new Date().toISOString().slice(0, 10)
+  const todayKey = businessToday
   const visibleDayCount =
-    now.getFullYear() === year && now.getMonth() + 1 === monthNumber
-      ? now.getDate()
+    businessToday.slice(0, 7) === monthKey
+      ? Number(businessToday.slice(-2))
       : Number(monthEnd.slice(-2))
   const ruler = Array.from({ length: visibleDayCount }, (_, index) => {
     const day = String(index + 1).padStart(2, '0')
@@ -3846,6 +3958,16 @@ function ChatAnalystPortal({
             Somente seus dados
           </span>
         </div>
+        <label className="mt-3 flex items-center gap-3 text-sm text-slate-400">
+          Competência
+          <input type="month" aria-label="Competência do meu desempenho" value={monthKey} max={businessToday.slice(0, 7)} className="form-input max-w-48" onChange={(event) => {
+            if (!event.target.value) return
+            setMonthKey(event.target.value)
+            setSelectedRoutineDate(null)
+            setDailyTickets(null)
+            setOpenQualitativeTicketId(null)
+          }} />
+        </label>
         <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
             <div className="flex items-center gap-4">
@@ -3936,95 +4058,13 @@ function ChatAnalystPortal({
 
         {!loading && !metrics?.erro && (
           <>
-            <div className="mt-6">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                Resumo da competência
-              </p>
-              <div className="mt-3 grid gap-4 lg:grid-cols-3">
-                <div className="rounded-xl border border-white/10 bg-slate-950/40 p-5">
-                  <p className="text-sm text-slate-400">Atendimentos</p>
-                  <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
-                    {formatChatCount(accumulated?.attendances ?? 0)}
-                  </strong>
-                  <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-3 text-sm">
-                    <span className="text-slate-500">Atendimentos hoje</span>
-                    <strong className="tabular-nums text-slate-200">
-                      {formatChatCount(today?.attendances ?? 0)}
-                    </strong>
-                  </div>
-                </div>
-
-                <div className={`rounded-xl border p-5 ${
-                  csat === null
-                    ? 'border-white/10 bg-slate-950/40'
-                    : meetsCsat
-                      ? 'border-emerald-400/20 bg-emerald-400/5'
-                      : 'border-amber-300/20 bg-amber-300/5'
-                }`}>
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm text-slate-400">CSAT</p>
-                      <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
-                        {csat === null ? '—' : formatChatPercent(csat)}
-                      </strong>
-                    </div>
-                    <span className="rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300">
-                      Meta {formatChatPercent(csatGoal)}
-                    </span>
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-slate-400">
-                    {csat === null
-                      ? 'Ainda sem avaliações suficientes para calcular o indicador.'
-                      : diagnostic.csatDelta !== null && diagnostic.csatDelta >= 0
-                        ? `${formatDelta(diagnostic.csatDelta, ' p.p.')} acima da meta.`
-                        : `${formatDelta(Math.abs(diagnostic.csatDelta ?? 0), ' p.p.').replace('+', '')} abaixo da meta.`}
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-4 border-t border-white/10 pt-3 text-sm">
-                    <a className="text-slate-500 hover:text-emerald-200" href="#minha-rotina">
-                      Positivas <strong className="text-slate-200">{formatChatCount(accumulated?.positive_reviews ?? 0)}</strong>
-                      <span className="ml-1 text-xs">ver tickets</span>
-                    </a>
-                    <a className="text-slate-500 hover:text-amber-100" href="#minha-rotina">
-                      Negativas <strong className="text-slate-200">{formatChatCount(accumulated?.negative_reviews ?? 0)}</strong>
-                      <span className="ml-1 text-xs">entender</span>
-                    </a>
-                  </div>
-                </div>
-
-                <div className={`rounded-xl border p-5 ${
-                  reviewPercentage === null
-                    ? 'border-white/10 bg-slate-950/40'
-                    : meetsReviews
-                      ? 'border-emerald-400/20 bg-emerald-400/5'
-                      : 'border-amber-300/20 bg-amber-300/5'
-                }`}>
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm text-slate-400">% de avaliações</p>
-                      <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
-                        {reviewPercentage === null ? '—' : formatChatPercent(reviewPercentage)}
-                      </strong>
-                    </div>
-                    <span className="rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300">
-                      Meta {formatChatPercent(reviewGoal)}
-                    </span>
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-slate-400">
-                    {reviewPercentage === null
-                      ? 'Ainda sem base para calcular participação nas avaliações.'
-                      : diagnostic.reviewDelta !== null && diagnostic.reviewDelta >= 0
-                        ? `${formatDelta(diagnostic.reviewDelta, ' p.p.')} acima da meta.`
-                        : `${formatDelta(Math.abs(diagnostic.reviewDelta ?? 0), ' p.p.').replace('+', '')} abaixo da meta.`}
-                  </p>
-                  <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-3 text-sm">
-                    <span className="text-slate-500">Avaliações recebidas</span>
-                    <strong className="tabular-nums text-slate-200">
-                      {formatChatCount(accumulated?.reviews ?? 0)}
-                    </strong>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <p className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-xs leading-5 text-amber-100">
+              Fonte: atendimentos persistidos ClickDesk · {formatDate(monthStart)} a {formatDate(monthEnd)} · horário de Brasília.
+              {' '}A conciliação histórica está pendente. Sincronização concluída não garante cobertura completa; esta leitura não substitui o fechamento oficial.
+              {ownSelection.ambiguous && ' Há mais de uma fila para seu cadastro neste período. O resumo individual fica indisponível até a conferência, sem somar ou escolher uma fila por suposição.'}
+              {metrics?.date_basis?.status === 'needs_validation' && ` ${metrics.date_basis.note}`}
+            </p>
+            <ChatSharedPerformanceSummary metric={accumulated} csatGoal={csatGoal} />
 
             <ChatPerformanceDiagnosticPanel diagnostic={diagnostic} />
 
@@ -7192,6 +7232,10 @@ function ChatModuleDashboard({
           normalizeChatText(item.area) === normalizeChatText(chat2SelectedLiveHuman.area),
       ) ?? null
     : null
+  const sharedIndividualSelection = selectChatPresentationRow(
+    chat2PersistedAnalystRows, chat2SelectedPersistedAnalyst?.analyst_id,
+  )
+  const sharedIndividualPerson = analysts.find(person => person.id === chat2SelectedPersistedAnalyst?.analyst_id)
 
   useEffect(() => {
     const analystId = chat2SelectedPersistedAnalyst?.analyst_id
@@ -7897,6 +7941,25 @@ function ChatModuleDashboard({
 
 
 
+      <nav aria-label="Visões principais do Chat" className="sticky top-0 z-20 flex flex-wrap gap-2 rounded-xl border border-white/10 bg-slate-950/95 p-2">
+        {([
+          ['overview', 'Operação'], ['prototype', 'Equipe e produtividade'],
+          ['podium', 'Gestão e ações'], ['reports', 'Fechamento'],
+        ] as const).map(([tab, label]) => (
+          <button key={tab} type="button" aria-current={chatActiveTab === tab ? 'page' : undefined}
+            onClick={() => onChatActiveTabChange(tab)}
+            className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${chatActiveTab === tab ? 'bg-cyan-300/15 text-cyan-100' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}>
+            {label}
+          </button>
+        ))}
+      </nav>
+      {['overview', 'prototype', 'podium', 'reports'].includes(chatActiveTab) && (
+        <p className="rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-xs leading-5 text-amber-100">
+          Fonte individual: atendimentos persistidos ClickDesk. A recuperação histórica é uma auditoria separada;
+          sincronização concluída ou ausência de registros não comprova cobertura completa nem zero atendimentos.
+          Valores parciais não substituem o fechamento oficial. Equipe de origem e fila são dimensões diferentes.
+        </p>
+      )}
       {chatActiveTab === 'overview' && (
         <section className="workspace-page-heading">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -7925,7 +7988,8 @@ function ChatModuleDashboard({
 
 
       {chatActiveTab === 'overview' && (
-        <section className="overflow-hidden rounded-2xl border border-cyan-300/15 bg-slate-950/35 shadow-[0_22px_70px_rgba(2,8,23,0.28)]">
+        <details className="overflow-hidden rounded-2xl border border-cyan-300/15 bg-slate-950/35 shadow-[0_22px_70px_rgba(2,8,23,0.28)]">
+          <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-cyan-100">Briefing e radar da operação · abrir detalhes</summary>
           <div className="border-b border-white/10 px-5 py-4 sm:px-6">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
@@ -8198,7 +8262,7 @@ function ChatModuleDashboard({
               </strong>
             </div>
           </div>
-        </section>
+        </details>
       )}
 
       {chatActiveTab === 'operation360' && (
@@ -8290,6 +8354,19 @@ function ChatModuleDashboard({
 
       {chatActiveTab === 'prototype' && (
         <div className="space-y-7">
+          <section className="workspace-content-section rounded-xl border border-cyan-300/15 p-4">
+            <div className="flex flex-wrap items-center gap-4">
+              {sharedIndividualPerson && <AnalystAvatar name={sharedIndividualPerson.name} photoUrl={sharedIndividualPerson.photo_url ?? null} size="lg" />}
+              <div>
+                <p className="workspace-eyebrow">Resumo compartilhado com o analista</p>
+                <h3 className="mt-1 text-xl font-bold">{sharedIndividualPerson?.name ?? chat2SelectedPersistedAnalyst?.assignee_name ?? 'Selecione um analista abaixo'}</h3>
+                <p className="mt-1 text-xs text-slate-400">{chat2SelectedPeriod.label} · mesma fonte, mesmos valores retornados, sem recalcular indicadores</p>
+                {sharedIndividualPerson && <p className="mt-1 text-xs text-slate-400">{teams.find(team => team.id === sharedIndividualPerson.team_id)?.name ?? 'Equipe não identificada'}</p>}
+              </div>
+            </div>
+            {sharedIndividualSelection.ambiguous && <p className="mt-3 text-sm text-amber-200">Mais de uma fila encontrada para o analista. Resumo indisponível até a conferência; nenhuma soma automática foi realizada.</p>}
+            <ChatSharedPerformanceSummary metric={sharedIndividualSelection.row} csatGoal={Number(sharedIndividualPerson?.csat_goal ?? 90)} />
+          </section>
           <section className="workspace-content-section">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
@@ -8367,7 +8444,8 @@ function ChatModuleDashboard({
             )}
           </section>
 
-          <section className="workspace-content-section workspace-content-section-divided phone-ai-layers">
+          <details className="workspace-content-section workspace-content-section-divided phone-ai-layers">
+            <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-cyan-100">Diagnóstico complementar e histórico · pode usar fontes diferentes do resumo compartilhado</summary>
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <p className="workspace-eyebrow">Visão individual</p>
@@ -8762,7 +8840,7 @@ function ChatModuleDashboard({
             ) : (
               <EmptyState text="Ainda não há dados consolidados do ClickDesk para este período. A conexão está ativa; a próxima etapa é ligar a leitura das conversas do mês atual." />
             )}
-          </section>
+          </details>
 
           <section className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
             <div className="panel">

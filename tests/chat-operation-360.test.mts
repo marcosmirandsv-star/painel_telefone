@@ -97,7 +97,7 @@ test('consolidação validada ignora pending e rejected', () => {
 
 test('síntese não generaliza quando a cobertura negativa ainda é inicial', () => {
   const analysis = {
-    status: 'analyzed',
+    status: 'analyzed' as const,
     total: 2,
     negative: {
       analyzed: 2,
@@ -147,7 +147,7 @@ test('síntese não generaliza quando a cobertura negativa ainda é inicial', ()
 
 test('síntese considera cobertura total do universo, não apenas negativas', () => {
   const analysis = {
-    status: 'analyzed',
+    status: 'analyzed' as const,
     total: 30,
     negative: {
       analyzed: 24,
@@ -369,7 +369,7 @@ test('consolidação preliminar usa pending e approved e exclui rejected', () =>
 
 test('síntese aprofunda expectativa do cliente com exemplos concretos dos tickets', () => {
   const analysis = {
-    status: 'analyzed',
+    status: 'analyzed' as const,
     total: 6,
     negative: {
       analyzed: 4,
@@ -448,7 +448,7 @@ test('síntese sem cobertura informa processamento pendente em vez de sugerir pa
 
 test('não chama de dominante um agrupamento de 3 em 9 negativas processadas', () => {
   const analysis = {
-    status: 'analyzed',
+    status: 'analyzed' as const,
     total: 13,
     negative: {
       analyzed: 9,
@@ -510,7 +510,7 @@ test('não chama de dominante um agrupamento de 3 em 9 negativas processadas', (
 
 test('cobertura forte exige leitura ampla do universo avaliado', () => {
   const analysis = {
-    status: 'analyzed',
+    status: 'analyzed' as const,
     total: 90,
     negative: {
       analyzed: 18,
