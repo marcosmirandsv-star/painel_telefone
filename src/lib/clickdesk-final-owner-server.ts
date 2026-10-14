@@ -1,6 +1,6 @@
 import 'server-only'
 import { adminClient, ApiError } from './integration-server'
-import { getServerSupabaseConfig } from './runtime-environment'
+import { getServerSupabaseConfig } from './runtime-environment.ts'
 import { createHash } from 'node:crypto'
 import { unstable_cache } from 'next/cache'
 import { finalHumanTicket, object, text, type FinalTicket, type Person } from './clickdesk-final-owner'
