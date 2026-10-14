@@ -35,7 +35,19 @@ export async function readFinalLedger(
     if (error) throw new ApiError(503, 'Ledger ClickDesk de homologação indisponível.')
     const page = (data ?? []) as LedgerRow[]
     records.push(...page)
-    if (page.length < 500) return records
+    if (page.length < 500) {
+      const pendingIds = new Set<string>()
+      for (let pendingOffset = 0; pendingOffset < 20000; pendingOffset += 500) {
+        const pendingQuery = await admin.from('clickdesk_final_ticket_pending')
+          .select('ticket_id').order('ticket_id',{ascending:true})
+          .range(pendingOffset,pendingOffset+499)
+        if (pendingQuery.error) throw new ApiError(503, 'Pendências do ledger indisponíveis.')
+        const pendingPage = pendingQuery.data ?? []
+        pendingPage.forEach(item => pendingIds.add(item.ticket_id))
+        if (pendingPage.length < 500) return records.filter(row => !pendingIds.has(row.ticket_id))
+      }
+      throw new ApiError(422, 'Pendências ClickDesk excederam limite seguro.')
+    }
   }
   throw new ApiError(422, 'Ledger ClickDesk excedeu o limite de paginação segura.')
 }
