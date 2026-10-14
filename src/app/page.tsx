@@ -471,7 +471,17 @@ type ClickDeskPersistedAggregate = {
 }
 
 type ClickDeskPersistedMetrics = {
-  reconciliation?: { captured_at: string; pending_count: number; retry_needed?: boolean; pending: Array<{ ticket_id: string; reason: string | null }>; excluded?: Array<{ ticket_id: string; reason: string }> }
+  reconciliation?: {
+    captured_at: string
+    pending_count: number
+    retry_needed?: boolean
+    pending: Array<{ ticket_id: string; reason: string | null }>
+    excluded?: Array<{ ticket_id: string; reason: string }>
+    coverage?: 'complete' | 'audit_sample_only' | 'stored_candidates_only'
+    coverage_complete?: boolean
+    coverage_sources?: Array<{ source_key: string; candidate_count: number; confirmed_count: number; pending_count: number; completeness: string }>
+    pending_note?: string
+  }
   source?: string
   period?: {
     start: string
@@ -7253,6 +7263,7 @@ function ChatModuleDashboard({
       metric.year === chat2SelectedPeriod.year && metric.month_number === chat2SelectedPeriod.monthNumber
     return matchesTeam && matchesPeriod
   })
+  const chat2CoveragePartial = clickDeskPersistedMetrics?.reconciliation?.coverage !== 'complete'
   const chat2PersistedAnalystRows = clickDeskPersistedMetrics?.by_analyst ?? []
   const chat2DiagnosticAnalystRows = (clickDeskConversationDiagnostic?.human_by_area_assignee ?? []).filter(
     (item) =>
@@ -8036,6 +8047,14 @@ function ChatModuleDashboard({
           )}
         </div>
       )}
+      {['overview', 'prototype', 'podium', 'reports'].includes(chatActiveTab) &&
+        clickDeskPersistedMetrics?.reconciliation?.coverage === 'audit_sample_only' && (
+          <div role="status" className="rounded-lg border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-100">
+            <strong>AMOSTRA PARCIAL AUDITADA — NÃO É O FECHAMENTO OFICIAL</strong>
+            <p className="mt-2">Os indicadores abaixo representam somente tickets comprovados e gravados no ledger de homologação. Ainda falta validar a descoberta de todos os tickets da competência. Não usar posições no pódio, metas atingidas ou volume comparativo para decisões finais.</p>
+            <p className="mt-2 text-xs">Amostra: {clickDeskPersistedMetrics.reconciliation.coverage_sources?.map(item => `${item.confirmed_count} confirmados / ${item.candidate_count} candidatos · ${item.pending_count} pendentes`).join(' · ') || 'cobertura em conferência'}.</p>
+          </div>
+        )}
       {['overview', 'prototype', 'podium', 'reports'].includes(chatActiveTab) && (
         <p className="rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-xs leading-5 text-amber-100">
           Fonte individual: último atendimento público humano comprovado. A cobertura da descoberta permanece em conferência;
@@ -9876,7 +9895,7 @@ function ChatModuleDashboard({
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Gestão e ações</p>
             <h2 className="mt-2 text-2xl font-bold">Quem precisa da sua atenção e qual é o próximo passo?</h2>
             <p className="section-subtitle">
-              Fila construída com a base viva do ClickDesk. Qualidade e participação definem prioridade; somente diferenças relevantes de volume aparecem como contexto operacional a validar, nunca como falha automática.
+              Sinais de qualidade e participação nos tickets comprovados. Enquanto a cobertura for parcial, as prioridades são observações da amostra, não avaliação definitiva de desempenho.
             </p>
           </div>
           <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-white/10 bg-slate-950/30 text-center sm:grid-cols-4 sm:divide-x sm:divide-white/10">
@@ -9886,7 +9905,7 @@ function ChatModuleDashboard({
             </div>
             <div className="flex min-h-20 flex-col items-center justify-center px-3 py-3">
               <span className="flex min-h-8 items-center justify-center text-xs leading-4 text-slate-500">Metas atingidas</span>
-              <strong className="mt-1 block text-lg tabular-nums text-emerald-300">{chat2ManagementRows.length ? chat2ManagementHealthy.length : '—'}</strong>
+              <strong className="mt-1 block text-lg tabular-nums text-emerald-300">{chat2CoveragePartial ? '—' : chat2ManagementRows.length ? chat2ManagementHealthy.length : '—'}</strong>
             </div>
             <div className="flex min-h-20 flex-col items-center justify-center px-3 py-3">
               <span className="flex min-h-8 items-center justify-center text-xs leading-4 text-slate-500">Volume a validar</span>
@@ -9945,6 +9964,10 @@ function ChatModuleDashboard({
         ) : chat2ManagementRows.length === 0 ? (
           <div className="mt-5 rounded-xl border border-amber-300/20 bg-amber-300/5 p-5 text-sm text-amber-100">
             Não é possível avaliar metas, prioridades ou avaliações negativas: não há indicadores válidos carregados para esta equipe e período.
+          </div>
+        ) : chat2CoveragePartial ? (
+          <div className="mt-5 rounded-xl border border-amber-300/20 bg-amber-300/5 p-5 text-sm text-amber-100">
+            Não há sinais de prioridade entre os tickets comprovados desta amostra. Isso não significa que todos os analistas atingiram as metas: a descoberta do período ainda está incompleta.
           </div>
         ) : (
           <div className="mt-5 rounded-xl border border-emerald-400/15 bg-emerald-400/5 p-5 text-sm text-emerald-100">
