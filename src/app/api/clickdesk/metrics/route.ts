@@ -1,7 +1,8 @@
 import { ApiError, authorizeClickDeskSessionClient, handle, json } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
-import { homologationReadAdmin, loadFinalSnapshot, scopedPending, scopedExclusions } from '@/lib/clickdesk-final-owner-server'
-import { finalPodium } from '@/lib/clickdesk-final-owner'
+import { homologationReadAdmin } from '@/lib/clickdesk-final-owner-server'
+import { readFinalLedger, readLedgerCoverage } from '@/lib/clickdesk-ledger-server'
+import { randomUUID } from 'node:crypto'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -117,18 +118,35 @@ function parseFilters(request: Request) {
 }
 
 async function loadRows(
-  admin: Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],
   filters: ReturnType<typeof parseFilters>,
 ) {
-  void admin
-  const snapshot = await loadFinalSnapshot(homologationReadAdmin())
-  const rows: DailyMetricRow[] = snapshot.rows.filter(row => row.occurred_date! >= filters.start && row.occurred_date! <= filters.end
-    && (!filters.analystId || row.analyst_id === filters.analystId) && (!filters.teamId || row.team_id === filters.teamId))
-    .map(row => ({ occurred_date: row.occurred_date!, team_id: row.team_id, analyst_id: row.analyst_id,
-      area: row.area ?? 'Fila histórica não comprovada', assignee_name: row.analyst_name!, identity_role: 'analyst' as const,
-      attendances: 1, positive_reviews: Number(row.satisfaction_label === 'positive'), negative_reviews: Number(row.satisfaction_label === 'negative'),
-      reviews: Number(row.satisfaction_label !== null), csat: null, review_percentage: null }))
-  return { rows, snapshot }
+  const admin = homologationReadAdmin()
+  const [tickets, coverage, people] = await Promise.all([
+    readFinalLedger(admin, { start: filters.start, end: filters.end, analystId: filters.analystId, teamId: filters.teamId }),
+    readLedgerCoverage(admin),
+    admin.from('chat_analysts').select('id,name,team_id'),
+  ])
+  if (people.error) throw new ApiError(503, 'Cadastro de analistas da homologação indisponível.')
+  const roster = new Map((people.data ?? []).map(person => [person.id, person]))
+  const rows: DailyMetricRow[] = tickets.map(ticket => {
+    const analyst = roster.get(ticket.analyst_id)
+    if (!analyst) throw new ApiError(503, 'Titular confirmado ausente do cadastro. Revisar conciliação.')
+    return {
+      occurred_date: ticket.occurred_date,
+      team_id: ticket.team_id,
+      analyst_id: ticket.analyst_id,
+      area: ticket.area ?? 'Fila histórica não comprovada',
+      assignee_name: analyst.name,
+      identity_role: 'analyst' as const,
+      attendances: 1,
+      positive_reviews: Number(ticket.satisfaction_label === 'positive'),
+      negative_reviews: Number(ticket.satisfaction_label === 'negative'),
+      reviews: Number(ticket.satisfaction_label !== null),
+      csat: null,
+      review_percentage: null,
+    }
+  })
+  return { rows, coverage, admin }
 }
 
 function aggregate(rows: DailyMetricRow[]): Aggregate {
@@ -215,12 +233,16 @@ function groupAnalysts(rows: DailyMetricRow[], today: string) {
 }
 
 export async function GET(request: Request) {
-  return handle(async () => {
+  const started = Date.now()
+  const traceId = randomUUID()
+  let stage = 'environment'
+  const response = await handle(async () => {
     const { environment } = getServerSupabaseConfig()
     if (environment !== 'homologacao') {
       throw new ApiError(404, 'Métricas ClickDesk disponíveis somente na homologação.')
     }
 
+    stage = 'authorization'
     const access = await authorizeClickDeskSessionClient(request)
     const requestedFilters = parseFilters(request)
 
@@ -240,29 +262,20 @@ export async function GET(request: Request) {
           teamId: null,
         }
 
-    const { rows, snapshot } = await loadRows(access.admin, filters)
-    if (snapshot.candidates.length > 0 && snapshot.rows.length === 0) {
-      throw new ApiError(503, 'Reconciliação ClickDesk sem atendimentos humanos confirmados. Verifique a origem e os casos pendentes; não interprete como zero atendimentos.')
-    }
-    // The end-user client is only for authentication/authorization. Operational sync
-    // metadata is read through the homologation-only server client and is scoped below.
-    const admin = homologationReadAdmin()
+    stage = 'ledger_read'
+    const { rows, coverage, admin } = await loadRows(filters)
 
+    stage = 'sync_status'
     const latestSync = await admin
       .from('clickdesk_chat_sync_runs')
-      .select(
-        'id,status,period_start,period_end,trigger_mode,pages_scanned,rows_upserted,matched_rows,unmatched_rows,finished_at',
-      )
+      .select('id,status,period_start,period_end,trigger_mode,pages_scanned,rows_upserted,matched_rows,unmatched_rows,finished_at')
       .eq('status', 'completed')
       .lte('period_start', filters.end)
       .gte('period_end', filters.start)
       .order('finished_at', { ascending: false })
       .limit(1)
       .maybeSingle()
-
-    if (latestSync.error) {
-      throw new ApiError(503, 'Não foi possível consultar o status da sincronização.')
-    }
+    if (latestSync.error) throw new ApiError(503, 'Não foi possível consultar o status da sincronização.')
 
     const apprenticeRows = rows.filter((row) => row.identity_role === 'apprentice')
     const includedRows = rows.filter((row) => row.identity_role !== 'apprentice')
@@ -271,17 +284,28 @@ export async function GET(request: Request) {
     const managementRows = includedRows.filter((row) => row.identity_role === 'management')
     const unmatchedRows = includedRows.filter((row) => row.identity_role === 'unmapped')
 
-    const periodRows = snapshot.rows.filter(row => row.occurred_date! >= filters.start && row.occurred_date! <= filters.end)
-    const pending = scopedPending(snapshot, filters.analystId, filters.teamId, filters.start, filters.end)
+    // Uma coorte parcial jamais autoriza pódio, avaliação conclusiva ou fechamento.
+    const coverageComplete = coverage.complete
     const timestampSources = { last_public_human_answer: rows.reduce((n,row) => n+row.attendances,0) }
-    const dateBasisNeedsValidation = pending.length > 0
-    const selfPodiumContext = filters.analystId ? finalPodium(periodRows, snapshot.people, filters.analystId) : null
+    const dateBasisNeedsValidation = !coverageComplete
+    const selfPodiumContext = null
+    stage = 'completed'
 
     return json({
-      source: 'clickdesk_final_public_human',
-      reconciliation: { captured_at: snapshot.captured_at, cache_window_minutes:5, coverage: 'stored_candidates_only', pending, pending_count: pending.length, unique_ticket_rule: true,
-        retry_needed: snapshot.pending.some(row=>row.reason==='audit_deadline'),
-        excluded: scopedExclusions(snapshot,filters.analystId,filters.teamId,filters.start,filters.end) },
+      source: 'clickdesk_final_ticket_ledger',
+      reconciliation: {
+        captured_at: coverage.verified_at,
+        cache_window_minutes: 0,
+        coverage: coverageComplete ? 'complete' : 'audit_sample_only',
+        coverage_complete: coverageComplete,
+        coverage_sources: access.isManagement ? coverage.entries : [],
+        pending: [],
+        pending_count: 0,
+        pending_note: 'Pendências globais não podem ser atribuídas a um analista/equipe sem autoria comprovada.',
+        unique_ticket_rule: true,
+        retry_needed: false,
+        excluded: [],
+      },
       period: {
         start: filters.start,
         end: filters.end,
@@ -321,9 +345,13 @@ export async function GET(request: Request) {
         sources: timestampSources,
         status: dateBasisNeedsValidation ? 'needs_validation' : 'validated',
         note: dateBasisNeedsValidation
-          ? 'Há tickets pendentes de autoria final ou cobertura do histórico. Eles não foram atribuídos por suposição.'
-          : 'Data operacional: última resposta pública humana, em Brasília. Cobertura limitada aos candidatos capturados; não equivale ao relatório de resoluções.',
+          ? 'AMOSTRA PARCIAL: somente tickets com autoria final auditada. Não usar estes valores como fechamento oficial, ranking ou confirmação de metas.'
+          : 'Data operacional: última resposta pública humana, em Brasília. Cobertura validada conforme fontes documentadas.',
       },
     })
   })
+  console.info('clickdesk_metrics', JSON.stringify({
+    trace_id: traceId, stage, duration_ms: Date.now()-started, status: response.status,
+  }))
+  return response
 }
