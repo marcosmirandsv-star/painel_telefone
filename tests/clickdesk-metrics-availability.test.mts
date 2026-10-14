@@ -13,13 +13,30 @@ test('homologação e produção usam configuração única para credenciais de 
   assert.match(finalOwner, /vvtorcvchnqhcredhorv\.supabase\.co/)
 })
 
-test('API nunca retorna zero comprovado quando todos os tickets estão inconclusivos', () => {
-  const route = source('src/app/api/clickdesk/metrics/route.ts')
-  assert.match(route, /snapshot\.candidates\.length > 0 && snapshot\.rows\.length === 0/)
-  assert.match(route, /new ApiError\(503, 'Reconciliação ClickDesk sem atendimentos humanos confirmados/)
-  assert.match(route, /const admin = homologationReadAdmin\(\)/)
-  assert.doesNotMatch(route, /const admin = access\.admin/)
-  assert.match(route, /!access\.isManagement/)
+test('consultas do painel usam o ledger e nunca refazem auditoria REST', () => {
+  const metrics = source('src/app/api/clickdesk/metrics/route.ts')
+  const history = source('src/app/api/clickdesk/history/route.ts')
+  const tickets = source('src/app/api/clickdesk/tickets/route.ts')
+  const ledger = source('src/lib/clickdesk-ledger-server.ts')
+  for (const route of [metrics, history, tickets]) {
+    assert.match(route, /readFinalLedger/)
+    assert.doesNotMatch(route, /loadFinalSnapshot\(/)
+    assert.match(route, /authorizeClickDeskSessionClient\(request\)/)
+  }
+  assert.match(ledger, /import 'server-only'/)
+  assert.match(ledger, /clickdesk_final_ticket_ledger/)
+  assert.match(ledger, /filters\.analystId/)
+  assert.match(ledger, /filters\.teamId/)
+  assert.match(metrics, /coverageComplete \? 'complete' : 'audit_sample_only'/)
+  assert.match(metrics, /selfPodiumContext = null/)
+  assert.match(metrics, /console\.info\('clickdesk_metrics'/)
+})
+
+test('diagnóstico fica restrito a gestores, sem reconciliação cara', () => {
+  const health = source('src/app/api/clickdesk/health/route.ts')
+  assert.match(health, /if \(!access\.isManagement\) throw new ApiError\(403/)
+  assert.match(health, /const access = await authorizeClickDeskSessionClient\(request\)/)
+  assert.doesNotMatch(health, /loadFinalSnapshot|CLICKDESK_API_KEY|CLICKDESK_ACCOUNT_ID/)
 })
 
 test('gestão mostra falha, carregamento e estado inconclusivo sem metas falsamente saudáveis', () => {
@@ -29,6 +46,8 @@ test('gestão mostra falha, carregamento e estado inconclusivo sem metas falsame
   assert.match(page, /Sessão indisponível\. Entre novamente no painel/)
   assert.match(page, /Não foi possível consultar a base ClickDesk/)
   assert.match(page, /Não é possível avaliar metas, prioridades ou avaliações negativas/)
-  assert.match(page, /chat2ManagementRows\.length \? chat2ManagementHealthy\.length : '—'/)
+  assert.match(page, /chat2CoveragePartial \? '—' : chat2ManagementRows\.length \? chat2ManagementHealthy\.length : '—'/)
+  assert.match(page, /AMOSTRA PARCIAL AUDITADA/)
+  assert.match(page, /Não há sinais de prioridade entre os tickets comprovados desta amostra/)
   assert.match(page, /Tentar novamente/)
 })
