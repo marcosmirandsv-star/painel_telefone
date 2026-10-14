@@ -22,6 +22,7 @@ test('reconciliação começa sempre em dry-run e rejeita gravação em preview 
   assert.match(source, /const confirmed=evaluated\.filter\(row=>row\.confirmed\)/)
   assert.match(source, /const pending=evaluated\.filter\(row=>!row\.confirmed\)/)
   assert.match(source, /if\(!dryRun && selection\.length\)/)
+  assert.match(source, /clickdesk_chat_capture_queue/)
   assert.match(source, /readTicketHistory/)
   assert.match(source, /finalHumanTicket/)
   assert.doesNotMatch(source, /['"]DELETE['"]|['"]PATCH['"]|['"]PUT['"]/)

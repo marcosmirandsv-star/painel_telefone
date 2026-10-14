@@ -20,6 +20,8 @@ async function sourceCandidates() {
   for (const [table, idColumn, versionColumn] of [
     ['clickdesk_chat_attendances', 'clickdesk_ticket_id', 'updated_at'],
     ['clickdesk_chat_verified_contributions', 'ticket_id', 'verified_at'],
+    // Descoberta mais ampla da rotina corrente. Done significa processado, não humano confirmado.
+    ['clickdesk_chat_capture_queue', 'ticket_id', 'source_updated_at'],
   ] as const) {
     for (let offset = 0; offset < MAX_SOURCE_ROWS; offset += 500) {
       const { data, error } = await admin.from(table)
