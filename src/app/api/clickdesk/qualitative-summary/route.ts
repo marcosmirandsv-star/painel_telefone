@@ -354,6 +354,13 @@ export async function GET(request: Request) {
       source: 'clickdesk_qualitative_cache',
       period: { start, end },
       scope: { team_id: teamId, analyst_id: analystId },
+      source_coverage: {
+        status: ledgerCoverage.complete ? 'complete' : 'audit_sample_only',
+        verified_at: ledgerCoverage.verified_at,
+        note: ledgerCoverage.complete
+          ? 'Atendimentos com autoria final confirmada.'
+          : 'Amostra parcial: outros tickets avaliados ainda aguardam reconciliação. Não é fechamento oficial.',
+      },
       totals: {
         evaluated: evaluated.length,
         positive: evaluatedPositive,
