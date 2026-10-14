@@ -5,6 +5,7 @@ import {
   json,
 } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
+import { readFinalLedger, readLedgerCoverage } from '@/lib/clickdesk-ledger-server'
 import { normalizeQualitativeAnalysis } from '@/lib/clickdesk-qualitative'
 
 export const runtime = 'nodejs'
@@ -143,24 +144,24 @@ export async function GET(request: Request) {
     if (teamId && !validUuid(teamId)) throw new ApiError(400, 'team_id inválido.')
     if (analystId && !validUuid(analystId)) throw new ApiError(400, 'analyst_id inválido.')
 
-    let attendanceQuery = access.admin
-      .from('clickdesk_chat_attendances')
-      .select('clickdesk_ticket_id,analyst_id,assignee_name,satisfaction_label,occurred_date,occurred_at,area')
-      .eq('identity_role', 'analyst')
-      .gte('occurred_date', start)
-      .lte('occurred_date', end)
-      .in('satisfaction_label', ['positive', 'negative'])
-      .order('occurred_at', { ascending: false })
-
-    if (teamId) attendanceQuery = attendanceQuery.eq('team_id', teamId)
-    if (analystId) attendanceQuery = attendanceQuery.eq('analyst_id', analystId)
-
-    const attendanceResult = await attendanceQuery
-    if (attendanceResult.error) {
-      throw new ApiError(503, 'Não foi possível calcular a cobertura das avaliações.')
-    }
-
-    const evaluated = (attendanceResult.data ?? []) as AttendanceRow[]
+    const [ledger, roster, ledgerCoverage] = await Promise.all([
+      readFinalLedger(access.admin, { start, end, analystId, teamId }),
+      access.admin.from('chat_analysts').select('id,name'),
+      readLedgerCoverage(access.admin),
+    ])
+    if (roster.error) throw new ApiError(503, 'Cadastro de analistas indisponível.')
+    const nameById = new Map((roster.data ?? []).map(item => [item.id, item.name]))
+    const evaluated: AttendanceRow[] = ledger
+      .filter(item => item.satisfaction_label === 'positive' || item.satisfaction_label === 'negative')
+      .map(item => ({
+        clickdesk_ticket_id: item.ticket_id,
+        analyst_id: item.analyst_id,
+        assignee_name: nameById.get(item.analyst_id) ?? 'Analista',
+        satisfaction_label: item.satisfaction_label,
+        occurred_date: item.occurred_date,
+        occurred_at: item.last_public_at,
+        area: item.area ?? 'Fila histórica não comprovada',
+      }))
     const evaluatedTicketIds = new Set(evaluated.map((item) => item.clickdesk_ticket_id))
     const analystNames = new Map<string, string>()
 
@@ -185,10 +186,13 @@ export async function GET(request: Request) {
     }
 
     const allAnalyses = (analysisResult.data ?? []) as AnalysisRow[]
-    const analyses =
-      teamId || analystId
-        ? allAnalyses.filter((item) => evaluatedTicketIds.has(item.clickdesk_ticket_id))
-        : allAnalyses
+    const currentOwner = new Map(evaluated.map(item => [item.clickdesk_ticket_id, item]))
+    const analyses = allAnalyses.filter(item => {
+      if (!evaluatedTicketIds.has(item.clickdesk_ticket_id)) return false
+      const owner = currentOwner.get(item.clickdesk_ticket_id)
+      return Boolean(owner && item.analyst_id === owner.analyst_id
+        && item.satisfaction_label === owner.satisfaction_label)
+    })
 
     const evaluatedPositive = evaluated.filter((item) => item.satisfaction_label === 'positive').length
     const evaluatedNegative = evaluated.filter((item) => item.satisfaction_label === 'negative').length
@@ -350,6 +354,13 @@ export async function GET(request: Request) {
       source: 'clickdesk_qualitative_cache',
       period: { start, end },
       scope: { team_id: teamId, analyst_id: analystId },
+      source_coverage: {
+        status: ledgerCoverage.complete ? 'complete' : 'audit_sample_only',
+        verified_at: ledgerCoverage.verified_at,
+        note: ledgerCoverage.complete
+          ? 'Atendimentos com autoria final confirmada.'
+          : 'Amostra parcial: outros tickets avaliados ainda aguardam reconciliação. Não é fechamento oficial.',
+      },
       totals: {
         evaluated: evaluated.length,
         positive: evaluatedPositive,
