@@ -241,7 +241,12 @@ export async function GET(request: Request) {
         }
 
     const { rows, snapshot } = await loadRows(access.admin, filters)
-    const admin = access.admin
+    if (snapshot.candidates.length > 0 && snapshot.rows.length === 0) {
+      throw new ApiError(503, 'Reconciliação ClickDesk sem atendimentos humanos confirmados. Verifique a origem e os casos pendentes; não interprete como zero atendimentos.')
+    }
+    // The end-user client is only for authentication/authorization. Operational sync
+    // metadata is read through the homologation-only server client and is scoped below.
+    const admin = homologationReadAdmin()
 
     const latestSync = await admin
       .from('clickdesk_chat_sync_runs')
