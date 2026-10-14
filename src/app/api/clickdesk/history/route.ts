@@ -5,7 +5,6 @@ import {
   json,
 } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
-import { homologationReadAdmin } from '@/lib/clickdesk-final-owner-server'
 import { readFinalLedger, readLedgerCoverage } from '@/lib/clickdesk-ledger-server'
 
 export const runtime = 'nodejs'
@@ -281,7 +280,7 @@ export async function GET(request: Request) {
     if (!officialByMonth.has(currentMonth)) {
       const { start } = monthBounds(currentMonth)
       const [liveRowsResult, teamResult] = await Promise.all([
-        readFinalLedger(homologationReadAdmin(), { start, end: today, analystId }),
+        readFinalLedger(admin, { start, end: today, analystId }),
         admin
           .from('chat_teams')
           .select('id,name')
@@ -357,7 +356,7 @@ export async function GET(request: Request) {
       points: withDeltas,
       official_months: withDeltas.filter((item) => item.source === 'official').length,
       live_month_included: withDeltas.some((item) => item.source === 'live'),
-      live_coverage: (await readLedgerCoverage(homologationReadAdmin())).complete ? 'complete' : 'audit_sample_only',
+      live_coverage: (await readLedgerCoverage(admin)).complete ? 'complete' : 'audit_sample_only',
     })
   })
 }
