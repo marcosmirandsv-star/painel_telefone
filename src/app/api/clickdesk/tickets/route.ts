@@ -5,7 +5,8 @@ import {
   json,
 } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
-import { homologationReadAdmin, loadFinalSnapshot, scopedPending } from '@/lib/clickdesk-final-owner-server'
+import { homologationReadAdmin } from '@/lib/clickdesk-final-owner-server'
+import { readFinalLedger, readLedgerCoverage } from '@/lib/clickdesk-ledger-server'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -66,23 +67,29 @@ export async function GET(request: Request) {
       throw new ApiError(400, 'Informe analyst_id para consultar os tickets.')
     }
 
-    const snapshot = await loadFinalSnapshot(homologationReadAdmin())
-    const rows = snapshot.rows.filter(row => row.analyst_id === analystId && row.occurred_date === date)
-    const pending = scopedPending(snapshot, analystId, null, date, date)
+    const admin = homologationReadAdmin()
+    const [rows, coverage] = await Promise.all([
+      readFinalLedger(admin, { start: date, end: date, analystId }),
+      readLedgerCoverage(admin),
+    ])
 
     return json({
-      source: 'clickdesk_final_public_human',
-      reconciliation: { captured_at: snapshot.captured_at, pending, pending_count: pending.length },
+      source: 'clickdesk_final_ticket_ledger',
+      reconciliation: {
+        captured_at: coverage.verified_at, pending: [], pending_count: 0,
+        coverage: coverage.complete ? 'complete' : 'audit_sample_only',
+        note: 'Amostra parcial: pendências globais sem autoria não são atribuíveis por analista.',
+      },
       date,
       analyst_id: analystId,
       tickets: rows.map((row) => ({
         ticket_id: row.ticket_id,
-        occurred_at: row.occurred_at,
+        occurred_at: row.last_public_at,
         area: row.area,
         satisfaction_label: row.satisfaction_label,
         journey_status: 'human_answer_confirmed',
         timestamp_source: 'last_public_human_answer',
-        final_message_id: row.message_id,
+        final_message_id: row.last_public_message_id,
       })),
     })
   })
