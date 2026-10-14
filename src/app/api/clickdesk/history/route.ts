@@ -5,7 +5,8 @@ import {
   json,
 } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
-import { homologationReadAdmin, loadFinalSnapshot } from '@/lib/clickdesk-final-owner-server'
+import { homologationReadAdmin } from '@/lib/clickdesk-final-owner-server'
+import { readFinalLedger, readLedgerCoverage } from '@/lib/clickdesk-ledger-server'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -280,7 +281,7 @@ export async function GET(request: Request) {
     if (!officialByMonth.has(currentMonth)) {
       const { start } = monthBounds(currentMonth)
       const [liveRowsResult, teamResult] = await Promise.all([
-        loadFinalSnapshot(homologationReadAdmin()),
+        readFinalLedger(homologationReadAdmin(), { start, end: today, analystId }),
         admin
           .from('chat_teams')
           .select('id,name')
@@ -292,7 +293,7 @@ export async function GET(request: Request) {
         throw new ApiError(503, 'Equipe do analista indisponível.')
       }
 
-      const totals = aggregate(liveRowsResult.rows.filter(row => row.analyst_id === analystId && row.occurred_date! >= start && row.occurred_date! <= today))
+      const totals = aggregate(liveRowsResult)
 
       officialByMonth.set(currentMonth, {
         priority: 3,
@@ -356,6 +357,7 @@ export async function GET(request: Request) {
       points: withDeltas,
       official_months: withDeltas.filter((item) => item.source === 'official').length,
       live_month_included: withDeltas.some((item) => item.source === 'live'),
+      live_coverage: (await readLedgerCoverage(homologationReadAdmin())).complete ? 'complete' : 'audit_sample_only',
     })
   })
 }
