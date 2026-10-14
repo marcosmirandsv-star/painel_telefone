@@ -1,5 +1,6 @@
 import 'server-only'
 import { adminClient, ApiError } from './integration-server'
+import { getServerSupabaseConfig } from './runtime-environment'
 import { createHash } from 'node:crypto'
 import { unstable_cache } from 'next/cache'
 import { finalHumanTicket, object, text, type FinalTicket, type Person } from './clickdesk-final-owner'
@@ -11,9 +12,11 @@ const cache = new Map<string, { expires: number; promise: Promise<FinalSnapshot>
 const ticketCache = new Map<string, { expires:number; row:FinalTicket }>()
 
 export function homologationReadAdmin() {
-  if (process.env.VERCEL_ENV !== 'preview') throw new ApiError(404, 'Reconciliação exclusiva da homologação.')
-  const url = process.env.NEXT_PUBLIC_HOMOLOGATION_SUPABASE_URL ?? 'https://vvtorcvchnqhcredhorv.supabase.co'
-  if (new URL(url).hostname !== 'vvtorcvchnqhcredhorv.supabase.co') throw new ApiError(503, 'Projeto de homologação divergente.')
+  const config = getServerSupabaseConfig()
+  if (config.environment !== 'homologacao') throw new ApiError(404, 'Reconciliação exclusiva da homologação.')
+  if (new URL(config.url).hostname !== 'vvtorcvchnqhcredhorv.supabase.co') {
+    throw new ApiError(503, 'Projeto de homologação divergente.')
+  }
   return adminClient()
 }
 
