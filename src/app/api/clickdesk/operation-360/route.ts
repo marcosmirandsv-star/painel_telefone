@@ -111,7 +111,7 @@ async function loadAnalyses(
   admin: Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],
   filters: ReturnType<typeof parseFilters>,
 ) {
-  const rows: Operation360AnalysisRow[] = []
+  const rows: Array<Operation360AnalysisRow & { analyst_id: string | null }> = []
 
   for (let offset = 0; offset < 10000; offset += 500) {
     const result = await admin
@@ -126,7 +126,7 @@ async function loadAnalyses(
       throw new ApiError(503, 'Não foi possível carregar as análises qualitativas preservadas.')
     }
 
-    rows.push(...((result.data ?? []) as Operation360AnalysisRow[]))
+    rows.push(...((result.data ?? []) as Array<Operation360AnalysisRow & { analyst_id: string | null }>))
     if ((result.data ?? []).length < 500) return rows
   }
 
