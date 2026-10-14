@@ -30,7 +30,7 @@ test('rotas individuais recusam analyst_id diferente do vínculo da sessão', ()
 test('IA qualitativa valida o dono do ticket antes de consultar cache', () => {
   const text = source('src/app/api/clickdesk/qualitative/route.ts')
   const ownershipPattern =
-    /persisted\.data\.analyst_id\s*!==\s*(?:sessionAccess|access)\.chatAnalystId/
+    /final\.analyst_id\s*!==\s*sessionAccess\.chatAnalystId/
   const ownershipMatch = ownershipPattern.exec(text)
   const ownershipCheck = ownershipMatch?.index ?? -1
   const cacheRead = text.indexOf("if (!body.force)")

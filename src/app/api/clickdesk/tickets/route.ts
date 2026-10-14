@@ -5,8 +5,10 @@ import {
   json,
 } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
+import { homologationReadAdmin, loadFinalSnapshot, scopedPending } from '@/lib/clickdesk-final-owner-server'
 
 export const runtime = 'nodejs'
+export const maxDuration = 300
 
 function validDate(value: string) {
   return (
@@ -64,32 +66,23 @@ export async function GET(request: Request) {
       throw new ApiError(400, 'Informe analyst_id para consultar os tickets.')
     }
 
-    const result = await access.admin
-      .from('clickdesk_chat_attendances')
-      .select(
-        'clickdesk_ticket_id,occurred_at,occurred_date,area,satisfaction_label,journey_status,timestamp_source',
-      )
-      .eq('analyst_id', analystId)
-      .eq('identity_role', 'analyst')
-      .eq('occurred_date', date)
-      .order('occurred_at', { ascending: true })
-      .limit(200)
-
-    if (result.error) {
-      throw new ApiError(503, 'Não foi possível carregar os tickets do dia.')
-    }
+    const snapshot = await loadFinalSnapshot(homologationReadAdmin())
+    const rows = snapshot.rows.filter(row => row.analyst_id === analystId && row.occurred_date === date)
+    const pending = scopedPending(snapshot, analystId, null, date, date)
 
     return json({
-      source: 'clickdesk_persisted',
+      source: 'clickdesk_final_public_human',
+      reconciliation: { captured_at: snapshot.captured_at, pending, pending_count: pending.length },
       date,
       analyst_id: analystId,
-      tickets: (result.data ?? []).map((row) => ({
-        ticket_id: row.clickdesk_ticket_id,
+      tickets: rows.map((row) => ({
+        ticket_id: row.ticket_id,
         occurred_at: row.occurred_at,
         area: row.area,
         satisfaction_label: row.satisfaction_label,
-        journey_status: row.journey_status,
-        timestamp_source: row.timestamp_source,
+        journey_status: 'human_answer_confirmed',
+        timestamp_source: 'last_public_human_answer',
+        final_message_id: row.message_id,
       })),
     })
   })
