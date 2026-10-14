@@ -8,7 +8,6 @@ import {
   json,
 } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
-import { homologationReadAdmin, loadFinalSnapshot } from '@/lib/clickdesk-final-owner-server'
 import {
   extractTranscriptText,
   isQualitativeTranscriptSufficient,
@@ -697,13 +696,35 @@ export async function POST(request: Request) {
         throw new ApiError(401, 'Sessão inválida.')
       }
 
-      const snapshot = await loadFinalSnapshot(homologationReadAdmin())
-      const final = snapshot.rows.find(row => row.ticket_id === ticketId)
+      // A análise individual deve consultar exatamente o ledger do painel,
+      // sob RLS da sessão (sem varrer milhares de mensagens nem usar service key).
+      const { data: final, error: finalError } = await sessionAccess.admin
+        .from('clickdesk_final_ticket_ledger')
+        .select('ticket_id,analyst_id,team_id,area,satisfaction_label,occurred_date')
+        .eq('ticket_id', ticketId)
+        .maybeSingle()
+      if (finalError) {
+        throw new ApiError(503, 'Ledger do ticket indisponível para análise qualitativa.')
+      }
       if (!final || (!sessionAccess.isManagement && final.analyst_id !== sessionAccess.chatAnalystId)) {
         throw new ApiError(404, 'Ticket sem autoria final comprovada para este acesso.')
       }
-      persistedData = { clickdesk_ticket_id: ticketId, analyst_id: final.analyst_id, area: final.area,
-        satisfaction_label: final.satisfaction_label, occurred_date: final.occurred_date, identity_role: 'analyst' } as PersistedTicket
+      const { data: pending, error: pendingError } = await sessionAccess.admin
+        .from('clickdesk_final_ticket_pending')
+        .select('ticket_id')
+        .eq('ticket_id', ticketId)
+        .maybeSingle()
+      if (pendingError) {
+        throw new ApiError(503, 'Não foi possível verificar pendências do ticket.')
+      }
+      if (pending) {
+        throw new ApiError(422, 'Ticket em conferência de autoria. A análise não será atribuída por suposição.')
+      }
+      persistedData = {
+        clickdesk_ticket_id: ticketId, analyst_id: final.analyst_id,
+        area: final.area, satisfaction_label: final.satisfaction_label,
+        occurred_date: final.occurred_date, identity_role: 'analyst',
+      }
 
 
       if (!body.force) {
