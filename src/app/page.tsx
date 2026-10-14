@@ -470,6 +470,24 @@ type ClickDeskPersistedAggregate = {
   review_percentage: number | null
 }
 
+type ClickDeskVerifiedCoverage = {
+  source?: string
+  status?: 'complementary_evidence_not_final'
+  period?: { start: string; end: string }
+  note?: string
+  analysts?: Array<{
+    analyst_id: string
+    analyst_name: string
+    team_id: string | null
+    distinct_tickets_with_human_contribution: number
+    positive_reviews_with_last_human_evidence: number
+    negative_reviews_with_last_human_evidence: number
+    evaluated_with_last_human_evidence: number
+    csat_of_verified_ratings: number | null
+  }>
+  erro?: string
+}
+
 type ClickDeskPersistedMetrics = {
   reconciliation?: {
     captured_at: string
@@ -732,6 +750,7 @@ type ClickDeskOperation360Synthesis = {
 }
 
 type ClickDeskOperation360 = {
+  source_coverage?: { status: 'complete' | 'audit_sample_only'; verified_at: string | null; note: string }
   source?: string
   period?: { start: string; end: string }
   scope?: { team_id: string | null }
@@ -4548,6 +4567,8 @@ function ChatModuleDashboard({
   const [clickDeskConversationLoading, setClickDeskConversationLoading] = useState(false)
   const [clickDeskConversationDiagnostic, setClickDeskConversationDiagnostic] = useState<ClickDeskConversationDiagnostic | null>(null)
   const [clickDeskPersistedMetrics, setClickDeskPersistedMetrics] = useState<ClickDeskPersistedMetrics | null>(null)
+  const [clickDeskVerifiedCoverage, setClickDeskVerifiedCoverage] = useState<ClickDeskVerifiedCoverage | null>(null)
+  const [clickDeskVerifiedCoverageLoading, setClickDeskVerifiedCoverageLoading] = useState(false)
   const [clickDeskMetricsLoading, setClickDeskMetricsLoading] = useState(false)
   const clickDeskMetricsRequestVersion = useRef(0)
   useEffect(() => () => { clickDeskMetricsRequestVersion.current++ }, [])
@@ -7206,6 +7227,42 @@ function ChatModuleDashboard({
     chat2PeriodOptions.find((period) => period.key === chat2PeriodKey) ??
     chat2PeriodOptions[0] ??
     chat2Periods[0]
+  useEffect(() => {
+    if (!isManagementUser || chatActiveTab !== 'prototype') {
+      setClickDeskVerifiedCoverage(null)
+      return
+    }
+    let cancelled = false
+    async function loadVerifiedCoverage() {
+      setClickDeskVerifiedCoverageLoading(true)
+      setClickDeskVerifiedCoverage(null)
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) {
+          if (!cancelled) setClickDeskVerifiedCoverage({ erro: 'Sessão expirada.' })
+          return
+        }
+        const params = new URLSearchParams({
+          start: chat2SelectedPeriod.start, end: chat2SelectedPeriod.end,
+        })
+        if (selectedTeamId !== 'all') params.set('team_id', selectedTeamId)
+        const response = await fetch(`/api/clickdesk/verified-coverage?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: 'no-store',
+        })
+        const result = (await response.json()) as ClickDeskVerifiedCoverage
+        if (!response.ok) result.erro = result.erro || 'Conferência complementar indisponível.'
+        if (!cancelled) setClickDeskVerifiedCoverage(result)
+      } catch {
+        if (!cancelled) setClickDeskVerifiedCoverage({ erro: 'Falha na leitura complementar.' })
+      } finally {
+        if (!cancelled) setClickDeskVerifiedCoverageLoading(false)
+      }
+    }
+    void loadVerifiedCoverage()
+    return () => { cancelled = true }
+  }, [chat2SelectedPeriod.start, chat2SelectedPeriod.end, selectedTeamId, isManagementUser, chatActiveTab])
+
   const chat2PreviousDate = new Date(Date.UTC(chat2SelectedPeriod.year, chat2SelectedPeriod.monthNumber - 2, 1))
   const chat2PreviousPeriod = {
     ...getChatMonthPeriod(chat2PreviousDate.getUTCFullYear(), chat2PreviousDate.getUTCMonth() + 1),
@@ -8550,6 +8607,46 @@ function ChatModuleDashboard({
               </div>
             )}
           </section>
+
+          <details open className="workspace-content-section border border-amber-300/20 rounded-xl p-4">
+            <summary className="cursor-pointer text-sm font-bold text-amber-100">
+              Conferência complementar — demais analistas e avaliações com autoria comprovada
+            </summary>
+            <p className="mt-3 text-xs leading-5 text-amber-100">
+              Estes números NÃO são o fechamento de atendimentos. Participação verificada em um ticket pode
+              incluir mais de um analista; apenas o ledger acima confirma a titularidade final.
+              O CSAT abaixo usa exclusivamente avaliações já atribuídas ao último respondente público.
+              Não calcule a porcentagem de avaliações usando participações como denominador.
+            </p>
+            {clickDeskVerifiedCoverageLoading ? (
+              <p className="mt-3 text-sm text-slate-400">Consultando contribuições verificadas...</p>
+            ) : clickDeskVerifiedCoverage?.erro ? (
+              <p className="mt-3 text-sm text-amber-100">{clickDeskVerifiedCoverage.erro}</p>
+            ) : clickDeskVerifiedCoverage?.analysts?.length ? (
+              <div className="data-table-shell mt-4 overflow-x-auto">
+                <table className="min-w-[660px] w-full text-sm">
+                  <thead><tr className="border-b border-white/10 text-left text-xs text-slate-400">
+                    <th className="p-3">Analista</th>
+                    <th className="p-3 text-right">Tickets com contribuição</th>
+                    <th className="p-3 text-right">Avaliações positivas</th>
+                    <th className="p-3 text-right">Avaliações negativas</th>
+                    <th className="p-3 text-right">CSAT da amostra avaliada</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-white/5">
+                    {clickDeskVerifiedCoverage.analysts.map(item => (
+                      <tr key={item.analyst_id}>
+                        <td className="p-3 font-medium text-slate-100">{item.analyst_name}</td>
+                        <td className="p-3 text-right tabular-nums">{formatChatCount(item.distinct_tickets_with_human_contribution)}</td>
+                        <td className="p-3 text-right tabular-nums">{formatChatCount(item.positive_reviews_with_last_human_evidence)}</td>
+                        <td className="p-3 text-right tabular-nums">{formatChatCount(item.negative_reviews_with_last_human_evidence)}</td>
+                        <td className="p-3 text-right tabular-nums">{item.csat_of_verified_ratings === null ? '—' : formatChatPercent(item.csat_of_verified_ratings)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : <p className="mt-3 text-sm text-slate-400">Nenhuma contribuição verificada neste recorte.</p>}
+          </details>
 
           <details className="workspace-content-section workspace-content-section-divided phone-ai-layers">
             <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-cyan-100">Diagnóstico complementar e histórico · pode usar fontes diferentes do resumo compartilhado</summary>
