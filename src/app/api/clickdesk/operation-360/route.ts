@@ -5,6 +5,7 @@ import {
   json,
 } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
+import { readFinalLedger, readLedgerCoverage } from '@/lib/clickdesk-ledger-server'
 import {
   normalizeQualitativeAnalysis,
   qualitativeAnalysisVersion,
@@ -81,32 +82,29 @@ async function loadAttendances(
   admin: Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],
   filters: ReturnType<typeof parseFilters>,
 ) {
-  const rows: AttendanceRow[] = []
-
-  for (let offset = 0; offset < 10000; offset += 500) {
-    let query = admin
-      .from('clickdesk_chat_attendances')
-      .select(
-        'clickdesk_ticket_id,analyst_id,assignee_name,team_id,area,satisfaction_label,occurred_date,occurred_at',
-      )
-      .eq('identity_role', 'analyst')
-      .gte('occurred_date', filters.start)
-      .lte('occurred_date', filters.end)
-      .order('occurred_at', { ascending: true })
-      .range(offset, offset + 499)
-
-    if (filters.teamId) query = query.eq('team_id', filters.teamId)
-
-    const result = await query
-    if (result.error) {
-      throw new ApiError(503, 'Não foi possível carregar os atendimentos da operação.')
-    }
-
-    rows.push(...((result.data ?? []) as AttendanceRow[]))
-    if ((result.data ?? []).length < 500) return rows
+  // Fonte única com Equipe e produtividade: um ticket, último autor humano confirmado.
+  const [ledger, analystsResult] = await Promise.all([
+    readFinalLedger(admin, { start: filters.start, end: filters.end, teamId: filters.teamId }),
+    admin.from('chat_analysts').select('id,name'),
+  ])
+  if (analystsResult.error) {
+    throw new ApiError(503, 'Cadastro dos analistas indisponível para o 360º.')
   }
-
-  throw new ApiError(422, 'O volume da operação excedeu o limite de 10.000 atendimentos.')
+  const names = new Map((analystsResult.data ?? []).map(item => [item.id, item.name]))
+  return ledger.map(row => {
+    const name = names.get(row.analyst_id)
+    if (!name) throw new ApiError(503, 'Titular verificado ausente do cadastro.')
+    return {
+      clickdesk_ticket_id: row.ticket_id,
+      analyst_id: row.analyst_id,
+      assignee_name: name,
+      team_id: row.team_id,
+      area: row.area ?? 'Fila histórica não comprovada',
+      satisfaction_label: row.satisfaction_label,
+      occurred_date: row.occurred_date,
+      occurred_at: row.last_public_at,
+    }
+  })
 }
 
 async function loadAnalyses(
@@ -118,7 +116,7 @@ async function loadAnalyses(
   for (let offset = 0; offset < 10000; offset += 500) {
     const result = await admin
       .from('clickdesk_qualitative_analyses')
-      .select('clickdesk_ticket_id,satisfaction_label,validation_status,analysis')
+      .select('clickdesk_ticket_id,analyst_id,satisfaction_label,validation_status,analysis')
       .gte('occurred_date', filters.start)
       .lte('occurred_date', filters.end)
       .order('updated_at', { ascending: false })
@@ -149,10 +147,13 @@ export async function GET(request: Request) {
 
     const filters = parseFilters(request)
     const attendances = await loadAttendances(access.admin, filters)
-    const attendanceIds = new Set(attendances.map((row) => row.clickdesk_ticket_id))
-    const analyses = (await loadAnalyses(access.admin, filters)).filter((row) =>
-      attendanceIds.has(row.clickdesk_ticket_id),
-    )
+    const currentOwner = new Map(attendances.map(row => [row.clickdesk_ticket_id, row]))
+    const analyses = (await loadAnalyses(access.admin, filters)).filter(row => {
+      const owner = currentOwner.get(row.clickdesk_ticket_id)
+      return Boolean(owner && row.analyst_id === owner.analyst_id
+        && row.satisfaction_label === owner.satisfaction_label)
+    })
+    const ledgerCoverage = await readLedgerCoverage(access.admin)
     const totals = calculateOperation360Totals(attendances)
     const currentAnalyses = analyses.filter(
       (row) =>
@@ -212,6 +213,13 @@ export async function GET(request: Request) {
       source: 'clickdesk_operation_360',
       period: { start: filters.start, end: filters.end },
       scope: { team_id: filters.teamId },
+      source_coverage: {
+        status: ledgerCoverage.complete ? 'complete' : 'audit_sample_only',
+        verified_at: ledgerCoverage.verified_at,
+        note: ledgerCoverage.complete
+          ? 'Tickets com autoria final confirmada na competência.'
+          : 'AMOSTRA PARCIAL: a fila de análise usa apenas os tickets avaliados com autoria final confirmada. Ainda faltam tickets da competência.',
+      },
       totals,
       coverage: {
         analyzed: analyzedIds.size,
