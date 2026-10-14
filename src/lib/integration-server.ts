@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { getServerSupabaseConfig } from './runtime-environment'
+import { getServerSupabaseConfig } from './runtime-environment.ts'
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message) }
@@ -163,13 +163,8 @@ export async function callClickDeskAutomationDb(
 
 export async function authorizeClickDeskSessionClient(request: Request) {
   const token = bearer(request, 'session')
-  const homologation = process.env.VERCEL_ENV === 'preview'
-  const url = homologation
-    ? process.env.NEXT_PUBLIC_HOMOLOGATION_SUPABASE_URL ?? 'https://vvtorcvchnqhcredhorv.supabase.co'
-    : process.env.NEXT_PUBLIC_SUPABASE_URL
-  const publishableKey = homologation
-    ? process.env.NEXT_PUBLIC_HOMOLOGATION_SUPABASE_PUBLISHABLE_KEY ?? 'sb_publishable_mqTX2u1bJ69dNKWD0lO-iw_p2Wa9B2t'
-    : process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+  const { url, publishableKey, environment } = getServerSupabaseConfig()
+  const homologation = environment === 'homologacao'
 
   if (!url || !publishableKey) {
     throw new ApiError(
