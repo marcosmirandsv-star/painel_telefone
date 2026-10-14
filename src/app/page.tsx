@@ -4538,6 +4538,7 @@ function ChatModuleDashboard({
   const [clickDeskConversationLoading, setClickDeskConversationLoading] = useState(false)
   const [clickDeskConversationDiagnostic, setClickDeskConversationDiagnostic] = useState<ClickDeskConversationDiagnostic | null>(null)
   const [clickDeskPersistedMetrics, setClickDeskPersistedMetrics] = useState<ClickDeskPersistedMetrics | null>(null)
+  const [clickDeskMetricsLoading, setClickDeskMetricsLoading] = useState(false)
   const clickDeskMetricsRequestVersion = useRef(0)
   useEffect(() => () => { clickDeskMetricsRequestVersion.current++ }, [])
   const [clickDeskPreviousMetrics, setClickDeskPreviousMetrics] = useState<ClickDeskPersistedMetrics | null>(null)
@@ -4739,12 +4740,20 @@ function ChatModuleDashboard({
     deadlineRetry = 0,
   ) {
     const requestVersion = ++clickDeskMetricsRequestVersion.current
+    setClickDeskMetricsLoading(true)
+    // Nunca mantenha números de outra equipe ou competência enquanto a API carrega.
+    if (deadlineRetry === 0) setClickDeskPersistedMetrics(null)
     try {
       const {
         data: { session },
       } = await supabase.auth.getSession()
 
-      if (!session?.access_token) return
+      if (!session?.access_token) {
+        if (requestVersion === clickDeskMetricsRequestVersion.current) {
+          setClickDeskPersistedMetrics({ erro: 'Sessão indisponível. Entre novamente no painel.' })
+        }
+        return
+      }
 
       const params = new URLSearchParams({
         start: period.start,
@@ -4759,18 +4768,26 @@ function ChatModuleDashboard({
       const data = (await response.json()) as ClickDeskPersistedMetrics
 
       if (!response.ok) {
-        data.erro = data.erro || 'Não foi possível carregar a base persistida do ClickDesk.'
+        data.erro = data.erro || 'Não foi possível carregar os indicadores do ClickDesk.'
       }
 
-      if(requestVersion !== clickDeskMetricsRequestVersion.current)return
+      if (requestVersion !== clickDeskMetricsRequestVersion.current) return
       setClickDeskPersistedMetrics(data)
-      if(data.reconciliation?.retry_needed && deadlineRetry<2) {
-        window.setTimeout(()=>{if(requestVersion === clickDeskMetricsRequestVersion.current)void loadClickDeskPersistedMetricsOnly(period,teamId,deadlineRetry+1)},5000)
+      if (data.reconciliation?.retry_needed && deadlineRetry < 2) {
+        window.setTimeout(() => {
+          if (requestVersion === clickDeskMetricsRequestVersion.current) {
+            void loadClickDeskPersistedMetricsOnly(period, teamId, deadlineRetry + 1)
+          }
+        }, 5000)
       }
     } catch (error) {
-      setClickDeskPersistedMetrics({
-        erro: getErrorMessage(error),
-      })
+      if (requestVersion === clickDeskMetricsRequestVersion.current) {
+        setClickDeskPersistedMetrics({ erro: getErrorMessage(error) })
+      }
+    } finally {
+      if (requestVersion === clickDeskMetricsRequestVersion.current) {
+        setClickDeskMetricsLoading(false)
+      }
     }
   }
 
@@ -7993,6 +8010,32 @@ function ChatModuleDashboard({
           </button>
         ))}
       </nav>
+      {['overview', 'prototype', 'podium', 'reports'].includes(chatActiveTab) &&
+        (clickDeskMetricsLoading || clickDeskPersistedMetrics?.erro || !clickDeskPersistedMetrics ||
+          (clickDeskPersistedMetrics.by_analyst?.length ?? 0) === 0) && (
+        <div role="status" aria-live="polite" className="rounded-lg border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-100">
+          <strong className="block">
+            {clickDeskMetricsLoading ? 'Consultando indicadores ClickDesk...' :
+              clickDeskPersistedMetrics?.erro ? 'Não foi possível consultar a base ClickDesk' :
+              'Sem atendimentos humanos confirmados neste recorte'}
+          </strong>
+          <p className="mt-2">
+            {clickDeskMetricsLoading
+              ? 'A reconciliação pode demorar. Os valores ainda não estão disponíveis; zeros provisórios não devem ser interpretados como desempenho.'
+              : clickDeskPersistedMetrics?.erro
+                ? clickDeskPersistedMetrics.erro
+                : 'A cobertura deste período/equipe permanece inconclusiva. Não é possível afirmar que os atendimentos ou avaliações sejam zero.'}
+          </p>
+          {!clickDeskMetricsLoading && (
+            <button type="button" className="secondary-button mt-3"
+              onClick={() => void loadClickDeskPersistedMetricsOnly(
+                { start: chat2SelectedPeriod.start, end: chat2SelectedPeriod.end }, selectedTeamId
+              )}>
+              Tentar novamente
+            </button>
+          )}
+        </div>
+      )}
       {['overview', 'prototype', 'podium', 'reports'].includes(chatActiveTab) && (
         <p className="rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-xs leading-5 text-amber-100">
           Fonte individual: último atendimento público humano comprovado. A cobertura da descoberta permanece em conferência;
@@ -9839,19 +9882,19 @@ function ChatModuleDashboard({
           <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-white/10 bg-slate-950/30 text-center sm:grid-cols-4 sm:divide-x sm:divide-white/10">
             <div className="flex min-h-20 flex-col items-center justify-center px-3 py-3">
               <span className="flex min-h-8 items-center justify-center text-xs leading-4 text-slate-500">Prioridades</span>
-              <strong className="mt-1 block text-lg tabular-nums text-amber-200">{chat2ManagementPriorities.length}</strong>
+              <strong className="mt-1 block text-lg tabular-nums text-amber-200">{chat2ManagementRows.length ? chat2ManagementPriorities.length : '—'}</strong>
             </div>
             <div className="flex min-h-20 flex-col items-center justify-center px-3 py-3">
               <span className="flex min-h-8 items-center justify-center text-xs leading-4 text-slate-500">Metas atingidas</span>
-              <strong className="mt-1 block text-lg tabular-nums text-emerald-300">{chat2ManagementHealthy.length}</strong>
+              <strong className="mt-1 block text-lg tabular-nums text-emerald-300">{chat2ManagementRows.length ? chat2ManagementHealthy.length : '—'}</strong>
             </div>
             <div className="flex min-h-20 flex-col items-center justify-center px-3 py-3">
               <span className="flex min-h-8 items-center justify-center text-xs leading-4 text-slate-500">Volume a validar</span>
-              <strong className="mt-1 block text-lg tabular-nums text-cyan-200">{chat2ManagementVolumeContexts.length}</strong>
+              <strong className="mt-1 block text-lg tabular-nums text-cyan-200">{chat2ManagementRows.length ? chat2ManagementVolumeContexts.length : '—'}</strong>
             </div>
             <div className="flex min-h-20 flex-col items-center justify-center px-3 py-3">
               <span className="flex min-h-8 items-center justify-center text-xs leading-4 text-slate-500">Avaliações negativas</span>
-              <strong className="mt-1 block text-lg tabular-nums text-rose-200">{chat2ManagementNegativeReviews}</strong>
+              <strong className="mt-1 block text-lg tabular-nums text-rose-200">{chat2ManagementRows.length ? chat2ManagementNegativeReviews : '—'}</strong>
             </div>
           </div>
         </div>
@@ -9899,6 +9942,10 @@ function ChatModuleDashboard({
               </div>
             ))}
           </div>
+        ) : chat2ManagementRows.length === 0 ? (
+          <div className="mt-5 rounded-xl border border-amber-300/20 bg-amber-300/5 p-5 text-sm text-amber-100">
+            Não é possível avaliar metas, prioridades ou avaliações negativas: não há indicadores válidos carregados para esta equipe e período.
+          </div>
         ) : (
           <div className="mt-5 rounded-xl border border-emerald-400/15 bg-emerald-400/5 p-5 text-sm text-emerald-100">
             Nenhum analista está abaixo da meta individual de CSAT ou da referência de 25% de avaliações neste recorte.
@@ -9906,7 +9953,7 @@ function ChatModuleDashboard({
         )}
       </section>
 
-      <details className={chatActiveTab === 'podium' ? 'workspace-collapsible' : 'hidden'}>
+      <details className={chatActiveTab === 'podium' && chat2ManagementRows.length > 0 ? 'workspace-collapsible' : 'hidden'}>
         <summary className="cursor-pointer list-none">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
