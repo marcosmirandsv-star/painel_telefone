@@ -1,28 +1,18 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { getServerSupabaseConfig } from './runtime-environment'
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message) }
 }
 export function adminClient() {
-  const homologation = process.env.VERCEL_ENV === 'preview'
-  const url = homologation
-    ? process.env.NEXT_PUBLIC_HOMOLOGATION_SUPABASE_URL ?? 'https://vvtorcvchnqhcredhorv.supabase.co'
-    : process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = homologation
-    ? process.env.HOMOLOGATION_SUPABASE_SERVICE_ROLE_KEY
-    : process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!url || !key) {
-    throw new ApiError(
-      503,
-      homologation
-        ? 'Serviço de homologação ainda não configurado.'
-        : 'Serviço não configurado.',
-    )
+  const { url, serviceRoleKey, environment } = getServerSupabaseConfig()
+  if (!url || !serviceRoleKey) {
+    throw new ApiError(503, environment === 'homologacao'
+      ? 'Serviço de homologação ainda não configurado.'
+      : 'Serviço não configurado.')
   }
-
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
+  return createClient(url, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } })
 }
 export function json(data: unknown, status = 200) {
   return Response.json(data, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...(status === 429 ? { 'Retry-After': '60' } : {}) } })
@@ -92,13 +82,8 @@ export async function authorizeManager(request: Request) {
 }
 export async function authorizeManagerSessionClient(request: Request) {
   const token = bearer(request, 'session')
-  const homologation = process.env.VERCEL_ENV === 'preview'
-  const url = homologation
-    ? process.env.NEXT_PUBLIC_HOMOLOGATION_SUPABASE_URL ?? 'https://vvtorcvchnqhcredhorv.supabase.co'
-    : process.env.NEXT_PUBLIC_SUPABASE_URL
-  const publishableKey = homologation
-    ? process.env.NEXT_PUBLIC_HOMOLOGATION_SUPABASE_PUBLISHABLE_KEY ?? 'sb_publishable_mqTX2u1bJ69dNKWD0lO-iw_p2Wa9B2t'
-    : process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+  const { url, publishableKey, environment } = getServerSupabaseConfig()
+  const homologation = environment === 'homologacao'
 
   if (!url || !publishableKey) {
     throw new ApiError(
