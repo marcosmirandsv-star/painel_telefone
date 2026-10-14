@@ -1,6 +1,5 @@
 import { ApiError, authorizeClickDeskSessionClient, handle, json } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
-import { homologationReadAdmin } from '@/lib/clickdesk-final-owner-server'
 import { readFinalLedger, readLedgerCoverage } from '@/lib/clickdesk-ledger-server'
 import { randomUUID } from 'node:crypto'
 
@@ -118,9 +117,9 @@ function parseFilters(request: Request) {
 }
 
 async function loadRows(
+  admin: Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],
   filters: ReturnType<typeof parseFilters>,
 ) {
-  const admin = homologationReadAdmin()
   const [tickets, coverage, people] = await Promise.all([
     readFinalLedger(admin, { start: filters.start, end: filters.end, analystId: filters.analystId, teamId: filters.teamId }),
     readLedgerCoverage(admin),
@@ -263,7 +262,7 @@ export async function GET(request: Request) {
         }
 
     stage = 'ledger_read'
-    const { rows, coverage, admin } = await loadRows(filters)
+    const { rows, coverage, admin } = await loadRows(access.admin, filters)
 
     stage = 'sync_status'
     const latestSync = await admin

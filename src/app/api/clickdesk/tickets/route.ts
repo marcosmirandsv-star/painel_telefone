@@ -5,7 +5,6 @@ import {
   json,
 } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
-import { homologationReadAdmin } from '@/lib/clickdesk-final-owner-server'
 import { readFinalLedger, readLedgerCoverage } from '@/lib/clickdesk-ledger-server'
 
 export const runtime = 'nodejs'
@@ -67,7 +66,7 @@ export async function GET(request: Request) {
       throw new ApiError(400, 'Informe analyst_id para consultar os tickets.')
     }
 
-    const admin = homologationReadAdmin()
+    const admin = access.admin
     const [rows, coverage] = await Promise.all([
       readFinalLedger(admin, { start: date, end: date, analystId }),
       readLedgerCoverage(admin),

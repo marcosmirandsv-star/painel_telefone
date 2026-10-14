@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { ApiError, authorizeClickDeskSessionClient, handle, json } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
-import { homologationReadAdmin } from '@/lib/clickdesk-final-owner-server'
 
 export const runtime = 'nodejs'
 
@@ -21,7 +20,7 @@ export async function GET(request: Request) {
     const access = await authorizeClickDeskSessionClient(request)
     if (!access.isManagement) throw new ApiError(403, 'Diagnóstico exclusivo da gestão.')
     stage = 'database'
-    const admin = homologationReadAdmin()
+    const admin = access.admin
     const [legacy, verified, daily, snapshots, sync, lastGood] = await Promise.all([
       admin.from('clickdesk_chat_attendances').select('id', { count: 'exact', head: true }),
       admin.from('clickdesk_chat_verified_contributions').select('ticket_id', { count: 'exact', head: true }),
