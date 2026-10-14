@@ -9394,6 +9394,16 @@ function ChatModuleDashboard({
           </div>
         ) : (
           <div className="space-y-6">
+            {clickDeskOperation360?.source_coverage?.status === 'audit_sample_only' && (
+              <div role="status" className="rounded-lg border border-amber-300/20 bg-amber-300/5 p-4 text-sm text-amber-100">
+                <strong>IA e CSAT em cobertura parcial</strong>
+                <p className="mt-2">
+                  A análise percorre somente tickets avaliados com último atendente humano confirmado.
+                  Não há avaliação definitiva da operação até a recuperação do restante do período.
+                  Para processar os pendentes, utilize o comando de análise abaixo.
+                </p>
+              </div>
+            )}
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
               <MetricCard
                 label="Atendimentos"
