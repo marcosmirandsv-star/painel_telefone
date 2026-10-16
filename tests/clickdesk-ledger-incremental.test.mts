@@ -76,3 +76,8 @@ test('amostra individual de avaliações também lê o ledger final e respeita i
   assert.doesNotMatch(sample,/clickdesk_chat_attendances/)
   assert.match(sample,/source: 'clickdesk_final_ticket_ledger'/)
 })
+
+test('worker inclui o unwrapping exigido pelo leitor histórico',()=>{
+  assert.match(worker,/const unwrap = \(payload: unknown\) =>/)
+  assert.match(worker,/const ticket = unwrap\(await get\(/)
+})
