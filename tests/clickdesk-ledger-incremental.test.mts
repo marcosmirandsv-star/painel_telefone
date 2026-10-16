@@ -68,3 +68,11 @@ test('Análise 360 valida tickets com a mesma titularidade final e exclui penden
   assert.doesNotMatch(db,/\.from\('clickdesk_chat_attendances'\)/)
   assert.match(db,/vvtorcvchnqhcredhorv\.supabase\.co/)
 })
+
+test('amostra individual de avaliações também lê o ledger final e respeita isolamento',()=>{
+  const sample=source('src/app/api/clickdesk/evaluated-sample/route.ts')
+  assert.match(sample,/readFinalLedger\(access\.admin, \{ start, end, analystId \}\)/)
+  assert.match(sample,/requestedAnalystId !== access\.chatAnalystId/)
+  assert.doesNotMatch(sample,/clickdesk_chat_attendances/)
+  assert.match(sample,/source: 'clickdesk_final_ticket_ledger'/)
+})
