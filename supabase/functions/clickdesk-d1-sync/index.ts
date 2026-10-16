@@ -93,11 +93,21 @@ function primitiveString(value: unknown) {
 }
 
 function extractCollection(payload: unknown): unknown[] {
-  if (Array.isArray(payload)) return payload
-  if (!payload || typeof payload !== 'object') return []
-  const source = payload as Record<string, unknown>
-  for (const key of ['data', 'items', 'results', 'tickets', 'conversations', 'messages']) {
-    if (Array.isArray(source[key])) return source[key] as unknown[]
+  // The ClickDesk list response may wrap its array in one or more pagination
+  // objects (for example, data.data). Do not treat an unrecognized shape as
+  // evidence that the operation had zero human attendances.
+  let current: unknown = payload
+  for (let depth = 0; depth < 3; depth++) {
+    if (Array.isArray(current)) return current
+    if (!current || typeof current !== 'object') return []
+    const source = current as Record<string, unknown>
+    const keys = ['data', 'items', 'results', 'records', 'tickets', 'conversations', 'messages']
+    for (const key of keys) {
+      if (Array.isArray(source[key])) return source[key] as unknown[]
+    }
+    current = keys.map((key) => source[key]).find(
+      (value) => value && typeof value === 'object' && !Array.isArray(value),
+    ) ?? null
   }
   return []
 }
@@ -358,17 +368,38 @@ async function collectReportSnapshotRows(params: {
     const teamId =
       areaLinkByKey.get(normalizeLabel(department.departmentName))?.team_id ?? null
 
+    // Legacy attendances stopped being populated in October. Zero rows in
+    // that table do NOT prove zero human answers. Count only tickets with a
+    // confirmed final public human author and full period-wide coverage.
     let humanAnswered: number | null = null
+    let humanAnsweredStatus = 'unavailable_incomplete_coverage'
     if (teamId) {
-      const countResult = await admin
-        .from('clickdesk_chat_attendances')
-        .select('clickdesk_ticket_id', { count: 'exact', head: true })
-        .eq('occurred_date', periodDate)
-        .eq('team_id', teamId)
-        .eq('attendance_mode', 'human')
+      const coverageResult = await admin
+        .from('clickdesk_final_coverage')
+        .select('candidate_count,confirmed_count,pending_count,completeness')
+        .lte('start_date', periodDate)
+        .gte('end_date', periodDate)
+        .eq('completeness', 'complete')
+        .order('verified_at', { ascending: false })
+        .limit(1)
 
-      if (countResult.error) throw new Error(countResult.error.message)
-      humanAnswered = countResult.count ?? 0
+      if (coverageResult.error) throw new Error(coverageResult.error.message)
+      const coverage = coverageResult.data?.[0]
+      if (
+        coverage &&
+        coverage.pending_count === 0 &&
+        coverage.candidate_count === coverage.confirmed_count
+      ) {
+        const countResult = await admin
+          .from('clickdesk_final_ticket_ledger')
+          .select('ticket_id', { count: 'exact', head: true })
+          .eq('occurred_date', periodDate)
+          .eq('team_id', teamId)
+
+        if (countResult.error) throw new Error(countResult.error.message)
+        humanAnswered = countResult.count ?? 0
+        humanAnsweredStatus = 'confirmed_final_public_author'
+      }
     }
 
     const reportCreated = numberAt(general, ['totals', 'created', 'value'])
@@ -452,7 +483,8 @@ async function collectReportSnapshotRows(params: {
         report_resolved_minus_agent_resolved: numericDelta(reportResolved, agentResolved),
         ai_escalated_minus_human_answered: numericDelta(aiEscalated, humanAnswered),
         human_answered_definition:
-          'Accumulated attendance rows for the same date/team after the current sync cycle.',
+          'Unique tickets credited to the last verified public human author on this date/team; only available with complete period coverage.',
+        human_answered_status: humanAnsweredStatus,
       },
     })
   }
@@ -520,6 +552,15 @@ async function fetchRecentHumanPages(
       total_pages_available: lastPage,
       pages_scanned: payloads.length,
       page_cap: MAX_INTRADAY_HUMAN_PAGES,
+      // Shape-only telemetry. Never log payload values, ticket IDs or customer data.
+      first_page_shape: {
+        root_array: Array.isArray(first),
+        data_array: Array.isArray((first as Record<string, unknown> | null)?.data),
+        nested_data_array: Array.isArray(
+          ((first as Record<string, unknown> | null)?.data as Record<string, unknown> | null)?.data,
+        ),
+        parsed_rows: summarizePayload(first).length,
+      },
       capped: lastPage > pagesToScan,
       boundary_rows: boundaryRows.length,
       boundary_oldest_date: boundaryOldestDate,

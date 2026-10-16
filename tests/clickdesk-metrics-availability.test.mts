@@ -1,6 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { runInNewContext } from 'node:vm'
+import ts from 'typescript'
 
 const source = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
 
@@ -50,4 +52,46 @@ test('gestão mostra falha, carregamento e estado inconclusivo sem metas falsame
   assert.match(page, /AMOSTRA PARCIAL AUDITADA/)
   assert.match(page, /Não há sinais de prioridade entre os tickets comprovados desta amostra/)
   assert.match(page, /Tentar novamente/)
+})
+
+test('sync interpreta listas paginadas diretas e aninhadas sem supor que data é sempre array', () => {
+  const edge = source('supabase/functions/clickdesk-d1-sync/index.ts')
+  const start = edge.indexOf('function extractCollection(')
+  const end = edge.indexOf('\nfunction findFirstByKeyPattern(', start)
+  assert.ok(start >= 0 && end > start)
+  const compiled = ts.transpileModule(edge.slice(start, end), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 },
+  }).outputText
+  const extract = runInNewContext(compiled + '\nextractCollection', {}) as (input: unknown) => unknown[]
+  const ticket = { id: 'ticket-1' }
+  for (const payload of [
+    [ticket],
+    { data: [ticket] },
+    { data: { data: [ticket], total: 1 } },
+    { data: { items: [ticket] } },
+    { results: [ticket] },
+    { records: [ticket] },
+  ]) {
+    assert.equal(JSON.stringify(extract(payload)), JSON.stringify([ticket]))
+  }
+  assert.equal(extract({ data: { unexpected: true } }).length, 0)
+  assert.equal(extract(null).length, 0)
+})
+
+test('sync não interpreta tabela legada vazia como ausência de atendimento humano', () => {
+  const edge = source('supabase/functions/clickdesk-d1-sync/index.ts')
+  const snapshot = edge.slice(
+    edge.indexOf('async function collectReportSnapshotRows('),
+    edge.indexOf('async function fetchRecentHumanPages('),
+  )
+  assert.match(snapshot, /let humanAnswered: number \| null = null/)
+  assert.match(snapshot, /from\('clickdesk_final_coverage'\)/)
+  assert.match(snapshot, /coverage\.pending_count === 0/)
+  assert.match(snapshot, /coverage\.candidate_count === coverage\.confirmed_count/)
+  assert.match(snapshot, /from\('clickdesk_final_ticket_ledger'\)/)
+  assert.match(snapshot, /human_answered_status: humanAnsweredStatus/)
+  assert.doesNotMatch(snapshot, /from\('clickdesk_chat_attendances'\)/)
+  assert.match(edge, /first_page_shape:/)
+  assert.match(edge, /nested_data_array:/)
+  assert.doesNotMatch(edge, /console\.log\(.*(?:apiKey|accountId|payload)/)
 })
