@@ -120,7 +120,7 @@ Deno.serve(async (request: Request) => {
                 .in('satisfaction_label', ['negative', 'positive'])
         .gte('occurred_date', body.start)
         .lte('occurred_date', body.end)
-        .order('occurred_at', { ascending: true })
+        .order('last_public_at', { ascending: true })
         .limit(2000)
 
       if (attendanceResult.error) {
