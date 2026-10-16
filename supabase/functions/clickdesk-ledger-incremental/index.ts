@@ -184,7 +184,7 @@ Deno.serve(async(req:Request)=>{
       sourceRows(admin,'clickdesk_chat_attendances','clickdesk_ticket_id,occurred_date,updated_at','clickdesk_ticket_id'),
       sourceRows(admin,'clickdesk_chat_capture_queue','ticket_id,period_end,source_updated_at','ticket_id'),
       sourceRows(admin,'clickdesk_final_ticket_ledger','ticket_id,evidence_version,verified_at','ticket_id'),
-      sourceRows(admin,'clickdesk_final_ticket_pending','ticket_id,checked_at','ticket_id'),
+      sourceRows(admin,'clickdesk_final_ticket_pending','ticket_id,checked_at,reason','ticket_id'),
       admin.from('chat_analysts').select('id,name,team_id,csat_goal'),
     ])
     if(roster.error)throw Error('roster_unavailable')
@@ -202,13 +202,28 @@ Deno.serve(async(req:Request)=>{
     for(const x of legacy)add(x.clickdesk_ticket_id,x.updated_at,x.occurred_date,'legacy')
     for(const x of verified)add(x.ticket_id,x.verified_at,x.occurred_date,'verified')
     const done=new Set(ledger.map(x=>str(x.ticket_id)))
-    const blocked=new Set(pending.map(x=>str(x.ticket_id)))
+    const blocked=new Map(pending.map(x=>[str(x.ticket_id),{checked_at:str(x.checked_at),reason:str(x.reason)}]))
+    // Pending authorship can become decidable after a new verified message,
+    // analyst registration, or a transient transport failure. Retry only when
+    // source evidence changed, or a narrow cooldown elapsed.
+    const eligible=(candidate:Candidate)=>{
+      if(refresh)return true
+      if(done.has(candidate.id))return false
+      const previous=blocked.get(candidate.id)
+      if(!previous)return true
+      const checked=Date.parse(previous.checked_at)
+      const changed=Number.isFinite(checked)&&Number.isFinite(Date.parse(candidate.version))
+        && Date.parse(candidate.version)>checked
+      const age=Number.isFinite(checked)?Date.now()-checked:0
+      const rosterRetry=previous.reason==='final_author_not_in_eligible_registry'&&age>86400000
+      const transportRetry=/^(clickdesk_http_|history_read_failed|deadline)/.test(previous.reason)&&age>1800000
+      return changed||rosterRetry||transportRetry
+    }
     // Newest candidate first; previously confirmed historical evidence is
     // preserved until an explicitly requested refresh, not blindly overwritten.
-    const candidates=[...map.values()]
-      .filter(c=>refresh || (!done.has(c.id)&&!blocked.has(c.id)))
+    const remaining=[...map.values()].filter(eligible)
       .sort((a,b)=>b.sourceDay.localeCompare(a.sourceDay)||b.id.localeCompare(a.id))
-      .slice(0,batch)
+    const candidates=remaining.slice(0,batch)
     const deadline=Date.now()+110000
     const evaluated: Array<FinalTicket&{version:string}> = new Array(candidates.length)
     let cursor=0
@@ -271,9 +286,9 @@ Deno.serve(async(req:Request)=>{
     const reasons:Record<string,number>={}
     for(const x of unresolved){const r=x.reason??'unspecified';reasons[r]=(reasons[r]??0)+1}
     return Response.json({ok:true,mode:dry?'dry_run':'homologation_persisted',candidate_count:map.size,
-      backlog_before:map.size-done.size-blocked.size,
+      backlog_before:remaining.length,
       examined:evaluated.length,confirmed:confirmed.length,pending:unresolved.length,reasons,
-      uncovered_cumulative:true,needs_another_batch:!refresh&&map.size-done.size-blocked.size>evaluated.length})
+      uncovered_cumulative:true,needs_another_batch:remaining.length>evaluated.length})
   }catch(e){
     const msg=e instanceof Error?e.message:'unknown'
     const safe=/^(candidate_source_|roster_unavailable|ledger_write_failed|pending_clear_failed|pending_write_failed|coverage_count_failed|coverage_write_failed|invalid_confirmed_evidence)/.test(msg)
