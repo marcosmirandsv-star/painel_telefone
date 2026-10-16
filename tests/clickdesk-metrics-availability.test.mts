@@ -95,3 +95,14 @@ test('sync não interpreta tabela legada vazia como ausência de atendimento hum
   assert.match(edge, /nested_data_array:/)
   assert.doesNotMatch(edge, /console\.log\(.*(?:apiKey|accountId|payload)/)
 })
+
+test('réguas de gestão e individual não inferem zero onde não há dia no ledger', () => {
+  const page = source('src/app/page.tsx')
+  assert.match(page, /const covered = Boolean\(persistedDay\)/)
+  assert.equal((page.match(/const covered = Boolean\(persistedDay\)/g) ?? []).length, 2)
+  assert.doesNotMatch(page, /const covered = chat2DailyCoverageStart \? date >= chat2DailyCoverageStart/)
+  assert.doesNotMatch(page, /const covered = chat2OperationDailyCoverageStart \? date >= chat2OperationDailyCoverageStart/)
+  assert.match(page, /item\.date === chat2DailyDateFilter && item\.covered/)
+  assert.match(page, /'em conferência'/)
+  assert.match(page, /Dias ainda não conciliados aparecem como em conferência/)
+})
