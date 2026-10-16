@@ -95,6 +95,12 @@ export function finalPodium(rows: FinalTicket[], people: Person[], id: string) {
 }
 
 
+// Exact payload-unwrapping dependency of the canonical history reader.
+const unwrap = (payload: unknown) => {
+  const p = object(payload)
+  return object(p.ticket || p.data || p)
+}
+
 export async function readTicketHistory(id: string, get: (path:string)=>Promise<unknown>) {
   const ticket = unwrap(await get('/tickets/'+encodeURIComponent(id)))
   if(text(ticket.id)!==id)return {ticket,messages:[],events:[],complete:false}
