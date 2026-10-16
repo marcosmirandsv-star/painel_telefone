@@ -7390,8 +7390,9 @@ function ChatModuleDashboard({
     const limit = new Date(`${clickDeskPersistedMetrics.period.end}T00:00:00Z`)
     while (cursor <= limit) {
       const date = cursor.toISOString().slice(0, 10)
-      const covered = chat2DailyCoverageStart ? date >= chat2DailyCoverageStart : true
       const persistedDay = chat2DailyMap.get(date)
+      // Sem ticket final confirmado não há como afirmar volume zero.
+      const covered = Boolean(persistedDay)
       chat2DailyRuler.push(
         persistedDay
           ? { ...persistedDay, covered: true }
@@ -7412,7 +7413,7 @@ function ChatModuleDashboard({
   const chat2SelectedDayMetric =
     chat2DailyDateFilter === 'all'
       ? null
-      : chat2DailyRuler.find((item) => item.date === chat2DailyDateFilter) ?? null
+      : chat2DailyRuler.find((item) => item.date === chat2DailyDateFilter && item.covered) ?? null
   const chat2LivePositive =
     chat2SelectedPersistedAnalyst?.positive_reviews ?? chat2SelectedLiveHuman?.positive_reviews ?? 0
   const chat2LiveNegative =
@@ -7518,10 +7519,6 @@ function ChatModuleDashboard({
     0,
   )
   const chat2OperationDailySource = clickDeskPersistedMetrics?.performance_daily ?? []
-  const chat2OperationDailyCoverageStart =
-    chat2OperationDailySource.length > 0
-      ? [...chat2OperationDailySource].sort((a, b) => a.date.localeCompare(b.date))[0]?.date ?? null
-      : null
   const chat2OperationTodayDate = clickDeskPersistedMetrics?.today?.date ?? null
   const chat2OperationPeriodEnd =
     clickDeskPersistedMetrics?.period?.end &&
@@ -7542,8 +7539,8 @@ function ChatModuleDashboard({
     const limit = new Date(`${chat2OperationPeriodEnd}T00:00:00Z`)
     while (cursor <= limit) {
       const date = cursor.toISOString().slice(0, 10)
-      const covered = chat2OperationDailyCoverageStart ? date >= chat2OperationDailyCoverageStart : false
       const persistedDay = chat2OperationDailyMap.get(date)
+      const covered = Boolean(persistedDay)
       chat2OperationDailyRuler.push(
         persistedDay
           ? { ...persistedDay, covered: true }
@@ -8764,7 +8761,7 @@ function ChatModuleDashboard({
                         <p className="text-sm font-semibold uppercase tracking-[0.14em] text-cyan-300">Régua diária</p>
                         <h4 className="mt-1 text-lg font-bold">Atendimentos por dia</h4>
                         <p className="mt-1 text-sm text-slate-400">
-                          Clique em um dia para detalhar o resultado sem perder o acumulado da competência.
+                          Clique em um dia para detalhar os tickets comprovados. Dias ainda não conciliados aparecem como em conferência, nunca como zero atendimentos.
                         </p>
                       </div>
                       <label className="min-w-52 text-sm text-slate-400">
@@ -8777,7 +8774,7 @@ function ChatModuleDashboard({
                           <option value="all">Competência inteira</option>
                           {chat2DailyRuler.map((item) => (
                             <option key={item.date} value={item.date} disabled={!item.covered}>
-                              {formatDate(item.date)} · {item.covered ? `${formatChatCount(item.attendances)} atendimento(s)` : 'sem base diária'}
+                              {formatDate(item.date)} · {item.covered ? `${formatChatCount(item.attendances)} atendimento(s) confirmado(s)` : 'em conferência'}
                             </option>
                           ))}
                         </select>
@@ -8802,8 +8799,8 @@ function ChatModuleDashboard({
                             }`}
                             title={
                               item.covered
-                                ? `${formatDate(item.date)} · ${formatChatCount(item.attendances)} atendimento(s)`
-                                : `${formatDate(item.date)} · sem base diária disponível`
+                                ? `${formatDate(item.date)} · ${formatChatCount(item.attendances)} atendimento(s) confirmado(s) · cobertura parcial`
+                                : `${formatDate(item.date)} · em conferência de atendimento`
                             }
                           >
                             <span className="block text-xs text-slate-500">{item.date.slice(8, 10)}</span>
