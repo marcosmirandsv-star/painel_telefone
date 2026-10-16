@@ -5,6 +5,7 @@ import {
   json,
 } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
+import { readFinalLedger } from '@/lib/clickdesk-ledger-server'
 
 export const runtime = 'nodejs'
 
@@ -130,24 +131,20 @@ export async function GET(request: Request) {
       throw new ApiError(400, 'Informe analyst_id para consultar a amostra.')
     }
 
-    const result = await access.admin
-      .from('clickdesk_chat_attendances')
-      .select(
-        'clickdesk_ticket_id,occurred_at,occurred_date,area,satisfaction_label,journey_status,timestamp_source',
-      )
-      .eq('analyst_id', analystId)
-      .eq('identity_role', 'analyst')
-      .gte('occurred_date', start)
-      .lte('occurred_date', end)
-      .in('satisfaction_label', ['positive', 'negative'])
-      .order('occurred_at', { ascending: true })
-      .limit(1000)
-
-    if (result.error) {
-      throw new ApiError(503, 'Não foi possível carregar as avaliações do período.')
-    }
-
-    const rows = (result.data ?? []) as EvaluatedRow[]
+    // Same final-owner evidence as manager and individual performance.
+    // Incomplete/pending tickets are excluded by readFinalLedger.
+    const ledger = await readFinalLedger(access.admin, { start, end, analystId })
+    const rows: EvaluatedRow[] = ledger
+      .filter((row) => row.satisfaction_label === 'positive' || row.satisfaction_label === 'negative')
+      .map((row) => ({
+        clickdesk_ticket_id: row.ticket_id,
+        occurred_at: row.last_public_at,
+        occurred_date: row.occurred_date,
+        area: row.area ?? 'Fila histórica não comprovada',
+        satisfaction_label: row.satisfaction_label,
+        journey_status: 'human_answer_confirmed',
+        timestamp_source: 'last_public_human_answer',
+      }))
     const negatives = rows.filter((row) => row.satisfaction_label === 'negative')
     const positives = rows.filter((row) => row.satisfaction_label === 'positive')
     const negativeSample = pickDistributedAcrossDates(negatives, 5)
@@ -182,7 +179,7 @@ export async function GET(request: Request) {
     })
 
     return json({
-      source: 'clickdesk_persisted',
+      source: 'clickdesk_final_ticket_ledger',
       analyst_id: analystId,
       period: { start, end },
       totals: {
