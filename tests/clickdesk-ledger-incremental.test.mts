@@ -81,3 +81,25 @@ test('worker inclui o unwrapping exigido pelo leitor histórico',()=>{
   assert.match(worker,/const unwrap = \(payload: unknown\) =>/)
   assert.match(worker,/const ticket = unwrap\(await get\(/)
 })
+
+test('recuperação retenta pendência somente após nova evidência ou cooldown seguro',()=>{
+  assert.match(worker,/const eligible=\(candidate:Candidate\)=>/)
+  assert.match(worker,/const changed=Number\.isFinite\(checked\)/)
+  assert.match(worker,/const rosterRetry=/)
+  assert.match(worker,/const transportRetry=/)
+  assert.match(worker,/backlog_before:remaining\.length/)
+  assert.match(worker,/needs_another_batch:remaining\.length>evaluated\.length/)
+})
+
+test('360 nunca reutiliza análise de outro titular ou outra classificação',()=>{
+  const db=source('supabase/functions/clickdesk-360-db/index.ts')
+  assert.match(db,/attendanceById = new Map/)
+  assert.match(db,/current\.analyst_id === row\.analyst_id/)
+  assert.match(db,/current\.satisfaction_label === row\.satisfaction_label/)
+})
+
+test('fila 360 ordena pelo campo físico de data do ledger',()=>{
+  const db=source('supabase/functions/clickdesk-360-db/index.ts')
+  assert.match(db,/\.order\('last_public_at', \{ ascending: true \}\)/)
+  assert.doesNotMatch(db,/\.order\('occurred_at'/)
+})
