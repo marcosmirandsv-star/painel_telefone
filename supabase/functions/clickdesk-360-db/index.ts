@@ -81,6 +81,9 @@ Deno.serve(async (request: Request) => {
   if (!supabaseUrl || !secretKey) {
     return json({ error: 'Supabase admin config unavailable' }, 500)
   }
+  if (new URL(supabaseUrl).hostname !== 'vvtorcvchnqhcredhorv.supabase.co') {
+    return json({ error: 'Homologation only' }, 403)
+  }
 
   const admin = createClient(supabaseUrl, secretKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -110,12 +113,11 @@ Deno.serve(async (request: Request) => {
       const limit = readLimit(body.limit)
 
       const attendanceResult = await admin
-        .from('clickdesk_chat_attendances')
+        .from('clickdesk_final_ticket_ledger')
         .select(
-          'clickdesk_ticket_id,analyst_id,area,satisfaction_label,occurred_date,occurred_at',
+          'clickdesk_ticket_id:ticket_id,analyst_id,area,satisfaction_label,occurred_date,occurred_at:last_public_at',
         )
-        .eq('identity_role', 'analyst')
-        .in('satisfaction_label', ['negative', 'positive'])
+                .in('satisfaction_label', ['negative', 'positive'])
         .gte('occurred_date', body.start)
         .lte('occurred_date', body.end)
         .order('occurred_at', { ascending: true })
@@ -125,7 +127,10 @@ Deno.serve(async (request: Request) => {
         return json({ error: 'Unable to load attendance queue' }, 503)
       }
 
-      const attendances = attendanceResult.data ?? []
+      const pendingResult = await admin.from('clickdesk_final_ticket_pending').select('ticket_id').limit(20000)
+      if (pendingResult.error) return json({ error: 'Unable to check unresolved authorship' }, 503)
+      const pendingIds = new Set((pendingResult.data ?? []).map((row) => String(row.ticket_id)))
+      const attendances = (attendanceResult.data ?? []).filter((row) => !pendingIds.has(String(row.clickdesk_ticket_id)))
       const attendanceIds = new Set(
         attendances.map((row) => String(row.clickdesk_ticket_id)),
       )
@@ -193,18 +198,20 @@ Deno.serve(async (request: Request) => {
       }
 
       const result = await admin
-        .from('clickdesk_chat_attendances')
+        .from('clickdesk_final_ticket_ledger')
         .select(
-          'clickdesk_ticket_id,analyst_id,area,satisfaction_label,occurred_date,identity_role',
+          'clickdesk_ticket_id:ticket_id,analyst_id,area,satisfaction_label,occurred_date',
         )
-        .eq('clickdesk_ticket_id', body.ticket_id)
-        .eq('identity_role', 'analyst')
-        .maybeSingle()
+        .eq('ticket_id', body.ticket_id)
+                .maybeSingle()
 
       if (result.error) {
         return json({ error: 'Unable to validate attendance' }, 503)
       }
       if (!result.data) return json({ error: 'Attendance not found' }, 404)
+      const pending = await admin.from('clickdesk_final_ticket_pending').select('ticket_id').eq('ticket_id', body.ticket_id).maybeSingle()
+      if (pending.error) return json({ error: 'Unable to validate final authorship' }, 503)
+      if (pending.data) return json({ error: 'Final authorship unresolved' }, 422)
 
       return json({ ok: true, ticket: result.data })
     }
@@ -227,13 +234,12 @@ Deno.serve(async (request: Request) => {
       }
 
       const attendance = await admin
-        .from('clickdesk_chat_attendances')
+        .from('clickdesk_final_ticket_ledger')
         .select(
-          'clickdesk_ticket_id,analyst_id,area,satisfaction_label,occurred_date,identity_role',
+          'clickdesk_ticket_id:ticket_id,analyst_id,area,satisfaction_label,occurred_date',
         )
-        .eq('clickdesk_ticket_id', body.ticket_id)
-        .eq('identity_role', 'analyst')
-        .maybeSingle()
+        .eq('ticket_id', body.ticket_id)
+                .maybeSingle()
 
       if (attendance.error) {
         return json({ error: 'Unable to validate attendance' }, 503)
@@ -241,6 +247,9 @@ Deno.serve(async (request: Request) => {
       if (!attendance.data?.analyst_id) {
         return json({ error: 'Attendance not eligible for analysis' }, 422)
       }
+      const pending = await admin.from('clickdesk_final_ticket_pending').select('ticket_id').eq('ticket_id', body.ticket_id).maybeSingle()
+      if (pending.error) return json({ error: 'Unable to validate final authorship' }, 503)
+      if (pending.data) return json({ error: 'Final authorship unresolved' }, 422)
 
       const stored = await admin
         .from('clickdesk_qualitative_analyses')
