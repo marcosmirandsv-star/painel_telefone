@@ -42,7 +42,7 @@ test('sem crédito não é zero oficial; duplicidade e time desconhecido bloquea
 test('visão executiva não mistura report de fila com performance da equipe',()=>{
   const api=source('src/app/api/clickdesk/overview/route.ts')
   const page=source('src/app/page.tsx')
-  assert.match(api,/authorizeManager\(request\)/)
+  assert.match(api,/authorizeManagerSessionClient\(request\)/)
   assert.match(api,/readFinalLedger\(admin/)
   assert.match(api,/summarizeVerifiedTeams/)
   assert.match(api,/team_summaries: teamSummaries/)
