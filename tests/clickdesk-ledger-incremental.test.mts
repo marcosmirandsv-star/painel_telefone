@@ -58,3 +58,13 @@ test('Painel gestor e acesso individual filtram o mesmo ledger por analyst_id', 
   assert.match(metrics,/positive_reviews: Number\(ticket\.satisfaction_label === 'positive'\)/)
   assert.match(metrics,/negative_reviews: Number\(ticket\.satisfaction_label === 'negative'\)/)
 })
+
+test('Análise 360 valida tickets com a mesma titularidade final e exclui pendentes',()=>{
+  const db=source('supabase/functions/clickdesk-360-db/index.ts')
+  assert.match(db,/\.from\('clickdesk_final_ticket_ledger'\)/)
+  assert.match(db,/\.from\('clickdesk_final_ticket_pending'\)/)
+  assert.match(db,/pendingIds\.has\(String\(row\.clickdesk_ticket_id\)\)/)
+  assert.match(db,/Final authorship unresolved/)
+  assert.doesNotMatch(db,/\.from\('clickdesk_chat_attendances'\)/)
+  assert.match(db,/vvtorcvchnqhcredhorv\.supabase\.co/)
+})
