@@ -3842,9 +3842,11 @@ function ChatAnalystPortal({
     }
 
     void loadOwnChatData()
+    // Durante a reconciliação incremental, atualize os indicadores leves
+    // sem exigir que o analista recarregue a página manualmente.
     const refreshTimer = window.setInterval(() => {
       void loadOwnChatData()
-    }, 60 * 60 * 1000)
+    }, 5 * 60 * 1000)
 
     return () => {
       cancelled = true
@@ -7305,7 +7307,7 @@ function ChatModuleDashboard({
         },
         selectedTeamId,
       )
-    }, 60 * 60 * 1000)
+    }, 5 * 60 * 1000)
 
     return () => window.clearInterval(refreshTimer)
   }, [
