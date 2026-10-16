@@ -131,13 +131,13 @@ Deno.serve(async (request: Request) => {
       if (pendingResult.error) return json({ error: 'Unable to check unresolved authorship' }, 503)
       const pendingIds = new Set((pendingResult.data ?? []).map((row) => String(row.ticket_id)))
       const attendances = (attendanceResult.data ?? []).filter((row) => !pendingIds.has(String(row.clickdesk_ticket_id)))
-      const attendanceIds = new Set(
-        attendances.map((row) => String(row.clickdesk_ticket_id)),
+      const attendanceById = new Map(
+        attendances.map((row) => [String(row.clickdesk_ticket_id), row]),
       )
 
       const analysisResult = await admin
         .from('clickdesk_qualitative_analyses')
-        .select('clickdesk_ticket_id,validation_status,analysis')
+        .select('clickdesk_ticket_id,analyst_id,satisfaction_label,validation_status,analysis')
         .gte('occurred_date', body.start)
         .lte('occurred_date', body.end)
         .limit(2000)
@@ -149,10 +149,16 @@ Deno.serve(async (request: Request) => {
       const currentIds = new Set(
         (analysisResult.data ?? [])
           .filter(
-            (row) =>
-              attendanceIds.has(String(row.clickdesk_ticket_id)) &&
-              row.validation_status !== 'rejected' &&
-              analysisVersion(row.analysis) >= QUALITATIVE_ANALYSIS_VERSION,
+            (row) => {
+              const current = attendanceById.get(String(row.clickdesk_ticket_id))
+              return Boolean(
+                current &&
+                current.analyst_id === row.analyst_id &&
+                current.satisfaction_label === row.satisfaction_label &&
+                row.validation_status !== 'rejected' &&
+                analysisVersion(row.analysis) >= QUALITATIVE_ANALYSIS_VERSION
+              )
+            },
           )
           .map((row) => String(row.clickdesk_ticket_id)),
       )
