@@ -1287,13 +1287,13 @@ function CentralOverview({
                 </span>
               </div>
               <div className="mt-5 grid grid-cols-3 gap-3">
-                <div><span className="text-xs text-slate-500">CSAT parcial</span><strong className="mt-1 block text-lg">{available && verified?.csat_pct !== null && verified?.csat_pct !== undefined ? formatPercent(verified.csat_pct) : '—'}</strong></div>
-                <div><span className="text-xs text-slate-500">Atendimentos</span><strong className="mt-1 block text-lg">{available ? formatChatCount(verified.attendances) : '—'}</strong></div>
-                <div><span className="text-xs text-slate-500">Avaliações</span><strong className="mt-1 block text-lg">{available ? formatChatCount(verified.reviews) : '—'}</strong></div>
+                <div><span className="text-xs text-slate-500">CSAT parcial</span><strong className="mt-1 block text-lg">{available && verified?.csat_pct !== null && verified?.csat_pct !== undefined ? formatPercent(verified?.csat_pct ?? 0) : '—'}</strong></div>
+                <div><span className="text-xs text-slate-500">Atendimentos</span><strong className="mt-1 block text-lg">{available ? formatChatCount(verified?.attendances ?? 0) : '—'}</strong></div>
+                <div><span className="text-xs text-slate-500">Avaliações</span><strong className="mt-1 block text-lg">{available ? formatChatCount(verified?.reviews ?? 0) : '—'}</strong></div>
               </div>
               <div className="mt-4 rounded-lg bg-slate-950/35 px-3 py-2 text-xs text-slate-400">
                 {available
-                  ? `Créditos verificados · ${formatChatCount(verified.positive_reviews)} positivas · ${formatChatCount(verified.negative_reviews)} negativas. Sem fechamento oficial.`
+                  ? `Créditos verificados · ${formatChatCount(verified?.positive_reviews ?? 0)} positivas · ${formatChatCount(verified?.negative_reviews ?? 0)} negativas. Sem fechamento oficial.`
                   : chatOverviewError ? 'Não foi possível consultar a base de créditos.' : 'Ainda não existem créditos finais comprovados para esta equipe.'}
               </div>
               <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-4 text-xs">
