@@ -2,6 +2,7 @@ import { ApiError, authorizeClickDeskSessionClient, handle, json } from '@/lib/i
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 import { readFinalLedger, readLedgerCoverage } from '@/lib/clickdesk-ledger-server'
 import { randomUUID } from 'node:crypto'
+import { partitionChatLedgerByActiveRoster } from '@/lib/clickdesk-active-analysts'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -123,11 +124,21 @@ async function loadRows(
   const [tickets, coverage, people] = await Promise.all([
     readFinalLedger(admin, { start: filters.start, end: filters.end, analystId: filters.analystId, teamId: filters.teamId }),
     readLedgerCoverage(admin),
-    admin.from('chat_analysts').select('id,name,team_id'),
+    admin.from('chat_analysts').select('id,name,team_id,active'),
   ])
   if (people.error) throw new ApiError(503, 'Cadastro de analistas da homologação indisponível.')
   const roster = new Map((people.data ?? []).map(person => [person.id, person]))
-  const rows: DailyMetricRow[] = tickets.map(ticket => {
+  let partition: ReturnType<typeof partitionChatLedgerByActiveRoster<typeof tickets[number]>>
+  try {
+    partition = partitionChatLedgerByActiveRoster(tickets, people.data ?? [])
+  } catch {
+    throw new ApiError(503, 'Titular do ledger ausente do cadastro. Revisar a conciliação.')
+  }
+  // Consultas operacionais do time excluem inativos. Histórico de um
+  // analista explicitamente selecionado continua consultável pelo gestor.
+  const currentTickets = filters.analystId ? tickets : partition.active
+  const excludedInactive = filters.analystId ? 0 : partition.inactive.length
+  const rows: DailyMetricRow[] = currentTickets.map(ticket => {
     const analyst = roster.get(ticket.analyst_id)
     if (!analyst) throw new ApiError(503, 'Titular confirmado ausente do cadastro. Revisar conciliação.')
     return {
@@ -145,7 +156,7 @@ async function loadRows(
       review_percentage: null,
     }
   })
-  return { rows, coverage, admin }
+  return { rows, coverage, admin, excludedInactive }
 }
 
 function aggregate(rows: DailyMetricRow[]): Aggregate {
@@ -262,7 +273,7 @@ export async function GET(request: Request) {
         }
 
     stage = 'ledger_read'
-    const { rows, coverage, admin } = await loadRows(access.admin, filters)
+    const { rows, coverage, admin, excludedInactive } = await loadRows(access.admin, filters)
 
     stage = 'sync_status'
     const latestSync = await admin
@@ -325,6 +336,7 @@ export async function GET(request: Request) {
       self_podium_context: selfPodiumContext,
       data_quality: {
         grouped_rows: includedRows.length,
+        excluded_inactive_analyst_attendances: excludedInactive,
         unmatched_grouped_rows: unmatchedRows.length,
         unmatched_attendances: aggregate(unmatchedRows).attendances,
         excluded_apprentice_grouped_rows: apprenticeRows.length,
