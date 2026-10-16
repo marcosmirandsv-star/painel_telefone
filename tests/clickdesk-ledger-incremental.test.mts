@@ -103,3 +103,18 @@ test('fila 360 ordena pelo campo físico de data do ledger',()=>{
   assert.match(db,/\.order\('last_public_at', \{ ascending: true \}\)/)
   assert.doesNotMatch(db,/\.order\('occurred_at'/)
 })
+
+test('recuperação seletiva por dia preserva a autoria final e não fabrica o zero',()=>{
+  assert.match(worker,/target_start/)
+  assert.match(worker,/target_end/)
+  assert.match(worker,/const scopedIds=targeted \? new Set/)
+  assert.match(worker,/verified\.filter\(x=>str\(x\.occurred_date\)>=targetStart/)
+  assert.match(worker,/legacy\.filter\(x=>str\(x\.occurred_date\)>=targetStart/)
+  assert.match(worker,/scopedIds\.has\(c\.id\)/)
+  assert.match(worker,/targetEnd<targetStart/)
+  assert.match(worker,/targeted&&refresh/)
+  assert.match(worker,/confirmed_by_final_day:/)
+  assert.match(worker,/last_public_at:x\.occurred_at/)
+  assert.doesNotMatch(worker,/occurred_date:candidate\.sourceDay/)
+  assert.match(worker,/MAX_BATCH = 32/)
+})
