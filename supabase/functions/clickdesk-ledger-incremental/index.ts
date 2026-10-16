@@ -4,7 +4,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 // historical message/event pagination. No production token, no transcripts stored.
 const HOMO = 'vvtorcvchnqhcredhorv.supabase.co'
 const BASE = 'https://api.desk.click.app/api/v1'
-const MAX_BATCH = 16
+const MAX_BATCH = 32
 const MAX_SOURCE_ROWS = 20000
 export type Person = { id: string; name: string; team_id: string; csat_goal?: number }
 export type RecordValue = Record<string, unknown>
@@ -171,13 +171,27 @@ Deno.serve(async(req:Request)=>{
   if(!key||!account)return Response.json({error:'clickdesk_config_unavailable'},{status:503})
   let body:Record<string,unknown>={}
   try{const v:unknown=await req.json();body=object(v)}catch{return Response.json({error:'invalid_body'},{status:400})}
-  if(Object.keys(body).some(k=>!['dry_run','commit_verified','limit','refresh_existing'].includes(k)))
+  if(Object.keys(body).some(k=>!['dry_run','commit_verified','limit','refresh_existing','target_start','target_end'].includes(k)))
     return Response.json({error:'unsupported_parameter'},{status:400})
   const dry=body.dry_run!==false
   if(!dry && body.commit_verified!==true)return Response.json({error:'commit_verified_required'},{status:403})
   const batch=body.limit===undefined?12:Number(body.limit)
   if(!Number.isSafeInteger(batch)||batch<1||batch>MAX_BATCH)return Response.json({error:'invalid_batch'},{status:400})
   const refresh=body.refresh_existing===true
+  // Reconciliar primeiro um período com lacuna comprovada, sem usar a data
+  // do candidato como data final de crédito. Esta vem da última mensagem humana.
+  const targetStart=typeof body.target_start==='string'?body.target_start:''
+  const targetEnd=typeof body.target_end==='string'?body.target_end:''
+  const targeted=Boolean(targetStart || targetEnd)
+  const validDate=(value:string)=>/^20\d{2}-\d{2}-\d{2}$/.test(value)
+    && Number.isFinite(Date.parse(value))
+    && new Date(value+'T00:00:00Z').toISOString().slice(0,10)===value
+  if(targeted && (!validDate(targetStart)||!validDate(targetEnd)||targetEnd<targetStart
+      ||targetStart<'2026-09-01'||targetEnd>businessDate(new Date().toISOString())
+      ||(Date.parse(targetEnd)-Date.parse(targetStart))>31*86400000))
+    return Response.json({error:'invalid_target_date_window'},{status:400})
+  // Never allow a scoped recovery job to refresh historical audited credits.
+  if(targeted&&refresh)return Response.json({error:'scoped_refresh_not_supported'},{status:400})
   try {
     const [verified,legacy,capture,ledger,pending,roster]=await Promise.all([
       sourceRows(admin,'clickdesk_chat_verified_contributions','ticket_id,occurred_date,verified_at','ticket_id'),
@@ -201,6 +215,12 @@ Deno.serve(async(req:Request)=>{
     for(const x of capture)add(x.ticket_id,x.source_updated_at,x.period_end,'capture')
     for(const x of legacy)add(x.clickdesk_ticket_id,x.updated_at,x.occurred_date,'legacy')
     for(const x of verified)add(x.ticket_id,x.verified_at,x.occurred_date,'verified')
+    const scopedIds=targeted ? new Set([
+      ...verified.filter(x=>str(x.occurred_date)>=targetStart&&str(x.occurred_date)<=targetEnd)
+        .map(x=>str(x.ticket_id)),
+      ...legacy.filter(x=>str(x.occurred_date)>=targetStart&&str(x.occurred_date)<=targetEnd)
+        .map(x=>str(x.clickdesk_ticket_id)),
+    ]) : null
     const done=new Set(ledger.map(x=>str(x.ticket_id)))
     const blocked=new Map(pending.map(x=>[str(x.ticket_id),{checked_at:str(x.checked_at),reason:str(x.reason)}]))
     // Pending authorship can become decidable after a new verified message,
@@ -221,7 +241,7 @@ Deno.serve(async(req:Request)=>{
     }
     // Newest candidate first; previously confirmed historical evidence is
     // preserved until an explicitly requested refresh, not blindly overwritten.
-    const remaining=[...map.values()].filter(eligible)
+    const remaining=[...map.values()].filter(c=>(!scopedIds||scopedIds.has(c.id))&&eligible(c))
       .sort((a,b)=>b.sourceDay.localeCompare(a.sourceDay)||b.id.localeCompare(a.id))
     const candidates=remaining.slice(0,batch)
     const deadline=Date.now()+110000
@@ -288,7 +308,13 @@ Deno.serve(async(req:Request)=>{
     return Response.json({ok:true,mode:dry?'dry_run':'homologation_persisted',candidate_count:map.size,
       backlog_before:remaining.length,
       examined:evaluated.length,confirmed:confirmed.length,pending:unresolved.length,reasons,
-      uncovered_cumulative:true,needs_another_batch:remaining.length>evaluated.length})
+      uncovered_cumulative:true,needs_another_batch:remaining.length>evaluated.length,
+      target_period:targeted?{start:targetStart,end:targetEnd}:null,
+      discovered_in_target_period:scopedIds?.size??null,
+      confirmed_by_final_day:evaluated.filter(x=>x.confirmed).reduce<Record<string,number>>((acc,x)=>{
+        const d=x.occurred_date??'unknown';acc[d]=(acc[d]??0)+1;return acc
+      },{}),
+    })
   }catch(e){
     const msg=e instanceof Error?e.message:'unknown'
     const safe=/^(candidate_source_|roster_unavailable|ledger_write_failed|pending_clear_failed|pending_write_failed|coverage_count_failed|coverage_write_failed|invalid_confirmed_evidence)/.test(msg)
