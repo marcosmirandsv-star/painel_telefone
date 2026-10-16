@@ -97,3 +97,9 @@ test('360 nunca reutiliza análise de outro titular ou outra classificação',()
   assert.match(db,/current\.analyst_id === row\.analyst_id/)
   assert.match(db,/current\.satisfaction_label === row\.satisfaction_label/)
 })
+
+test('fila 360 ordena pelo campo físico de data do ledger',()=>{
+  const db=source('supabase/functions/clickdesk-360-db/index.ts')
+  assert.match(db,/\.order\('last_public_at', \{ ascending: true \}\)/)
+  assert.doesNotMatch(db,/\.order\('occurred_at'/)
+})
