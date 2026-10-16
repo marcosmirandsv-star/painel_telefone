@@ -7738,23 +7738,17 @@ function ChatModuleDashboard({
             : chat2OperationBelowVolume.length > 0
               ? 'Os indicadores gerais estão saudáveis; o principal cuidado agora é entender diferenças de volume dentro do time.'
               : 'Qualidade, participação e volume sustentam uma leitura saudável da operação.'
-  const chat2OperationAreas = Object.values(
+  // Agrupar por equipe cadastrada, nunca pelo campo de fila de um ticket.
+  const chat2OperationTeams = Object.values(
     chat2ProductivityRows.reduce<Record<string, {
-      area: string
-      analysts: number
-      attendances: number
-      positive: number
-      negative: number
-      reviews: number
+      teamId: string; teamName: string; analysts: number
+      attendances: number; positive: number; negative: number; reviews: number
     }>>((acc, item) => {
-      const key = item.area || 'Área não identificada'
+      const key = item.team_id ?? 'sem-vinculo'
+      const registered = teams.find((team) => team.id === item.team_id)
       const current = acc[key] ?? {
-        area: key,
-        analysts: 0,
-        attendances: 0,
-        positive: 0,
-        negative: 0,
-        reviews: 0,
+        teamId: key, teamName: registered?.name ?? 'Vínculo de equipe não identificado',
+        analysts: 0, attendances: 0, positive: 0, negative: 0, reviews: 0,
       }
       current.analysts += 1
       current.attendances += Number(item.attendances)
@@ -7768,7 +7762,7 @@ function ChatModuleDashboard({
     ...item,
     csat: item.reviews > 0 ? round((item.positive / item.reviews) * 100) : null,
     reviewPercentage: item.attendances > 0 ? round((item.reviews / item.attendances) * 100) : null,
-  }))
+  })).sort((a,b) => b.attendances - a.attendances || a.teamName.localeCompare(b.teamName, 'pt-BR'))
   const chat2ManagementRows = chat2ProductivityRows
     .map((item) => {
       const analystProfile =
@@ -9973,19 +9967,20 @@ function ChatModuleDashboard({
         <div className="mt-5">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.14em] text-cyan-300">Leitura por área</p>
-              <h3 className="mt-1 text-xl font-bold">Onde o resultado está concentrado?</h3>
+              <p className="text-sm font-semibold uppercase tracking-[0.14em] text-cyan-300">Leitura por equipe</p>
+              <h3 className="mt-1 text-xl font-bold">Como estão as equipes do Chat?</h3>
             </div>
-            <span className="text-xs text-slate-500">Somente atendimentos classificados como analista</span>
+            <span className="text-xs text-slate-500">Autoria humana final · equipe cadastrada · cobertura parcial</span>
+            <p className="mt-1 text-xs text-slate-500">Renovação, Suporte N3 e fila não comprovada são históricos de roteamento, não equipes. O ticket permanece creditado à equipe cadastrada do último autor humano.</p>
           </div>
 
-          {chat2OperationAreas.length > 0 ? (
+          {chat2OperationTeams.length > 0 ? (
             <div className="mt-4 grid gap-4 lg:grid-cols-2">
-              {chat2OperationAreas.map((item) => (
-                <div key={item.area} className="rounded-xl border border-white/10 bg-slate-950/35 p-5">
+              {chat2OperationTeams.map((item) => (
+                <div key={item.teamId} className="rounded-xl border border-white/10 bg-slate-950/35 p-5">
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <strong className="text-slate-100">{item.area}</strong>
+                      <strong className="text-slate-100">{item.teamName}</strong>
                       <p className="mt-1 text-xs text-slate-500">
                         {formatChatCount(item.analysts)} analista(s) com dados
                       </p>
