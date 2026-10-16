@@ -571,20 +571,26 @@ type ClickDeskPersistedMetrics = {
   erro?: string
 }
 
-type CentralChatOverviewSnapshot = {
+type CentralChatOverviewTeamSummary = {
   team_id: string
-  period_date: string
+  team_name: string
+  attendances: number
+  positive_reviews: number
+  negative_reviews: number
+  reviews: number
+  csat_pct: number | null
+  review_percentage: number | null
+  latest_verified_at: string | null
+  coverage_status: 'partial' | 'complete'
+  available: boolean
+}
+
+type CentralChatOverviewQueueReport = {
   department_id: number
   department_name: string
+  period_date: string
   report_created: number
   report_resolved: number
-  open_now: number
-  waiting_now: number
-  agent_received: number
-  agent_resolved: number
-  agent_transferred: number
-  ai_handled: number
-  ai_escalated: number
   csat_pct: number | null
   csat_total: number
   captured_at: string
@@ -592,7 +598,11 @@ type CentralChatOverviewSnapshot = {
 
 type CentralChatOverviewResponse = {
   source?: string
-  snapshots?: CentralChatOverviewSnapshot[]
+  team_summaries?: CentralChatOverviewTeamSummary[]
+  queue_reports?: CentralChatOverviewQueueReport[]
+  queue_report_status?: 'available' | 'unavailable' | 'not_captured'
+  ledger_coverage?: 'partial' | 'complete'
+  period?: { start: string; end: string; timezone: string }
   latest_sync?: {
     id: string
     status: string
@@ -1205,15 +1215,15 @@ function CentralOverview({
   onOpenChat: (teamId?: string) => void
 }) {
   const activeTeams = chatTeams.filter((team) => team.active)
-  const snapshotByTeam = new Map(
-    (chatOverview?.snapshots ?? []).map((snapshot) => [snapshot.team_id, snapshot]),
+  const verifiedByTeam = new Map(
+    (chatOverview?.team_summaries ?? []).map((team) => [team.team_id, team]),
   )
-  const availableChatSnapshots = activeTeams.filter((team) => snapshotByTeam.has(team.id)).length
+  const availableChatTeams = activeTeams.filter((team) => verifiedByTeam.get(team.id)?.available).length
   const phoneHasData = Boolean(phonePeriodEnd)
-  const availableSources = (phoneHasData ? 1 : 0) + availableChatSnapshots
+  const availableSources = (phoneHasData ? 1 : 0) + availableChatTeams
   const totalSources = 1 + activeTeams.length
   const phoneHealthy = phoneHasData && phoneCsat >= 90 && phonePerformance >= 96
-  const missingChatSnapshots = activeTeams.length - availableChatSnapshots
+  const missingChatTeams = activeTeams.length - availableChatTeams
   const phonePeriodAgeDays = phonePeriodEnd
     ? Math.max(0, Math.floor((Date.now() - Date.parse(`${phonePeriodEnd}T12:00:00`)) / 86400000))
     : null
@@ -1226,7 +1236,7 @@ function CentralOverview({
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">Visão executiva</p>
             <h2 className="mt-2 text-2xl font-bold">Onde vale olhar primeiro?</h2>
             <p className="mt-2 text-sm text-slate-400">
-              Telefone e Chat aparecem juntos, mas cada operação preserva sua própria fonte e data de atualização.
+              Telefone e Chat aparecem juntos com fontes independentes. Os números de equipe do Chat vêm do ledger auditado; as filas Fiscal/ERP aparecem separadamente.
             </p>
           </div>
           <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-right">
@@ -1263,31 +1273,34 @@ function CentralOverview({
         </button>
 
         {activeTeams.map((team) => {
-          const snapshot = snapshotByTeam.get(team.id)
+          const verified = verifiedByTeam.get(team.id)
+          const available = verified?.available === true
           return (
             <button key={team.id} type="button" onClick={() => onOpenChat(team.id)} className="rounded-2xl border border-white/10 bg-slate-900/55 p-5 text-left transition hover:border-cyan-300/35">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Chat · ClickDesk</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Chat · atendimentos comprovados</p>
                   <h3 className="mt-2 text-lg font-bold">{team.name}</h3>
                 </div>
-                <span className={snapshot ? 'text-xs font-semibold text-emerald-300' : 'text-xs font-semibold text-amber-200'}>
-                  {snapshot ? '● Snapshot oficial' : chatOverviewLoading ? '● Atualizando' : '● Sem leitura'}
+                <span className={available ? 'text-xs font-semibold text-amber-200' : 'text-xs font-semibold text-slate-400'}>
+                  {available ? '● Base parcial auditada' : chatOverviewLoading ? '● Atualizando' : '● Em conferência'}
                 </span>
               </div>
               <div className="mt-5 grid grid-cols-3 gap-3">
-                <div><span className="text-xs text-slate-500">CSAT</span><strong className="mt-1 block text-lg">{snapshot?.csat_pct === null || snapshot?.csat_pct === undefined ? '—' : formatPercent(snapshot.csat_pct)}</strong></div>
-                <div><span className="text-xs text-slate-500">Entraram</span><strong className="mt-1 block text-lg">{snapshot ? formatChatCount(snapshot.report_created) : '—'}</strong></div>
-                <div><span className="text-xs text-slate-500">Resolvidos</span><strong className="mt-1 block text-lg">{snapshot ? formatChatCount(snapshot.report_resolved) : '—'}</strong></div>
+                <div><span className="text-xs text-slate-500">CSAT parcial</span><strong className="mt-1 block text-lg">{available && verified?.csat_pct !== null && verified?.csat_pct !== undefined ? formatPercent(verified.csat_pct) : '—'}</strong></div>
+                <div><span className="text-xs text-slate-500">Atendimentos</span><strong className="mt-1 block text-lg">{available ? formatChatCount(verified.attendances) : '—'}</strong></div>
+                <div><span className="text-xs text-slate-500">Avaliações</span><strong className="mt-1 block text-lg">{available ? formatChatCount(verified.reviews) : '—'}</strong></div>
               </div>
               <div className="mt-4 rounded-lg bg-slate-950/35 px-3 py-2 text-xs text-slate-400">
-                {snapshot
-                  ? `Estado agora: ${formatChatCount(snapshot.open_now)} aberto(s) · ${formatChatCount(snapshot.waiting_now)} aguardando`
-                  : 'Aguardando snapshot oficial do ClickDesk.'}
+                {available
+                  ? `Créditos verificados · ${formatChatCount(verified.positive_reviews)} positivas · ${formatChatCount(verified.negative_reviews)} negativas. Sem fechamento oficial.`
+                  : chatOverviewError ? 'Não foi possível consultar a base de créditos.' : 'Ainda não existem créditos finais comprovados para esta equipe.'}
               </div>
               <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-4 text-xs">
                 <span className="text-slate-500">
-                  {snapshot ? `${formatDate(snapshot.period_date)} · atualizado ${formatDateTime(snapshot.captured_at)}` : 'Sem atualização oficial disponível'}
+                  {available
+                    ? `${chatOverview?.period?.start ? formatDate(chatOverview.period.start) : 'Início do mês'} a ${chatOverview?.period?.end ? formatDate(chatOverview.period.end) : 'hoje'} · leitura parcial`
+                    : 'Não confundir ausência de leitura com zero atendimentos'}
                 </span>
                 <span className="font-semibold text-cyan-200">Abrir Chat →</span>
               </div>
@@ -1296,6 +1309,19 @@ function CentralOverview({
         })}
       </section>
 
+      {Boolean(chatOverview?.queue_reports?.length) && (
+        <section className="rounded-xl border border-white/10 bg-slate-900/45 px-5 py-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Relatório oficial das filas · diferente do desempenho das equipes</p>
+          <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-300">
+            {(chatOverview?.queue_reports ?? []).map((queue) => (
+              <span key={queue.department_id}>
+                <strong>{queue.department_name}</strong> · {formatDate(queue.period_date)} · {formatChatCount(queue.report_created)} criados · {formatChatCount(queue.report_resolved)} resolvidos · CSAT {queue.csat_pct === null ? '—' : formatPercent(queue.csat_pct)}
+              </span>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-slate-500">Os números de filas não são somados aos tickets creditados por último analista humano.</p>
+        </section>
+      )}
       <section className="rounded-2xl border border-violet-300/15 bg-violet-300/[0.04] px-5 py-4">
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -1303,13 +1329,13 @@ function CentralOverview({
             <p className="mt-1 text-sm text-slate-300">
               {chatOverviewError
                 ? `A leitura operacional do Chat não pôde ser carregada: ${chatOverviewError}`
-                : missingChatSnapshots > 0 && !chatOverviewLoading
-                  ? `${missingChatSnapshots} operação(ões) de Chat ainda não têm snapshot oficial disponível.`
+                : missingChatTeams > 0 && !chatOverviewLoading
+                  ? `${missingChatTeams} equipe(s) de Chat ainda não têm crédito final confirmado nesta competência. Não interpretar como zero operacional.`
                   : phoneAttention > 0
-                    ? `O último período lançado manualmente do Telefone possui ${phoneAttention} ponto(s) de atenção. O Chat usa o snapshot oficial mais recente do ClickDesk.`
+                    ? `O Telefone possui ${phoneAttention} ponto(s) de atenção no último período manual. Chat mostra somente tickets com último autor humano validado, em cobertura parcial.`
                     : phoneHasData
-                      ? 'O Telefone representa o último período lançado manualmente; o Chat representa o snapshot oficial mais recente do ClickDesk. Os dois recortes não devem ser interpretados como tendo a mesma data-base.'
-                      : 'As fontes disponíveis foram carregadas. Abra cada operação para aprofundar sem misturar recortes históricos com estado atual.'}
+                      ? 'Telefone: período manual; Chat: ledger parcial da competência. Não tratar fontes ou datas como equivalentes nem utilizar o Chat para fechamento.'
+                      : 'O Chat utiliza apenas os créditos de autoria final validados; os relatórios de filas permanecem independentes.'}
             </p>
           </div>
           <span className="text-xs text-slate-500">
@@ -1648,7 +1674,7 @@ export default function Home() {
     void loadCentralChatOverview()
     const refreshTimer = window.setInterval(() => {
       void loadCentralChatOverview()
-    }, 60 * 60 * 1000)
+    }, 5 * 60 * 1000)
 
     return () => {
       cancelled = true
