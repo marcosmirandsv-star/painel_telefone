@@ -6242,15 +6242,17 @@ function ChatModuleDashboard({
           : 'Fechamento pede atenção: nenhum analista ficou plenamente elegível ao pódio.'
 
   const chatExecutiveStatus =
-    !calculationMetrics.length
-      ? 'Sem dados no período'
+    (liveChatAnalysis && totals.reviews === 0 && totals.tickets > 0)
+      ? 'Sem avaliações no período'
+      : !calculationMetrics.length
+        ? 'Sem dados no período'
       : averageCsat >= 90 && averageReviews >= 25
         ? 'Operação saudável'
         : averageCsat < 85 || averageReviews < 20 || attention.length >= 3
           ? 'Acompanhamento prioritário'
           : 'Período em atenção'
   const chatExecutiveTone =
-    !calculationMetrics.length
+    (!calculationMetrics.length || (liveChatAnalysis && totals.reviews === 0))
       ? 'text-slate-300'
       : averageCsat >= 90 && averageReviews >= 25
         ? 'text-emerald-300'
@@ -6258,8 +6260,10 @@ function ChatModuleDashboard({
           ? 'text-rose-300'
           : 'text-amber-300'
   const chatMainAlert =
-    !calculationMetrics.length
-      ? 'Selecione outro período ou aguarde a importação mensal.'
+    (liveChatAnalysis && totals.reviews === 0)
+      ? 'Ainda não existem avaliações atribuídas neste recorte; não interpretar como CSAT zero.'
+      : !calculationMetrics.length
+        ? 'Aguardando conciliação de tickets desta competência.'
       : averageCsat < 85
         ? 'A qualidade do atendimento tem espaço para evolução.'
         : averageCsat < 90
@@ -6273,8 +6277,10 @@ function ChatModuleDashboard({
                 : 'Equipe alinhada com os critérios principais do período.'
 
   const chatRecommendedAction =
-    !calculationMetrics.length
-      ? 'Importar ou selecionar um mês com dados.'
+    (liveChatAnalysis && totals.reviews === 0)
+      ? 'Acompanhar novas avaliações confirmadas antes de concluir a leitura de qualidade.'
+      : !calculationMetrics.length
+        ? 'Selecione um período com dados confirmados.'
       : averageCsat < 90
         ? 'Revisar atendimentos negativos e direcionar feedback dos analistas em atenção.'
         : averageReviews < 25
@@ -9017,7 +9023,7 @@ function ChatModuleDashboard({
                 <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
                   <MetricCard
                     label="Meu CSAT"
-                    value={formatChatPercent(chat2SelectedMetric.csat)}
+                    value={chat2SelectedPeriod.start >= '2026-10-01' && chat2SelectedMetric.reviews === 0 ? '—' : formatChatPercent(chat2SelectedMetric.csat)}
                     tone={Number(chat2SelectedMetric.csat) >= Number(chat2SelectedMetric.csat_goal) ? 'success' : 'warning'}
                   />
                   <MetricCard label="Atendimentos" value={formatChatCount(chat2SelectedMetric.total_tickets)} />
@@ -9041,7 +9047,7 @@ function ChatModuleDashboard({
                       <div className="flex items-center justify-between gap-4">
                         <span className="text-slate-400">Distância da meta</span>
                         <strong className={Number(chat2SelectedMetric.csat) >= Number(chat2SelectedMetric.csat_goal) ? 'text-emerald-300' : 'text-amber-200'}>
-                          {formatDelta(round(Number(chat2SelectedMetric.csat) - Number(chat2SelectedMetric.csat_goal)), ' p.p.')}
+                          {chat2SelectedPeriod.start >= '2026-10-01' && chat2SelectedMetric.reviews === 0 ? '— (sem avaliações)' : formatDelta(round(Number(chat2SelectedMetric.csat) - Number(chat2SelectedMetric.csat_goal)), ' p.p.')}
                         </strong>
                       </div>
                       <div className="flex items-center justify-between gap-4">
@@ -11252,7 +11258,7 @@ function ChatModuleDashboard({
 
         {selectedChatReportMetric ? (
           <div className="phone-kpi-grid mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-            <MetricCard label="CSAT" value={formatChatPercent(selectedChatReportMetric.csat)} />
+            <MetricCard label="CSAT" value={chatReportUsesClickDesk && selectedChatReportMetric.reviews === 0 ? '—' : formatChatPercent(selectedChatReportMetric.csat)} />
             <MetricCard label="% de avaliações" value={formatChatPercent(selectedChatReportMetric.review_percentage)} />
             <MetricCard label="Avaliações recebidas" value={formatChatCount(selectedChatReportMetric.reviews)} />
             <MetricCard label="Atendimentos" value={selectedChatReportMetric.total_tickets} />
@@ -11719,7 +11725,7 @@ function ChatModuleDashboard({
                 <tr key={metric.id} className="border-t border-slate-800">
                   <td className="px-3 py-3 font-semibold">{getChatAnalystName(metric)}</td>
                   <td className="px-3 py-3 text-slate-300">{getChatTeamName(metric)}</td>
-                  <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatPercent(metric.csat)}</td>
+                  <td className="whitespace-nowrap px-3 py-3 tabular-nums">{liveChatAnalysis && metric.reviews === 0 ? '—' : formatChatPercent(metric.csat)}</td>
                   <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatPercent(metric.review_percentage)}</td>
                   <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatCount(metric.total_tickets)}</td>
                   <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatCount(metric.valid_tickets)}</td>
