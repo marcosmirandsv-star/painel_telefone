@@ -480,6 +480,7 @@ type ClickDeskVerifiedCoverage = {
     analyst_id: string
     analyst_name: string
     team_id: string | null
+    active: boolean
     distinct_tickets_with_human_contribution: number
     positive_reviews_with_last_human_evidence: number
     negative_reviews_with_last_human_evidence: number
@@ -7288,7 +7289,7 @@ function ChatModuleDashboard({
     chat2PeriodOptions[0] ??
     chat2Periods[0]
   useEffect(() => {
-    if (!isManagementUser || chatActiveTab !== 'prototype') {
+    if (!isManagementUser || chatActiveTab !== 'analysis') {
       setClickDeskVerifiedCoverage(null)
       return
     }
@@ -8548,6 +8549,51 @@ function ChatModuleDashboard({
         </section>
       )}
 
+      <section className={chatActiveTab === 'analysis' ? 'panel' : 'hidden'}>
+        <p className="text-sm font-bold text-cyan-200">Auditoria das participações ClickDesk</p>
+        <p className="mt-2 text-xs text-slate-400">
+          Evidência de captura auxiliar, separada dos indicadores de atendimento e satisfação.
+        </p>
+          <details className="workspace-content-section border border-amber-300/20 rounded-xl p-4">
+            <summary className="cursor-pointer text-sm font-bold text-amber-100">
+              Diagnóstico da captura auxiliar · participações, não atendimentos
+            </summary>
+            <p className="mt-3 text-xs leading-5 text-amber-100">
+              Fonte: contribuições verificadas na captura auxiliar, que registra a primeira participação humana,
+              não a titularidade final. Um ticket pode incluir várias pessoas. Essa captura lê uma página de
+              mensagens, sem a paginação integral exigida pelo ledger. As avaliações capturadas são incompletas:
+              NÃO são outro CSAT e não devem ser usadas para metas, ranking ou fechamento.
+              Para indicadores de desempenho, consulte somente Equipe e produtividade.
+            </p>
+            {clickDeskVerifiedCoverageLoading ? (
+              <p className="mt-3 text-sm text-slate-400">Consultando contribuições verificadas...</p>
+            ) : clickDeskVerifiedCoverage?.erro ? (
+              <p className="mt-3 text-sm text-amber-100">{clickDeskVerifiedCoverage.erro}</p>
+            ) : clickDeskVerifiedCoverage?.analysts?.length ? (
+              <div className="data-table-shell mt-4 overflow-x-auto">
+                <table className="min-w-[660px] w-full text-sm">
+                  <thead><tr className="border-b border-white/10 text-left text-xs text-slate-400">
+                    <th className="p-3">Analista</th>
+                    <th className="p-3 text-right">Tickets com participação</th>
+                    <th className="p-3 text-right">Positivas na captura auxiliar</th>
+                    <th className="p-3 text-right">Negativas na captura auxiliar</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-white/5">
+                    {clickDeskVerifiedCoverage.analysts.map(item => (
+                      <tr key={item.analyst_id}>
+                        <td className="p-3 font-medium text-slate-100">{item.analyst_name}{!item.active ? <span className="ml-2 text-xs text-amber-200"> (histórico · inativo)</span> : null}</td>
+                        <td className="p-3 text-right tabular-nums">{formatChatCount(item.distinct_tickets_with_human_contribution)}</td>
+                        <td className="p-3 text-right tabular-nums">{formatChatCount(item.positive_reviews_with_last_human_evidence)}</td>
+                        <td className="p-3 text-right tabular-nums">{formatChatCount(item.negative_reviews_with_last_human_evidence)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : <p className="mt-3 text-sm text-slate-400">Nenhuma contribuição verificada neste recorte.</p>}
+          </details>
+      </section>
+
       {chatActiveTab === 'podium' && (
         <section className="workspace-page-heading">
           <p className="workspace-eyebrow">Gestão e ações</p>
@@ -8656,45 +8702,10 @@ function ChatModuleDashboard({
             )}
           </section>
 
-          <details open className="workspace-content-section border border-amber-300/20 rounded-xl p-4">
-            <summary className="cursor-pointer text-sm font-bold text-amber-100">
-              Conferência complementar — demais analistas e avaliações com autoria comprovada
-            </summary>
-            <p className="mt-3 text-xs leading-5 text-amber-100">
-              Estes números NÃO são o fechamento de atendimentos. Participação verificada em um ticket pode
-              incluir mais de um analista; apenas o ledger acima confirma a titularidade final.
-              O CSAT abaixo usa exclusivamente avaliações já atribuídas ao último respondente público.
-              Não calcule a porcentagem de avaliações usando participações como denominador.
-            </p>
-            {clickDeskVerifiedCoverageLoading ? (
-              <p className="mt-3 text-sm text-slate-400">Consultando contribuições verificadas...</p>
-            ) : clickDeskVerifiedCoverage?.erro ? (
-              <p className="mt-3 text-sm text-amber-100">{clickDeskVerifiedCoverage.erro}</p>
-            ) : clickDeskVerifiedCoverage?.analysts?.length ? (
-              <div className="data-table-shell mt-4 overflow-x-auto">
-                <table className="min-w-[660px] w-full text-sm">
-                  <thead><tr className="border-b border-white/10 text-left text-xs text-slate-400">
-                    <th className="p-3">Analista</th>
-                    <th className="p-3 text-right">Tickets com contribuição</th>
-                    <th className="p-3 text-right">Avaliações positivas</th>
-                    <th className="p-3 text-right">Avaliações negativas</th>
-                    <th className="p-3 text-right">CSAT da amostra avaliada</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-white/5">
-                    {clickDeskVerifiedCoverage.analysts.map(item => (
-                      <tr key={item.analyst_id}>
-                        <td className="p-3 font-medium text-slate-100">{item.analyst_name}</td>
-                        <td className="p-3 text-right tabular-nums">{formatChatCount(item.distinct_tickets_with_human_contribution)}</td>
-                        <td className="p-3 text-right tabular-nums">{formatChatCount(item.positive_reviews_with_last_human_evidence)}</td>
-                        <td className="p-3 text-right tabular-nums">{formatChatCount(item.negative_reviews_with_last_human_evidence)}</td>
-                        <td className="p-3 text-right tabular-nums">{item.csat_of_verified_ratings === null ? '—' : formatChatPercent(item.csat_of_verified_ratings)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : <p className="mt-3 text-sm text-slate-400">Nenhuma contribuição verificada neste recorte.</p>}
-          </details>
+          <p className="workspace-content-section rounded-xl border border-white/10 p-4 text-xs text-slate-400">
+            Exibição exclusiva dos atendimentos auditados por último respondente humano. Participações históricas
+            e capturas auxiliares ficam em Ferramentas → Conferência da base. Os dados deste mês ainda são parciais.
+          </p>
 
           <details className="workspace-content-section workspace-content-section-divided phone-ai-layers">
             <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-cyan-100">Diagnóstico complementar e histórico · pode usar fontes diferentes do resumo compartilhado</summary>
