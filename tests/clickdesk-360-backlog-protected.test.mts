@@ -1,18 +1,34 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { resolve360BatchWindow } from '../src/lib/clickdesk-360-window.ts'
 
 const source = (path: string) => readFileSync(new URL('../'+path,import.meta.url),'utf8')
 
-test('automação 360 retoma outubro inteiro, e nunca só o próprio dia',()=>{
+test('janela padrão da automação inclui todo o outubro pendente até hoje',()=>{
+  const result=resolve360BatchWindow({limit:8},'2026-10-17')
+  assert.deepEqual(result,{
+    start:'2026-10-01',end:'2026-10-17',limit:8,
+    period_source:'backlog_october_to_today',
+  })
   const route=source('src/app/api/clickdesk/operation-360/auto-process/route.ts')
-  assert.match(route,/const oldestBacklogDate = '2026-10-01'/)
-  assert.match(route,/typeof body\.start === 'string' && body\.start\.trim\(\)[\s\S]*?: oldestBacklogDate/)
-  assert.match(route,/typeof body\.end === 'string' && body\.end\.trim\(\)[\s\S]*?: today/)
-  assert.match(route,/start > end \|\| end > today \|\| start < '2026-10-01'/)
-  assert.match(route,/period_source: body\.start \|\| body\.end \? 'explicit' : 'backlog_october_to_today'/)
-  assert.match(route,/limit = Math\.max\(1, Math\.min\(requestedLimit, 8\)\)/)
+  assert.match(route,/resolve360BatchWindow\(body, today\)/)
+  assert.match(route,/period_source: periodSource/)
   assert.match(route,/action: 'queue'/)
+})
+
+test('janela explícita, datas inválidas e limites são validados',()=>{
+  assert.deepEqual(resolve360BatchWindow({start:'2026-10-14',end:'2026-10-15',limit:100},'2026-10-17'),{
+    start:'2026-10-14',end:'2026-10-15',limit:8,
+    period_source:'explicit',
+  })
+  assert.equal(resolve360BatchWindow({start:'2026-10-14',limit:0},'2026-10-17').limit,1)
+  assert.equal(resolve360BatchWindow({start:'2026-10-14'},'2026-10-17').end,'2026-10-17')
+  for(const input of [
+    {start:'2026-09-30'},{start:'2026-10-18'},{start:'2026-10-15',end:'2026-10-14'},
+    {start:'2026-10-14',end:'2026-10-20'},{start:'2026-02-30'},{end:'bad'},
+  ]) assert.throws(()=>resolve360BatchWindow(input,'2026-10-17'))
+  assert.throws(()=>resolve360BatchWindow({},'invalid-date'))
 })
 
 test('qualitativo é processado internamente com autenticação e sem segundo acesso SSO',()=>{
