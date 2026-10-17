@@ -75,3 +75,10 @@ test('Telefone permanece separado: nenhuma dependência de seus indicadores no c
   assert.doesNotMatch(helper,/phone|telefone|55DBX|weekly_individual_metrics|weekly_team_metrics/i)
   assert.doesNotMatch(source('src/app/api/clickdesk/metrics/route.ts'),/weekly_individual_metrics|weekly_team_metrics/)
 })
+
+test('competência exibida é a competência do ledger e tendência Zendesk não é comparável',()=>{
+  const page=source('src/app/page.tsx')
+  assert.match(page,/liveChatAnalysis \? chatAuditPeriod\.label : selectedPeriod\?\.label/)
+  assert.match(page,/a tendência histórica importada utiliza outra fonte/)
+  assert.match(page,/const chat2LiveTeamRows = chat2SelectedPersistedAnalyst/)
+})
