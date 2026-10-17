@@ -70,10 +70,13 @@ export async function POST(request: Request) {
     const automation = await authorizeClickDeskAutomation(request)
     const body = (await request.json().catch(() => ({}))) as AutoProcessRequest
     const today = businessDate()
+    // O job programado deve buscar também as avaliações de outubro pendentes.
+    // Apenas "hoje" omitia permanentemente os tickets de dias anteriores.
+    const oldestBacklogDate = '2026-10-01'
     const start =
       typeof body.start === 'string' && body.start.trim()
         ? body.start.trim()
-        : today
+        : oldestBacklogDate
     const end =
       typeof body.end === 'string' && body.end.trim()
         ? body.end.trim()
@@ -84,7 +87,7 @@ export async function POST(request: Request) {
         : 6
     const limit = Math.max(1, Math.min(requestedLimit, 8))
 
-    if (!validDate(start) || !validDate(end) || start > end) {
+    if (!validDate(start) || !validDate(end) || start > end || end > today || start < '2026-10-01') {
       throw new ApiError(400, 'Período inválido.')
     }
 
@@ -166,6 +169,7 @@ export async function POST(request: Request) {
 
     return json({
       source: 'clickdesk_operation_360_auto_processor',
+      period_source: body.start || body.end ? 'explicit' : 'backlog_october_to_today',
       period: { start, end },
       requested: selected.length,
       processed: processed.length,
