@@ -6,6 +6,7 @@ import {
   json,
 } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
+import { POST as processQualitativeTicket } from '../../qualitative/route'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -114,7 +115,9 @@ export async function POST(request: Request) {
       if (!ticketId) return
 
       try {
-        const response = await fetch(`${baseUrl}/api/clickdesk/qualitative`, {
+        // Chamada interna autenticada: evita uma segunda travessia da
+        // proteção SSO da Vercel, sem tornar o endpoint público.
+        const response = await processQualitativeTicket(new Request(`${baseUrl}/api/clickdesk/qualitative`, {
           method: 'POST',
           headers: {
             Authorization: authorization,
@@ -127,7 +130,7 @@ export async function POST(request: Request) {
             force: false,
           }),
           cache: 'no-store',
-        })
+        }))
         const payload = await readJson(response)
 
         if (!response.ok) {
