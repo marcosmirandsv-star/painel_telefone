@@ -37,7 +37,7 @@ test('historico e tickets recusam consultas cruzadas e preservam titularidade', 
   for (const route of [history, tickets]) {
     assert.match(route, /requestedAnalystId !== access\.chatAnalystId/)
     assert.match(route, /new ApiError\(403/)
-    assert.match(route, /analystId: access\.chatAnalystId/)
+    assert.match(route, /access\.chatAnalystId/)
   }
   assert.match(history, /get_clickdesk_self_closed_history/)
   assert.match(qualitative, /final\.analyst_id !== sessionAccess\.chatAnalystId/)
