@@ -485,7 +485,6 @@ type ClickDeskVerifiedCoverage = {
     positive_reviews_with_last_human_evidence: number
     negative_reviews_with_last_human_evidence: number
     evaluated_with_last_human_evidence: number
-    csat_of_verified_ratings: number | null
   }>
   erro?: string
 }
