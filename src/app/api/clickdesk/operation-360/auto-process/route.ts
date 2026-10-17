@@ -6,6 +6,7 @@ import {
   json,
 } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
+import { POST as processQualitativeTicket } from '../../qualitative/route'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -70,21 +71,24 @@ export async function POST(request: Request) {
     const automation = await authorizeClickDeskAutomation(request)
     const body = (await request.json().catch(() => ({}))) as AutoProcessRequest
     const today = businessDate()
+    // O job programado deve buscar também as avaliações de outubro pendentes.
+    // Apenas "hoje" omitia permanentemente os tickets de dias anteriores.
+    const oldestBacklogDate = '2026-10-01'
     const start =
       typeof body.start === 'string' && body.start.trim()
         ? body.start.trim()
-        : today
+        : oldestBacklogDate
     const end =
       typeof body.end === 'string' && body.end.trim()
         ? body.end.trim()
-        : start
+        : today
     const requestedLimit =
       typeof body.limit === 'number' && Number.isFinite(body.limit)
         ? Math.trunc(body.limit)
         : 6
     const limit = Math.max(1, Math.min(requestedLimit, 8))
 
-    if (!validDate(start) || !validDate(end) || start > end) {
+    if (!validDate(start) || !validDate(end) || start > end || end > today || start < '2026-10-01') {
       throw new ApiError(400, 'Período inválido.')
     }
 
@@ -111,7 +115,9 @@ export async function POST(request: Request) {
       if (!ticketId) return
 
       try {
-        const response = await fetch(`${baseUrl}/api/clickdesk/qualitative`, {
+        // Chamada interna autenticada: evita uma segunda travessia da
+        // proteção SSO da Vercel, sem tornar o endpoint público.
+        const response = await processQualitativeTicket(new Request(`${baseUrl}/api/clickdesk/qualitative`, {
           method: 'POST',
           headers: {
             Authorization: authorization,
@@ -124,7 +130,7 @@ export async function POST(request: Request) {
             force: false,
           }),
           cache: 'no-store',
-        })
+        }))
         const payload = await readJson(response)
 
         if (!response.ok) {
@@ -166,6 +172,7 @@ export async function POST(request: Request) {
 
     return json({
       source: 'clickdesk_operation_360_auto_processor',
+      period_source: body.start || body.end ? 'explicit' : 'backlog_october_to_today',
       period: { start, end },
       requested: selected.length,
       processed: processed.length,
