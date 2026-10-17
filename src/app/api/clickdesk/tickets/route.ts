@@ -5,7 +5,7 @@ import {
   json,
 } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
-import { readFinalLedger, readLedgerCoverage } from '@/lib/clickdesk-ledger-server'
+import { readFinalLedger, readLedgerCoverageForAccess } from '@/lib/clickdesk-ledger-server'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -69,7 +69,7 @@ export async function GET(request: Request) {
     const admin = access.admin
     const [rows, coverage] = await Promise.all([
       readFinalLedger(admin, { start: date, end: date, analystId }),
-      readLedgerCoverage(admin),
+      readLedgerCoverageForAccess(admin, access.isManagement),
     ])
 
     return json({
