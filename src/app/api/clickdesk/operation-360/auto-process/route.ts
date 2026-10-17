@@ -7,6 +7,7 @@ import {
 } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 import { POST as processQualitativeTicket } from '../../qualitative/route'
+import { resolve360BatchWindow } from '@/lib/clickdesk-360-window'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -30,14 +31,6 @@ type AutoProcessRequest = {
   start?: string
   end?: string
   limit?: number
-}
-
-function validDate(value: string) {
-  return (
-    /^20\d{2}-\d{2}-\d{2}$/.test(value) &&
-    Number.isFinite(Date.parse(value)) &&
-    new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value
-  )
 }
 
 function businessDate() {
@@ -71,26 +64,13 @@ export async function POST(request: Request) {
     const automation = await authorizeClickDeskAutomation(request)
     const body = (await request.json().catch(() => ({}))) as AutoProcessRequest
     const today = businessDate()
-    // O job programado deve buscar também as avaliações de outubro pendentes.
-    // Apenas "hoje" omitia permanentemente os tickets de dias anteriores.
-    const oldestBacklogDate = '2026-10-01'
-    const start =
-      typeof body.start === 'string' && body.start.trim()
-        ? body.start.trim()
-        : oldestBacklogDate
-    const end =
-      typeof body.end === 'string' && body.end.trim()
-        ? body.end.trim()
-        : today
-    const requestedLimit =
-      typeof body.limit === 'number' && Number.isFinite(body.limit)
-        ? Math.trunc(body.limit)
-        : 6
-    const limit = Math.max(1, Math.min(requestedLimit, 8))
-
-    if (!validDate(start) || !validDate(end) || start > end || end > today || start < '2026-10-01') {
+    let window: ReturnType<typeof resolve360BatchWindow>
+    try {
+      window = resolve360BatchWindow(body, today)
+    } catch {
       throw new ApiError(400, 'Período inválido.')
     }
+    const { start, end, limit, period_source: periodSource } = window
 
     const queuePayload = (await callClickDeskAutomationDb(automation.token, {
       action: 'queue',
@@ -172,7 +152,7 @@ export async function POST(request: Request) {
 
     return json({
       source: 'clickdesk_operation_360_auto_processor',
-      period_source: body.start || body.end ? 'explicit' : 'backlog_october_to_today',
+      period_source: periodSource,
       period: { start, end },
       requested: selected.length,
       processed: processed.length,
