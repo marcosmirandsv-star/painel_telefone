@@ -6394,7 +6394,9 @@ function ChatModuleDashboard({
           ? `Antes de publicar o ranking, confirme se apoio a outro setor, ausências, pausas ou diferenças de disponibilidade para puxar tickets exigem algum ajuste. Depois, reconheça ${chatNameList(chatEligibleNames)} e compartilhe com a equipe os comportamentos que sustentaram os resultados.`
           : 'Antes de publicar o ranking, separe as exceções operacionais dos resultados individuais. Depois, escolha o indicador com maior impacto e defina uma ação para aumentar a quantidade de elegíveis no próximo ciclo.'
   const chatStrategicTrend =
-    !calculationMetrics.length
+    liveChatAnalysis
+      ? 'Indicadores do ClickDesk auditado; a tendência histórica importada utiliza outra fonte e não é comparada com a competência corrente.'
+      : !calculationMetrics.length
       ? 'Sem tendência calculada.'
       : chatCsatDelta >= 0 && chatReviewDelta >= 0
         ? `Evolução favorável: o CSAT passou de ${formatChatPercent(previousAverageCsat)} para ${formatChatPercent(averageCsat)}, e as avaliações passaram de ${formatChatPercent(previousAverageReviews)} para ${formatChatPercent(averageReviews)}. Mantenha as práticas que produziram essa melhora.`
@@ -11661,7 +11663,7 @@ function ChatModuleDashboard({
             </p>
           </div>
           <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">
-            {selectedPeriod?.label ?? 'Período'} - {selectedTeamName}
+            {liveChatAnalysis ? chatAuditPeriod.label : selectedPeriod?.label ?? 'Período'} - {selectedTeamName}
           </span>
         </div>
 
