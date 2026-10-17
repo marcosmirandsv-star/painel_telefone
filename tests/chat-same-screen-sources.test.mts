@@ -7,7 +7,7 @@ const read = (path: string) => readFileSync(new URL('../' + path, import.meta.ur
 test('produtividade usa apenas ledger; captura auxiliar aparece em ferramenta de auditoria',()=>{
   const page=read('src/app/page.tsx')
   const audit=page.indexOf('Auditoria das participações ClickDesk')
-  const prod=page.indexOf("{chatActiveTab === 'prototype' && (")
+  const prod=page.indexOf("{chatActiveTab === 'prototype' && (\\n        <div className=\\\"space-y-7\\\">")
   const old=page.indexOf('Conferência complementar — demais analistas')
   assert.ok(audit>0 && prod>audit,'auditoria deve vir antes da aba produtividade')
   assert.equal(old,-1,'quadro de comparações indevidas deve desaparecer')
