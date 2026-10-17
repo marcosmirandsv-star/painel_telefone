@@ -2,7 +2,6 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const BRANCH_URL =
   'https://central-performance-git-homologacao-project-gestao.vercel.app'
-const SHARE_COOKIE_NAME = '_vercel_jwt'
 
 function json(data: unknown, status = 200) {
   return Response.json(data, {
@@ -97,44 +96,33 @@ Deno.serve(async (request: Request) => {
   const limit = readLimit(body.limit)
 
   try {
-    const shareResponse = await fetchWithTimeout(
-      `${BRANCH_URL}/?_vercel_share=${encodeURIComponent(shareToken)}`,
-      {
-        method: 'GET',
-        redirect: 'manual',
-        headers: { Accept: 'text/html' },
-      },
-      20000,
-    )
-
-    const setCookie = shareResponse.headers.get('set-cookie') ?? ''
-    const cookieMatch = new RegExp(`${SHARE_COOKIE_NAME}=([^;]+)`).exec(setCookie)
-
-    if (!cookieMatch?.[1]) {
-      return json(
-        {
-          error: 'Vercel share session was not issued',
-          share_status: shareResponse.status,
-        },
-        503,
-      )
-    }
-
+    // A Vercel exige uma credencial específica para automação. Links
+    // _vercel_share expiram e não constituem autenticação servidor-servidor.
+    // O segredo fica exclusivamente no Supabase Vault e é enviado no header.
     const processResponse = await fetchWithTimeout(
       `${BRANCH_URL}/api/clickdesk/operation-360/auto-process`,
       {
         method: 'POST',
+        redirect: 'manual',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
           'X-Central-Automation': 'clickdesk-sync',
-          Cookie: `${SHARE_COOKIE_NAME}=${cookieMatch[1]}`,
+          'x-vercel-protection-bypass': shareToken,
         },
         body: JSON.stringify({ limit }),
       },
       95000,
     )
 
+    // A resposta 302 (SSO) ou 401 significa que a credencial de automação
+    // ainda não foi configurada/reconhecida. Nunca tratar isso como sucesso.
+    if ([301, 302, 303, 307, 308, 401, 403].includes(processResponse.status)) {
+      return json({
+        error: 'Vercel automation protection bypass not authorized',
+        processor_status: processResponse.status,
+      }, 503)
+    }
     const text = await processResponse.text()
     let payload: unknown = null
     try {
