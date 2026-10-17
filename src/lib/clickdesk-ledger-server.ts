@@ -36,17 +36,22 @@ export async function readFinalLedger(
     const page = (data ?? []) as LedgerRow[]
     records.push(...page)
     if (page.length < 500) {
+      // Consultar apenas pendências dos tickets realmente carregados.
+      // A RLS da tabela pending faz uma checagem por titular; percorrer a
+      // tabela global para cada leitura do gestor e de cada analista
+      // acrescentava custo desnecessário e podia bloquear o painel.
+      if (records.length === 0) return []
       const pendingIds = new Set<string>()
-      for (let pendingOffset = 0; pendingOffset < 20000; pendingOffset += 500) {
-        const pendingQuery = await admin.from('clickdesk_final_ticket_pending')
-          .select('ticket_id').order('ticket_id',{ascending:true})
-          .range(pendingOffset,pendingOffset+499)
-        if (pendingQuery.error) throw new ApiError(503, 'Pendências do ledger indisponíveis.')
-        const pendingPage = pendingQuery.data ?? []
-        pendingPage.forEach(item => pendingIds.add(item.ticket_id))
-        if (pendingPage.length < 500) return records.filter(row => !pendingIds.has(row.ticket_id))
+      for (let start = 0; start < records.length; start += 200) {
+        const ids = records.slice(start, start + 200).map(row => row.ticket_id)
+        const { data: pendingPage, error: pendingError } = await admin
+          .from('clickdesk_final_ticket_pending')
+          .select('ticket_id')
+          .in('ticket_id', ids)
+        if (pendingError) throw new ApiError(503, 'Pendências dos tickets consultados indisponíveis.')
+        for (const item of pendingPage ?? []) pendingIds.add(item.ticket_id)
       }
-      throw new ApiError(422, 'Pendências ClickDesk excederam limite seguro.')
+      return records.filter(row => !pendingIds.has(row.ticket_id))
     }
   }
   throw new ApiError(422, 'Ledger ClickDesk excedeu o limite de paginação segura.')
