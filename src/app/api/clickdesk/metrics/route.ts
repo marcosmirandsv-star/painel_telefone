@@ -1,6 +1,6 @@
 import { ApiError, authorizeClickDeskSessionClient, handle, json } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
-import { readFinalLedger, readLedgerCoverage } from '@/lib/clickdesk-ledger-server'
+import { readFinalLedger, readLedgerCoverageForAccess } from '@/lib/clickdesk-ledger-server'
 import { randomUUID } from 'node:crypto'
 import { partitionChatLedgerByActiveRoster } from '@/lib/clickdesk-active-analysts'
 
@@ -120,10 +120,11 @@ function parseFilters(request: Request) {
 async function loadRows(
   admin: Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],
   filters: ReturnType<typeof parseFilters>,
+  isManagement: boolean,
 ) {
   const [tickets, coverage, people] = await Promise.all([
     readFinalLedger(admin, { start: filters.start, end: filters.end, analystId: filters.analystId, teamId: filters.teamId }),
-    readLedgerCoverage(admin),
+    readLedgerCoverageForAccess(admin, isManagement),
     admin.from('chat_analysts').select('id,name,team_id,active'),
   ])
   if (people.error) throw new ApiError(503, 'Cadastro de analistas da homologação indisponível.')
@@ -273,7 +274,7 @@ export async function GET(request: Request) {
         }
 
     stage = 'ledger_read'
-    const { rows, coverage, admin, excludedInactive } = await loadRows(access.admin, filters)
+    const { rows, coverage, admin, excludedInactive } = await loadRows(access.admin, filters, access.isManagement)
 
     stage = 'sync_status'
     const latestSync = await admin
