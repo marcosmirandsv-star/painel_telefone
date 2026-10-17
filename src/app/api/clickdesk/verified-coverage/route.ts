@@ -84,19 +84,18 @@ export async function GET(request: Request) {
       const r=reviews.get(person.id)??{positive:0,negative:0}
       const evaluated=r.positive+r.negative
       return {
-        analyst_id:person.id,analyst_name:person.name,team_id:person.team_id,
+        analyst_id:person.id,analyst_name:person.name,team_id:person.team_id,active:person.active,
         distinct_tickets_with_human_contribution:participations,
         positive_reviews_with_last_human_evidence:r.positive,
         negative_reviews_with_last_human_evidence:r.negative,
         evaluated_with_last_human_evidence:evaluated,
-        csat_of_verified_ratings:evaluated?Math.round(r.positive/evaluated*10000)/100:null,
       }
     }).filter(row=>row.distinct_tickets_with_human_contribution||row.evaluated_with_last_human_evidence)
       .sort((a,b)=>b.distinct_tickets_with_human_contribution-a.distinct_tickets_with_human_contribution)
     return json({
       source:'clickdesk_verified_contributions',period:{start,end},scope:{team_id:teamId},
       status:'complementary_evidence_not_final',
-      note:'Participações verificadas não equivalem à titularidade final do ticket; não calcule percentual de avaliações com esse denominador. CSAT é somente da amostra de avaliações com atribuição pública comprovada e não é fechamento oficial.',
+      note:'SOMENTE DIAGNÓSTICO: a captura auxiliar contabiliza participações e avaliações incompletas; não calcular ou comparar CSAT, metas, volume de atendimento ou fechamento com esta fonte. A leitura operacional usa exclusivamente o ledger final.',
       ambiguous_review_tickets:conflictingReviewedTickets,
       analysts,
     })
