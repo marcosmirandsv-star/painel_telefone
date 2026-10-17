@@ -82,3 +82,13 @@ test('competência exibida é a competência do ledger e tendência Zendesk não
   assert.match(page,/a tendência histórica importada utiliza outra fonte/)
   assert.match(page,/const chat2LiveTeamRows = chat2SelectedPersistedAnalyst/)
 })
+
+test('Sem avaliações no recorte corrente não vira CSAT zero ou alerta de baixa satisfação',()=>{
+  const page=source('src/app/page.tsx')
+  assert.match(page,/liveChatAnalysis && metric\.reviews === 0 \? '—'/)
+  assert.match(page,/chatReportUsesClickDesk && selectedChatReportMetric\.reviews === 0 \? '—'/)
+  assert.match(page,/chat2SelectedMetric\.reviews === 0 \? '—'/)
+  assert.match(page,/Sem avaliações no período/)
+  assert.match(page,/não interpretar como CSAT zero/)
+  assert.match(page,/Acompanhar novas avaliações confirmadas/)
+})
