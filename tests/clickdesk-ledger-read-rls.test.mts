@@ -13,7 +13,7 @@ test('API do painel usa somente sessão validada para leitura de ledger e status
     assert.doesNotMatch(source,/homologationReadAdmin\(\)/,name)
     assert.match(source,/access\.admin/,name)
   }
-  assert.match(metrics,/loadRows\(access\.admin, filters\)/)
+  assert.match(metrics,/loadRows\(access\.admin, filters, access\.isManagement\)/)
   assert.match(metrics,/async function loadRows\(\s*admin:/)
   assert.match(history,/readFinalLedger\(admin, \{/)
   assert.match(tickets,/const admin = access\.admin/)
