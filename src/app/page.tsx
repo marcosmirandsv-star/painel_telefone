@@ -6242,8 +6242,10 @@ function ChatModuleDashboard({
           : 'Fechamento pede atenção: nenhum analista ficou plenamente elegível ao pódio.'
 
   const chatExecutiveStatus =
-    (!calculationMetrics.length || (liveChatAnalysis && totals.reviews === 0))
-      ? 'Sem dados no período'
+    (liveChatAnalysis && totals.reviews === 0 && totals.tickets > 0)
+      ? 'Sem avaliações no período'
+      : !calculationMetrics.length
+        ? 'Sem dados no período'
       : averageCsat >= 90 && averageReviews >= 25
         ? 'Operação saudável'
         : averageCsat < 85 || averageReviews < 20 || attention.length >= 3
@@ -6258,8 +6260,10 @@ function ChatModuleDashboard({
           ? 'text-rose-300'
           : 'text-amber-300'
   const chatMainAlert =
-    (!calculationMetrics.length || (liveChatAnalysis && totals.reviews === 0))
-      ? 'Selecione outro período ou aguarde a importação mensal.'
+    (liveChatAnalysis && totals.reviews === 0)
+      ? 'Ainda não existem avaliações atribuídas neste recorte; não interpretar como CSAT zero.'
+      : !calculationMetrics.length
+        ? 'Aguardando conciliação de tickets desta competência.'
       : averageCsat < 85
         ? 'A qualidade do atendimento tem espaço para evolução.'
         : averageCsat < 90
@@ -6273,8 +6277,10 @@ function ChatModuleDashboard({
                 : 'Equipe alinhada com os critérios principais do período.'
 
   const chatRecommendedAction =
-    (!calculationMetrics.length || (liveChatAnalysis && totals.reviews === 0))
-      ? 'Importar ou selecionar um mês com dados.'
+    (liveChatAnalysis && totals.reviews === 0)
+      ? 'Acompanhar novas avaliações confirmadas antes de concluir a leitura de qualidade.'
+      : !calculationMetrics.length
+        ? 'Selecione um período com dados confirmados.'
       : averageCsat < 90
         ? 'Revisar atendimentos negativos e direcionar feedback dos analistas em atenção.'
         : averageReviews < 25
