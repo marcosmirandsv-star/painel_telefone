@@ -14,6 +14,7 @@ import {
 } from '@/lib/chat-diagnostic'
 import { normalizeQualitativeAnalysis } from '@/lib/clickdesk-qualitative'
 import { chatBusinessDate, chatPeriodBounds, selectChatPresentationRow } from '@/lib/chat-presentation'
+import { sumChatVoteRows } from '@/lib/clickdesk-csat'
 
 // Homologação: IA qualitativa liberada no acesso individual com governança separada da gestão.
 const QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS = true
@@ -5779,9 +5780,19 @@ function ChatModuleDashboard({
   const chatAuditYear = Number(chatAuditYearText) || chatAuditNow.getFullYear()
   const chatAuditMonthNumber = Number(chatAuditMonthText) || chatAuditNow.getMonth() + 1
   const chatAuditPeriod = getChatMonthPeriod(chatAuditYear, chatAuditMonthNumber)
-  const clickDeskAuditMetrics: ChatMonthlyMetric[] = (clickDeskPersistedMetrics?.by_analyst ?? [])
+  const clickDeskAuditPeriodMatches =
+    clickDeskPersistedMetrics?.period?.start === chatAuditPeriod.start &&
+    Boolean(clickDeskPersistedMetrics?.period?.end) &&
+    String(clickDeskPersistedMetrics?.period?.end) >= chatAuditPeriod.start &&
+    String(clickDeskPersistedMetrics?.period?.end) <= chatAuditPeriod.end &&
+    !clickDeskPersistedMetrics?.erro
+  // Nunca rotular resultados de outra competência com o mês selecionado.
+  const clickDeskAuditMetrics: ChatMonthlyMetric[] = (
+    clickDeskAuditPeriodMatches ? clickDeskPersistedMetrics?.by_analyst ?? [] : []
+  )
     .filter((item) => {
       if (!item.analyst_id) return false
+      if (!analysts.some((analyst) => analyst.id === item.analyst_id && analyst.active)) return false
       return selectedTeamId === 'all' || item.team_id === selectedTeamId
     })
     .map((item) => {
@@ -5829,10 +5840,10 @@ function ChatModuleDashboard({
         chat_teams: { name: teamName },
       }
     })
-  const visibleMetrics =
-    chatActiveTab === 'analysis' && clickDeskAuditMetrics.length > 0
-      ? clickDeskAuditMetrics
-      : legacyVisibleMetrics
+  const liveChatAnalysis = chatActiveTab === 'analysis' && chatAuditPeriod.start >= '2026-10-01'
+  // Histórico importado do Zendesk continua disponível em competências antigas,
+  // mas nunca substitui uma leitura ClickDesk ausente no mês corrente.
+  const visibleMetrics = liveChatAnalysis ? clickDeskAuditMetrics : legacyVisibleMetrics
   const activePodiumExclusions = podiumExclusions.filter((exclusion) => {
     const matchesTeam = selectedTeamId === 'all' || exclusion.team_id === selectedTeamId
     const matchesPeriod =
@@ -5845,7 +5856,10 @@ function ChatModuleDashboard({
     return matchesTeam && matchesPeriod
   })
   const excludedChatAnalystIds = new Set(activePodiumExclusions.map((exclusion) => exclusion.analyst_id))
-  const calculationMetrics = visibleMetrics.filter((metric) => !excludedChatAnalystIds.has(metric.analyst_id))
+  // Exclusão do pódio não apaga avaliações reais do CSAT da equipe.
+  const calculationMetrics = liveChatAnalysis
+    ? visibleMetrics
+    : visibleMetrics.filter((metric) => !excludedChatAnalystIds.has(metric.analyst_id))
   const excludedChatMetricKeys = new Set(
     podiumExclusions
       .filter((exclusion) => selectedTeamId === 'all' || exclusion.team_id === selectedTeamId)
@@ -5870,8 +5884,15 @@ function ChatModuleDashboard({
     { tickets: 0, validTickets: 0, reviews: 0, positives: 0, negatives: 0, inactive: 0 },
   )
   const averageTickets = calculationMetrics.length ? round(totals.tickets / calculationMetrics.length) : 0
-  const averageCsat = calculateChatAverage(calculationMetrics, 'csat')
-  const averageReviews = calculateChatAverage(calculationMetrics, 'review_percentage')
+  const auditedChatTotals = liveChatAnalysis
+    ? sumChatVoteRows(calculationMetrics.map((metric) => ({
+        attendances: Number(metric.total_tickets),
+        positive_reviews: Number(metric.positive_reviews),
+        negative_reviews: Number(metric.negative_reviews),
+      })))
+    : null
+  const averageCsat = auditedChatTotals ? auditedChatTotals.csat : calculateChatAverage(calculationMetrics, 'csat')
+  const averageReviews = auditedChatTotals ? auditedChatTotals.reviewPercentage : calculateChatAverage(calculationMetrics, 'review_percentage')
   const averageSending = calculateChatAverage(calculationMetrics, 'sending_percentage')
   const chatReviewRate = totals.validTickets ? round((totals.reviews / totals.validTickets) * 100) : 0
   const chatSendingRate = totals.validTickets ? round(((totals.validTickets - totals.reviews) / totals.validTickets) * 100) : 0
@@ -6100,9 +6121,12 @@ function ChatModuleDashboard({
     clickDeskOfficialReportMetrics.length > 0
       ? clickDeskOfficialReportMetrics
       : clickDeskLiveReportMetrics
-  const chatReportUsesClickDesk = clickDeskChatReportMetrics.length > 0
-  const chatReportMetrics =
-    chatReportUsesClickDesk ? clickDeskChatReportMetrics : legacyChatReportMetrics
+  const chatReportCurrentClickDeskOnly = chatReportPeriod.start >= '2026-10-01'
+  const chatReportUsesClickDesk = chatReportCurrentClickDeskOnly || clickDeskChatReportMetrics.length > 0
+  // Em competência ClickDesk, jamais recorrer silenciosamente a importação antiga.
+  const chatReportMetrics = chatReportUsesClickDesk
+    ? clickDeskChatReportMetrics
+    : legacyChatReportMetrics
   const chatReportExcludedIds = new Set(
     podiumExclusions
       .filter((item) => {
@@ -7342,12 +7366,16 @@ function ChatModuleDashboard({
     selectedTeamId,
     isManagementUser,
   ])
-  const chat2VisibleMetrics = metrics.filter((metric) => {
-    const matchesTeam = selectedTeamId === 'all' || metric.team_id === selectedTeamId
-    const matchesPeriod =
-      metric.year === chat2SelectedPeriod.year && metric.month_number === chat2SelectedPeriod.monthNumber
-    return matchesTeam && matchesPeriod
-  })
+  // Visão de analista do mês corrente usa as MESMAS linhas do ledger
+  // que a visão individual; importações manuais são somente histórico.
+  const chat2VisibleMetrics = chat2SelectedPeriod.start >= '2026-10-01'
+    ? (chat2SelectedPeriod.start === chatAuditPeriod.start ? clickDeskAuditMetrics : [])
+    : metrics.filter((metric) => {
+        const matchesTeam = selectedTeamId === 'all' || metric.team_id === selectedTeamId
+        const matchesPeriod =
+          metric.year === chat2SelectedPeriod.year && metric.month_number === chat2SelectedPeriod.monthNumber
+        return matchesTeam && matchesPeriod
+      })
   const chat2CoveragePartial = clickDeskPersistedMetrics?.reconciliation?.coverage !== 'complete'
   const chat2PersistedAnalystRows = clickDeskPersistedMetrics?.by_analyst ?? []
   const chat2DiagnosticAnalystRows = (clickDeskConversationDiagnostic?.human_by_area_assignee ?? []).filter(
@@ -7370,10 +7398,8 @@ function ChatModuleDashboard({
     candidate_csat: item.csat,
     candidate_review_percentage: item.review_percentage,
   }))
-  const chat2LiveHumanRows =
-    chat2DiagnosticAnalystRows.length > 0
-      ? chat2DiagnosticAnalystRows
-      : chat2PersistedHumanRows
+  // Dados complementares não substituem a titularidade final para medir CSAT.
+  const chat2LiveHumanRows = chat2PersistedHumanRows
   const chat2SelectedLiveHuman =
     chat2LiveHumanRows.find((item) => `${item.area}::${item.name}` === chat2LiveAnalystKey) ??
     chat2LiveHumanRows[0] ??
@@ -7442,29 +7468,13 @@ function ChatModuleDashboard({
     chat2DailyDateFilter === 'all'
       ? null
       : chat2DailyRuler.find((item) => item.date === chat2DailyDateFilter && item.covered) ?? null
-  const chat2LivePositive =
-    chat2SelectedPersistedAnalyst?.positive_reviews ?? chat2SelectedLiveHuman?.positive_reviews ?? 0
-  const chat2LiveNegative =
-    chat2SelectedPersistedAnalyst?.negative_reviews ?? chat2SelectedLiveHuman?.negative_reviews ?? 0
-  const chat2LiveReviews =
-    chat2SelectedPersistedAnalyst?.reviews ?? chat2SelectedLiveHuman?.reviews ?? 0
-  const chat2LiveAttendances =
-    chat2SelectedPersistedAnalyst?.attendances ?? chat2SelectedLiveHuman?.count ?? 0
+  const chat2LivePositive = chat2SelectedPersistedAnalyst?.positive_reviews ?? 0
+  const chat2LiveNegative = chat2SelectedPersistedAnalyst?.negative_reviews ?? 0
+  const chat2LiveReviews = chat2SelectedPersistedAnalyst?.reviews ?? 0
+  const chat2LiveAttendances = chat2SelectedPersistedAnalyst?.attendances ?? 0
   const chat2TodayAttendances = chat2SelectedPersistedAnalyst?.today.attendances ?? 0
-  const chat2LiveCandidateCsat =
-    chat2SelectedPersistedAnalyst?.csat !== null && chat2SelectedPersistedAnalyst?.csat !== undefined
-      ? round(chat2SelectedPersistedAnalyst.csat)
-      : chat2SelectedLiveHuman?.candidate_csat === null || chat2SelectedLiveHuman?.candidate_csat === undefined
-        ? null
-        : round(chat2SelectedLiveHuman.candidate_csat)
-  const chat2LiveCandidateReviewPercentage =
-    chat2SelectedPersistedAnalyst?.review_percentage !== null &&
-    chat2SelectedPersistedAnalyst?.review_percentage !== undefined
-      ? round(chat2SelectedPersistedAnalyst.review_percentage)
-      : chat2SelectedLiveHuman?.candidate_review_percentage === null ||
-          chat2SelectedLiveHuman?.candidate_review_percentage === undefined
-        ? null
-        : round(chat2SelectedLiveHuman.candidate_review_percentage)
+  const chat2LiveCandidateCsat = chat2SelectedPersistedAnalyst?.csat ?? null
+  const chat2LiveCandidateReviewPercentage = chat2SelectedPersistedAnalyst?.review_percentage ?? null
   const chat2SelectedLiveAnalyst = chat2SelectedLiveHuman
     ? analysts.find((analyst) => normalizeChatText(analyst.name) === normalizeChatText(chat2SelectedLiveHuman.name)) ?? null
     : null
@@ -7482,9 +7492,9 @@ function ChatModuleDashboard({
   const chat2LiveCsatMet = chat2LiveDiagnostic.csatMet === true
   const chat2LiveReviewMet = chat2LiveDiagnostic.reviewMet === true
   const chat2LiveStatus = chat2LiveDiagnostic.statusLabel
-  const chat2LiveTeamRows = chat2SelectedLiveHuman
+  const chat2LiveTeamRows = chat2SelectedPersistedAnalyst
     ? chat2PersistedAnalystRows.filter(
-        (item) => normalizeChatText(item.area) === normalizeChatText(chat2SelectedLiveHuman.area),
+        (item) => item.team_id === chat2SelectedPersistedAnalyst.team_id,
       )
     : []
   const chat2LiveTeamTickets = chat2LiveTeamRows.reduce((sum, item) => sum + Number(item.attendances), 0)
@@ -7960,8 +7970,19 @@ function ChatModuleDashboard({
   const chat2TeamMetrics = chat2SelectedMetric
     ? chat2VisibleMetrics.filter((metric) => metric.team_id === chat2SelectedMetric.team_id)
     : []
-  const chat2TeamAverageCsat = calculateChatAverage(chat2TeamMetrics, 'csat')
-  const chat2TeamAverageReviews = calculateChatAverage(chat2TeamMetrics, 'review_percentage')
+  const chat2CurrentTeamTotals = chat2SelectedPeriod.start >= '2026-10-01'
+    ? sumChatVoteRows(chat2TeamMetrics.map((metric) => ({
+        attendances: Number(metric.total_tickets),
+        positive_reviews: Number(metric.positive_reviews),
+        negative_reviews: Number(metric.negative_reviews),
+      })))
+    : null
+  const chat2TeamAverageCsat = chat2CurrentTeamTotals
+    ? chat2CurrentTeamTotals.csat
+    : calculateChatAverage(chat2TeamMetrics, 'csat')
+  const chat2TeamAverageReviews = chat2CurrentTeamTotals
+    ? chat2CurrentTeamTotals.reviewPercentage
+    : calculateChatAverage(chat2TeamMetrics, 'review_percentage')
   const chat2TeamTickets = chat2TeamMetrics.reduce((sum, metric) => sum + Number(metric.total_tickets), 0)
   const chat2TeamAverageTickets = chat2TeamMetrics.length ? round(chat2TeamTickets / chat2TeamMetrics.length) : 0
   const chat2Ranking = buildChatRanking(chat2TeamMetrics, chat2TeamAverageTickets, new Set<string>())
@@ -8751,7 +8772,7 @@ function ChatModuleDashboard({
                   <MetricCard label="Atendimentos na competência" value={formatChatCount(chat2LiveAttendances)} />
                   <MetricCard label="Atendimentos hoje" value={formatChatCount(chat2TodayAttendances)} />
                   <MetricCard
-                    label="CSAT atual"
+                    label="CSAT acumulado da competência"
                     value={chat2LiveCandidateCsat === null ? '—' : formatChatPercent(chat2LiveCandidateCsat)}
                   />
                   <MetricCard label="Avaliações positivas" value={formatChatCount(chat2LivePositive)} tone="success" />
@@ -8766,6 +8787,11 @@ function ChatModuleDashboard({
                   />
                 </div>
 
+                <p className="mt-3 text-xs text-amber-200">
+                  {chat2SelectedPeriod.label} · último autor humano confirmado · {chat2LivePositive} positiva(s),
+                  {' '}{chat2LiveNegative} negativa(s) · {chat2LiveReviews} avaliação(ões).
+                  O percentual diário pode ser diferente do acumulado desta competência.
+                </p>
                 <ChatPerformanceDiagnosticPanel diagnostic={chat2LiveDiagnostic} />
 
                 {clickDeskPersistedMetrics?.period && (
@@ -11645,8 +11671,16 @@ function ChatModuleDashboard({
           <MetricCard label="Válidos" value={formatChatCount(totals.validTickets)} />
           <MetricCard label="Avaliações" value={`${formatChatCount(totals.reviews)} (${formatChatPercent(chatReviewRate)})`} />
           <MetricCard label="Sem avaliação" value={`${formatChatCount(Math.max(totals.validTickets - totals.reviews, 0))} (${formatChatPercent(chatSendingRate)})`} />
-          <MetricCard label="CSAT consolidado" value={formatChatPercent(averageCsat)} />
+          <MetricCard label={liveChatAnalysis ? "CSAT consolidado por avaliações" : "CSAT médio do histórico"} value={averageCsat === null ? '—' : formatChatPercent(averageCsat)} />
         </div>
+        {liveChatAnalysis && (
+          <p className="mt-3 text-xs text-amber-200">
+            ClickDesk · {chatAuditPeriod.label} · amostra de autoria final auditada.
+            CSAT consolidado = {totals.positives} avaliações positivas / {totals.reviews} avaliações recebidas.
+            Nunca é a média simples dos percentuais individuais.
+            A competência permanece em conferência até a conciliação histórica completa.
+          </p>
+        )}
 
         <div className="mt-5 grid gap-4 lg:grid-cols-3">
           <div className="rounded-lg bg-slate-900 p-4 text-sm text-slate-300">
