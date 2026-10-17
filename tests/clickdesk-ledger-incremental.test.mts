@@ -52,7 +52,7 @@ test('Painel gestor e acesso individual filtram o mesmo ledger por analyst_id', 
   const server=source('src/lib/clickdesk-ledger-server.ts')
   assert.match(metrics,/const filters = access\.isManagement/)
   assert.match(metrics,/analystId: access\.chatAnalystId/)
-  assert.match(metrics,/loadRows\(access\.admin, filters\)/)
+  assert.match(metrics,/loadRows\(access\.admin, filters, access\.isManagement\)/)
   assert.match(server,/\.eq\('analyst_id', filters\.analystId\)/)
   assert.match(metrics,/const rows: DailyMetricRow\[\] = currentTickets\.map/)
   assert.match(metrics,/positive_reviews: Number\(ticket\.satisfaction_label === 'positive'\)/)
