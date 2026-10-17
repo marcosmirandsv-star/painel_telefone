@@ -5,7 +5,7 @@ import {
   json,
 } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
-import { readFinalLedger, readLedgerCoverage } from '@/lib/clickdesk-ledger-server'
+import { readFinalLedger, readLedgerCoverageForAccess } from '@/lib/clickdesk-ledger-server'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -356,7 +356,7 @@ export async function GET(request: Request) {
       points: withDeltas,
       official_months: withDeltas.filter((item) => item.source === 'official').length,
       live_month_included: withDeltas.some((item) => item.source === 'live'),
-      live_coverage: (await readLedgerCoverage(admin)).complete ? 'complete' : 'audit_sample_only',
+      live_coverage: (await readLedgerCoverageForAccess(admin, access.isManagement)).complete ? 'complete' : 'audit_sample_only',
     })
   })
 }
