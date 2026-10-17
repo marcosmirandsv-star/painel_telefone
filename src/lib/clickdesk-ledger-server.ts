@@ -73,6 +73,25 @@ export async function readLedgerCoverage(admin: SupabaseClient) {
   }
 }
 
+/**
+ * Global candidate counts are management-only (RLS). Personal access
+ * must not query or expose the organization-wide coverage records.
+ * Until exhaustive reconciliation is attested, personal values are
+ * explicitly partial rather than silently considered complete.
+ */
+export async function readLedgerCoverageForAccess(
+  admin: SupabaseClient,
+  isManagement: boolean,
+) {
+  if (isManagement) return readLedgerCoverage(admin)
+  return {
+    complete: false,
+    entries: [],
+    verified_at: null,
+    note: 'Cobertura da competência ainda em conferência; o acesso individual contém apenas tickets próprios confirmados.',
+  }
+}
+
 export function asFinalTicket(row: LedgerRow, name: string): FinalTicket {
   return {
     ticket_id: row.ticket_id,
