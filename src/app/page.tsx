@@ -5891,8 +5891,8 @@ function ChatModuleDashboard({
         negative_reviews: Number(metric.negative_reviews),
       })))
     : null
-  const averageCsat = auditedChatTotals ? auditedChatTotals.csat : calculateChatAverage(calculationMetrics, 'csat')
-  const averageReviews = auditedChatTotals ? auditedChatTotals.reviewPercentage : calculateChatAverage(calculationMetrics, 'review_percentage')
+  const averageCsat = auditedChatTotals ? (auditedChatTotals.csat ?? 0) : calculateChatAverage(calculationMetrics, 'csat')
+  const averageReviews = auditedChatTotals ? (auditedChatTotals.reviewPercentage ?? 0) : calculateChatAverage(calculationMetrics, 'review_percentage')
   const averageSending = calculateChatAverage(calculationMetrics, 'sending_percentage')
   const chatReviewRate = totals.validTickets ? round((totals.reviews / totals.validTickets) * 100) : 0
   const chatSendingRate = totals.validTickets ? round(((totals.validTickets - totals.reviews) / totals.validTickets) * 100) : 0
@@ -9072,11 +9072,11 @@ function ChatModuleDashboard({
                     <div className="mt-4 space-y-3 text-sm">
                       <div className="flex items-center justify-between gap-4">
                         <span className="text-slate-400">CSAT do time</span>
-                        <strong className="tabular-nums">{formatChatPercent(chat2TeamAverageCsat)}</strong>
+                        <strong className="tabular-nums">{chat2TeamAverageCsat === null ? '—' : formatChatPercent(chat2TeamAverageCsat)}</strong>
                       </div>
                       <div className="flex items-center justify-between gap-4">
                         <span className="text-slate-400">Avaliações do time</span>
-                        <strong className="tabular-nums">{formatChatPercent(chat2TeamAverageReviews)}</strong>
+                        <strong className="tabular-nums">{chat2TeamAverageReviews === null ? '—' : formatChatPercent(chat2TeamAverageReviews)}</strong>
                       </div>
                       <div className="flex items-center justify-between gap-4">
                         <span className="text-slate-400">Média de atendimentos</span>
@@ -11671,7 +11671,7 @@ function ChatModuleDashboard({
           <MetricCard label="Válidos" value={formatChatCount(totals.validTickets)} />
           <MetricCard label="Avaliações" value={`${formatChatCount(totals.reviews)} (${formatChatPercent(chatReviewRate)})`} />
           <MetricCard label="Sem avaliação" value={`${formatChatCount(Math.max(totals.validTickets - totals.reviews, 0))} (${formatChatPercent(chatSendingRate)})`} />
-          <MetricCard label={liveChatAnalysis ? "CSAT consolidado por avaliações" : "CSAT médio do histórico"} value={averageCsat === null ? '—' : formatChatPercent(averageCsat)} />
+          <MetricCard label={liveChatAnalysis ? "CSAT consolidado por avaliações" : "CSAT médio do histórico"} value={liveChatAnalysis && totals.reviews === 0 ? '—' : formatChatPercent(averageCsat)} />
         </div>
         {liveChatAnalysis && (
           <p className="mt-3 text-xs text-amber-200">
@@ -11730,7 +11730,7 @@ function ChatModuleDashboard({
             <tfoot className="border-t border-cyan-400/30 font-semibold text-cyan-100">
               <tr>
                 <td className="px-3 py-3" colSpan={2}>Total do filtro</td>
-                <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatPercent(averageCsat)}</td>
+                <td className="whitespace-nowrap px-3 py-3 tabular-nums">{liveChatAnalysis && totals.reviews === 0 ? '—' : formatChatPercent(averageCsat)}</td>
                 <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatPercent(chatReviewRate)}</td>
                 <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatCount(totals.tickets)}</td>
                 <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatCount(totals.validTickets)}</td>
