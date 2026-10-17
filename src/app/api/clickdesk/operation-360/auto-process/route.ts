@@ -81,7 +81,7 @@ export async function POST(request: Request) {
     const end =
       typeof body.end === 'string' && body.end.trim()
         ? body.end.trim()
-        : start
+        : today
     const requestedLimit =
       typeof body.limit === 'number' && Number.isFinite(body.limit)
         ? Math.trunc(body.limit)
