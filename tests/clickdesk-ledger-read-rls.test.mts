@@ -30,3 +30,14 @@ test('políticas preservam leitura por titular e nunca liberam dados de terceiro
   assert.match(sql,/revoke insert, update, delete, truncate, references, trigger/)
   assert.doesNotMatch(sql,/grant all|grant .* to anon|for select to anon|using\s*\(\s*true\s*\)/i)
 })
+
+test('consultas de pendências são limitadas aos IDs visíveis, não varrem toda a base',()=>{
+  const ledger=read('src/lib/clickdesk-ledger-server.ts')
+  assert.match(ledger,/const ids = records\.slice\(start, start \+ 200\)\.map\(row => row\.ticket_id\)/)
+  assert.match(ledger,/\.in\('ticket_id', ids\)/)
+  assert.match(ledger,/if \(records\.length === 0\) return \[\]/)
+  assert.match(ledger,/return records\.filter\(row => !pendingIds\.has\(row\.ticket_id\)\)/)
+  assert.doesNotMatch(ledger,/pendingOffset\s*<\s*20000/)
+  assert.match(ledger,/\.eq\('analyst_id', filters\.analystId\)/)
+  assert.match(ledger,/\.eq\('team_id', filters\.teamId\)/)
+})
