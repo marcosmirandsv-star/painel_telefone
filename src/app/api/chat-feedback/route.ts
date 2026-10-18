@@ -9,6 +9,7 @@ type ChatFeedbackRequest = {
   feedbackStyle?: 'coach' | 'sare' | 'mimo'
   feedbackGoal?: 'recognition' | 'courseCorrection' | 'maintenance' | 'development'
   generationMode?: 'generate' | 'improve'
+  periodStatus?: 'open' | 'closed'
   periodLabel?: string
   managerNotes?: string
   fallbackText?: string
@@ -285,9 +286,11 @@ ${volumeRule}
 - Evite frases prontas como "patamar de reconhecimento", "excelência na resolução", "grande confiabilidade" e "manter consistência" quando não houver uma explicação concreta adequada ao caso.
 - Em modo de melhoria, reorganize e reescreva de verdade; não faça apenas substituições de palavras.
 - Não termine frase pela metade. Entregue um texto completo, pronto para colar no relatório.
+- Quando a competência estiver em andamento, use presente e qualifique os indicadores como parciais. Diga "até agora", "neste acompanhamento" ou equivalente. Não escreva "fechou outubro", "fechamos outubro", "encerrou a competência", "CSAT fechou" ou equivalente para o mês atual.
 - Mantenha entre 120 e 190 palavras. Prefira especificidade, naturalidade e direção prática em vez de repetir o painel em texto.
 - ${styleInstructions[feedbackStyle]}
 
+Situação da competência: ${body.periodStatus === 'open' ? 'EM ANDAMENTO. Use dados parciais até agora. Não escreva que o mês fechou, encerrou ou foi concluído. Não use passado de fechamento para a competência atual.' : 'Siga o período informado, sem presumir um fechamento não demonstrado.'}
 Periodo: ${body.periodLabel ?? 'Periodo não informado'}
 Analista: ${metric?.analystName}
 Equipe: ${metric?.teamName ?? 'Equipe não informada'}

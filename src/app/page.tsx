@@ -4047,6 +4047,17 @@ function ChatAnalystPortal({
     }
   }, [analyst?.id, monthStart, monthEnd])
 
+  function changeRoutineMonth(value: string) {
+    if (!/^20\d{2}-(0[1-9]|1[0-2])$/.test(value) || value === monthKey) return
+    setMonthKey(value)
+    setMetrics(null)
+    setHistory(null)
+    setSelectedRoutineDate(null)
+    setDailyTickets(null)
+    setOpenQualitativeTicketId(null)
+    setQualitativeByTicket({})
+  }
+
   async function analyzeQualitativeTicket(ticketId: string, force = false) {
     setOpenQualitativeTicketId(ticketId)
     setQualitativeLoadingTicketId(ticketId)
@@ -4209,13 +4220,9 @@ function ChatAnalystPortal({
         </div>
         <label className="mt-3 flex items-center gap-3 text-sm text-slate-400">
           Competência
-          <input type="month" aria-label="Competência do meu desempenho" value={monthKey} max={businessToday.slice(0, 7)} className="form-input max-w-48" onChange={(event) => {
-            if (!event.target.value) return
-            setMonthKey(event.target.value)
-            setSelectedRoutineDate(null)
-            setDailyTickets(null)
-            setOpenQualitativeTicketId(null)
-          }} />
+          <input type="month" aria-label="Competência do meu desempenho" value={monthKey} max={businessToday.slice(0, 7)} className="form-input max-w-48"
+            onInput={event => changeRoutineMonth(event.currentTarget.value)}
+            onChange={event => changeRoutineMonth(event.currentTarget.value)} />
         </label>
         <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -7233,7 +7240,7 @@ function ChatModuleDashboard({
       return
     }
 
-    setChatFeedbackDraft(chatReportFeedbackSuggestion)
+    setChatFeedbackDraft(chatReportInProgress ? chatReportFeedbackSuggestion.replace(/encerra a competência/g, 'apresenta até agora na competência') : chatReportFeedbackSuggestion)
     setChatExportMessage('Base factual gerada. Você pode revisá-la ou pedir à IA uma devolutiva personalizada.')
   }
 
@@ -7265,7 +7272,8 @@ function ChatModuleDashboard({
           feedbackStyle: chatFeedbackStyle,
           feedbackGoal: chatFeedbackGoal,
           generationMode: 'generate',
-          periodLabel: chatReportPeriod.label,
+          periodLabel: chatReportInProgress ? chatReportPeriod.label + ' · em andamento' : chatReportPeriod.label,
+          periodStatus: chatReportInProgress ? 'open' : 'closed',
           managerNotes: chatManagerNotes,
           fallbackText: chatReportFeedbackSuggestion,
           averageTickets: chatReportAverageTickets,
@@ -7341,7 +7349,8 @@ function ChatModuleDashboard({
           feedbackStyle: chatFeedbackStyle,
           feedbackGoal: chatFeedbackGoal,
           generationMode: 'improve',
-          periodLabel: chatReportPeriod.label,
+          periodLabel: chatReportInProgress ? chatReportPeriod.label + ' · em andamento' : chatReportPeriod.label,
+          periodStatus: chatReportInProgress ? 'open' : 'closed',
           managerNotes: chatManagerNotes,
           fallbackText: baseFeedback,
           averageTickets: chatReportAverageTickets,
@@ -7392,7 +7401,8 @@ function ChatModuleDashboard({
 
     return {
       metric: selectedChatReportMetric,
-      periodLabel: chatReportPeriod.label,
+      periodLabel: chatReportInProgress ? chatReportPeriod.label + ' · em andamento' : chatReportPeriod.label,
+          periodStatus: chatReportInProgress ? 'open' : 'closed',
       averageTickets: chatReportAverageTickets,
       podiumPosition: selectedChatPodiumPosition,
       monthlyHistory,
