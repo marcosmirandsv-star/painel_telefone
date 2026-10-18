@@ -2,6 +2,7 @@ import { ApiError, authorizeClickDeskSessionClient, handle, json } from '@/lib/i
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 import { readFinalLedger, readLedgerCoverageForAccess } from '@/lib/clickdesk-ledger-server'
 import { randomUUID } from 'node:crypto'
+import { homologationReadAdmin } from '@/lib/clickdesk-final-owner-server'
 import { partitionChatLedgerByActiveRoster } from '@/lib/clickdesk-active-analysts'
 
 export const runtime = 'nodejs'
@@ -277,15 +278,17 @@ export async function GET(request: Request) {
     const { rows, coverage, admin, excludedInactive } = await loadRows(access.admin, filters, access.isManagement)
 
     stage = 'sync_status'
-    const latestSync = await admin
-      .from('clickdesk_chat_sync_runs')
-      .select('id,status,period_start,period_end,trigger_mode,pages_scanned,rows_upserted,matched_rows,unmatched_rows,finished_at')
-      .eq('status', 'completed')
-      .lte('period_start', filters.end)
-      .gte('period_end', filters.start)
-      .order('finished_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+    // A RLS mantém o histórico operacional global restrito à gestão.
+    // Após autenticar o analista, exponha apenas o horário da última sincronização.
+    const latestSync = access.isManagement
+      ? await admin.from('clickdesk_chat_sync_runs')
+        .select('id,status,period_start,period_end,trigger_mode,pages_scanned,rows_upserted,matched_rows,unmatched_rows,finished_at')
+        .eq('status', 'completed').lte('period_start', filters.end).gte('period_end', filters.start)
+        .order('finished_at', { ascending: false }).limit(1).maybeSingle()
+      : await homologationReadAdmin().from('clickdesk_chat_sync_runs')
+        .select('finished_at')
+        .eq('status', 'completed').lte('period_start', filters.end).gte('period_end', filters.start)
+        .order('finished_at', { ascending: false }).limit(1).maybeSingle()
     if (latestSync.error) throw new ApiError(503, 'Não foi possível consultar o status da sincronização.')
 
     const apprenticeRows = rows.filter((row) => row.identity_role === 'apprentice')
