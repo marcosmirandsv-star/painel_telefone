@@ -4209,8 +4209,7 @@ function ChatAnalystPortal({
         </div>
         <label className="mt-3 flex items-center gap-3 text-sm text-slate-400">
           Competência
-          <input type="month" aria-label="Competência do meu desempenho"
-                max={businessToday.slice(0, 7)} value={monthKey} max={businessToday.slice(0, 7)} className="form-input max-w-48" onChange={(event) => {
+          <input type="month" aria-label="Competência do meu desempenho" value={monthKey} max={businessToday.slice(0, 7)} className="form-input max-w-48" onChange={(event) => {
             if (!event.target.value) return
             setMonthKey(event.target.value)
             setSelectedRoutineDate(null)
