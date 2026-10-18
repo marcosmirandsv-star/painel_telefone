@@ -146,12 +146,16 @@ export async function GET(request: Request) {
 
     const [ledger, roster, ledgerCoverage] = await Promise.all([
       readFinalLedger(access.admin, { start, end, analystId, teamId }),
-      access.admin.from('chat_analysts').select('id,name'),
+      access.admin.from('chat_analysts').select('id,name,active'),
       readLedgerCoverage(access.admin),
     ])
     if (roster.error) throw new ApiError(503, 'Cadastro de analistas indisponível.')
     const nameById = new Map((roster.data ?? []).map(item => [item.id, item.name]))
+    const activeIds = new Set((roster.data ?? []).filter(item => item.active).map(item => item.id))
+    // Ao consultar um ex-integrante explicitamente, a gestão acessa o histórico.
+    // Na análise geral, colaboradores inativos não distorcem o retrato atual.
     const evaluated: AttendanceRow[] = ledger
+      .filter(item => Boolean(analystId) || activeIds.has(item.analyst_id))
       .filter(item => item.satisfaction_label === 'positive' || item.satisfaction_label === 'negative')
       .map(item => ({
         clickdesk_ticket_id: item.ticket_id,
@@ -359,7 +363,7 @@ export async function GET(request: Request) {
         verified_at: ledgerCoverage.verified_at,
         note: ledgerCoverage.complete
           ? 'Atendimentos com autoria final confirmada.'
-          : 'Amostra parcial: outros tickets avaliados ainda aguardam reconciliação. Não é fechamento oficial.',
+          : 'Outubro ClickDesk em conciliação: alguns tickets ainda não têm autoria final comprovada. A análise 360º pendente NÃO impede a nota positiva ou negativa de compor o CSAT.',
       },
       totals: {
         evaluated: evaluated.length,
