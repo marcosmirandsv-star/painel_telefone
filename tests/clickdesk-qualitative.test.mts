@@ -222,3 +222,23 @@ test('descarte editorial preserva o cache; análise antiga não descartada é at
   assert.equal(qualitativeAnalysisVersion({ _analysis_version: QUALITATIVE_ANALYSIS_VERSION }), QUALITATIVE_ANALYSIS_VERSION)
   assert.equal(qualitativeAnalysisVersion({}), 0)
 })
+
+
+test('nota positiva recebe reconhecimento contextual e normalização preserva a origem', () => {
+  const raw = {
+    initial_sentiment: 'negative', final_sentiment: 'positive',
+    primary_cause: {category:'system_or_product',summary:'Atualização de notas após erro na consulta',confidence:'medium'},
+    human_influence: {classification:'improved',summary:'Solicitou o PDF, atualizou a nota e o cliente confirmou que deu certo.',confidence:'high'},
+    controllability: {classification:'mixed',summary:'Problema técnico com resolução pelo analista'},
+    analyst_takeaway: {kind:'maintain',summary:'Solicitar o PDF e confirmar a atualização com o cliente.',confidence:'high'},
+    evidence_summary: ['Cliente confirmou que deu certo e agradeceu.'],
+  }
+  const positive = normalizeQualitativeAnalysis(raw, 'positive')
+  assert.match(positive.cx_coaching.negative_rating_hypothesis, /avaliação registrada é positiva/)
+  assert.doesNotMatch(positive.cx_coaching.negative_rating_hypothesis, /avaliado negativamente|nota negativa/)
+  assert.doesNotMatch(positive.cx_coaching.customer_experience_impact, /frustração|insegurança/)
+  assert.equal(positive.cx_coaching.source, 'contextual_from_existing_analysis')
+  const repeated = normalizeQualitativeAnalysis(positive, 'positive')
+  assert.equal(repeated.cx_coaching.source, 'contextual_from_existing_analysis')
+  assert.deepEqual(repeated.cx_coaching, positive.cx_coaching)
+})

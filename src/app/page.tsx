@@ -3292,7 +3292,7 @@ function Operation360PatternList({
 }
 
 function QualitativeAnalysisCard({
-  result,
+  result: rawResult,
   onReanalyze,
   reanalyzing = false,
   audience = 'management',
@@ -3302,6 +3302,9 @@ function QualitativeAnalysisCard({
   reanalyzing?: boolean
   audience?: 'management' | 'analyst'
 }) {
+  const result = rawResult.analysis
+    ? { ...rawResult, analysis: normalizeQualitativeAnalysis(rawResult.analysis, rawResult.satisfaction_label) }
+    : rawResult
   if (result.error) {
     return (
       <div className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-sm text-amber-100">
@@ -3504,7 +3507,7 @@ function QualitativeAnalysisCard({
       <div className="mt-3 space-y-3 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.04] p-4 text-sm">
         <p className="text-xs font-bold uppercase tracking-[0.12em] text-cyan-200">Coaching de experiência do cliente · causa e efeito</p>
         <div>
-          <strong className="text-slate-100">Por que a nota pode ter sido negativa?</strong>
+          <strong className="text-slate-100">{result.satisfaction_label === 'positive' ? 'O que pode explicar a avaliação positiva?' : 'Por que a nota pode ter sido negativa?'}</strong>
           <p className="mt-1 leading-6 text-slate-300">{result.analysis.cx_coaching.negative_rating_hypothesis}</p>
         </div>
         <div>
@@ -3938,7 +3941,8 @@ function ChatAnalystPortal({
 
   const businessToday = chatBusinessDate()
   const [monthKey, setMonthKey] = useState(() => businessToday.slice(0, 7))
-  const { start: monthStart, end: monthEnd } = chatPeriodBounds(monthKey)
+  const { start: monthStart, end: calendarMonthEnd } = chatPeriodBounds(monthKey)
+  const monthEnd = calendarMonthEnd < businessToday ? calendarMonthEnd : businessToday
   const monthLabel = new Intl.DateTimeFormat('pt-BR', {
     month: 'long',
     year: 'numeric',
@@ -4205,7 +4209,8 @@ function ChatAnalystPortal({
         </div>
         <label className="mt-3 flex items-center gap-3 text-sm text-slate-400">
           Competência
-          <input type="month" aria-label="Competência do meu desempenho" value={monthKey} max={businessToday.slice(0, 7)} className="form-input max-w-48" onChange={(event) => {
+          <input type="month" aria-label="Competência do meu desempenho"
+                max={businessToday.slice(0, 7)} value={monthKey} max={businessToday.slice(0, 7)} className="form-input max-w-48" onChange={(event) => {
             if (!event.target.value) return
             setMonthKey(event.target.value)
             setSelectedRoutineDate(null)
@@ -7118,7 +7123,7 @@ function ChatModuleDashboard({
         ticketId: item.clickdesk_ticket_id,
         satisfactionLabel: item.satisfaction_label,
         occurredDate: item.occurred_date,
-        analysis: normalizeQualitativeAnalysis(item.analysis),
+        analysis: normalizeQualitativeAnalysis(item.analysis, item.satisfaction_label),
       })))
       if ((result.data ?? []).length < 500) break
       if (offset + 500 >= 10000) throw new Error('Seleção de feedback excedeu o limite seguro de consulta.')

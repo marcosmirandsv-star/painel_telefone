@@ -230,7 +230,7 @@ function buildPrompt(body: ChatFeedbackRequest) {
       ticket_id: item.ticketId ?? null,
       satisfaction: item.satisfactionLabel ?? 'sem classificação',
       date: item.occurredDate ?? 'data não informada',
-      analysis: normalizeQualitativeAnalysis(item.analysis),
+      analysis: normalizeQualitativeAnalysis(item.analysis, item.satisfactionLabel),
     }))
   const qualitativeCoverage =
     qualitativeContext && Number(qualitativeContext.analyzedCount) > 0

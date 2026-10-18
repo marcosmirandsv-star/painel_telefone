@@ -228,7 +228,7 @@ FORMATO EXATO
   "evidence_summary": [],
   "limitations": [],
   "cx_coaching": {
-    "negative_rating_hypothesis": "Hipótese objetiva sobre por que a experiência pode ter recebido nota negativa, distinguindo motivo declarado de motivo não comprovado.",
+    "negative_rating_hypothesis": "Hipótese objetiva para a avaliação recebida: se positiva, descreva o que pode ter contribuído para a satisfação; se negativa, o que pode ter causado insatisfação. Nunca trate uma nota positiva como negativa. Distinga motivo declarado de motivo não comprovado.",
     "customer_experience_impact": "Impacto possível da ocorrência na percepção do cliente; só atribua emoção expressa na conversa.",
     "observable_analyst_behavior": "O que o analista efetivamente fez ou disse, sem julgamento de caráter.",
     "practice_to_improve": "Um procedimento de CX prático e específico para atendimento semelhante, sem presumir que tenha faltado neste.",

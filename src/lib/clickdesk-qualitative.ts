@@ -180,7 +180,7 @@ function stringArray(value: unknown, maxItems: number, maxLength = 500) {
     .slice(0, maxItems)
 }
 
-export function normalizeQualitativeAnalysis(value: unknown): ClickDeskQualitativeAnalysis {
+export function normalizeQualitativeAnalysis(value: unknown, satisfactionLabel?: string | null): ClickDeskQualitativeAnalysis {
   const source = record(value)
   const cause = record(source.primary_cause)
   const influence = record(source.human_influence)
@@ -272,14 +272,19 @@ export function normalizeQualitativeAnalysis(value: unknown): ClickDeskQualitati
 
   // A oportunidade de experiência é diferente de afirmar um erro do analista.
   // Análises anteriores continuam legíveis com uma sugestão contextual explícita.
-  const enhanced = record(source.cx_coaching)
+  const preservedCx = record(source.cx_coaching)
+  // Não promover uma sugestão contextual a leitura gerada ao normalizar novamente.
+  const enhanced = preservedCx.source === 'contextual_from_existing_analysis' ? {} : preservedCx
+  const positiveRating = satisfactionLabel === 'positive'
   const previousSummary = shortText(cause.summary, 'o problema relatado no atendimento')
   const closureByInactivity = [
     ...stringArray(source.limitations, 5),
     ...stringArray(source.evidence_summary, 3),
     shortText(influence.summary, ''),
   ].some(item => /inatividade|encerrad[oa] automaticamente|sem confirma[cç][aã]o de solu[cç][aã]o|não é possível saber se/i.test(item))
-  const contextualHypothesis = closureByInactivity
+  const contextualHypothesis = positiveRating
+    ? `A avaliação registrada é positiva. A atuação observada foi: ${shortText(influence.summary, 'consulte as evidências do atendimento')}. Essa relação é uma hipótese de reconhecimento; não é um motivo declarado pelo cliente.`
+    : closureByInactivity
     ? 'O cliente pode ter ficado sem confirmação de que o problema foi resolvido após o encerramento por inatividade. É uma hipótese para a nota, não um motivo declarado pelo cliente.'
     : `O cliente pode ter avaliado negativamente a dificuldade associada a ${previousSummary}. O motivo exato da nota não foi declarado na evidência disponível.`
   const contextualPractice = closureByInactivity
@@ -291,10 +296,12 @@ export function normalizeQualitativeAnalysis(value: unknown): ClickDeskQualitati
     ? 'Entendi que a emissão está impedida. Após os procedimentos orientados, você consegue fazer um novo teste? Se o erro persistir, informe o código técnico do retorno para seguirmos. Deixarei os passos registrados caso seja necessário retomar.'
     : 'Quero confirmar se a orientação ajudou. Você consegue testar agora? Caso não resolva, vamos registrar o retorno técnico e definir o próximo passo.'
   const cxCoaching: QualitativeCxCoaching = {
-    negative_rating_hypothesis: shortText(enhanced.negative_rating_hypothesis, contextualHypothesis),
+    negative_rating_hypothesis: shortText(positiveRating && /negativ/i.test(String(enhanced.negative_rating_hypothesis ?? '')) ? '' : enhanced.negative_rating_hypothesis, contextualHypothesis),
     customer_experience_impact: shortText(
       enhanced.customer_experience_impact,
-      closureByInactivity ? 'Possível insegurança pela falta de desfecho confirmado; percepção não explicitamente comprovada.' : 'Possível frustração com o problema, sem evidência direta do motivo da nota.',
+      positiveRating
+        ? 'A avaliação registra satisfação. Confira nas evidências o que o cliente confirmou, agradeceu ou elogiou antes de atribuir o resultado a uma conduta específica.'
+        : closureByInactivity ? 'Possível insegurança pela falta de desfecho confirmado; percepção não explicitamente comprovada.' : 'Possível frustração com o problema, sem evidência direta do motivo da nota.',
     ),
     observable_analyst_behavior: shortText(enhanced.observable_analyst_behavior, shortText(influence.summary, 'A conversa não permite atribuir conduta específica ao analista.')),
     practice_to_improve: shortText(enhanced.practice_to_improve, contextualPractice),
