@@ -905,6 +905,7 @@ type ChatQualitativeFeedbackContext = {
   negativeTotal: number
   positiveTotal: number
   findings: {
+    ticketId?: string
     satisfactionLabel: string | null
     occurredDate: string | null
     analysis: NonNullable<ClickDeskQualitativeResponse['analysis']>
@@ -3358,15 +3359,15 @@ function QualitativeAnalysisCard({
             >
               {audience === 'analyst'
                 ? result.validation_status === 'approved'
-                  ? 'Leitura validada'
+                  ? 'Selecionada para feedback'
                   : result.validation_status === 'rejected'
-                    ? 'Leitura não usada na consolidação'
-                    : 'Leitura em revisão para consolidação'
+                    ? 'Descartada do feedback'
+                    : 'Disponível para seleção de feedback'
                 : result.validation_status === 'approved'
-                  ? 'Validada pela gestão'
+                  ? 'Selecionada para feedback'
                   : result.validation_status === 'rejected'
-                    ? 'Descartada da consolidação'
-                    : 'Aguardando validação da gestão'}
+                    ? 'Descartada do feedback'
+                    : 'Ainda não selecionada para feedback'}
             </span>
           )}
         </div>
@@ -3543,45 +3544,40 @@ function QualitativeValidationActions({
   ticketId: string
   status?: 'pending' | 'approved' | 'rejected'
   validating: boolean
-  onValidate: (ticketId: string, status: 'approved' | 'rejected') => void
+  onValidate: (ticketId: string, status: 'pending' | 'approved' | 'rejected') => void
 }) {
-  if (status === 'approved' || status === 'rejected') {
-    return (
-      <div className="mt-3 rounded-lg border border-white/10 bg-slate-950/30 px-3 py-3 text-sm">
-        <strong className={status === 'approved' ? 'text-emerald-200' : 'text-rose-200'}>
-          {status === 'approved'
-            ? 'Leitura aprovada para consolidação'
-            : 'Leitura descartada da consolidação'}
-        </strong>
-      </div>
-    )
-  }
 
   return (
     <div className="mt-3 flex flex-col gap-3 rounded-lg border border-white/10 bg-slate-950/30 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <strong className="text-sm text-slate-100">Esta leitura aguarda sua validação</strong>
+        <strong className="text-sm text-slate-100">{status === 'approved' ? 'Selecionada para feedback' : status === 'rejected' ? 'Descartada do feedback' : 'Disponível para selecionar quando for útil'}</strong>
         <p className="mt-1 text-xs leading-5 text-slate-500">
-          Aprove somente se contexto, influência, controle e evidências fizerem sentido diante do atendimento real.
+          Escolha os tickets que deseja usar nos próximos relatórios de feedback. A escolha é opcional, pode ser revista e não altera a nota do cliente, o CSAT ou outros KPIs.
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
           className="small-button"
-          disabled={validating}
+          disabled={validating || status === 'approved'}
           onClick={() => onValidate(ticketId, 'approved')}
         >
-          {validating ? 'Salvando...' : 'Aprovar leitura'}
+          {validating ? 'Salvando...' : 'Selecionar para feedback'}
         </button>
         <button
           type="button"
           className="danger-button"
-          disabled={validating}
+          disabled={validating || status === 'rejected'}
           onClick={() => onValidate(ticketId, 'rejected')}
         >
-          Descartar
+          Descartar do feedback
         </button>
+        {status && status !== 'pending' && (
+          <button type="button" className="small-button" disabled={validating}
+            onClick={() => onValidate(ticketId, 'pending')}>
+            Limpar escolha
+          </button>
+        )}
       </div>
     </div>
   )
@@ -3796,6 +3792,130 @@ function ChatSharedPerformanceSummary({ metric, csatGoal }: {
             </div>
 
 
+  )
+}
+
+
+function ManagementDailyFeedback({
+  analystId, days, onSelectionSaved,
+}: {
+  analystId: string
+  days: Array<ClickDeskPersistedAggregate & { date: string }>
+  onSelectionSaved: () => void
+}) {
+  const [date, setDate] = useState('')
+  const [tickets, setTickets] = useState<ClickDeskDailyTicketResponse | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [busyTicket, setBusyTicket] = useState('')
+  const [results, setResults] = useState<Record<string, ClickDeskQualitativeResponse>>({})
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    if (!date) return
+    let active = true
+    setLoading(true)
+    setTickets(null)
+    setResults({})
+    setMessage('')
+    void (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) throw new Error('Sua sessão expirou. Entre novamente.')
+        const params = new URLSearchParams({ date, analyst_id: analystId })
+        const response = await fetch('/api/clickdesk/tickets?' + params, {
+          headers: { Authorization: 'Bearer ' + session.access_token }, cache: 'no-store',
+        })
+        const data = await response.json() as ClickDeskDailyTicketResponse
+        if (!response.ok) throw new Error(data.erro || 'Não foi possível carregar os tickets.')
+        if (active) setTickets(data)
+      } catch (error) {
+        if (active) setMessage(getErrorMessage(error))
+      } finally {
+        if (active) setLoading(false)
+      }
+    })()
+    return () => { active = false }
+  }, [date, analystId])
+
+  async function analyze(ticketId: string) {
+    setBusyTicket(ticketId)
+    setMessage('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('Sua sessão expirou. Entre novamente.')
+      const response = await fetch('/api/clickdesk/qualitative', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket_id: ticketId, force: false }),
+      })
+      const data = await response.json() as ClickDeskQualitativeResponse
+      if (!response.ok || data.error || data.erro) throw new Error(data.error || data.erro || 'Falha ao carregar análise.')
+      setResults(current => ({ ...current, [ticketId]: data }))
+    } catch (error) { setMessage(getErrorMessage(error)) }
+    finally { setBusyTicket('') }
+  }
+
+  async function select(ticketId: string, status: 'pending' | 'approved' | 'rejected') {
+    setBusyTicket(ticketId)
+    setMessage('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) throw new Error('Sua sessão expirou. Entre novamente.')
+      const response = await fetch('/api/clickdesk/qualitative-validation', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + session.access_token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket_id: ticketId, status }),
+      })
+      const data = await response.json() as ClickDeskQualitativeResponse
+      if (!response.ok || data.error || data.erro) throw new Error(data.error || data.erro || 'Falha ao salvar seleção.')
+      setResults(current => ({ ...current, [ticketId]: { ...current[ticketId], ...data } }))
+      onSelectionSaved()
+    } catch (error) { setMessage(getErrorMessage(error)) }
+    finally { setBusyTicket('') }
+  }
+
+  return (
+    <section id="minha-rotina" className="workspace-content-section rounded-xl border border-white/10 p-5">
+      <h3 className="text-xl font-bold">Régua diária · selecionar tickets para feedback</h3>
+      <p className="mt-2 text-sm text-slate-400">Abra um dia e escolha os casos positivos ou negativos que deseja levar ao feedback. Nenhuma escolha é obrigatória e os KPIs não dependem dela.</p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {days.map(day => (
+          <button key={day.date} type="button" className="small-button" disabled={Boolean(busyTicket)}
+            aria-pressed={date === day.date} onClick={() => setDate(day.date)}>
+            {formatDate(day.date)} · {day.positive_reviews} positivas · {day.negative_reviews} negativas
+          </button>
+        ))}
+      </div>
+      {loading && <p role="status" className="mt-4">Carregando tickets do dia...</p>}
+      {message && <p role="alert" className="mt-4 text-amber-100">{message}</p>}
+      {date && tickets && (
+        <div className="mt-4 space-y-3">
+          <p className="text-sm text-slate-400">{formatDate(date)} · {tickets.tickets?.length ?? 0} tickets carregados</p>
+          {(tickets.tickets ?? []).map(ticket => (
+            <div key={ticket.ticket_id} className="rounded-lg border border-white/10 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <strong>Ticket #{ticket.ticket_id} · {ticket.satisfaction_label === 'positive' ? 'Positiva' : ticket.satisfaction_label === 'negative' ? 'Negativa' : 'Sem avaliação'}</strong>
+                {(ticket.satisfaction_label === 'positive' || ticket.satisfaction_label === 'negative') && (
+                  <button type="button" className="small-button" disabled={Boolean(busyTicket)}
+                    onClick={() => void analyze(ticket.ticket_id)}>
+                    {busyTicket === ticket.ticket_id ? 'Carregando...' : 'Ver análise para feedback'}
+                  </button>
+                )}
+              </div>
+              {results[ticket.ticket_id]?.analysis && (
+                <>
+                  <QualitativeAnalysisCard result={results[ticket.ticket_id]} audience="management" />
+                  <QualitativeValidationActions ticketId={ticket.ticket_id}
+                    status={results[ticket.ticket_id].validation_status}
+                    validating={Boolean(busyTicket)}
+                    onValidate={(id, status) => void select(id, status)} />
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   )
 }
 
@@ -5228,7 +5348,7 @@ function ChatModuleDashboard({
 
   async function handleValidateClickDeskQualitative(
     ticketId: string,
-    status: 'approved' | 'rejected',
+    status: 'pending' | 'approved' | 'rejected',
   ) {
     setClickDeskQualitativeValidationTicketId(ticketId)
 
@@ -6977,23 +7097,30 @@ function ChatModuleDashboard({
       .toISOString()
       .slice(0, 10)
 
-    const result = await supabase
-      .from('clickdesk_qualitative_analyses')
-      .select('satisfaction_label,occurred_date,analysis')
-      .eq('analyst_id', metric.analyst_id)
-      .eq('validation_status', 'approved')
-      .gte('occurred_date', start)
-      .lte('occurred_date', end)
-      .order('occurred_date', { ascending: true })
-      .limit(8)
-
-    if (result.error || !result.data?.length) return undefined
-
-    const findings = result.data.map((item) => ({
-      satisfactionLabel: item.satisfaction_label,
-      occurredDate: item.occurred_date,
-      analysis: normalizeQualitativeAnalysis(item.analysis),
-    }))
+    // Todas as escolhas editoriais do período entram no relatório; sem corte silencioso em oito.
+    const findings: ChatQualitativeFeedbackContext['findings'] = []
+    for (let offset = 0; offset < 10000; offset += 500) {
+      const result = await supabase
+        .from('clickdesk_qualitative_analyses')
+        .select('clickdesk_ticket_id,satisfaction_label,occurred_date,analysis')
+        .eq('analyst_id', metric.analyst_id)
+        .eq('validation_status', 'approved')
+        .gte('occurred_date', start)
+        .lte('occurred_date', end)
+        .order('occurred_date', { ascending: true })
+        .order('clickdesk_ticket_id', { ascending: true })
+        .range(offset, offset + 499)
+      if (result.error) throw new Error('Não foi possível carregar os tickets selecionados para feedback. Tente novamente.')
+      findings.push(...(result.data ?? []).map(item => ({
+        ticketId: item.clickdesk_ticket_id,
+        satisfactionLabel: item.satisfaction_label,
+        occurredDate: item.occurred_date,
+        analysis: normalizeQualitativeAnalysis(item.analysis),
+      })))
+      if ((result.data ?? []).length < 500) break
+      if (offset + 500 >= 10000) throw new Error('Seleção de feedback excedeu o limite seguro de consulta.')
+    }
+    if (!findings.length) return undefined
 
     return {
       analyzedCount: findings.length,
@@ -8665,6 +8792,14 @@ function ChatModuleDashboard({
             {sharedIndividualSelection.ambiguous && <p className="mt-3 text-sm text-amber-200">Mais de uma fila encontrada para o analista. Resumo indisponível até a conferência; nenhuma soma automática foi realizada.</p>}
             <ChatSharedPerformanceSummary metric={sharedIndividualSelection.row} csatGoal={Number(sharedIndividualPerson?.csat_goal ?? 90)} />
           </section>
+          {sharedIndividualPerson && sharedIndividualSelection.row && (
+            <ManagementDailyFeedback
+              key={sharedIndividualPerson.id + ':' + chat2SelectedPeriod.start + ':' + chat2SelectedPeriod.end}
+              analystId={sharedIndividualPerson.id}
+              days={sharedIndividualSelection.row.daily}
+              onSelectionSaved={() => setClickDeskQualitativeSummaryRefresh(current => current + 1)}
+            />
+          )}
           <section className="workspace-content-section">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
@@ -10258,12 +10393,12 @@ function ChatModuleDashboard({
               <p className="workspace-eyebrow text-violet-200">IA qualitativa · governança ativa</p>
               <h2 className="mt-2 text-xl font-bold">Da métrica para a causa</h2>
               <p className="section-subtitle">
-                Abra quando precisar validar leituras, investigar causas e consolidar apenas evidências aprovadas pela gestão.
+                Selecione tickets positivos e negativos para os próximos feedbacks. Não é necessário decidir sobre todos os tickets; notas e KPIs independem desta escolha.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-md border border-violet-400/20 bg-violet-400/5 px-3 py-2 text-xs font-semibold text-violet-200">
-                Homologação · validação humana
+                Homologação · seleção para feedback
               </span>
               <span className="rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-xs font-semibold text-slate-300">
                 Abrir governança qualitativa
@@ -10359,7 +10494,7 @@ function ChatModuleDashboard({
                     </span>
                   </div>
                   <div className="rounded-lg bg-slate-900 p-4">
-                    <p className="text-xs text-slate-500">Aprovadas pela gestão</p>
+                    <p className="text-xs text-slate-500">Selecionadas para feedback</p>
                     <strong className="mt-2 block text-2xl tabular-nums text-emerald-200">
                       {formatChatCount(clickDeskQualitativeSummary?.totals?.approved ?? 0)}
                     </strong>
@@ -10368,12 +10503,12 @@ function ChatModuleDashboard({
                     </span>
                   </div>
                   <div className="rounded-lg bg-slate-900 p-4">
-                    <p className="text-xs text-slate-500">Aguardando validação</p>
+                    <p className="text-xs text-slate-500">Disponíveis para seleção</p>
                     <strong className="mt-2 block text-2xl tabular-nums text-amber-100">
                       {formatChatCount(clickDeskQualitativeSummary?.totals?.pending ?? 0)}
                     </strong>
                     <span className="mt-1 block text-xs text-slate-500">
-                      {formatChatCount(clickDeskQualitativeSummary?.totals?.rejected ?? 0)} descartada(s) da consolidação
+                      {formatChatCount(clickDeskQualitativeSummary?.totals?.rejected ?? 0)} descartada(s) do feedback
                     </span>
                   </div>
                 </div>
@@ -10392,10 +10527,10 @@ function ChatModuleDashboard({
                 <div id="qualitative-pending-reviews" className="mt-5 rounded-lg border border-violet-400/15 bg-violet-400/5 p-4 scroll-mt-24">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">Validação humana</p>
-                      <h4 className="mt-1 font-semibold text-slate-100">Leituras aguardando sua conferência</h4>
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">Seleção editorial</p>
+                      <h4 className="mt-1 font-semibold text-slate-100">Tickets disponíveis para feedback</h4>
                       <p className="mt-1 text-xs text-slate-500">
-                        O ticket já foi analisado. Confira a leitura completa antes de decidir se ela entra ou não na consolidação gerencial.
+                        O ticket já foi analisado. Confira a leitura e selecione apenas os casos úteis para o feedback.
                       </p>
                     </div>
                     <span className="text-xs text-slate-500">
@@ -10653,7 +10788,7 @@ function ChatModuleDashboard({
                 <summary className="cursor-pointer list-none">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">Consolidação validada</p>
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">Seleção para feedback</p>
                       <h4 className="mt-1 font-semibold text-slate-100">Padrões e cobertura detalhada</h4>
                       <p className="mt-1 text-xs text-slate-500">
                         Abra quando quiser investigar distribuição de causas, influência, controle, aprendizados e cobertura por analista.
@@ -10677,7 +10812,7 @@ function ChatModuleDashboard({
                   {(clickDeskQualitativeSummary?.totals?.approved ?? 0) > 0 ? (
                     <div className="mt-5 grid gap-4 xl:grid-cols-4">
                       <div className="rounded-lg border border-white/10 bg-slate-900/60 p-4">
-                        <p className="text-sm font-semibold">Contextos validados na amostra</p>
+                        <p className="text-sm font-semibold">Contextos dos tickets selecionados</p>
                         <div className="mt-3 space-y-2">
                           {(clickDeskQualitativeSummary?.causes ?? []).slice(0, 5).map((item) => (
                             <div key={item.key} className="flex items-center justify-between gap-3 text-sm">
@@ -10713,7 +10848,7 @@ function ChatModuleDashboard({
                         </div>
                       </div>
                       <div className="rounded-lg border border-white/10 bg-slate-900/60 p-4">
-                        <p className="text-sm font-semibold">Aprendizados validados</p>
+                        <p className="text-sm font-semibold">Aprendizados selecionados</p>
                         <p className="mt-1 text-xs leading-5 text-slate-500">
                           Resume se a leitura aprovada aponta prática para manter, desenvolver, contextualizar ou se não permite conclusão segura.
                         </p>
@@ -10836,7 +10971,7 @@ function ChatModuleDashboard({
                 </p>
                 <strong className="mt-1 block text-sm text-slate-200">Analisar ticket específico</strong>
                 <p className="mt-1 text-xs leading-5 text-slate-500">
-                  Use quando precisar investigar um ticket fora das amostras gerenciais. O resultado continua sujeito à mesma validação humana.
+                  Use para investigar um ticket e decidir se ele deve compor um feedback.
                 </p>
               </div>
               <span className="text-xs font-semibold text-violet-200">Abrir</span>
@@ -17114,24 +17249,24 @@ async function exportChatIndividualReport({
 
   const negativeSummaryText = negativeQualitativeFindings.length
     ? `Na amostra negativa, os principais sinais foram ${negativeCauseText || 'diversificados, sem um padrão recorrente suficiente'}.${negativeHumanText ? ` ${negativeHumanText}` : ''}`
-    : 'Nenhuma avaliação negativa validada na amostra.'
+    : 'Nenhuma avaliação negativa selecionada para feedback.'
 
   const positiveSummaryText = positiveQualitativeFindings.length
     ? positiveHumanText
       ? `Na amostra positiva, destacaram-se: ${positiveHumanText}`
       : `Na amostra positiva, os principais sinais foram ${positiveCauseText || 'favoráveis, sem um padrão único dominante'}.`
-    : 'Nenhuma avaliação positiva validada na amostra.'
+    : 'Nenhuma avaliação positiva selecionada para feedback.'
 
   const qualitativeHtml = qualitativeFindings.length
     ? `
       <section class="section-block">
         <div class="section-heading">
-          <span class="section-kicker">IA + validação da gestão</span>
+          <span class="section-kicker">Tickets selecionados pela gestão</span>
           <h2>Resumo qualitativo da experiência</h2>
         </div>
         <div class="insight-box">
           <div class="sample-line">
-            <strong>${qualitativeFindings.length} leitura(s) aprovada(s)</strong>
+            <strong>${qualitativeFindings.length} ticket(s) selecionado(s) para feedback</strong>
             <span>${negativeQualitativeFindings.length} negativa(s) · ${positiveQualitativeFindings.length} positiva(s)</span>
           </div>
           <p class="muted">Cobertura validada: ${qualitativeContext?.negativeAnalyzed ?? 0} de ${qualitativeContext?.negativeTotal ?? 0} negativas e ${qualitativeContext?.positiveAnalyzed ?? 0} de ${qualitativeContext?.positiveTotal ?? 0} positivas.</p>
@@ -17160,7 +17295,7 @@ async function exportChatIndividualReport({
           <h2>Leitura qualitativa</h2>
         </div>
         <div class="empty-insight">
-          <strong>Sem leitura qualitativa validada nesta competência.</strong>
+          <strong>Nenhum ticket selecionado para feedback nesta competência.</strong>
           <p>O relatório preserva somente evidências aprovadas pela gestão; nenhuma hipótese da IA foi incorporada ao documento.</p>
         </div>
       </section>

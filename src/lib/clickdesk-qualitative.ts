@@ -132,8 +132,8 @@ export function shouldReuseQualitativeCache(
   analysisVersion = QUALITATIVE_ANALYSIS_VERSION,
 ) {
   return (
-    validationStatus !== 'rejected' &&
-    analysisVersion >= QUALITATIVE_ANALYSIS_VERSION
+    // Descarte é uma decisão editorial, não uma falha da análise.
+    (validationStatus === 'rejected' || analysisVersion >= QUALITATIVE_ANALYSIS_VERSION)
   )
 }
 

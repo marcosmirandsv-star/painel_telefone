@@ -164,8 +164,8 @@ Deno.serve(async (request: Request) => {
                 current &&
                 current.analyst_id === row.analyst_id &&
                 current.satisfaction_label === row.satisfaction_label &&
-                row.validation_status !== 'rejected' &&
-                analysisVersion(row.analysis) >= QUALITATIVE_ANALYSIS_VERSION
+                (row.validation_status === 'rejected' ||
+                  analysisVersion(row.analysis) >= QUALITATIVE_ANALYSIS_VERSION)
               )
             },
           )

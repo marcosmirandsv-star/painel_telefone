@@ -163,11 +163,10 @@ export async function GET(request: Request) {
         qualitativeAnalysisVersion(row.analysis) >= QUALITATIVE_ANALYSIS_VERSION,
     )
 
-    const analyzedIds = new Set(
-      currentAnalyses
-        .filter((row) => row.validation_status !== 'rejected')
-        .map((row) => row.clickdesk_ticket_id),
-    )
+    // Cobertura técnica inclui descartadas. A seleção editorial só controla o feedback.
+    const analyzedIds = new Set(currentAnalyses.map((row) => row.clickdesk_ticket_id))
+    const retainedIds = new Set(analyses.filter(row => row.validation_status === 'rejected')
+      .map(row => row.clickdesk_ticket_id))
 
     const approvedIds = new Set(
       currentAnalyses
@@ -177,7 +176,7 @@ export async function GET(request: Request) {
 
     const negativeRows = attendances.filter((row) => row.satisfaction_label === 'negative')
     const positiveRows = attendances.filter((row) => row.satisfaction_label === 'positive')
-    const unanalyzedNegative = negativeRows.filter((row) => !analyzedIds.has(row.clickdesk_ticket_id))
+    const unanalyzedNegative = negativeRows.filter((row) => !analyzedIds.has(row.clickdesk_ticket_id) && !retainedIds.has(row.clickdesk_ticket_id))
     const unanalyzedPositive = positiveRows.filter((row) => !analyzedIds.has(row.clickdesk_ticket_id))
 
     const serializeQueue = (row: AttendanceRow) => ({
@@ -260,9 +259,9 @@ export async function GET(request: Request) {
       },
       interpretation_rule: {
         message:
-          'A fila 360º acompanha a qualidade dos atendimentos e não valida notas para o CSAT. Análises aprovadas ou pendentes são aproveitadas; rejeitadas ou antigas retornam à fila. O recorte considera apenas analistas ativos e tickets de outubro com autoria comprovada.',
+          'A fila 360º acompanha a qualidade dos atendimentos e não valida notas para o CSAT. A seleção para feedback não altera CSAT nem cobertura técnica. Descartadas não retornam à fila automática; reanálise é uma ação explícita. O recorte considera apenas analistas ativos e tickets de outubro com autoria comprovada.',
         causality:
-          'Recorrência não prova causalidade. A leitura deve ser apresentada como padrão observado, com confiança e evidências rastreáveis. A governança de aprovação/rejeição permanece no menu próprio.',
+          'Recorrência não prova causalidade. A leitura deve ser apresentada como padrão observado, com confiança e evidências rastreáveis. A seleção editorial para feedback permanece sob controle da gestão.',
       },
     })
   })

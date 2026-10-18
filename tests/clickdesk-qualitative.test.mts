@@ -210,10 +210,11 @@ test('fallback qualitativo retorna indisponibilidade quando todos os provedores 
   assert.match(outcome.errors.join(' | '), /github: falha B/)
 })
 
-test('cache qualitativo rejeitado ou de versão antiga é refeito', () => {
+test('descarte editorial preserva o cache; análise antiga não descartada é atualizada', () => {
   assert.equal(shouldReuseQualitativeCache('approved'), true)
   assert.equal(shouldReuseQualitativeCache('pending'), true)
-  assert.equal(shouldReuseQualitativeCache('rejected'), false)
+  assert.equal(shouldReuseQualitativeCache('rejected'), true)
+  assert.equal(shouldReuseQualitativeCache('rejected', 0), true)
   assert.equal(shouldReuseQualitativeCache(null), true)
   assert.equal(shouldReuseQualitativeCache('approved', QUALITATIVE_ANALYSIS_VERSION - 1), false)
   assert.equal(shouldReuseQualitativeCache('pending', QUALITATIVE_ANALYSIS_VERSION - 1), false)

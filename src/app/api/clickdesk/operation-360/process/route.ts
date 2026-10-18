@@ -6,6 +6,9 @@ import {
 } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 
+import { GET as readOperation360 } from '../route'
+import { POST as processQualitativeTicket } from '../../qualitative/route'
+
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
@@ -89,10 +92,10 @@ export async function POST(request: Request) {
 
     // Reutiliza a própria rota 360º como fonte única da fila. Assim a população
     // processada é exatamente a mesma exibida no painel (somente operação válida).
-    const queueResponse = await fetch(
+    const queueResponse = await readOperation360(new Request(
       `${baseUrl}/api/clickdesk/operation-360?${query.toString()}`,
-      { headers: forwardHeaders, cache: 'no-store' },
-    )
+      { headers: forwardHeaders },
+    ))
     const queuePayload = (await readJson(queueResponse)) as Operation360Payload | null
     if (!queueResponse.ok || !queuePayload?.queues) {
       throw new ApiError(503, 'Não foi possível carregar a fila pendente do 360º.')
@@ -117,7 +120,7 @@ export async function POST(request: Request) {
       const ticketId = item.ticket_id?.trim()
       if (!ticketId) continue
       try {
-        const response = await fetch(`${baseUrl}/api/clickdesk/qualitative`, {
+        const response = await processQualitativeTicket(new Request(`${baseUrl}/api/clickdesk/qualitative`, {
           method: 'POST',
           headers: {
             ...forwardHeaders,
@@ -125,7 +128,7 @@ export async function POST(request: Request) {
           },
           body: JSON.stringify({ ticket_id: ticketId, force: false }),
           cache: 'no-store',
-        })
+        }))
         const payload = await readJson(response)
         if (!response.ok) {
           const message =
@@ -144,10 +147,10 @@ export async function POST(request: Request) {
       }
     }
 
-    const afterResponse = await fetch(
+    const afterResponse = await readOperation360(new Request(
       `${baseUrl}/api/clickdesk/operation-360?${query.toString()}`,
       { headers: forwardHeaders, cache: 'no-store' },
-    )
+    ))
     const afterPayload = (await readJson(afterResponse)) as Operation360Payload | null
     if (!afterResponse.ok || !afterPayload?.queues) {
       throw new ApiError(

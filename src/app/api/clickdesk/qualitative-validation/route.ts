@@ -11,7 +11,7 @@ export const runtime = 'nodejs'
 
 type ValidationRequest = {
   ticket_id?: string
-  status?: 'approved' | 'rejected'
+  status?: 'pending' | 'approved' | 'rejected'
   notes?: string
 }
 
@@ -38,8 +38,8 @@ export async function POST(request: Request) {
     if (!validTicketId(ticketId)) {
       throw new ApiError(400, 'ticket_id inválido.')
     }
-    if (status !== 'approved' && status !== 'rejected') {
-      throw new ApiError(400, 'status deve ser approved ou rejected.')
+    if (status !== 'pending' && status !== 'approved' && status !== 'rejected') {
+      throw new ApiError(400, 'status deve ser pending, approved ou rejected.')
     }
     const existing = await access.admin
       .from('clickdesk_qualitative_analyses')
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
       .maybeSingle()
 
     if (existing.error) {
-      throw new ApiError(503, 'Não foi possível validar a análise selecionada.')
+      throw new ApiError(503, 'Não foi possível consultar a seleção para feedback.')
     }
     if (!existing.data) {
       throw new ApiError(404, 'Análise qualitativa não encontrada.')
@@ -59,8 +59,8 @@ export async function POST(request: Request) {
       .from('clickdesk_qualitative_analyses')
       .update({
         validation_status: status,
-        validated_by: access.userId,
-        validated_at: validatedAt,
+        validated_by: status === 'pending' ? null : access.userId,
+        validated_at: status === 'pending' ? null : validatedAt,
         validation_notes: body.notes?.trim().slice(0, 1000) || null,
         updated_at: validatedAt,
       })
@@ -71,11 +71,13 @@ export async function POST(request: Request) {
       .single()
 
     if (update.error || !update.data) {
-      throw new ApiError(503, 'Não foi possível salvar a validação da análise.')
+      throw new ApiError(503, 'Não foi possível salvar a seleção para feedback.')
     }
 
     return json({
       source: 'clickdesk_qualitative_validation',
+      selection_purpose: 'feedback_editorial_only',
+      csat_changed: false,
       ticket_id: update.data.clickdesk_ticket_id,
       analyst_id: update.data.analyst_id,
       occurred_date: update.data.occurred_date,
