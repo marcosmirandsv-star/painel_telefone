@@ -64,7 +64,8 @@ function buildPatterns(
 }
 
 export function buildOperation360Analysis(rows: Operation360AnalysisRow[], status: 'approved' | 'analyzed' = 'approved') {
-  const eligible = status === 'approved' ? rows.filter((row) => row.validation_status === 'approved') : rows.filter((row) => row.validation_status !== 'rejected')
+  // Seleção editorial só limita o feedback, nunca a cobertura ou o diagnóstico técnico.
+  const eligible = status === 'approved' ? rows.filter((row) => row.validation_status === 'approved') : rows
   const normalized = eligible.map((row) => ({ ticket_id: row.clickdesk_ticket_id, satisfaction_label: row.satisfaction_label, analysis: row.analysis }))
 
   const summarize = (satisfaction: 'positive' | 'negative') => {

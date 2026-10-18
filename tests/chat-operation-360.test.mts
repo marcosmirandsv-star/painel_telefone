@@ -326,7 +326,7 @@ test('grande volume mantém percentuais e limita evidências expostas por padrã
   assert.equal(result.negative.causes[0]?.examples.length, 3)
 })
 
-test('consolidação preliminar usa pending e approved e exclui rejected', () => {
+test('diagnóstico técnico inclui todas as análises; descarte limita somente o feedback', () => {
   const analysis = {
     primary_cause: { category: 'process', summary: 'Processo observado.' },
     human_influence: { classification: 'neutral', summary: 'Sem influência demonstrável.' },
@@ -358,11 +358,11 @@ test('consolidação preliminar usa pending e approved e exclui rejected', () =>
     'analyzed',
   )
 
-  assert.equal(result.negative.analyzed, 2)
-  assert.equal(result.negative.causes[0]?.count, 2)
+  assert.equal(result.negative.analyzed, 3)
+  assert.equal(result.negative.causes[0]?.count, 3)
   assert.deepEqual(
     result.negative.causes[0]?.ticket_ids,
-    ['approved-1', 'pending-1'],
+    ['approved-1', 'pending-1', 'rejected-1'],
   )
 })
 
