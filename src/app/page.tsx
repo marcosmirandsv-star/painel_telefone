@@ -882,6 +882,17 @@ type ClickDeskQualitativeResponse = {
     }
     evidence_summary: string[]
     limitations: string[]
+    cx_coaching: {
+      negative_rating_hypothesis: string
+      customer_experience_impact: string
+      observable_analyst_behavior: string
+      practice_to_improve: string
+      suggested_phrase: string
+      verification_check: string
+      attribution_caution: string
+      evidence_confidence: 'low' | 'medium' | 'high'
+      source: 'generated' | 'contextual_from_existing_analysis'
+    }
   }
   error?: string
   erro?: string
@@ -3482,12 +3493,42 @@ function QualitativeAnalysisCard({
           </>
         ) : (
           <>
-            <span className="text-slate-500">Ponto acionável para feedback: </span>
-            <strong className={result.analysis.coaching_signal.available ? 'text-cyan-200' : 'text-slate-300'}>
-              {result.analysis.coaching_signal.summary}
+            <span className="text-slate-500">Prática de CX para o próximo caso (sem atribuição automática de culpa): </span>
+            <strong className="text-cyan-200">
+              {result.analysis.cx_coaching.practice_to_improve}
             </strong>
           </>
         )}
+      </div>
+      <div className="mt-3 space-y-3 rounded-lg border border-cyan-300/15 bg-cyan-300/[0.04] p-4 text-sm">
+        <p className="text-xs font-bold uppercase tracking-[0.12em] text-cyan-200">Coaching de experiência do cliente · causa e efeito</p>
+        <div>
+          <strong className="text-slate-100">Por que a nota pode ter sido negativa?</strong>
+          <p className="mt-1 leading-6 text-slate-300">{result.analysis.cx_coaching.negative_rating_hypothesis}</p>
+        </div>
+        <div>
+          <strong className="text-slate-100">Impacto percebido ou possível</strong>
+          <p className="mt-1 leading-6 text-slate-300">{result.analysis.cx_coaching.customer_experience_impact}</p>
+        </div>
+        <div>
+          <strong className="text-slate-100">O que o atendimento demonstrou</strong>
+          <p className="mt-1 leading-6 text-slate-300">{result.analysis.cx_coaching.observable_analyst_behavior}</p>
+        </div>
+        <div>
+          <strong className="text-slate-100">Como conduzir um caso semelhante</strong>
+          <p className="mt-1 leading-6 text-cyan-100">{result.analysis.cx_coaching.practice_to_improve}</p>
+          <p className="mt-2 rounded-md bg-slate-950/55 p-3 italic leading-6 text-slate-300">“{result.analysis.cx_coaching.suggested_phrase}”</p>
+        </div>
+        <div>
+          <strong className="text-slate-100">O que a gestão deve verificar na próxima amostra</strong>
+          <p className="mt-1 leading-6 text-slate-300">{result.analysis.cx_coaching.verification_check}</p>
+        </div>
+        <p className="border-t border-white/10 pt-3 text-xs leading-5 text-amber-100">
+          {result.analysis.cx_coaching.attribution_caution}
+          {result.analysis.cx_coaching.source === 'contextual_from_existing_analysis'
+            ? ' · Sugestão elaborada a partir do diagnóstico preservado; não é uma nova leitura do transcript.'
+            : ' · Sugestão da IA sujeita à validação da gestão.'}
+        </p>
       </div>
     </div>
   )
