@@ -127,10 +127,19 @@ Deno.serve(async (request: Request) => {
         return json({ error: 'Unable to load attendance queue' }, 503)
       }
 
+      // Somente membros ativos participam da fila operacional da IA.
+      // O histórico dos desligados/transferidos permanece intocado.
+      const rosterResult = await admin.from('chat_analysts').select('id').eq('active', true)
+      if (rosterResult.error) return json({ error: 'Active analyst roster unavailable' }, 503)
+      const activeIds = new Set((rosterResult.data ?? []).map(row => String(row.id)))
+
       const pendingResult = await admin.from('clickdesk_final_ticket_pending').select('ticket_id').limit(20000)
       if (pendingResult.error) return json({ error: 'Unable to check unresolved authorship' }, 503)
       const pendingIds = new Set((pendingResult.data ?? []).map((row) => String(row.ticket_id)))
-      const attendances = (attendanceResult.data ?? []).filter((row) => !pendingIds.has(String(row.clickdesk_ticket_id)))
+      const attendances = (attendanceResult.data ?? []).filter((row) =>
+        activeIds.has(String(row.analyst_id)) &&
+        !pendingIds.has(String(row.clickdesk_ticket_id)),
+      )
       const attendanceById = new Map(
         attendances.map((row) => [String(row.clickdesk_ticket_id), row]),
       )

@@ -177,6 +177,13 @@ REGRAS OBRIGATÓRIAS
 - Em context, explique o fator fora do controle direto e, quando houver evidência, o que ainda cabe ao analista fazer sem assumir culpa pelo problema.
 - Uma avaliação positiva ou negativa, sozinha, nunca define o analyst_takeaway.
 - evidence_summary deve ter no máximo 3 itens, em paráfrase curta. Não copie dados pessoais nem trechos longos.
+- A leitura de CX deve ser útil à gestão mesmo quando NÃO existe falha humana comprovada. Não responda só "inconclusivo" ou "sem evidência para feedback": separe observação, hipótese e oportunidade prática.
+- A hipótese da nota negativa deve explicar um possível elo causa → impacto na experiência → nota, sempre rotulado como hipótese quando o cliente não declarou o motivo. Não trate frustração provável como sentimento psicológico comprovado.
+- Distinguir: (1) defeito do produto/processo, (2) ação REALMENTE observada do analista, (3) percepção possível do cliente, (4) prática adicional a ser adotada no próximo caso. Não atribua mau humor, má vontade, desinteresse ou falta de empatia sem fala ou conduta inequívoca no transcript.
+- No coaching, aponte UM comportamento específico praticável (p. ex. validar se o cliente conseguiu repetir a emissão, resumir passos ou registrar retorno), explicando efeito esperado. Não afirme que faltou na conversa se não há prova da omissão.
+- Em suggested_phrase dê uma fala pronta, curta, humana e tecnicamente viável em português, sem prometer solução garantida, sem culpar cliente e sem supor uma ação que não ocorreu.
+- Em verification_check ofereça um indicador objetivo para a gestão conferir em novo ticket (não a mudança futura do CSAT, que depende do cliente).
+- Em attribution_caution registre o limite causal de maneira específica. Ser coach é orientar boas práticas, não fabricar culpa.
 - limitations deve registrar o que não pode ser concluído com segurança.
 - Não reproduza e-mail, telefone, CPF, CNPJ, IDs ou outros identificadores.
 - Responda SOMENTE com JSON, sem Markdown.
@@ -219,7 +226,17 @@ FORMATO EXATO
     "confidence": "low"
   },
   "evidence_summary": [],
-  "limitations": []
+  "limitations": [],
+  "cx_coaching": {
+    "negative_rating_hypothesis": "Hipótese objetiva sobre por que a experiência pode ter recebido nota negativa, distinguindo motivo declarado de motivo não comprovado.",
+    "customer_experience_impact": "Impacto possível da ocorrência na percepção do cliente; só atribua emoção expressa na conversa.",
+    "observable_analyst_behavior": "O que o analista efetivamente fez ou disse, sem julgamento de caráter.",
+    "practice_to_improve": "Um procedimento de CX prático e específico para atendimento semelhante, sem presumir que tenha faltado neste.",
+    "suggested_phrase": "Frase natural que o analista poderia utilizar em atendimento semelhante.",
+    "verification_check": "Um item verificável no transcript futuro que a gestão possa conferir.",
+    "attribution_caution": "O que impede afirmar que o analista causou a nota, quando não houver prova.",
+    "evidence_confidence": "low"
+  }
 }
 
 CONTEXTO OPERACIONAL

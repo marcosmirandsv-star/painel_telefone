@@ -85,13 +85,16 @@ async function loadAttendances(
   // Fonte única com Equipe e produtividade: um ticket, último autor humano confirmado.
   const [ledger, analystsResult] = await Promise.all([
     readFinalLedger(admin, { start: filters.start, end: filters.end, teamId: filters.teamId }),
-    admin.from('chat_analysts').select('id,name'),
+    admin.from('chat_analysts').select('id,name,active'),
   ])
   if (analystsResult.error) {
     throw new ApiError(503, 'Cadastro dos analistas indisponível para o 360º.')
   }
   const names = new Map((analystsResult.data ?? []).map(item => [item.id, item.name]))
-  return ledger.map(row => {
+  // O retrato operacional considera somente os analistas ativos.
+  // Tickets de ex-integrantes permanecem preservados no banco para auditoria.
+  const activeIds = new Set((analystsResult.data ?? []).filter(item => item.active).map(item => item.id))
+  return ledger.filter(row => activeIds.has(row.analyst_id)).map(row => {
     const name = names.get(row.analyst_id)
     if (!name) throw new ApiError(503, 'Titular verificado ausente do cadastro.')
     return {
@@ -218,7 +221,7 @@ export async function GET(request: Request) {
         verified_at: ledgerCoverage.verified_at,
         note: ledgerCoverage.complete
           ? 'Tickets com autoria final confirmada na competência.'
-          : 'AMOSTRA PARCIAL: a fila de análise usa apenas os tickets avaliados com autoria final confirmada. Ainda faltam tickets da competência.',
+          : 'OUTUBRO CLICKDESK EM CONCILIAÇÃO: a IA usa tickets avaliados com autoria final confirmada. As avaliações recebidas já entram no CSAT, mesmo sem análise 360º ou aprovação gerencial.',
       },
       totals,
       coverage: {
@@ -257,7 +260,7 @@ export async function GET(request: Request) {
       },
       interpretation_rule: {
         message:
-          'O diagnóstico 360º usa somente análises na versão qualitativa atual. Aprovadas e pendentes atuais são reaproveitadas; rejeitadas e análises de versões antigas voltam para reanálise; tickets sem leitura entram na fila até completar o universo do filtro.',
+          'A fila 360º acompanha a qualidade dos atendimentos e não valida notas para o CSAT. Análises aprovadas ou pendentes são aproveitadas; rejeitadas ou antigas retornam à fila. O recorte considera apenas analistas ativos e tickets de outubro com autoria comprovada.',
         causality:
           'Recorrência não prova causalidade. A leitura deve ser apresentada como padrão observado, com confiança e evidências rastreáveis. A governança de aprovação/rejeição permanece no menu próprio.',
       },
