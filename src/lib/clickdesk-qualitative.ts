@@ -26,6 +26,18 @@ export type QualitativeCauseCategory =
   | 'other'
   | 'unclear'
 
+export type QualitativeCxCoaching = {
+  negative_rating_hypothesis: string
+  customer_experience_impact: string
+  observable_analyst_behavior: string
+  practice_to_improve: string
+  suggested_phrase: string
+  verification_check: string
+  attribution_caution: string
+  evidence_confidence: QualitativeConfidence
+  source: 'generated' | 'contextual_from_existing_analysis'
+}
+
 export type ClickDeskQualitativeAnalysis = {
   initial_sentiment: QualitativeSentiment
   final_sentiment: QualitativeSentiment
@@ -54,6 +66,7 @@ export type ClickDeskQualitativeAnalysis = {
   }
   evidence_summary: string[]
   limitations: string[]
+  cx_coaching: QualitativeCxCoaching
 }
 
 const SENTIMENT = new Set<QualitativeSentiment>([
@@ -257,6 +270,43 @@ export function normalizeQualitativeAnalysis(value: unknown): ClickDeskQualitati
             )
           : 'Esta conversa não traz evidência suficiente para indicar algo específico a manter ou desenvolver. Isso evita transformar hipótese em orientação pessoal.'
 
+  // A oportunidade de experiência é diferente de afirmar um erro do analista.
+  // Análises anteriores continuam legíveis com uma sugestão contextual explícita.
+  const enhanced = record(source.cx_coaching)
+  const previousSummary = shortText(cause.summary, 'o problema relatado no atendimento')
+  const closureByInactivity = [
+    ...stringArray(source.limitations, 5),
+    ...stringArray(source.evidence_summary, 3),
+    shortText(influence.summary, ''),
+  ].some(item => /inatividade|encerrad[oa] automaticamente|sem confirma[cç][aã]o de solu[cç][aã]o|não é possível saber se/i.test(item))
+  const contextualHypothesis = closureByInactivity
+    ? 'O cliente pode ter ficado sem confirmação de que o problema foi resolvido após o encerramento por inatividade. É uma hipótese para a nota, não um motivo declarado pelo cliente.'
+    : `O cliente pode ter avaliado negativamente a dificuldade associada a ${previousSummary}. O motivo exato da nota não foi declarado na evidência disponível.`
+  const contextualPractice = closureByInactivity
+    ? 'Em atendimentos semelhantes, convide o cliente a testar a solução, confirme o resultado e registre o próximo passo e a forma de retomada se a sessão encerrar. Isso não demonstra que o analista deixou de fazê-lo neste ticket.'
+    : takeawayKind !== 'none'
+      ? shortText(takeaway.summary, fallbackTakeawaySummary)
+      : 'Em atendimento semelhante, identifique a necessidade do cliente, confirme a compreensão e combine a próxima ação verificável, sem presumir que essa etapa faltou nesta conversa.'
+  const suggestedPhrase = closureByInactivity
+    ? 'Entendi que a emissão está impedida. Após os procedimentos orientados, você consegue fazer um novo teste? Se o erro persistir, informe o código técnico do retorno para seguirmos. Deixarei os passos registrados caso seja necessário retomar.'
+    : 'Quero confirmar se a orientação ajudou. Você consegue testar agora? Caso não resolva, vamos registrar o retorno técnico e definir o próximo passo.'
+  const cxCoaching: QualitativeCxCoaching = {
+    negative_rating_hypothesis: shortText(enhanced.negative_rating_hypothesis, contextualHypothesis),
+    customer_experience_impact: shortText(
+      enhanced.customer_experience_impact,
+      closureByInactivity ? 'Possível insegurança pela falta de desfecho confirmado; percepção não explicitamente comprovada.' : 'Possível frustração com o problema, sem evidência direta do motivo da nota.',
+    ),
+    observable_analyst_behavior: shortText(enhanced.observable_analyst_behavior, shortText(influence.summary, 'A conversa não permite atribuir conduta específica ao analista.')),
+    practice_to_improve: shortText(enhanced.practice_to_improve, contextualPractice),
+    suggested_phrase: shortText(enhanced.suggested_phrase, suggestedPhrase),
+    verification_check: shortText(enhanced.verification_check, 'Verificar na próxima amostra se o cliente testou o procedimento e se há um próximo passo registrado, sem presumir falha passada.'),
+    attribution_caution: shortText(enhanced.attribution_caution, 'A causa técnica e a avaliação registrada não comprovam, por si só, que a conduta do analista provocou a nota.'),
+    evidence_confidence: CONFIDENCE.has(enhanced.evidence_confidence as QualitativeConfidence)
+      ? enhanced.evidence_confidence as QualitativeConfidence : 'low',
+    source: enhanced.negative_rating_hypothesis && enhanced.practice_to_improve
+      ? 'generated' : 'contextual_from_existing_analysis',
+  }
+
   return {
     initial_sentiment: initialSentiment,
     final_sentiment: finalSentiment,
@@ -299,6 +349,7 @@ export function normalizeQualitativeAnalysis(value: unknown): ClickDeskQualitati
     },
     evidence_summary: stringArray(source.evidence_summary, 3, 350),
     limitations: stringArray(source.limitations, 5, 350),
+    cx_coaching: cxCoaching,
   }
 }
 
