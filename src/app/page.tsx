@@ -6157,6 +6157,7 @@ function ChatModuleDashboard({
     key: `${chatReportYear}-${chatReportMonthNumber}`,
   }
   const chatReportMonthKey = `${chatReportYear}-${String(chatReportMonthNumber).padStart(2, '0')}`
+  const chatReportInProgress = chatReportMonthKey >= chatBusinessDate().slice(0, 7)
   const legacyChatReportMetrics = metrics.filter((metric) => {
     const matchesTeam = selectedTeamId === 'all' || metric.team_id === selectedTeamId
     return (
@@ -6393,7 +6394,9 @@ function ChatModuleDashboard({
   const chatReportAttentionText = chatReportAttentionItem?.reasons.length
     ? formatStatusText(chatReportAttentionItem.reasons.join(', '))
     : 'Sem prioridade aberta no período.'
-  const chatReportClosureReading =
+  const chatReportClosureReading = chatReportInProgress
+    ? 'Competência em andamento: acompanhamento parcial até a última atualização.'
+    :
     !chatReportMetrics.length
       ? 'Ainda não há base suficiente para leitura do fechamento.'
       : chatReportEligibleCount >= 3 && !chatReportCriticalCount
@@ -8772,8 +8775,8 @@ function ChatModuleDashboard({
       {chatActiveTab === 'reports' && (
         <section className="workspace-page-heading">
           <p className="workspace-eyebrow">Fechamento mensal</p>
-          <h2 className="mt-2 text-2xl font-bold">Consolidar, reconhecer e comunicar</h2>
-          <p className="section-subtitle">Ranking final, ajustes operacionais do pódio e geração dos relatórios individuais.</p>
+          <h2 className="mt-2 text-2xl font-bold">{chatReportInProgress ? 'Acompanhar a competência em andamento' : 'Consolidar, reconhecer e comunicar'}</h2>
+          <p className="section-subtitle">{chatReportInProgress ? 'Prévia de indicadores e relatórios de acompanhamento; resultados ainda podem mudar.' : 'Ranking final, ajustes operacionais do pódio e geração dos relatórios individuais.'}</p>
         </section>
       )}
 
@@ -11114,7 +11117,7 @@ function ChatModuleDashboard({
         <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <p className="workspace-eyebrow">Reconhecimento</p>
-            <h2 className="section-title">Pódio final do chat</h2>
+            <h2 className="section-title">{chatReportInProgress ? 'Prévia do pódio do chat' : 'Pódio final do chat'}</h2>
             <p className="section-subtitle">
               O ranking automático define os elegíveis. O ajuste manual pode reorganizar a ordem entre eles, mas não coloca no pódio quem deixou de cumprir os critérios.
             </p>
@@ -11390,7 +11393,7 @@ function ChatModuleDashboard({
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Relatório individual</p>
-            <h2 className="section-title">Fechamento mensal por analista</h2>
+            <h2 className="section-title">{chatReportInProgress ? 'Acompanhamento mensal por analista' : 'Fechamento mensal por analista'}</h2>
             <p className="section-subtitle">
               Fluxo guiado: confira os dados, gere o feedback, revise o texto final e exporte o documento individual.
             </p>
@@ -11460,8 +11463,8 @@ function ChatModuleDashboard({
             <span className="mt-1 block text-xs leading-5">Indicadores, volume e pódio.</span>
           </div>
           <div className="border-t border-white/10 p-3 text-sm text-slate-400 md:border-t-0">
-            <strong className="block text-slate-100">2. Validar amostra</strong>
-            <span className="mt-1 block text-xs leading-5">Até 5 negativas + 5 positivas.</span>
+            <strong className="block text-slate-100">2. Selecionar tickets</strong>
+            <span className="mt-1 block text-xs leading-5">Escolha opcional na régua diária.</span>
           </div>
           <div className="border-t border-white/10 p-3 text-sm text-slate-400 md:border-t-0">
             <strong className="block text-slate-100">3. Revisar feedback</strong>
@@ -11489,7 +11492,7 @@ function ChatModuleDashboard({
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-violet-200">Leitura qualitativa opcional</p>
                 <p className="mt-1 text-sm text-slate-300">
-                  Prepare a amostra e depois valide as leituras em Gestão e ações. Somente o que for aprovado entra como evidência do feedback.
+                  Selecione os tickets úteis na régua diária do analista ou em Gestão e ações. Somente os selecionados entram no feedback; não é necessário decidir sobre os demais.
                 </p>
                 {chatReportQualitativeStatus && (
                   <p className="mt-2 text-xs leading-5 text-slate-400">{chatReportQualitativeStatus}</p>
@@ -11519,7 +11522,7 @@ function ChatModuleDashboard({
                     }, 80)
                   }}
                 >
-                  Validar leituras deste analista
+                  Selecionar tickets deste analista
                 </button>
               </div>
             </div>
@@ -17269,7 +17272,7 @@ async function exportChatIndividualReport({
             <strong>${qualitativeFindings.length} ticket(s) selecionado(s) para feedback</strong>
             <span>${negativeQualitativeFindings.length} negativa(s) · ${positiveQualitativeFindings.length} positiva(s)</span>
           </div>
-          <p class="muted">Cobertura validada: ${qualitativeContext?.negativeAnalyzed ?? 0} de ${qualitativeContext?.negativeTotal ?? 0} negativas e ${qualitativeContext?.positiveAnalyzed ?? 0} de ${qualitativeContext?.positiveTotal ?? 0} positivas.</p>
+          <p class="muted">Seleção para feedback: ${qualitativeContext?.negativeAnalyzed ?? 0} de ${qualitativeContext?.negativeTotal ?? 0} negativas e ${qualitativeContext?.positiveAnalyzed ?? 0} de ${qualitativeContext?.positiveTotal ?? 0} positivas.</p>
           <div class="qualitative-grid">
             <div class="qualitative-item">
               <span>Nas negativas</span>

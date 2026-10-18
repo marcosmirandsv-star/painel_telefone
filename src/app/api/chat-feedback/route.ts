@@ -47,6 +47,7 @@ type ChatFeedbackRequest = {
     negativeTotal?: number
     positiveTotal?: number
     findings?: {
+      ticketId?: string
       satisfactionLabel?: string | null
       occurredDate?: string | null
       analysis?: unknown
@@ -225,15 +226,15 @@ function buildPrompt(body: ChatFeedbackRequest) {
   const managerHasContext = Boolean(body.managerNotes?.trim())
   const qualitativeContext = body.qualitativeContext
   const qualitativeFindings = (qualitativeContext?.findings ?? [])
-    .slice(0, 8)
     .map((item) => ({
+      ticket_id: item.ticketId ?? null,
       satisfaction: item.satisfactionLabel ?? 'sem classificação',
       date: item.occurredDate ?? 'data não informada',
       analysis: normalizeQualitativeAnalysis(item.analysis),
     }))
   const qualitativeCoverage =
     qualitativeContext && Number(qualitativeContext.analyzedCount) > 0
-      ? `${Number(qualitativeContext.analyzedCount)} tickets analisados; ${Number(qualitativeContext.negativeAnalyzed ?? 0)} de ${Number(qualitativeContext.negativeTotal ?? 0)} negativas e ${Number(qualitativeContext.positiveAnalyzed ?? 0)} de ${Number(qualitativeContext.positiveTotal ?? 0)} positivas.`
+      ? `${Number(qualitativeContext.analyzedCount)} tickets selecionados para feedback; ${Number(qualitativeContext.negativeAnalyzed ?? 0)} de ${Number(qualitativeContext.negativeTotal ?? 0)} negativas e ${Number(qualitativeContext.positiveAnalyzed ?? 0)} de ${Number(qualitativeContext.positiveTotal ?? 0)} positivas.`
       : 'Nenhum ticket qualitativo analisado para este ciclo.'
 
   return `
@@ -266,7 +267,7 @@ ${volumeRule}
 - Não invente a causa de um resultado. Quando a causa não estiver nos dados ou nas observações, registre que gestor e analista vão verificá-la juntos.
 - Quando houver evidências qualitativas, trate-as explicitamente como amostra dos tickets analisados. Nunca generalize um padrão da amostra para todos os atendimentos do mês.
 - Respeite o nível de confiança da análise qualitativa. Confiança baixa deve aparecer como hipótese ou ponto a validar, nunca como conclusão.
-- Só transforme uma evidência qualitativa em orientação comportamental quando coaching_signal.available for verdadeiro ou quando as observações do gestor trouxerem o mesmo comportamento de forma explícita.
+- Só afirme uma falha comportamental quando coaching_signal.available for verdadeiro ou quando as observações do gestor trouxerem o mesmo comportamento de forma explícita. A seleção editorial não comprova culpa. Quando houver cx_coaching.practice_to_improve, você pode propor essa prática para o próximo caso, com exemplo e verificação, deixando claro que é orientação prospectiva e preservando attribution_caution.
 - Uma causa classificada como empresa, sistema, processo, cliente ou fator externo não deve ser convertida em culpa individual do analista.
 - Não comece com parabéns genérico. Comece pelo aspecto que torna este caso diferente dos demais.
 - A base do sistema é uma ficha factual, não um modelo de redação. Não copie sua ordem, frases ou cadência. Use-a somente para preservar fatos e limites da análise.
@@ -309,7 +310,7 @@ Observacoes do gestor:
 ${body.managerNotes?.trim() || 'Sem observações adicionais.'}
 Contexto específico fornecido pelo gestor: ${managerHasContext ? 'sim; ele deve orientar a personalização do texto' : 'não; limite-se aos indicadores e sinalize hipóteses como pontos a verificar'}
 
-Cobertura qualitativa da amostra:
+Tickets selecionados pela gestão para compor o feedback:
 ${qualitativeCoverage}
 
 Evidências qualitativas estruturadas dos tickets já analisados:
