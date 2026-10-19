@@ -2,7 +2,6 @@ import { ApiError, authorizeClickDeskSessionClient, handle, json } from '@/lib/i
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 import { readFinalLedger, readLedgerCoverageForAccess } from '@/lib/clickdesk-ledger-server'
 import { randomUUID } from 'node:crypto'
-import { homologationReadAdmin } from '@/lib/clickdesk-final-owner-server'
 import { partitionChatLedgerByActiveRoster } from '@/lib/clickdesk-active-analysts'
 
 export const runtime = 'nodejs'
@@ -278,18 +277,26 @@ export async function GET(request: Request) {
     const { rows, coverage, admin, excludedInactive } = await loadRows(access.admin, filters, access.isManagement)
 
     stage = 'sync_status'
-    // A RLS mantém o histórico operacional global restrito à gestão.
-    // Após autenticar o analista, exponha apenas o horário da última sincronização.
-    const latestSync = access.isManagement
-      ? await admin.from('clickdesk_chat_sync_runs')
-        .select('id,status,period_start,period_end,trigger_mode,pages_scanned,rows_upserted,matched_rows,unmatched_rows,finished_at')
-        .eq('status', 'completed').lte('period_start', filters.end).gte('period_end', filters.start)
-        .order('finished_at', { ascending: false }).limit(1).maybeSingle()
-      : await homologationReadAdmin().from('clickdesk_chat_sync_runs')
-        .select('finished_at')
-        .eq('status', 'completed').lte('period_start', filters.end).gte('period_end', filters.start)
-        .order('finished_at', { ascending: false }).limit(1).maybeSingle()
+    const latestSync = await admin
+      .from('clickdesk_chat_sync_runs')
+      .select('id,status,period_start,period_end,trigger_mode,pages_scanned,rows_upserted,matched_rows,unmatched_rows,finished_at')
+      .eq('status', 'completed')
+      .lte('period_start', filters.end)
+      .gte('period_end', filters.start)
+      .order('finished_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
     if (latestSync.error) throw new ApiError(503, 'Não foi possível consultar o status da sincronização.')
+
+    let visibleSyncFinishedAt = latestSync.data?.finished_at ?? null
+    if (!access.isManagement) {
+      // A sessão só pode obter o horário, nunca as linhas globais de sincronização.
+      const clock = await access.admin.rpc('get_clickdesk_sync_clock', {
+        p_start: filters.start, p_end: filters.end,
+      })
+      visibleSyncFinishedAt = !clock.error && typeof clock.data === 'string' ? clock.data : null
+      if (clock.error) console.warn('clickdesk_sync_clock_unavailable', { code: clock.error.code })
+    }
 
     const apprenticeRows = rows.filter((row) => row.identity_role === 'apprentice')
     const includedRows = rows.filter((row) => row.identity_role !== 'apprentice')
@@ -348,8 +355,8 @@ export async function GET(request: Request) {
       },
       latest_sync: access.isManagement
         ? latestSync.data ?? null
-        : latestSync.data?.finished_at
-          ? { finished_at: latestSync.data.finished_at }
+        : visibleSyncFinishedAt
+          ? { finished_at: visibleSyncFinishedAt }
           : null,
       sync_schedule: {
         interval_minutes: CLICKDESK_SYNC_INTERVAL_MINUTES,
