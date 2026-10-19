@@ -66,7 +66,7 @@ async function recoveryHarness(options:{host?:string;lease?:boolean;reasons?:Rec
  runInNewContext(ts.transpileModule(code,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,{
   Deno:{env:{get:(key:string)=>key==='SUPABASE_URL'?'https://'+(options.host??'vvtorcvchnqhcredhorv.supabase.co'):key==='SUPABASE_SERVICE_ROLE_KEY'?'test-placeholder':undefined},serve:(fn:typeof handler)=>{handler=fn}},
   createClient:()=>admin,EdgeRuntime:{waitUntil:(task:Promise<unknown>)=>background.push(task)},
-  Response,AbortSignal,setTimeout:(fn:()=>void)=>{fn();return 0},
+  URL,Response,AbortSignal,setTimeout:(fn:()=>void)=>{fn();return 0},
   fetch:async(url:string)=>{urls.push(url);return options.failed?Response.json({error:'failed'},{status:503}):Response.json({ok:true,examined:32,confirmed:0,needs_another_batch:true,reasons:options.reasons??{}})}
  })
  const response=await handler(new Request('https://example.invalid',{method:'POST',headers:{Authorization:'Bearer test-placeholder'}}))
