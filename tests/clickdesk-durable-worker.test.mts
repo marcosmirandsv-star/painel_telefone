@@ -53,3 +53,43 @@ test('chaves ficam no servidor e nunca podem escolher uma URL de destino pelo cl
  assert.match(worker,/cooldown_until/)
  assert.doesNotMatch(worker,/vercel.app|x-vercel-protection-bypass/)
 })
+
+async function recoveryHarness(options:{host?:string;lease?:boolean;reasons?:Record<string,number>;failed?:boolean}={}){
+ let handler:(request:Request)=>Promise<Response>=async()=>new Response()
+ const background:Promise<unknown>[]=[]
+ const urls:string[]=[]
+ let releases=0
+ const chain:any={eq(){return this},then(resolve:(value:unknown)=>void){resolve({error:null})}}
+ const admin={rpc:async(name:string)=>({data:name==='get_clickdesk_cron_credentials'?{api_key:'unused-test-placeholder'}:options.lease===false?null:'test-lease',error:null}),
+ from:(table:string)=>({update:()=>{if(table==='clickdesk_reconciliation_cycle')releases++;return chain}})}
+ const code=source('supabase/functions/clickdesk-ledger-catchup/index.ts').replace(/^import[^\n]+\n/,'')
+ runInNewContext(ts.transpileModule(code,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,{
+  Deno:{env:{get:(key:string)=>key==='SUPABASE_URL'?'https://'+(options.host??'vvtorcvchnqhcredhorv.supabase.co'):key==='SUPABASE_SERVICE_ROLE_KEY'?'test-placeholder':undefined},serve:(fn:typeof handler)=>{handler=fn}},
+  createClient:()=>admin,EdgeRuntime:{waitUntil:(task:Promise<unknown>)=>background.push(task)},
+  Response,AbortSignal,setTimeout:(fn:()=>void)=>{fn();return 0},
+  fetch:async(url:string)=>{urls.push(url);return options.failed?Response.json({error:'failed'},{status:503}):Response.json({ok:true,examined:32,confirmed:0,needs_another_batch:true,reasons:options.reasons??{}})}
+ })
+ const response=await handler(new Request('https://example.invalid',{method:'POST',headers:{Authorization:'Bearer test-placeholder'}}))
+ await Promise.all(background)
+ return {response,urls,releases}
+}
+test('recuperação é limitada a oito lotes e usa apenas o endpoint fixo de homologação',async()=>{
+ const r=await recoveryHarness()
+ assert.equal(r.response.status,202)
+ assert.equal(r.urls.length,8)
+ assert.ok(r.urls.every(url=>url==='https://vvtorcvchnqhcredhorv.supabase.co/functions/v1/clickdesk-ledger-incremental'))
+ assert.equal(r.releases,1)
+})
+test('recuperação para ao receber limite da origem e preserva lease após interrupção',async()=>{
+ const rate=await recoveryHarness({reasons:{clickdesk_http_429:32}})
+ assert.equal(rate.urls.length,1)
+ const failed=await recoveryHarness({failed:true})
+ assert.equal(failed.urls.length,1)
+ assert.equal(failed.releases,0)
+})
+test('recuperação não inicia em outro projeto nem durante ciclo já reservado',async()=>{
+ const host=await recoveryHarness({host:'other-project.supabase.co'})
+ assert.equal(host.response.status,403);assert.equal(host.urls.length,0)
+ const busy=await recoveryHarness({lease:false})
+ assert.equal(busy.response.status,202);assert.equal(busy.urls.length,0)
+})
