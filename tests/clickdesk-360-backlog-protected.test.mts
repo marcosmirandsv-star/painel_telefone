@@ -43,24 +43,35 @@ test('qualitativo é processado internamente com autenticação e sem segundo ac
   assert.match(qualitative,/clickdesk_final_ticket_pending/)
 })
 
-test('acesso servidor-servidor da Vercel usa header persistente protegido',()=>{
+test('fila nativa não atravessa SSO e autentica cron ou gestor antes de acessar configuração',()=>{
   const dispatcher=source('supabase/functions/clickdesk-360-dispatch/index.ts')
-  assert.match(dispatcher,/get_homologation_360_dispatch_config/)
-  assert.match(dispatcher,/x-vercel-protection-bypass/)
-  assert.match(dispatcher,/X-Central-Automation/)
-  assert.match(dispatcher,/Vercel automation protection bypass not authorized/)
-  assert.doesNotMatch(dispatcher,/SHARE_COOKIE_NAME/)
-  assert.doesNotMatch(dispatcher,/\/_vercel_share=\$\{/)
-  assert.doesNotMatch(dispatcher,/get\('set-cookie'\)/)
-  assert.match(dispatcher,/\[301, 302, 303, 307, 308, 401, 403\]/)
-  assert.match(dispatcher,/p_token: token/)
+  assert.match(dispatcher,/get_clickdesk_cron_credentials/)
+  assert.match(dispatcher,/admin.auth.getUser\(token\)/)
+  assert.match(dispatcher,/management_only/)
+  assert.match(dispatcher,/vvtorcvchnqhcredhorv.supabase.co/)
+  assert.match(dispatcher,/EdgeRuntime.waitUntil\(work/)
+  assert.match(dispatcher,/claim_clickdesk_360_work/)
+  assert.match(dispatcher,/finish_clickdesk_360_work/)
+  assert.doesNotMatch(dispatcher,/vercel.app|x-vercel-protection-bypass|_vercel_share/)
+  assert.doesNotMatch(dispatcher,/console\.(log|info).*config/)
 })
+
 
 test('segurança: sem período fora do backlog, sem alterar produção ou telefone',()=>{
   const route=source('src/app/api/clickdesk/operation-360/auto-process/route.ts')
   const dispatcher=source('supabase/functions/clickdesk-360-dispatch/index.ts')
   assert.match(route,/environment !== 'homologacao'/)
   assert.match(route,/authorizeClickDeskAutomation/)
-  assert.match(dispatcher,/get_homologation_360_dispatch_config/)
+  assert.match(dispatcher,/new URL\(url\).hostname!==HOMO/)
   assert.doesNotMatch(route+dispatcher,/weekly_team_metrics|weekly_individual_metrics|55DBX/)
+})
+
+test('fechamento usa o mesmo ledger, exige cobertura comprovada e não aguarda IA',()=>{
+ const closure=source('src/lib/clickdesk-closure.ts')
+ assert.match(closure,/readFinalLedger\(admin/)
+ assert.doesNotMatch(closure,/from\('clickdesk_chat_attendances'\)/)
+ assert.match(closure,/if \(!coverageComplete\) issues.push/)
+ assert.match(closure,/qualitative_analysis_required: false/)
+ assert.match(closure,/feedback_selection_required: false/)
+ assert.match(closure,/ledger_sha256: ledgerHash/)
 })

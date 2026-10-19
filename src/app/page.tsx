@@ -761,6 +761,12 @@ type ClickDeskOperation360Synthesis = {
 }
 
 type ClickDeskOperation360 = {
+  background?: {
+    counts: { pending: number; processing: number; failed: number; done: number }
+    health: { status: string; last_started_at: string | null; last_finished_at: string | null; error_code: string | null } | null
+    failures: { ticket_id: string; error_code: string; attempts: number; next_attempt_at: string }[]
+    refreshed_at: string
+  } | null
   source_coverage?: { status: 'complete' | 'audit_sample_only'; verified_at: string | null; note: string }
   source?: string
   period?: { start: string; end: string }
@@ -4796,6 +4802,7 @@ function ChatModuleDashboard({
   const [clickDeskOperation360Refresh, setClickDeskOperation360Refresh] = useState(0)
   const [clickDeskOperation360Analyzing, setClickDeskOperation360Analyzing] = useState<'negative' | 'positive' | 'all' | ''>('')
   const [clickDeskOperation360Progress, setClickDeskOperation360Progress] = useState('')
+  const operation360RequestSequence = useRef(0)
   const [clickDeskOperation360Message, setClickDeskOperation360Message] = useState('')
   const [clickDeskOperation360EvidenceTicketId, setClickDeskOperation360EvidenceTicketId] = useState('')
   const [clickDeskOperation360EvidenceLoading, setClickDeskOperation360EvidenceLoading] = useState(false)
@@ -5569,57 +5576,36 @@ function ChatModuleDashboard({
     }
   }, [teams, chatAnalystForm.teamId])
 
-  async function loadOperation360() {
+  async function loadOperation360(quiet = false) {
     if (!isManagementUser || !chat2PeriodKey) return
-
-    setClickDeskOperation360Loading(true)
-    setClickDeskOperation360Message('')
-    setClickDeskOperation360Evidence(null)
-    setClickDeskOperation360EvidenceTicketId('')
-
+    const sequence = ++operation360RequestSequence.current
+    if (!quiet) {
+      setClickDeskOperation360Loading(true)
+      setClickDeskOperation360(null)
+      setClickDeskOperation360Evidence(null)
+      setClickDeskOperation360EvidenceTicketId('')
+    }
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-
-      if (!session?.access_token) {
-        setClickDeskOperation360({
-          error: 'Sua sessão de homologação não está ativa.',
-        })
-        return
-      }
-
-      const [yearText, monthText] = chat2PeriodKey.split('-')
-      const now = new Date()
-      const year = Number(yearText) || now.getFullYear()
-      const monthNumber = Number(monthText) || now.getMonth() + 1
-      const period = getChatMonthPeriod(year, monthNumber)
-      const params = new URLSearchParams({
-        start: period.start,
-        end: period.end,
-      })
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('Sua sessão de homologação não está ativa.')
+      const [year, month] = chat2PeriodKey.split('-').map(Number)
+      const period = getChatMonthPeriod(year, month)
+      const params = new URLSearchParams({ start: period.start, end: period.end })
       if (selectedTeamId !== 'all') params.set('team_id', selectedTeamId)
-
       const response = await fetch(`/api/clickdesk/operation-360?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-        cache: 'no-store',
+        headers: { Authorization: `Bearer ${session.access_token}` }, cache: 'no-store',
       })
       const data = (await response.json()) as ClickDeskOperation360
-      const message = data.error || data.erro
-
-      if (!response.ok) {
-        setClickDeskOperation360({
-          ...data,
-          error: message || 'Não foi possível montar a Análise 360º da operação.',
-        })
-        return
-      }
-
+      if (sequence !== operation360RequestSequence.current) return
+      if (!response.ok) throw new Error(data.error || data.erro || 'Não foi possível consultar o 360º.')
       setClickDeskOperation360(data)
     } catch (error) {
-      setClickDeskOperation360({ error: getErrorMessage(error) })
+      if (sequence === operation360RequestSequence.current) {
+        if (quiet) setClickDeskOperation360Message('A atualização automática falhou. A última leitura permanece visível; tente atualizar novamente.')
+        else setClickDeskOperation360({ error: getErrorMessage(error) })
+      }
     } finally {
-      setClickDeskOperation360Loading(false)
+      if (sequence === operation360RequestSequence.current) setClickDeskOperation360Loading(false)
     }
   }
 
@@ -5701,106 +5687,26 @@ function ChatModuleDashboard({
 
   async function handleCompleteOperation360() {
     if (!chat2PeriodKey || clickDeskOperation360Analyzing) return
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-
-    if (!session?.access_token) {
-      setClickDeskOperation360Message('Sua sessão de homologação não está ativa.')
-      return
-    }
-
+    const sequence = operation360RequestSequence.current
     setClickDeskOperation360Analyzing('all')
     setClickDeskOperation360Message('')
-    setClickDeskOperation360Progress('Preparando fila completa...')
-
-    let totalProcessed = 0
-    let stalledRounds = 0
-    let remaining = (clickDeskOperation360?.queues?.negative_unanalyzed?.length ?? 0) +
-      (clickDeskOperation360?.queues?.positive_unanalyzed?.length ?? 0)
-
     try {
-      for (let round = 1; round <= 40; round += 1) {
-        const response = await fetch('/api/clickdesk/operation-360/process', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            start: chat2SelectedPeriod.start,
-            end: chat2SelectedPeriod.end,
-            team_id: selectedTeamId === 'all' ? null : selectedTeamId,
-            limit: 8,
-          }),
-          cache: 'no-store',
-        })
-
-        const data = (await response.json()) as {
-          processed?: number
-          failed?: number
-          failures?: { ticket_id: string; error: string }[]
-          remaining_after_batch?: { negative: number; positive: number; total: number }
-          error?: string
-          erro?: string
-        }
-
-        if (!response.ok) {
-          setClickDeskOperation360Message(
-            data.error || data.erro || 'Não foi possível processar a fila completa do 360º.',
-          )
-          break
-        }
-
-        const processedThisRound = data.processed ?? 0
-        totalProcessed += processedThisRound
-        remaining = data.remaining_after_batch?.total ?? Math.max(0, remaining - processedThisRound)
-
-        setClickDeskOperation360Progress(
-          `${totalProcessed} processada(s) nesta execução · ${remaining} pendente(s)`,
-        )
-
-        if (remaining <= 0) {
-          setClickDeskOperation360Message(
-            `Leitura qualitativa concluída para todo o recorte. ${totalProcessed} avaliação(ões) pendente(s) foram processadas nesta execução.`,
-          )
-          break
-        }
-
-        if (processedThisRound <= 0) {
-          stalledRounds += 1
-        } else {
-          stalledRounds = 0
-        }
-
-        if (stalledRounds >= 2) {
-          const failurePreview = (data.failures ?? [])
-            .slice(0, 3)
-            .map((item) => `#${item.ticket_id}: ${item.error}`)
-            .join(' · ')
-          setClickDeskOperation360Message(
-            `O processamento avançou até restarem ${remaining} avaliação(ões), mas esses tickets não puderam ser concluídos após novas tentativas.${failurePreview ? ` Motivos: ${failurePreview}` : ''}`,
-          )
-          break
-        }
-
-        if (round === 40) {
-          setClickDeskOperation360Message(
-            `O processamento automático atingiu o limite de segurança desta execução. Restam ${remaining} avaliação(ões); uma nova atualização continuará somente do ponto pendente.`,
-          )
-        }
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('Sua sessão de homologação não está ativa.')
+      const response = await fetch('/api/clickdesk/operation-360/jobs', {
+        method: 'POST', headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ start: chat2SelectedPeriod.start, end: chat2SelectedPeriod.end, team_id: selectedTeamId === 'all' ? null : selectedTeamId }),
+        cache: 'no-store',
+      })
+      const data = await response.json()
+      if (!response.ok || !data.accepted) throw new Error(data.erro || data.error || 'Não foi possível iniciar a fila.')
+      if (sequence === operation360RequestSequence.current) {
+        setClickDeskOperation360Message('Fila registrada no servidor. Você pode trocar filtros ou fechar esta aba; as leituras continuam e esta tela atualiza a cada 10 segundos.')
       }
-    } catch (error) {
-      setClickDeskOperation360Message(
-        `Falha durante o processamento da fila qualitativa: ${getErrorMessage(error)}`,
-      )
-    } finally {
-      setClickDeskOperation360Analyzing('')
-      setClickDeskOperation360Progress('')
       setClickDeskOperation360Refresh((current) => current + 1)
-      setClickDeskQualitativeSummaryRefresh((current) => current + 1)
-    }
+    } catch (error) {
+      if (sequence === operation360RequestSequence.current) setClickDeskOperation360Message(getErrorMessage(error))
+    } finally { setClickDeskOperation360Analyzing('') }
   }
 
   async function handleOpenOperation360Evidence(ticketId: string) {
@@ -5857,7 +5763,10 @@ function ChatModuleDashboard({
 
   useEffect(() => {
     if (!isManagementUser || chatActiveTab !== 'operation360' || !chat2PeriodKey) return
+    setClickDeskOperation360Message('')
     void loadOperation360()
+    const timer = window.setInterval(() => { void loadOperation360(true) }, 10000)
+    return () => { window.clearInterval(timer); operation360RequestSequence.current += 1 }
   }, [
     isManagementUser,
     chatActiveTab,
@@ -9697,10 +9606,10 @@ function ChatModuleDashboard({
             <div className="rounded-xl border border-violet-300/20 bg-violet-300/5 p-4">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-violet-100">Processamento qualitativo do recorte</p>
+                  <p className="text-sm font-semibold text-violet-100">Leitura da IA · {selectedTeamId === 'all' ? 'Todas as equipes' : teams.find((team) => team.id === selectedTeamId)?.name ?? 'Equipe selecionada'} · {chat2PeriodKey}</p>
                   <p className="mt-1 text-xs leading-5 text-slate-400">
                     {operation360NegativeQueue.length + operation360PositiveQueue.length > 0
-                      ? `${operation360NegativeQueue.length} negativa(s) e ${operation360PositiveQueue.length} positiva(s) aguardam leitura. O processamento percorre toda a fila e reaproveita o que já estiver válido.`
+                      ? `${operation360NegativeQueue.length} negativa(s) e ${operation360PositiveQueue.length} positiva(s) aguardam leitura da IA. As notas já estão incluídas no CSAT e no percentual de avaliações. Selecionar ou descartar para feedback é opcional.`
                       : 'Todas as avaliações elegíveis deste recorte já possuem leitura qualitativa válida.'}
                   </p>
                 </div>
@@ -9714,12 +9623,27 @@ function ChatModuleDashboard({
                   onClick={() => void handleCompleteOperation360()}
                 >
                   {clickDeskOperation360Analyzing === 'all'
-                    ? `Processando leitura completa · ${clickDeskOperation360Progress}`
+                    ? 'Registrando fila no servidor...'
                     : operation360NegativeQueue.length + operation360PositiveQueue.length > 0
-                      ? `Processar leitura completa · ${operation360NegativeQueue.length + operation360PositiveQueue.length} pendente(s)`
+                      ? `Iniciar ou retomar leitura · ${operation360NegativeQueue.length + operation360PositiveQueue.length} sem leitura`
                       : 'Leitura completa'}
                 </button>
               </div>
+              <p className="mt-3 text-xs leading-5 text-slate-300">
+                CSAT e participação são cálculos da base conciliada e não aguardam a IA. Os contadores abaixo pertencem somente à equipe e ao período exibidos.
+              </p>
+              {clickDeskOperation360?.background && (
+                <div className="mt-3 rounded-lg border border-white/10 p-3 text-xs leading-6 text-slate-300" aria-live="polite">
+                  <p>Fila no servidor neste recorte: {clickDeskOperation360.background.counts.processing} em leitura · {clickDeskOperation360.background.counts.pending} aguardando processamento · {clickDeskOperation360.background.counts.failed} com falha.</p>
+                  <p>A tela atualiza a cada 10 segundos. O processamento continua com a aba fechada.</p>
+                  <p>Rotina automática: {clickDeskOperation360.background.health?.status ?? 'aguardando configuração'} · última atividade: {clickDeskOperation360.background.health?.last_started_at ? formatDateTime(clickDeskOperation360.background.health.last_started_at) : 'ainda não registrada'}.</p>
+                  {clickDeskOperation360.background.failures.length > 0 && (
+                    <details><summary>Ver tickets que precisam de atenção</summary>
+                    {clickDeskOperation360.background.failures.map((item) => <p key={item.ticket_id}>Ticket #{item.ticket_id}: {item.error_code} · {item.attempts} tentativa(s).</p>)}
+                    </details>
+                  )}
+                </div>
+              )}
               {clickDeskOperation360Message && (
                 <p className="mt-3 text-sm leading-6 text-violet-100">{clickDeskOperation360Message}</p>
               )}

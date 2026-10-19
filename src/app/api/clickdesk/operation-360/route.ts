@@ -156,7 +156,7 @@ export async function GET(request: Request) {
       return Boolean(owner && row.analyst_id === owner.analyst_id
         && row.satisfaction_label === owner.satisfaction_label)
     })
-    const ledgerCoverage = await readLedgerCoverage(access.admin)
+    const [ledgerCoverage, workerStatus] = await Promise.all([readLedgerCoverage(access.admin), access.admin.rpc('get_clickdesk_360_queue_status', {p_start:filters.start,p_end:filters.end,p_team:filters.teamId})])
     const totals = calculateOperation360Totals(attendances)
     const currentAnalyses = analyses.filter(
       (row) =>
@@ -177,7 +177,7 @@ export async function GET(request: Request) {
     const negativeRows = attendances.filter((row) => row.satisfaction_label === 'negative')
     const positiveRows = attendances.filter((row) => row.satisfaction_label === 'positive')
     const unanalyzedNegative = negativeRows.filter((row) => !analyzedIds.has(row.clickdesk_ticket_id) && !retainedIds.has(row.clickdesk_ticket_id))
-    const unanalyzedPositive = positiveRows.filter((row) => !analyzedIds.has(row.clickdesk_ticket_id))
+    const unanalyzedPositive = positiveRows.filter((row) => !analyzedIds.has(row.clickdesk_ticket_id) && !retainedIds.has(row.clickdesk_ticket_id))
 
     const serializeQueue = (row: AttendanceRow) => ({
       ticket_id: row.clickdesk_ticket_id,
@@ -213,6 +213,7 @@ export async function GET(request: Request) {
 
     return json({
       source: 'clickdesk_operation_360',
+      background: workerStatus.error ? null : workerStatus.data,
       period: { start: filters.start, end: filters.end },
       scope: { team_id: filters.teamId },
       source_coverage: {

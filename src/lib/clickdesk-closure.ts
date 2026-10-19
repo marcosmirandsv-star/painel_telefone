@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ApiError } from '@/lib/integration-server'
+import { readFinalLedger, readLedgerCoverage } from '@/lib/clickdesk-ledger-server'
+import { createHash } from 'node:crypto'
 
 export type ClickDeskClosurePeriod = {
   month: string
@@ -72,29 +74,13 @@ async function pagedAttendances(
   admin: SupabaseClient,
   period: ClickDeskClosurePeriod,
 ): Promise<AttendanceRow[]> {
-  const result: AttendanceRow[] = []
-
-  for (let offset = 0; offset < 100000; offset += 500) {
-    let query = admin
-      .from('clickdesk_chat_attendances')
-      .select(
-        'clickdesk_ticket_id,occurred_date,area,assignee_name,analyst_id,team_id,identity_role,satisfaction_label,timestamp_source',
-      )
-      .gte('occurred_date', period.start)
-      .lte('occurred_date', period.end)
-      .order('clickdesk_ticket_id', { ascending: true })
-      .range(offset, offset + 499)
-
-    if (period.team !== 'all') query = query.eq('team_id', period.team)
-
-    const { data, error } = await query
-    if (error) throw new ApiError(503, 'Base persistida do ClickDesk indisponível.')
-
-    result.push(...((data ?? []) as AttendanceRow[]))
-    if ((data ?? []).length < 500) return result
-  }
-
-  throw new ApiError(422, 'O volume do fechamento excedeu o limite de consulta.')
+  const ledger = await readFinalLedger(admin, { start: period.start, end: period.end, teamId: period.team === 'all' ? null : period.team })
+  return ledger.map((row) => ({
+    clickdesk_ticket_id: row.ticket_id, occurred_date: row.occurred_date,
+    area: row.area ?? 'Fila histórica não comprovada', assignee_name: '',
+    analyst_id: row.analyst_id, team_id: row.team_id, identity_role: 'analyst' as const,
+    satisfaction_label: row.satisfaction_label, timestamp_source: 'last_public_human_answer',
+  }))
 }
 
 function groupBy<T>(items: T[], keyOf: (item: T) => string) {
@@ -123,7 +109,7 @@ export async function buildClickDeskClosureSnapshot(
     if (!data) throw new ApiError(404, 'Equipe do chat não encontrada.')
   }
 
-  const [attendanceRows, analystsResult, teamsResult, latestSyncResult, finalSyncResult] =
+  const [rawAttendanceRows, analystsResult, teamsResult, latestSyncResult, finalSyncResult, ledgerCoverage] =
     await Promise.all([
       pagedAttendances(admin, period),
       admin
@@ -152,6 +138,7 @@ export async function buildClickDeskClosureSnapshot(
         .order('finished_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
+      readLedgerCoverage(admin),
     ])
 
   if (analystsResult.error) throw new ApiError(503, 'Cadastro de analistas indisponível.')
@@ -163,6 +150,19 @@ export async function buildClickDeskClosureSnapshot(
   const teams = (teamsResult.data ?? []) as TeamRow[]
   const analystById = new Map(analysts.map((item) => [item.id, item]))
   const teamById = new Map(teams.map((item) => [item.id, item]))
+  if (rawAttendanceRows.some((row) => !row.analyst_id || !analystById.has(row.analyst_id))) {
+    throw new ApiError(503, 'Autoria do ledger sem cadastro; revisar conciliação antes do fechamento.')
+  }
+  const attendanceRows = rawAttendanceRows.filter((row) => analystById.get(row.analyst_id!)?.active)
+    .map((row) => ({ ...row, assignee_name: analystById.get(row.analyst_id!)!.name }))
+  const excludedInactive = rawAttendanceRows.length - attendanceRows.length
+  const coverageComplete = ledgerCoverage.entries.some((entry) =>
+    entry.source_key.startsWith('period_inventory_') && entry.start_date <= period.start &&
+    entry.end_date >= period.end && entry.completeness === 'complete' && entry.pending_count === 0)
+  const ledgerHash = createHash('sha256').update(JSON.stringify(attendanceRows.map((row) => [
+    row.clickdesk_ticket_id,row.analyst_id,row.team_id,row.occurred_date,row.satisfaction_label,
+  ]).sort((a,b) => String(a[0]).localeCompare(String(b[0]))))).digest('hex')
+
 
   const performanceRows = attendanceRows.filter((row) => row.identity_role === 'analyst')
   const managementRows = attendanceRows.filter((row) => row.identity_role === 'management')
@@ -275,6 +275,7 @@ export async function buildClickDeskClosureSnapshot(
   }).format(new Date())
 
   const issues: string[] = []
+  if (!coverageComplete) issues.push('A descoberta integral dos tickets e a conciliação da competência ainda não foram comprovadas. A leitura da IA não bloqueia os cálculos; a cobertura da base precisa ser validada.')
   if (period.end >= today) {
     issues.push('A competência ainda está aberta.')
   }
@@ -297,9 +298,9 @@ export async function buildClickDeskClosureSnapshot(
   }
 
   return {
-    versao: '2',
+    versao: '3',
     regras: 'clickdesk-human-v1',
-    fonte: 'clickdesk_persisted',
+    fonte: 'clickdesk_final_ticket_ledger',
     consultado_em: new Date().toISOString(),
     status: 'parcial',
     canal: 'chat',
@@ -310,7 +311,7 @@ export async function buildClickDeskClosureSnapshot(
     tem_dados: attendanceRows.length > 0,
     regra_periodo: 'atendimentos_humanos_clickdesk_por_data_operacional',
     regra_data:
-      'first_assignee_message -> first_human_role_message -> explicit_fallback',
+      'last_public_human_answer -> autoria final comprovada, em Brasília',
     metas: {
       review_percentage: 25,
       csat: 'meta individual congelada por analista no fechamento',
@@ -322,6 +323,12 @@ export async function buildClickDeskClosureSnapshot(
     equipes: teamSnapshots,
     gestao: managementSnapshots,
     qualidade_dados: {
+      coverage_complete: coverageComplete,
+      coverage_sources: ledgerCoverage.entries,
+      excluded_inactive_attendances: excludedInactive,
+      ledger_sha256: ledgerHash,
+      qualitative_analysis_required: false,
+      feedback_selection_required: false,
       unmapped_attendances: unmappedRows.length,
       fallback_timestamp_attendances: fallbackRows.length,
       missing_team_attendances: missingTeamRows.length,
@@ -333,6 +340,8 @@ export async function buildClickDeskClosureSnapshot(
     },
     fechamento: {
       pronto: attendanceRows.length > 0 && issues.length === 0,
+      formulas: { csat: 'positivas / (positivas + negativas) × 100', review_percentage: '(positivas + negativas) / atendimentos comprovados × 100', review_goal: 25 },
+      ledger_sha256: ledgerHash,
       pendencias: issues,
     },
   }

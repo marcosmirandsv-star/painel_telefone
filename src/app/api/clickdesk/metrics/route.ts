@@ -117,7 +117,7 @@ function parseFilters(request: Request) {
   return { start, end, analystId, teamId, today }
 }
 
-async function loadRows(
+async function loadRowsFallback(
   admin: Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],
   filters: ReturnType<typeof parseFilters>,
   isManagement: boolean,
@@ -158,6 +158,20 @@ async function loadRows(
     }
   })
   return { rows, coverage, admin, excludedInactive }
+}
+
+async function loadRows(
+ admin: Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],
+ filters: ReturnType<typeof parseFilters>, isManagement: boolean,
+) {
+ const [result,coverage]=await Promise.all([
+ admin.rpc('get_clickdesk_metric_rows',{p_start:filters.start,p_end:filters.end,p_analyst:filters.analystId,p_team:filters.teamId}),
+ readLedgerCoverageForAccess(admin,isManagement),
+ ])
+ // Compatibility only while a migration is being rolled out; normal reads are one SQL aggregate.
+ if(result.error?.code==='PGRST202')return loadRowsFallback(admin,filters,isManagement)
+ if(result.error||!result.data)throw new ApiError(503,'Não foi possível calcular os indicadores da base conciliada.')
+ return {rows:result.data.rows as DailyMetricRow[],coverage,admin,excludedInactive:Number(result.data.excludedInactive)||0}
 }
 
 function aggregate(rows: DailyMetricRow[]): Aggregate {
