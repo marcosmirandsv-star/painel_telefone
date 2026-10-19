@@ -4327,10 +4327,10 @@ function ChatAnalystPortal({
 
           <div className="analyst-status-card rounded-lg border border-cyan-400/20 bg-cyan-400/5 px-4 py-3 text-sm">
             <p className="text-slate-400">Situação atual</p>
-            <strong className="mt-1 block text-cyan-100">{status}</strong>
-            <span className="mt-1 block text-xs text-slate-400">
+            <strong className="mt-1 block text-cyan-100">{loading ? 'Consultando indicadores' : status}</strong>
+            {!loading && !metrics?.erro && <span className="mt-1 block text-xs text-slate-400">
               {Number(meetsCsat) + Number(meetsReviews)} de 2 metas atingidas
-            </span>
+            </span>}
           </div>
         </div>
 
@@ -4439,7 +4439,7 @@ function ChatAnalystPortal({
         )}
       </section>
 
-      <section id="minha-rotina" className="panel scroll-mt-24">
+      <section id="minha-rotina" className={loading || metrics?.erro ? 'hidden' : 'panel scroll-mt-24'}>
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
@@ -4620,7 +4620,7 @@ function ChatAnalystPortal({
         )}
       </section>
 
-      <section className="panel">
+      <section className={loading ? 'hidden' : 'panel'}>
         <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
           Minha evolução
         </p>
