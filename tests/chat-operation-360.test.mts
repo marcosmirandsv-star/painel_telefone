@@ -535,4 +535,6 @@ test('cobertura forte exige leitura ampla do universo avaliado', () => {
   })
 
   assert.equal(synthesis.coverage_level, 'strong')
+  assert.equal(synthesis.coverage_label, 'Cobertura parcial')
+  assert.match(synthesis.caveat, /Cobertura incompleta/)
 })

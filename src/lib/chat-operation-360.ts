@@ -152,7 +152,7 @@ export function buildOperation360Synthesis(input: {
   const topPositiveTakeaway = strongestPattern(input.analysis.positive.takeaways)
   const topPositiveCause = strongestPattern(input.analysis.positive.causes)
 
-  const coverageLabel = level === 'strong' ? 'Cobertura forte' : level === 'partial' ? 'Cobertura parcial' : level === 'initial' ? 'Cobertura inicial' : 'Análise pendente'
+  const coverageLabel = totalAnalyzed === totalEvaluated && totalEvaluated > 0 ? 'Leitura do recorte concluída' : totalAnalyzed > 0 ? 'Cobertura parcial' : 'Análise pendente'
 
   const headline = input.negativeTotal === 0
     ? 'Não há avaliações negativas neste recorte.'
@@ -177,7 +177,7 @@ export function buildOperation360Synthesis(input: {
       ? `A IA processou apenas ${positiveAnalyzed} de ${input.positiveTotal} positiva(s) (${positiveCoverage}%). A amostra positiva ainda é inicial e não deve ser generalizada. Entre os tickets já lidos aparece ${patternWithMeaning(positivePattern)}.`
       : `A IA processou ${positiveAnalyzed} de ${input.positiveTotal} positiva(s) (${positiveCoverage}%). O agrupamento mais frequente é ${patternWithMeaning(positivePattern)}.`
 
-  const lowCoveragePrefix = level === 'strong' ? '' : `Leitura parcial (${totalAnalyzed}/${totalEvaluated} avaliações processadas; ${negativeAnalyzed}/${input.negativeTotal} negativas). `
+  const lowCoveragePrefix = totalAnalyzed === totalEvaluated ? '' : `Leitura parcial (${totalAnalyzed}/${totalEvaluated} avaliações processadas; ${negativeAnalyzed}/${input.negativeTotal} negativas). `
   const resultRead = input.negativeTotal === 0
     ? 'Neste recorte, não há avaliações negativas pressionando o CSAT.'
     : negativeAnalyzed === 0
@@ -197,7 +197,7 @@ export function buildOperation360Synthesis(input: {
     positive_read: positiveRead,
     result_read: resultRead,
     recommended_focus: resultRead,
-    caveat: level === 'strong'
+    caveat: totalAnalyzed === totalEvaluated
       ? 'A síntese descreve recorrências observadas nos tickets analisados. Recorrência não prova causalidade; consulte as evidências antes de concluir responsabilidade.'
       : 'Cobertura incompleta: a síntese não representa automaticamente todas as avaliações do período. Recorrência não prova causalidade. Os tickets pendentes precisam ser processados antes de uma conclusão consolidada.',
   }

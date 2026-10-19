@@ -16181,7 +16181,7 @@ function ClickDeskSyncStatus({
     latestSyncAt && !Number.isNaN(new Date(latestSyncAt).getTime())
       ? new Date(latestSyncAt).getTime()
       : null
-  const intervalMs = (schedule?.interval_minutes ?? 60) * 60 * 1000
+  const intervalMs = (schedule?.interval_minutes ?? 5) * 60 * 1000
   const currentBusinessHour = Number(
     new Intl.DateTimeFormat('en-US', {
       hour: '2-digit',
@@ -16227,7 +16227,7 @@ function ClickDeskSyncStatus({
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Sincronização ClickDesk</p>
         <p className="mt-1 text-sm text-slate-300">
           Última: <strong>{latestSyncAt ? formatDateTime(latestSyncAt) : 'não informada'}</strong>
-          {' '}· ciclo de {schedule?.interval_minutes ?? 60} minutos
+          {' '}· ciclo de {schedule?.interval_minutes ?? 5} minutos
         </p>
       </div>
       <div className={`rounded-lg border px-4 py-2 text-right ${isOverdue ? 'border-amber-300/25 bg-amber-300/5' : 'border-cyan-300/20 bg-cyan-300/5'}`}>
@@ -17815,7 +17815,7 @@ function buildChatFeedbackText({
         : 'O próximo passo é identificar, nas evidências reais do atendimento, quais práticas ajudaram a sustentar esse resultado e transformá-las em um padrão consciente para o próximo ciclo.'
 
   const evidenceRule =
-    'Os indicadores mostram o resultado do período, mas não explicam sozinhos o comportamento que o produziu. Reconhecimentos ou ajustes comportamentais devem ser apoiados por exemplos reais, observações da gestão ou leituras qualitativas validadas.'
+    'Os indicadores mostram o resultado do período, mas não explicam sozinhos o comportamento que o produziu. Reconhecimentos ou ajustes comportamentais devem ser apoiados por exemplos reais, observações da gestão ou evidências dos tickets selecionados para feedback.'
 
   return [
     cycleReading,
