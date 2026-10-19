@@ -1,3 +1,5 @@
+import { ApiError, authorizeManagerSessionClient } from '@/lib/integration-server'
+import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 import { NextResponse } from 'next/server'
 import { normalizeQualitativeAnalysis } from '@/lib/clickdesk-qualitative'
 
@@ -654,6 +656,7 @@ async function generateExternalFeedback(prompt: string, style: ChatFeedbackReque
 
 export async function POST(request: Request) {
   try {
+    if(getServerSupabaseConfig().environment === 'homologacao')await authorizeManagerSessionClient(request)
     const body = (await request.json()) as ChatFeedbackRequest
 
     if (!body.metric?.analystName) {
@@ -700,6 +703,7 @@ export async function POST(request: Request) {
       })
     }
   } catch (error) {
+    if(error instanceof ApiError)return NextResponse.json({error:error.message},{status:error.status})
     return NextResponse.json({ error: getErrorText(error) }, { status: 500 })
   }
 }

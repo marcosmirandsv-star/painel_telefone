@@ -212,6 +212,8 @@ export async function authorizeClickDeskSessionClient(request: Request) {
   }
 
   if (isAnalyst && chatAnalystId) {
+    const membership = await client.from('chat_analysts').select('id,active').eq('id',chatAnalystId).maybeSingle()
+    if(membership.error || !membership.data?.active)throw new ApiError(403,'Acesso ao Chat indisponível: vínculo de equipe inativo. Procure a gestão.')
     return {
       admin: client,
       userId: data.user.id,

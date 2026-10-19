@@ -6957,6 +6957,12 @@ function ChatModuleDashboard({
     }
   }
 
+  async function feedbackRequestHeaders() {
+    const {data:{session}}=await supabase.auth.getSession()
+    if(!session?.access_token)throw new Error('Sua sessão expirou. Entre novamente para gerar o feedback.')
+    return {'Content-Type':'application/json',Authorization:`Bearer ${session.access_token}`}
+  }
+
   async function loadChatQualitativeFeedbackContext(
     metric: ChatMonthlyMetric,
   ): Promise<ChatQualitativeFeedbackContext | undefined> {
@@ -7122,7 +7128,7 @@ function ChatModuleDashboard({
       const qualitativeContext = await loadChatQualitativeFeedbackContext(selectedChatReportMetric)
       const response = await fetch('/api/chat-feedback', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await feedbackRequestHeaders(),
         body: JSON.stringify({
           serviceModule: 'chat',
           dataSourceLabel: chatReportSourceLabel,
@@ -7199,7 +7205,7 @@ function ChatModuleDashboard({
       const qualitativeContext = await loadChatQualitativeFeedbackContext(selectedChatReportMetric)
       const response = await fetch('/api/chat-feedback', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await feedbackRequestHeaders(),
         body: JSON.stringify({
           serviceModule: 'chat',
           dataSourceLabel: chatReportSourceLabel,
@@ -13718,9 +13724,7 @@ function ReportsView({
           : 0
       const response = await fetch('/api/chat-feedback', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: await feedbackRequestHeaders(),
         body: JSON.stringify({
           serviceModule: 'phone',
           feedbackStyle: phoneFeedbackStyle,
@@ -13800,9 +13804,7 @@ function ReportsView({
           : 0
       const response = await fetch('/api/chat-feedback', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: await feedbackRequestHeaders(),
         body: JSON.stringify({
           serviceModule: 'phone',
           feedbackStyle: phoneFeedbackStyle,
