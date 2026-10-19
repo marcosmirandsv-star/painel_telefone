@@ -187,7 +187,7 @@ Deno.serve(async(req:Request)=>{
   if(!key||!account)return Response.json({error:'clickdesk_config_unavailable'},{status:503})
   let body:Record<string,unknown>={}
   try{const v:unknown=await req.json();body=object(v)}catch{return Response.json({error:'invalid_body'},{status:400})}
-  if(Object.keys(body).some(k=>!['dry_run','commit_verified','limit','refresh_existing','target_start','target_end'].includes(k)))
+  if(Object.keys(body).some(k=>!['dry_run','commit_verified','limit','refresh_existing','target_start','target_end','retry_history_exceptions'].includes(k)))
     return Response.json({error:'unsupported_parameter'},{status:400})
   const dry=body.dry_run!==false
   if(!dry && body.commit_verified!==true)return Response.json({error:'commit_verified_required'},{status:403})
@@ -211,7 +211,7 @@ Deno.serve(async(req:Request)=>{
   try {
     if(!dry)await admin.from('clickdesk_reconciliation_health').upsert({singleton:true,status:'running',last_started_at:new Date().toISOString(),error_code:null})
     const [selection,roster]=await Promise.all([
-      admin.rpc('get_clickdesk_reconciliation_batch',{p_limit:batch,p_refresh:refresh,p_start:targeted?targetStart:null,p_end:targeted?targetEnd:null}),
+      body.retry_history_exceptions===true ? admin.rpc('get_clickdesk_reconciliation_exceptions',{p_limit:batch}) : admin.rpc('get_clickdesk_reconciliation_batch',{p_limit:batch,p_refresh:refresh,p_start:targeted?targetStart:null,p_end:targeted?targetEnd:null}),
       admin.from('chat_analysts').select('id,name,team_id,csat_goal'),
     ])
     if(selection.error||!selection.data)throw Error('candidate_source_unavailable_sql_batch')

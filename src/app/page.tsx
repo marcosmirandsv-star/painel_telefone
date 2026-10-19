@@ -37,6 +37,13 @@ function reconciliationReason(reason: string | null) {
   return reason?.startsWith('clickdesk_http_') ? `Falha de leitura no ClickDesk (HTTP ${reason.slice(14)}).` : labels[reason ?? ''] ?? 'Pendente de conferência.'
 }
 
+  async function feedbackRequestHeaders() {
+    const {data:{session}}=await supabase.auth.getSession()
+    if(!session?.access_token)throw new Error('Sua sessão expirou. Entre novamente para gerar o feedback.')
+    return {'Content-Type':'application/json',Authorization:`Bearer ${session.access_token}`}
+  }
+
+
 type Goal = {
   id: string
   key: string
@@ -6955,12 +6962,6 @@ function ChatModuleDashboard({
     } finally {
       setChatReportQualitativePreparing(false)
     }
-  }
-
-  async function feedbackRequestHeaders() {
-    const {data:{session}}=await supabase.auth.getSession()
-    if(!session?.access_token)throw new Error('Sua sessão expirou. Entre novamente para gerar o feedback.')
-    return {'Content-Type':'application/json',Authorization:`Bearer ${session.access_token}`}
   }
 
   async function loadChatQualitativeFeedbackContext(
