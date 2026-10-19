@@ -30,7 +30,7 @@ async function scan(admin:any,creds:any,run:any){
  return
  }
  if(page===lastPage)throw Error('source_interval_limit_requires_partition')
- await new Promise(resolve=>setTimeout(resolve,1200))
+ await new Promise(resolve=>setTimeout(resolve,350))
  }
  await admin.from('clickdesk_period_inventory').update({lease_until:null}).eq('period_key',run.period_key)
  return
@@ -53,7 +53,8 @@ async function scan(admin:any,creds:any,run:any){
  const errors=await admin.from('clickdesk_inventory_partitions').select('error_code').eq('period_key',run.period_key).eq('status','error').limit(1)
  if(errors.data?.length)throw Error(errors.data[0].error_code||'partition_needs_review')
  const totals=await admin.from('clickdesk_inventory_partitions').select('total_items,total_pages').eq('period_key',run.period_key).eq('status','complete')
- await admin.from('clickdesk_period_inventory').update({status:'complete',total_items:totals.data?.reduce((n:any,p:any)=>n+p.total_items,0)||0,total_pages:totals.data?.reduce((n:any,p:any)=>n+p.total_pages,0)||0,finished_at:new Date().toISOString(),last_incremental_at:run.started_at,lease_until:null,error_code:null}).eq('period_key',run.period_key)
+ await admin.from('clickdesk_period_inventory').update({status:'complete',total_items:totals.data?.reduce((n:any,p:any)=>n+p.total_items,0)||0,total_pages:totals.data?.reduce((n:any,p:any)=>n+p.total_pages,0)||0,finished_at:new Date().toISOString(),last_incremental_at:run.scan_watermark_at||run.started_at,lease_until:null,error_code:null}).eq('period_key',run.period_key)
+ await admin.rpc('set_clickdesk_recovery_cadence',{p_recovering:false})
  await admin.rpc('assess_clickdesk_period_inventory',{p_period:run.period_key})
  return
  }
@@ -68,7 +69,7 @@ async function scan(admin:any,creds:any,run:any){
  const split=await admin.from('clickdesk_inventory_partitions').upsert([{period_key:run.period_key,created_from:part.created_from,created_to:middle},{period_key:run.period_key,created_from:after,created_to:part.created_to}],{onConflict:'period_key,created_from,created_to',ignoreDuplicates:true})
  if(split.error)throw Error('inventory_save_failed')
  await admin.from('clickdesk_inventory_partitions').update({status:'split'}).eq('id',part.id)
- await new Promise(resolve=>setTimeout(resolve,1200));continue
+ await new Promise(resolve=>setTimeout(resolve,350));continue
  }
  const ids=items.map(t=>String(t.id))
  if(ids.some(id=>!/^\d{1,25}$/.test(id))||new Set(ids).size!==ids.length)throw Error('invalid_ticket_ids')
@@ -86,7 +87,7 @@ async function scan(admin:any,creds:any,run:any){
  await admin.from('clickdesk_inventory_partitions').update({status:'complete',next_page:lastPage+1,total_pages:lastPage,total_items:total}).eq('id',part.id)
  }
  }else await admin.from('clickdesk_inventory_partitions').update({status:'running',next_page:part.next_page+1,total_pages:lastPage,total_items:total}).eq('id',part.id)
- await new Promise(resolve=>setTimeout(resolve,1200))
+ await new Promise(resolve=>setTimeout(resolve,350))
  }
  await admin.from('clickdesk_period_inventory').update({lease_until:null}).eq('period_key',run.period_key)
  await admin.rpc('assess_clickdesk_period_inventory',{p_period:run.period_key})
@@ -136,7 +137,7 @@ Deno.serve(async(req:Request)=>{
  const tailStart=new Date(Date.parse(state.data.cutoff_date)+86400000).toISOString().slice(0,10)
  await admin.from('clickdesk_inventory_partitions').upsert({period_key:period,created_from:tailStart,created_to:cutoff},{onConflict:'period_key,created_from,created_to',ignoreDuplicates:true})
  }
- const restarted=await admin.from('clickdesk_period_inventory').update({status:'running',cutoff_date:cutoff,started_at:new Date().toISOString(),finished_at:null,error_code:null}).eq('period_key',period).select('*').single()
+ const restarted=await admin.from('clickdesk_period_inventory').update({status:'running',cutoff_date:cutoff,scan_watermark_at:new Date().toISOString(),started_at:new Date().toISOString(),finished_at:null,error_code:null}).eq('period_key',period).select('*').single()
  state=restarted
  }
  if(state.data.status==='complete'&&state.data.cutoff_date<cutoff){

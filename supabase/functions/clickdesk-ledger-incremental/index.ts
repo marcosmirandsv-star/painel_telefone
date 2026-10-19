@@ -246,6 +246,24 @@ Deno.serve(async(req:Request)=>{
     const unresolved=evaluated.filter(x=>!x.confirmed)
     if(confirmed.some(x=>!x.analyst_id||!x.team_id||!x.message_id||!x.occurred_at||!x.occurred_date))
       throw Error('invalid_confirmed_evidence')
+    if(!dry&&unresolved.some(row=>row.reason==='clickdesk_http_404')){
+      const missing=new Set(unresolved.filter(row=>row.reason==='clickdesk_http_404').map(row=>row.ticket_id))
+      const deleted:Array<{ticket_id:string;deleted_at:string}>=[]
+      try{
+        for(let page=1;page<=20&&missing.size;page++){
+          const result=await clickdeskGet('/tickets?inbox=all&view=deleted&sort=id&dir=asc&per_page=500&page='+page,key,account)
+          const payload=object(result),items=Array.isArray(payload.data)?payload.data:Array.isArray(payload.tickets)?payload.tickets:[]
+          for(const raw of items){const item=object(raw),id=text(item.id),at=text(item.deleted_at);if(missing.has(id)&&Number.isFinite(Date.parse(at))){deleted.push({ticket_id:id,deleted_at:at});missing.delete(id)}}
+          const last=Number(payload.last_page)
+          if(!Number.isSafeInteger(last)||page>=last||!items.length)break
+        }
+        if(deleted.length){
+          const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(deleted))))).map(x=>x.toString(16).padStart(2,'0')).join('')
+          const saved=await admin.rpc('record_clickdesk_source_deletions',{p_rows:deleted,p_hash:digest})
+          if(!saved.error&&Array.isArray(saved.data)){const proven=new Set(saved.data);for(const row of unresolved)if(proven.has(row.ticket_id))row.reason='deleted_in_source'}
+        }
+      }catch{/* An unproven deletion remains an explicit HTTP failure. */}
+    }
     if(!dry){
       const now=new Date().toISOString()
       if(confirmed.length){

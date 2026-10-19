@@ -1,0 +1,4 @@
+alter table public.clickdesk_period_inventory add column scan_watermark_at timestamptz not null default now();
+update public.clickdesk_period_inventory
+set scan_watermark_at=least(started_at,coalesce((select to_timestamp(version,'YYYYMMDDHH24MISS') from supabase_migrations.schema_migrations where name='resumable_clickdesk_period_inventory' order by version limit 1),started_at));
+comment on column public.clickdesk_period_inventory.scan_watermark_at is 'Immutable start of this full scan. Retries must preserve it so the first incremental pass catches updates made during any earlier partition read.';
