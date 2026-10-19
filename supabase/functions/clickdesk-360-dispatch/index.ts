@@ -7,19 +7,23 @@ const json=(value:unknown,status=200)=>Response.json(value,{status,headers:{'Cac
 const day=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())
 const validDate=(s:string)=>/^20\d{2}-\d{2}-\d{2}$/.test(s)&&!Number.isNaN(Date.parse(s))&&new Date(s).toISOString().slice(0,10)===s
 class WorkError extends Error { constructor(public code:string){super(code)} }
-async function requestJson(url:string,init:RequestInit,ms:number){
+async function requestJson(url:string,init:RequestInit,ms:number,service='source'){
  const response=await fetch(url,{...init,signal:AbortSignal.timeout(ms)})
- const data=await response.json().catch(()=>null)
- if(!response.ok)throw new WorkError('http_'+response.status)
+ const raw=await response.text()
+ let data:any
+ try{data=raw?JSON.parse(raw):null}catch{data=raw}
+ if(!response.ok)throw new WorkError(service+'_http_'+response.status)
  return data
 }
 async function work(admin:any,config:any){
  const deadline=Date.now()+100000
- let completed=0,failed=0
+ let completed=0,failed=0,throttled=false
+ const state=await admin.from('clickdesk_360_worker_health').select('cooldown_until').eq('singleton',true).single()
+ if(state.data?.cooldown_until && Date.parse(state.data.cooldown_until)>Date.now())return
  await admin.from('clickdesk_360_worker_health').upsert({singleton:true,status:'running',last_started_at:new Date().toISOString(),error_code:null})
  try{
  while(Date.now()<deadline-35000){
- const claim=await admin.rpc('claim_clickdesk_360_work',{p_limit:4})
+ const claim=await admin.rpc('claim_clickdesk_360_work',{p_limit:2})
  if(claim.error)throw new WorkError('queue_claim_failed')
  if(!claim.data?.length)break
  await Promise.all(claim.data.map(async(item:any)=>{
@@ -42,7 +46,7 @@ async function work(admin:any,config:any){
  method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':config.google_api_key},
  body:JSON.stringify({systemInstruction:{parts:[{text:'Analise atendimento de forma conservadora. Evidência insuficiente deve resultar em unclear, nunca em invenção.'}]},
  contents:[{role:'user',parts:[{text:prompt}]}],
- generationConfig:{maxOutputTokens:1800,responseMimeType:'application/json',thinkingConfig:{thinkingLevel:'low'}}})},40000)
+ generationConfig:{maxOutputTokens:1800,responseMimeType:'application/json',thinkingConfig:{thinkingLevel:'low'}}})},40000,'provider')
  const content=result?.candidates?.[0]?.content?.parts?.map((p:any)=>p.text||'').join('').trim()
  if(!content)throw new WorkError('provider_empty')
  let parsed:unknown
@@ -55,15 +59,19 @@ async function work(admin:any,config:any){
  completed++
  }catch(error){
  const code=error instanceof WorkError?error.code:(error instanceof Error&&/Timeout|Abort/.test(error.name)?'request_timeout':'worker_error')
- const terminal=item.attempts>=3||['transcript_insufficient','authorship_changed'].includes(code)
- await admin.from('clickdesk_360_work_queue').update({status:terminal?'failed':'pending',error_code:code,
- next_attempt_at:new Date(Date.now()+Math.pow(2,item.attempts-1)*60000).toISOString(),lease_token:null,lease_until:null,updated_at:new Date().toISOString()})
+ const rateLimited=code.endsWith('_http_429')
+ if(rateLimited){throttled=true;await admin.from('clickdesk_360_worker_health').update({status:'cooldown',cooldown_until:new Date(Date.now()+300000).toISOString(),error_code:code}).eq('singleton',true)}
+ const terminal=!rateLimited&&(item.attempts>=3||['transcript_insufficient','authorship_changed'].includes(code))
+ await admin.from('clickdesk_360_work_queue').update({status:terminal?'failed':'pending',error_code:code,attempts:rateLimited?Math.max(0,item.attempts-1):item.attempts,
+ next_attempt_at:new Date(Date.now()+(rateLimited?300000:Math.pow(2,item.attempts-1)*60000)).toISOString(),lease_token:null,lease_until:null,updated_at:new Date().toISOString()})
  .eq('ticket_id',item.ticket_id).eq('lease_token',item.lease_token)
  failed++
  }
  }))
+ if(throttled)break
+ await new Promise(resolve=>setTimeout(resolve,10000))
  }
- await admin.from('clickdesk_360_worker_health').upsert({singleton:true,status:failed?'attention':'ready',last_finished_at:new Date().toISOString(),processed:completed,failed,error_code:null})
+ await admin.from('clickdesk_360_worker_health').upsert({singleton:true,status:throttled?'cooldown':failed?'attention':'ready',last_finished_at:new Date().toISOString(),processed:completed,failed,error_code:null})
  }catch{
  await admin.from('clickdesk_360_worker_health').upsert({singleton:true,status:'error',last_finished_at:new Date().toISOString(),processed:completed,failed,error_code:'worker_cycle_failed'})
  }
@@ -103,6 +111,12 @@ Deno.serve(async(req:Request)=>{
  if(config.error||!config.data?.google_api_key||!config.data?.api_key||!config.data?.account_id)return json({error:'provider_not_configured'},503)
  const refreshed=await admin.rpc('refresh_clickdesk_360_queue',{p_start:start,p_end:end,p_team:team})
  if(refreshed.error)return json({error:'queue_refresh_failed'},503)
+ if(managerId&&body.retry_failed===true){
+ let retry=admin.from('clickdesk_360_work_queue').update({status:'pending',attempts:0,error_code:null,next_attempt_at:new Date().toISOString()}).eq('status','failed').gte('occurred_date',start).lte('occurred_date',end)
+ if(team)retry=retry.eq('team_id',team)
+ const retried=await retry
+ if(retried.error)return json({error:'retry_not_saved'},503)
+ }
  if(managerId){
  const record=await admin.from('clickdesk_360_requests').insert({start_date:start,end_date:end,team_id:team,requested_by:managerId}).select('id').single()
  if(record.error)return json({error:'request_not_saved'},503)

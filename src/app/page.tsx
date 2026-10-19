@@ -766,6 +766,12 @@ type ClickDeskOperation360 = {
     health: { status: string; last_started_at: string | null; last_finished_at: string | null; error_code: string | null } | null
     failures: { ticket_id: string; error_code: string; attempts: number; next_attempt_at: string }[]
     refreshed_at: string
+    inventory?: {
+      scope: string
+      run: { status: string; cutoff_date: string; error_code: string | null; finished_at: string | null }
+      assessment: { candidate_count: number; confirmed_count: number; excluded_count: number; pending_count: number; complete: boolean; reasons: Record<string,number> } | null
+      partitions: Record<string,number> | null
+    } | null
   } | null
   source_coverage?: { status: 'complete' | 'audit_sample_only'; verified_at: string | null; note: string }
   source?: string
@@ -4801,7 +4807,6 @@ function ChatModuleDashboard({
   const [clickDeskOperation360Loading, setClickDeskOperation360Loading] = useState(false)
   const [clickDeskOperation360Refresh, setClickDeskOperation360Refresh] = useState(0)
   const [clickDeskOperation360Analyzing, setClickDeskOperation360Analyzing] = useState<'negative' | 'positive' | 'all' | ''>('')
-  const [clickDeskOperation360Progress, setClickDeskOperation360Progress] = useState('')
   const operation360RequestSequence = useRef(0)
   const [clickDeskOperation360Message, setClickDeskOperation360Message] = useState('')
   const [clickDeskOperation360EvidenceTicketId, setClickDeskOperation360EvidenceTicketId] = useState('')
@@ -5609,83 +5614,7 @@ function ChatModuleDashboard({
     }
   }
 
-  async function handleAnalyzeOperation360(kind: 'negative' | 'positive') {
-    const availableQueue =
-      kind === 'negative'
-        ? clickDeskOperation360?.queues?.negative_unanalyzed ?? []
-        : clickDeskOperation360?.queues?.positive_unanalyzed ?? []
-    const queue = kind === 'negative' ? availableQueue : availableQueue.slice(0, 20)
-    const totalScope =
-      kind === 'negative'
-        ? clickDeskOperation360?.coverage?.negative.total ?? availableQueue.length
-        : clickDeskOperation360?.coverage?.positive.total ?? availableQueue.length
-    const alreadyCovered = Math.max(0, totalScope - availableQueue.length)
-
-    if (!queue.length || clickDeskOperation360Analyzing) return
-
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
-
-    if (!session?.access_token) {
-      setClickDeskOperation360Message('Sua sessão de homologação não está ativa.')
-      return
-    }
-
-    setClickDeskOperation360Analyzing(kind)
-    setClickDeskOperation360Message('')
-    setClickDeskOperation360Progress(`0 de ${queue.length}`)
-
-    let completed = 0
-    let failed = 0
-
-    try {
-      for (let index = 0; index < queue.length; index += 2) {
-        const batch = queue.slice(index, index + 2)
-        const results = await Promise.all(
-          batch.map(async (ticket) => {
-            try {
-              const response = await fetch('/api/clickdesk/qualitative', {
-                method: 'POST',
-                headers: {
-                  Authorization: `Bearer ${session.access_token}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ ticket_id: ticket.ticket_id }),
-              })
-              return response.ok
-            } catch {
-              return false
-            }
-          }),
-        )
-
-        completed += results.filter(Boolean).length
-        failed += results.filter((item) => !item).length
-        setClickDeskOperation360Progress(
-          `${Math.min(index + batch.length, queue.length)} de ${queue.length}`,
-        )
-      }
-
-      const coveredAfterRun = Math.min(totalScope, alreadyCovered + completed)
-      setClickDeskOperation360Message(
-        kind === 'negative'
-          ? failed > 0
-            ? `A leitura 360º cobre ${coveredAfterRun} de ${totalScope} negativas. ${failed} ticket(s) ficaram pendentes e podem ser tentados novamente.`
-            : `Leitura concluída: ${totalScope} de ${totalScope} negativas consideradas. Leituras válidas foram reaproveitadas e análises rejeitadas foram refeitas quando necessário.`
-          : failed > 0
-            ? `${completed} positiva(s) analisada(s); ${failed} ficaram pendentes e podem ser tentadas novamente.`
-            : `${completed} positiva(s) analisada(s). A leitura do 360º foi atualizada; a governança continua no menu próprio.`,
-      )
-      setClickDeskOperation360Refresh((current) => current + 1)
-      setClickDeskQualitativeSummaryRefresh((current) => current + 1)
-    } finally {
-      setClickDeskOperation360Analyzing('')
-      setClickDeskOperation360Progress('')
-    }
-  }
-
-  async function handleCompleteOperation360() {
+  async function handleCompleteOperation360(retryFailed = false) {
     if (!chat2PeriodKey || clickDeskOperation360Analyzing) return
     const sequence = operation360RequestSequence.current
     setClickDeskOperation360Analyzing('all')
@@ -5695,7 +5624,7 @@ function ChatModuleDashboard({
       if (!session?.access_token) throw new Error('Sua sessão de homologação não está ativa.')
       const response = await fetch('/api/clickdesk/operation-360/jobs', {
         method: 'POST', headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ start: chat2SelectedPeriod.start, end: chat2SelectedPeriod.end, team_id: selectedTeamId === 'all' ? null : selectedTeamId }),
+        body: JSON.stringify({ start: chat2SelectedPeriod.start, end: chat2SelectedPeriod.end, team_id: selectedTeamId === 'all' ? null : selectedTeamId, retry_failed: retryFailed }),
         cache: 'no-store',
       })
       const data = await response.json()
@@ -5707,6 +5636,21 @@ function ChatModuleDashboard({
     } catch (error) {
       if (sequence === operation360RequestSequence.current) setClickDeskOperation360Message(getErrorMessage(error))
     } finally { setClickDeskOperation360Analyzing('') }
+  }
+
+  async function handleRefreshClickDeskInventory() {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error('Sua sessão não está ativa.')
+      const response = await fetch('/api/clickdesk/inventory', {
+        method: 'POST', headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ month: chat2PeriodKey }), cache: 'no-store',
+      })
+      const data = await response.json()
+      if (!response.ok || !data.accepted) throw new Error(data.erro || 'Não foi possível iniciar a captura.')
+      setClickDeskOperation360Message('Captura registrada no servidor. A conciliação seguirá a fila sem depender desta aba.')
+      setClickDeskOperation360Refresh((current) => current + 1)
+    } catch (error) { setClickDeskOperation360Message(getErrorMessage(error)) }
   }
 
   async function handleOpenOperation360Evidence(ticketId: string) {
@@ -9636,13 +9580,27 @@ function ChatModuleDashboard({
                 <div className="mt-3 rounded-lg border border-white/10 p-3 text-xs leading-6 text-slate-300" aria-live="polite">
                   <p>Fila no servidor neste recorte: {clickDeskOperation360.background.counts.processing} em leitura · {clickDeskOperation360.background.counts.pending} aguardando processamento · {clickDeskOperation360.background.counts.failed} com falha.</p>
                   <p>A tela atualiza a cada 10 segundos. O processamento continua com a aba fechada.</p>
-                  <p>Rotina automática: {clickDeskOperation360.background.health?.status ?? 'aguardando configuração'} · última atividade: {clickDeskOperation360.background.health?.last_started_at ? formatDateTime(clickDeskOperation360.background.health.last_started_at) : 'ainda não registrada'}.</p>
+                  <p>Rotina automática: {({ ready: 'disponível', running: 'processando', cooldown: 'aguardando liberação da API', attention: 'nova tentativa necessária', error: 'precisa de atenção', not_configured: 'aguardando configuração' } as Record<string,string>)[clickDeskOperation360.background.health?.status ?? 'not_configured'] ?? 'em conferência'} · última atividade: {clickDeskOperation360.background.health?.last_started_at ? formatDateTime(clickDeskOperation360.background.health.last_started_at) : 'ainda não registrada'}.</p>
                   {clickDeskOperation360.background.failures.length > 0 && (
                     <details><summary>Ver tickets que precisam de atenção</summary>
-                    {clickDeskOperation360.background.failures.map((item) => <p key={item.ticket_id}>Ticket #{item.ticket_id}: {item.error_code} · {item.attempts} tentativa(s).</p>)}
+                    <button type="button" className="secondary-button mt-2" onClick={() => void handleCompleteOperation360(true)}>Tentar novamente nos tickets com falha</button>
+                    {clickDeskOperation360.background.failures.map((item) => <p key={item.ticket_id}>Ticket #{item.ticket_id}: {item.error_code.includes('429') ? 'A API solicitou aguardar antes de tentar novamente' : item.error_code === 'transcript_insufficient' ? 'Conversa sem conteúdo suficiente para uma análise segura' : item.error_code === 'provider_invalid_json' ? 'A IA não devolveu uma resposta utilizável' : 'Não foi possível concluir a leitura; revisar o ticket'} · {item.attempts} tentativa(s).</p>)}
                     </details>
                   )}
                 </div>
+              )}
+              {clickDeskOperation360?.background?.inventory && (
+                <details className="mt-3 rounded-lg border border-white/10 p-3 text-xs leading-6 text-slate-300">
+                  <summary>Conferência da base numérica · todas as equipes desta competência</summary>
+                  <p>Esta conferência é independente da leitura da IA e da seleção para feedback.</p>
+                  {clickDeskOperation360.background.inventory.run.error_code && <p>{clickDeskOperation360.background.inventory.run.error_code === 'source_daily_limit_requires_export' ? 'A API atingiu o limite de registros em um único dia. É necessário obter uma exportação completa da origem antes de certificar a cobertura.' : clickDeskOperation360.background.inventory.run.error_code.includes('429') ? 'A origem solicitou uma pausa nas consultas. O sistema fará nova tentativa dentro dos limites configurados.' : 'A conferência encontrou mudança ou falha na origem. Haverá até três tentativas automáticas; se persistir, atualize a captura para revisar novamente.'}</p>}
+                  <p>Captura: {clickDeskOperation360.background.inventory.run.status === 'complete' ? 'varredura de origem concluída' : clickDeskOperation360.background.inventory.run.status === 'error' ? 'precisa de nova conferência' : 'varredura em andamento'} · corte em {formatDate(clickDeskOperation360.background.inventory.run.cutoff_date)}.</p>
+                  {clickDeskOperation360.background.inventory.assessment && (
+                    <p>{clickDeskOperation360.background.inventory.assessment.candidate_count} candidatos descobertos · {clickDeskOperation360.background.inventory.assessment.confirmed_count} com autoria conferida · {clickDeskOperation360.background.inventory.assessment.excluded_count} fora do escopo elegível · {clickDeskOperation360.background.inventory.assessment.pending_count} aguardando conciliação.</p>
+                  )}
+                  <p>{clickDeskOperation360.background.inventory.assessment?.complete ? 'A captura e a classificação deste corte foram conferidas. A competência em andamento ainda não é um fechamento mensal.' : 'A base permanece parcial. O fechamento oficial aguarda a descoberta integral e a resolução das pendências da origem.'}</p>
+                  <button type="button" className="secondary-button mt-2" onClick={() => void handleRefreshClickDeskInventory()}>Atualizar captura da competência</button>
+                </details>
               )}
               {clickDeskOperation360Message && (
                 <p className="mt-3 text-sm leading-6 text-violet-100">{clickDeskOperation360Message}</p>
@@ -9703,30 +9661,8 @@ function ChatModuleDashboard({
               </div>
 
               <div className="mt-5 flex flex-wrap gap-3 border-t border-white/10 pt-4">
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={!operation360NegativeQueue.length || Boolean(clickDeskOperation360Analyzing)}
-                  onClick={() => void handleAnalyzeOperation360('negative')}
-                >
-                  {clickDeskOperation360Analyzing === 'negative'
-                    ? `Analisando negativas · ${clickDeskOperation360Progress}`
-                    : operation360NegativeQueue.length
-                      ? `Completar leitura das ${operation360Coverage?.negative.total ?? operation360NegativeQueue.length} negativas · ${operation360NegativeQueue.length} por processar`
-                      : `${operation360Coverage?.negative.total ?? 0} negativas consideradas`}
-                </button>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  disabled={!operation360PositiveQueue.length || Boolean(clickDeskOperation360Analyzing)}
-                  onClick={() => void handleAnalyzeOperation360('positive')}
-                >
-                  {clickDeskOperation360Analyzing === 'positive'
-                    ? `Analisando positivas · ${clickDeskOperation360Progress}`
-                    : operation360PositiveQueue.length
-                      ? `Analisar próximas ${Math.min(20, operation360PositiveQueue.length)} positiva(s)`
-                      : 'Positivas analisadas'}
-                </button>
+                <p className="text-xs text-slate-400">A leitura deste grupo faz parte da fila no servidor. Use o comando de iniciar ou retomar no início desta tela.</p>
+                <p className="text-xs text-slate-400">A leitura deste grupo faz parte da fila no servidor. Use o comando de iniciar ou retomar no início desta tela.</p>
               </div>
 
               {operation360PositiveQueue.length > 20 && (

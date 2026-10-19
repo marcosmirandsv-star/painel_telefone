@@ -1,0 +1,7 @@
+
+-- Replace the redundant discovery/contribution pipeline only in homologation.
+select cron.alter_job(job_id := (select jobid from cron.job where jobname='clickdesk-verified-discover-hourly'),schedule:='*/5 12-22 * * *',command:=$cron$select net.http_post(url:='https://vvtorcvchnqhcredhorv.supabase.co/functions/v1/clickdesk-period-inventory',headers:=jsonb_build_object('Content-Type','application/json','Authorization','Bearer '||(select decrypted_secret from vault.decrypted_secrets where name='clickdesk_cron_token')),body:='{}'::jsonb,timeout_milliseconds:=20000);$cron$);
+select cron.alter_job(job_id := (select jobid from cron.job where jobname='clickdesk-verified-ingest-hourly'),active:=false);
+select cron.alter_job(job_id := (select jobid from cron.job where jobname='clickdesk-verified-dispatch'),active:=false);
+select cron.alter_job(job_id := (select jobid from cron.job where jobname='clickdesk-verified-settle'),active:=false);
+select cron.alter_job(job_id := (select jobid from cron.job where jobname='clickdesk-ledger-incremental-every-5m'),schedule:='*/5 12-22 * * *',command:=$cron$select net.http_post(url:='https://vvtorcvchnqhcredhorv.supabase.co/functions/v1/clickdesk-ledger-incremental',headers:=jsonb_build_object('Content-Type','application/json','Authorization','Bearer '||(select decrypted_secret from vault.decrypted_secrets where name='clickdesk_cron_token')),body:=jsonb_build_object('dry_run',false,'commit_verified',true,'limit',24),timeout_milliseconds:=120000);$cron$);

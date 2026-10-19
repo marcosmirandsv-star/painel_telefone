@@ -279,7 +279,7 @@ export async function buildClickDeskClosureSnapshot(
   if (period.end >= today) {
     issues.push('A competência ainda está aberta.')
   }
-  if (!finalSyncResult.data) {
+  if (!finalSyncResult.data && !coverageComplete) {
     issues.push('O último dia da competência ainda não foi revalidado pelo ClickDesk.')
   }
   if (unmappedRows.length > 0) {

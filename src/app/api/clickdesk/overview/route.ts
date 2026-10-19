@@ -1,6 +1,6 @@
 import { ApiError, authorizeManagerSessionClient, handle, json } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
-import { readFinalLedger, readLedgerCoverage } from '@/lib/clickdesk-ledger-server'
+import { readFinalLedger, readLedgerCoverage, scopeLedgerCoverage } from '@/lib/clickdesk-ledger-server'
 import { summarizeVerifiedTeams } from '@/lib/clickdesk-team-summary'
 import { partitionChatLedgerByActiveRoster } from '@/lib/clickdesk-active-analysts'
 
@@ -46,7 +46,7 @@ export async function GET(request: Request) {
     stage = 'ledger_and_teams'
     const [tickets, coverage, rosterResult, analystsResult, snapshotsResult, latestSyncResult] = await Promise.all([
       readFinalLedger(admin, { start: monthStart, end: today }),
-      readLedgerCoverage(admin),
+      readLedgerCoverage(admin).then(coverage=>scopeLedgerCoverage(coverage,{start:monthStart,end:today})),
       admin.from('chat_teams').select('id,name,active').eq('active', true),
       admin.from('chat_analysts').select('id,active'),
       admin.from('clickdesk_chat_report_snapshots')
@@ -74,6 +74,7 @@ export async function GET(request: Request) {
     } catch {
       throw new ApiError(503, 'Conferência de vínculo ou duplicidade do ledger falhou.')
     }
+    const lastReconciledAt=tickets.reduce<string|null>((latest,row)=>!latest||row.verified_at>latest?row.verified_at:latest,null)
     stage = 'serialize'
 
     const latestByDepartment = new Map<number, ReportSnapshotRow>()
@@ -105,7 +106,9 @@ export async function GET(request: Request) {
       queue_report_status: snapshotsResult.error
         ? 'unavailable' : queueReports.length ? 'available' : 'not_captured',
       ledger_coverage: coverage.complete ? 'complete' : 'partial',
-      latest_sync: latestSyncResult.error ? null : latestSyncResult.data ?? null,
+      latest_sync: lastReconciledAt && (!latestSyncResult.data?.finished_at || lastReconciledAt > latestSyncResult.data.finished_at)
+        ? {finished_at:lastReconciledAt,source:'canonical_ledger_reconciliation'}
+        : latestSyncResult.error ? null : latestSyncResult.data ?? null,
       sync_status: latestSyncResult.error ? 'unavailable' : 'available',
       semantics: {
         teams: 'Contagem de um ticket por ultimo autor publico humano verificado e ativo, agrupado pelo vinculo cadastral.',

@@ -1,6 +1,6 @@
 import { ApiError, authorizeClickDeskSessionClient, handle, json } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
-import { readFinalLedger, readLedgerCoverageForAccess } from '@/lib/clickdesk-ledger-server'
+import { readFinalLedger, readLedgerCoverageForAccess, scopeLedgerCoverage } from '@/lib/clickdesk-ledger-server'
 import { randomUUID } from 'node:crypto'
 import { partitionChatLedgerByActiveRoster } from '@/lib/clickdesk-active-analysts'
 
@@ -8,7 +8,7 @@ export const runtime = 'nodejs'
 export const maxDuration = 300
 
 const BUSINESS_TIME_ZONE = 'America/Sao_Paulo'
-const CLICKDESK_SYNC_INTERVAL_MINUTES = 60
+const CLICKDESK_SYNC_INTERVAL_MINUTES = 5
 const CLICKDESK_SYNC_START_UTC_HOUR = 12
 const CLICKDESK_SYNC_END_UTC_HOUR = 22
 
@@ -18,9 +18,11 @@ function getNextClickDeskSyncAt(now = new Date()) {
     hour <= CLICKDESK_SYNC_END_UTC_HOUR;
     hour += 1
   ) {
-    const candidate = new Date(now)
-    candidate.setUTCHours(hour, 0, 0, 0)
-    if (candidate.getTime() > now.getTime()) return candidate.toISOString()
+    for (let minute = 0; minute < 60; minute += CLICKDESK_SYNC_INTERVAL_MINUTES) {
+      const candidate = new Date(now)
+      candidate.setUTCHours(hour, minute, 0, 0)
+      if (candidate.getTime() > now.getTime()) return candidate.toISOString()
+    }
   }
 
   const nextDay = new Date(now)
@@ -157,7 +159,7 @@ async function loadRowsFallback(
       review_percentage: null,
     }
   })
-  return { rows, coverage, admin, excludedInactive }
+  return { rows, coverage: isManagement ? scopeLedgerCoverage(coverage, filters) : coverage, admin, excludedInactive, lastReconciledAt: null as string | null }
 }
 
 async function loadRows(
@@ -171,7 +173,7 @@ async function loadRows(
  // Compatibility only while a migration is being rolled out; normal reads are one SQL aggregate.
  if(result.error?.code==='PGRST202')return loadRowsFallback(admin,filters,isManagement)
  if(result.error||!result.data)throw new ApiError(503,'Não foi possível calcular os indicadores da base conciliada.')
- return {rows:result.data.rows as DailyMetricRow[],coverage,admin,excludedInactive:Number(result.data.excludedInactive)||0}
+ return {rows:result.data.rows as DailyMetricRow[],coverage:isManagement?scopeLedgerCoverage(coverage,filters):coverage,admin,excludedInactive:Number(result.data.excludedInactive)||0,lastReconciledAt:typeof result.data.last_reconciled_at==='string'?result.data.last_reconciled_at:null}
 }
 
 function aggregate(rows: DailyMetricRow[]): Aggregate {
@@ -288,7 +290,7 @@ export async function GET(request: Request) {
         }
 
     stage = 'ledger_read'
-    const { rows, coverage, admin, excludedInactive } = await loadRows(access.admin, filters, access.isManagement)
+    const { rows, coverage, admin, excludedInactive, lastReconciledAt } = await loadRows(access.admin, filters, access.isManagement)
 
     stage = 'sync_status'
     const latestSync = await admin
@@ -311,6 +313,8 @@ export async function GET(request: Request) {
       visibleSyncFinishedAt = !clock.error && typeof clock.data === 'string' ? clock.data : null
       if (clock.error) console.warn('clickdesk_sync_clock_unavailable', { code: clock.error.code })
     }
+
+    if (lastReconciledAt && (!visibleSyncFinishedAt || lastReconciledAt > visibleSyncFinishedAt)) visibleSyncFinishedAt = lastReconciledAt
 
     const apprenticeRows = rows.filter((row) => row.identity_role === 'apprentice')
     const includedRows = rows.filter((row) => row.identity_role !== 'apprentice')
@@ -368,13 +372,15 @@ export async function GET(request: Request) {
         excluded_apprentice_attendances: aggregate(apprenticeRows).attendances,
       },
       latest_sync: access.isManagement
-        ? latestSync.data ?? null
+        ? lastReconciledAt && (!latestSync.data?.finished_at || lastReconciledAt > latestSync.data.finished_at)
+          ? { finished_at: lastReconciledAt, source: 'canonical_ledger_reconciliation' }
+          : latestSync.data ?? null
         : visibleSyncFinishedAt
           ? { finished_at: visibleSyncFinishedAt }
           : null,
       sync_schedule: {
         interval_minutes: CLICKDESK_SYNC_INTERVAL_MINUTES,
-        window_brt: '09:00-19:00',
+        window_brt: '09:00-19:55',
         next_sync_at: getNextClickDeskSyncAt(),
       },
       date_basis: {

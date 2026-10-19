@@ -5,7 +5,7 @@ import {
   json,
 } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
-import { readFinalLedger, readLedgerCoverage } from '@/lib/clickdesk-ledger-server'
+import { readFinalLedger, readLedgerCoverage, scopeLedgerCoverage } from '@/lib/clickdesk-ledger-server'
 import {
   normalizeQualitativeAnalysis,
   qualitativeAnalysisVersion,
@@ -156,7 +156,7 @@ export async function GET(request: Request) {
       return Boolean(owner && row.analyst_id === owner.analyst_id
         && row.satisfaction_label === owner.satisfaction_label)
     })
-    const [ledgerCoverage, workerStatus] = await Promise.all([readLedgerCoverage(access.admin), access.admin.rpc('get_clickdesk_360_queue_status', {p_start:filters.start,p_end:filters.end,p_team:filters.teamId})])
+    const [ledgerCoverage, workerStatus] = await Promise.all([readLedgerCoverage(access.admin).then(coverage=>scopeLedgerCoverage(coverage,filters)), access.admin.rpc('get_clickdesk_360_queue_status', {p_start:filters.start,p_end:filters.end,p_team:filters.teamId})])
     const totals = calculateOperation360Totals(attendances)
     const currentAnalyses = analyses.filter(
       (row) =>

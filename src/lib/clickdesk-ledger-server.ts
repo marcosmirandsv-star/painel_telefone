@@ -108,3 +108,15 @@ export function asFinalTicket(row: LedgerRow, name: string): FinalTicket {
     rating_timestamp_warning: row.rating_timestamp_warning,
   }
 }
+
+/** A period attestation cannot be replaced by an older audit cohort or another month. */
+export function scopeLedgerCoverage(
+ coverage: Awaited<ReturnType<typeof readLedgerCoverage>>,
+ period: {start:string;end:string},
+) {
+ const entries=coverage.entries.filter(entry=>entry.source_key.startsWith('period_inventory_') &&
+   entry.start_date<=period.start && entry.end_date>=period.end)
+ return {...coverage,complete:entries.some(entry=>entry.completeness==='complete'&&entry.pending_count===0),
+   entries:entries.length?entries:coverage.entries,
+   verified_at:entries[0]?.verified_at??coverage.verified_at}
+}

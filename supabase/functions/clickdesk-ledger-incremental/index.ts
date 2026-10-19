@@ -202,7 +202,7 @@ Deno.serve(async(req:Request)=>{
       admin.from('chat_analysts').select('id,name,team_id,csat_goal'),
     ])
     if(roster.error)throw Error('roster_unavailable')
-    const people:Person=(roster.data??[]).map((p:any)=>({id:p.id,name:p.name,team_id:p.team_id,csat_goal:Number(p.csat_goal)}))
+    const people:Person[]=(roster.data??[]).map((p:any)=>({id:p.id,name:p.name,team_id:p.team_id,csat_goal:Number(p.csat_goal)}))
     const map=new Map<string,Candidate>()
     const add=(id:unknown,version:unknown,day:unknown,origin:string)=>{
       const ticketId=text(id).trim()
@@ -221,22 +221,26 @@ Deno.serve(async(req:Request)=>{
       ...legacy.filter(x=>str(x.occurred_date)>=targetStart&&str(x.occurred_date)<=targetEnd)
         .map(x=>str(x.clickdesk_ticket_id)),
     ]) : null
-    const done=new Set(ledger.map(x=>str(x.ticket_id)))
+    const revision=await admin.from('clickdesk_registry_revision').select('changed_at').eq('singleton',true).single()
+    if(revision.error)throw Error('roster_unavailable')
+    const rosterChangedAt=Date.parse(str(revision.data?.changed_at))||0
+    const done=new Map(ledger.map(x=>[str(x.ticket_id),{version:str(x.evidence_version),verified_at:str(x.verified_at)}]))
     const blocked=new Map(pending.map(x=>[str(x.ticket_id),{checked_at:str(x.checked_at),reason:str(x.reason)}]))
     // Pending authorship can become decidable after a new verified message,
     // analyst registration, or a transient transport failure. Retry only when
     // source evidence changed, or a narrow cooldown elapsed.
     const eligible=(candidate:Candidate)=>{
       if(refresh)return true
-      if(done.has(candidate.id))return false
+      const existing=done.get(candidate.id)
+      if(existing) return Boolean(candidate.version && candidate.version > existing.version && candidate.version > existing.verified_at)
       const previous=blocked.get(candidate.id)
       if(!previous)return true
       const checked=Date.parse(previous.checked_at)
       const changed=Number.isFinite(checked)&&Number.isFinite(Date.parse(candidate.version))
         && Date.parse(candidate.version)>checked
       const age=Number.isFinite(checked)?Date.now()-checked:0
-      const rosterRetry=previous.reason==='final_author_not_in_eligible_registry'&&age>86400000
-      const transportRetry=/^(clickdesk_http_|history_read_failed|deadline)/.test(previous.reason)&&age>1800000
+      const rosterRetry=previous.reason==='final_author_not_in_eligible_registry'&&rosterChangedAt>checked
+      const transportRetry=/^(clickdesk_http_|history_read_failed|history_incomplete|deadline)/.test(previous.reason)&&age>1800000
       return changed||rosterRetry||transportRetry
     }
     // Newest candidate first; previously confirmed historical evidence is
@@ -302,6 +306,7 @@ Deno.serve(async(req:Request)=>{
       },{onConflict:'source_key'})
       if(result.error)throw Error('coverage_write_failed')
     }
+    if(!dry) await admin.rpc('assess_clickdesk_period_inventory',{p_period:businessDate(new Date().toISOString()).slice(0,7)})
     // No names, ticket IDs, content, credentials or session identifiers returned.
     const reasons:Record<string,number>={}
     for(const x of unresolved){const r=x.reason??'unspecified';reasons[r]=(reasons[r]??0)+1}

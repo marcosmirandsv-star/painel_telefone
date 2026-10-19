@@ -1,0 +1,1 @@
+alter table public.clickdesk_period_inventory add column retry_count integer not null default 0, add column next_retry_at timestamptz;

@@ -22,7 +22,9 @@ function fingerprint(snapshot: Record<string, unknown>) {
   } = snapshot
   void _consultedAt
   void _sync
-  return createHash('sha256').update(JSON.stringify(stable)).digest('hex')
+  const quality = stable.qualidade_dados && typeof stable.qualidade_dados === 'object' ? stable.qualidade_dados as Record<string, unknown> : null
+  const stableQuality = quality ? { ...quality, coverage_sources: undefined } : undefined
+  return createHash('sha256').update(JSON.stringify({ ...stable, qualidade_dados: stableQuality })).digest('hex')
 }
 
 export async function GET(request: Request) {
