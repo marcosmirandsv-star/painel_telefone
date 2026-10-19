@@ -73,10 +73,10 @@ async function recoveryHarness(options:{host?:string;lease?:boolean;reasons?:Rec
  await Promise.all(background)
  return {response,urls,releases}
 }
-test('recuperação é limitada a oito lotes e usa apenas o endpoint fixo de homologação',async()=>{
+test('recuperação é limitada a 24 lotes e 85 segundos e usa apenas o endpoint fixo de homologação',async()=>{
  const r=await recoveryHarness()
  assert.equal(r.response.status,202)
- assert.equal(r.urls.length,8)
+ assert.equal(r.urls.length,24)
  assert.ok(r.urls.every(url=>url==='https://vvtorcvchnqhcredhorv.supabase.co/functions/v1/clickdesk-ledger-incremental'))
  assert.equal(r.releases,1)
 })
@@ -92,4 +92,12 @@ test('recuperação não inicia em outro projeto nem durante ciclo já reservado
  assert.equal(host.response.status,403);assert.equal(host.urls.length,0)
  const busy=await recoveryHarness({lease:false})
  assert.equal(busy.response.status,202);assert.equal(busy.urls.length,0)
+})
+
+test('retentativas preservam o início real da captura para conciliar alterações feitas durante a varredura',()=>{
+ const inventory=source('supabase/functions/clickdesk-period-inventory/index.ts')
+ assert.match(inventory,/last_incremental_at:run.scan_watermark_at\|\|run.started_at/)
+ const retry=inventory.slice(inventory.indexOf("if(state.data.status==='error')"),inventory.indexOf("if(state.data.status==='complete'"))
+ assert.doesNotMatch(retry,/scan_watermark_at:/)
+ assert.match(inventory,/scan_watermark_at:new Date\(\).toISOString\(\)/)
 })

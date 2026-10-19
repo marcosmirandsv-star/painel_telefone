@@ -777,6 +777,7 @@ type ClickDeskOperation360 = {
       scope: string
       run: { status: string; cutoff_date: string; error_code: string | null; finished_at: string | null }
       assessment: { candidate_count: number; confirmed_count: number; excluded_count: number; pending_count: number; complete: boolean; reasons: Record<string,number> } | null
+      source_exclusions?: Array<{ticket_id:string;reason:string;source_deleted_at:string;verified_at:string}>
       source_exceptions?: Array<{ticket_id:string;reason:string;checked_at:string}>
       partitions: Record<string,number> | null
     } | null
@@ -9611,6 +9612,7 @@ function ChatModuleDashboard({
                   )}
                   <p>{clickDeskOperation360.background.inventory.assessment?.complete ? 'A captura e a classificação deste corte foram conferidas. A competência em andamento ainda não é um fechamento mensal.' : 'A base permanece parcial. O fechamento oficial aguarda a descoberta integral e a resolução das pendências da origem.'}</p>
                   {(clickDeskOperation360.background.inventory.source_exceptions?.length ?? 0) > 0 && <div className="mt-2"><p>Tickets com falha de consulta ou histórico incompleto na origem:</p><ul>{clickDeskOperation360.background.inventory.source_exceptions?.map(item => <li key={item.ticket_id}>#{item.ticket_id} · {reconciliationReason(item.reason)} · conferido em {formatDateTime(item.checked_at)}</li>)}</ul><p>Esses casos exigem o histórico completo da origem; não são resolvidos por aprovação editorial nem pela IA.</p></div>}
+                  {(clickDeskOperation360.background.inventory.source_exclusions?.length ?? 0) > 0 && <div className="mt-2"><p>Referências históricas com exclusão comprovada na origem:</p><ul>{clickDeskOperation360.background.inventory.source_exclusions?.map(item => <li key={item.ticket_id}>ID interno {item.ticket_id} · excluído na origem em {formatDateTime(item.source_deleted_at)} · conferido em {formatDateTime(item.verified_at)}</li>)}</ul><p>As referências foram preservadas para auditoria. Sem histórico disponível, elas não geram créditos ou avaliações no cálculo canônico.</p></div>}
                   <button type="button" className="secondary-button mt-2" onClick={() => void handleRefreshClickDeskInventory()}>Atualizar captura da competência</button>
                 </details>
               )}

@@ -20,8 +20,8 @@ Deno.serve(async(req:Request)=>{
   const deadline=Date.now()+85000
   let examined=0,confirmed=0,rounds=0,interrupted=false
   try{
-   // Fixed endpoint, fixed batch size, at most 256 tickets per existing five-minute cycle.
-   while(rounds<8&&Date.now()<deadline-20000){
+   // Fixed endpoint, fixed batch size, at most 768 tickets inside the same 85-second deadline; concurrency stays four.
+   while(rounds<24&&Date.now()<deadline-20000){
     const r=await fetch('https://'+HOST+'/functions/v1/clickdesk-ledger-incremental',{
      method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
      body:JSON.stringify({dry_run:false,commit_verified:true,limit:32}),
@@ -38,8 +38,9 @@ Deno.serve(async(req:Request)=>{
    interrupted=true
    await admin.from('clickdesk_reconciliation_health').update({status:'attention',error_code:'recovery_cycle_interrupted'}).eq('singleton',true)
   }finally{
+   if(!interrupted)await admin.rpc('set_clickdesk_recovery_cadence',{p_recovering:false})
    if(!interrupted)await admin.from('clickdesk_reconciliation_cycle').update({lease_token:null,lease_until:null}).eq('singleton',true).eq('lease_token',leaseToken)
   }
  })())
- return Response.json({ok:true,status:'accepted',max_tickets:256,max_seconds:85},{status:202,headers:{'Cache-Control':'no-store'}})
+ return Response.json({ok:true,status:'accepted',max_tickets:768,max_seconds:85},{status:202,headers:{'Cache-Control':'no-store'}})
 })
