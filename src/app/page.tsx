@@ -9839,7 +9839,7 @@ function ChatModuleDashboard({
         ]}
       />
 
-      <section className={chatActiveTab === 'overview' ? 'workspace-content-section' : 'hidden'}>
+      <section className={chatActiveTab === 'overview' && chatMetricsReady ? 'workspace-content-section' : 'hidden'}>
         <div className="grid gap-5 xl:grid-cols-[1.05fr_1.95fr]">
           <div className="rounded-xl border border-white/10 bg-slate-950/35 p-5">
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Leitura da operação</p>
@@ -10820,7 +10820,7 @@ function ChatModuleDashboard({
 
       </details>
 
-      <section className={chatActiveTab === 'reports' ? 'workspace-content-section' : 'hidden'}>
+      <section className={chatActiveTab === 'reports' && chatMetricsReady ? 'workspace-content-section' : 'hidden'}>
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <p className="workspace-eyebrow">Leitura para fechamento</p>
@@ -10948,7 +10948,7 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <section className={chatActiveTab === 'overview' ? 'panel' : 'hidden'}>
+      <section className={chatActiveTab === 'overview' && chatMetricsReady ? 'panel' : 'hidden'}>
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Histórico anterior · Zendesk</p>
           <h2 className="mt-2 text-2xl font-bold">Série preservada dos fechamentos anteriores</h2>
@@ -11002,7 +11002,7 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <section className={chatActiveTab === 'reports' ? 'workspace-content-section workspace-content-section-divided' : 'hidden'}>
+      <section className={chatActiveTab === 'reports' && chatMetricsReady ? 'workspace-content-section workspace-content-section-divided' : 'hidden'}>
         <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <p className="workspace-eyebrow">Reconhecimento</p>
@@ -11469,7 +11469,7 @@ function ChatModuleDashboard({
         {chatExportMessage && <p className="mt-4 rounded-md bg-slate-900/70 px-4 py-3 text-sm text-slate-200">{chatExportMessage}</p>}
       </section>
       
-      <section className={chatActiveTab === 'reports' ? 'workspace-content-section workspace-content-section-divided' : 'hidden'}>
+      <section className={chatActiveTab === 'reports' && chatMetricsReady ? 'workspace-content-section workspace-content-section-divided' : 'hidden'}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="workspace-eyebrow">
