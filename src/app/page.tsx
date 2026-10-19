@@ -1387,6 +1387,7 @@ function CentralOverview({
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null)
+  const [sessionLoading, setSessionLoading] = useState(true)
   const [isHomologationView, setIsHomologationView] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -1437,13 +1438,20 @@ export default function Home() {
       recoveryFromSearch.get('type') === 'recovery'
 
     async function loadSession() {
-      const { data } = await supabase.auth.getUser()
-      setUser(data.user)
-      if (cameFromRecoveryLink) {
-        setIsPasswordRecovery(true)
-        setMessage('Digite uma nova senha para concluir a recuperação.')
+      try {
+        const { data } = await supabase.auth.getUser()
+        setUser(data.user)
+        if (cameFromRecoveryLink) {
+          setIsPasswordRecovery(true)
+          setMessage('Digite uma nova senha para concluir a recuperação.')
+        }
+        if (!data.user) setLoading(false)
+      } catch {
+        setLoading(false)
+        setMessage('Não foi possível restaurar a sessão. Entre novamente.')
+      } finally {
+        setSessionLoading(false)
       }
-      if (!data.user) setLoading(false)
     }
 
     loadSession()
@@ -2535,6 +2543,10 @@ export default function Home() {
     } finally {
       setSaving(false)
     }
+  }
+
+  if (sessionLoading) {
+    return <main className="min-h-screen bg-slate-950 p-8 text-slate-100"><p role="status" aria-live="polite">Restaurando sua sessão do Central de Performance...</p></main>
   }
 
   if (!user || isPasswordRecovery) {
