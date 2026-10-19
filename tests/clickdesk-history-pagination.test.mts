@@ -62,3 +62,11 @@ test('nota interna corroborada nunca substitui a última resposta pública human
  const row=finalHumanTicket('1',result.messages,[],{},[{id:'first',name:'First Analyst',team_id:'team'},{id:'final',name:'Final Analyst',team_id:'team'}],result.complete)
  assert.equal(row.analyst_id,'first')
 })
+
+test('ticket, messages and events start together without weakening completeness checks',async()=>{
+ const waiting=new Map<string,(value:unknown)=>void>()
+ const task=read('1',path=>new Promise(resolve=>waiting.set(path,resolve)))
+ assert.equal(waiting.size,3,'independent source requests must not wait for ticket detail')
+ for(const [path,resolve]of waiting)resolve(path==='/tickets/1'?{id:1,messages:[]}:path.includes('/events')?{events:[]}:{messages:[]})
+ assert.equal((await task).complete,true)
+})

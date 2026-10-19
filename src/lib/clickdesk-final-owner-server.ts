@@ -40,8 +40,7 @@ const unwrap = (payload: unknown) => {
 
 /** Exposed separately for deterministic transport/pagination tests. Only HTTP GET. */
 export async function readTicketHistory(id: string, get: (path:string)=>Promise<unknown>) {
-  const ticket = unwrap(await get('/tickets/'+encodeURIComponent(id)))
-  if(text(ticket.id)!==id)return {ticket,messages:[],events:[],complete:false}
+  const ticketRequest = get('/tickets/'+encodeURIComponent(id))
   async function collection(kind:'messages'|'events') {
     const result: unknown[] = [], seen = new Set<string>()
     for (let page=1;page<=50;page++) {
@@ -60,7 +59,9 @@ export async function readTicketHistory(id: string, get: (path:string)=>Promise<
     }
     return {records:result,complete:false}
   }
-  const [messages, events]=await Promise.all([collection('messages'),collection('events')])
+  const [ticketPayload,messages,events]=await Promise.all([ticketRequest,collection('messages'),collection('events')])
+  const ticket=unwrap(ticketPayload)
+  if(text(ticket.id)!==id)return {ticket,messages:[],events:[],complete:false}
   const embedded=Array.isArray(ticket.messages)?ticket.messages:[]
   const fetched=new Set(messages.records.map(m=>text(object(m).id)))
   // Detail can expose later records omitted by /messages. Never credit a truncated history.

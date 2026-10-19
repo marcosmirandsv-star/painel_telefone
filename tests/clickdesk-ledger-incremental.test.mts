@@ -79,7 +79,7 @@ test('amostra individual de avaliações também lê o ledger final e respeita i
 
 test('worker inclui o unwrapping exigido pelo leitor histórico',()=>{
   assert.match(worker,/const unwrap = \(payload: unknown\) =>/)
-  assert.match(worker,/const ticket = unwrap\(await get\(/)
+  assert.match(worker,/const ticket=unwrap\(ticketPayload\)/)
 })
 
 test('recuperação consulta lote limitado no banco e retorna contagem integral',()=>{
