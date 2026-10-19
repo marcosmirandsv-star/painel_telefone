@@ -4792,6 +4792,7 @@ function ChatModuleDashboard({
   const [clickDeskVerifiedCoverage, setClickDeskVerifiedCoverage] = useState<ClickDeskVerifiedCoverage | null>(null)
   const [clickDeskVerifiedCoverageLoading, setClickDeskVerifiedCoverageLoading] = useState(false)
   const [clickDeskMetricsLoading, setClickDeskMetricsLoading] = useState(false)
+  const chatMetricsReady = !clickDeskMetricsLoading && !clickDeskPersistedMetrics?.erro && Boolean(clickDeskPersistedMetrics?.by_analyst?.length)
   const clickDeskMetricsRequestVersion = useRef(0)
   useEffect(() => () => { clickDeskMetricsRequestVersion.current++ }, [])
   const [clickDeskPreviousMetrics, setClickDeskPreviousMetrics] = useState<ClickDeskPersistedMetrics | null>(null)
@@ -8187,7 +8188,7 @@ function ChatModuleDashboard({
           </strong>
           <p className="mt-2">
             {clickDeskMetricsLoading
-              ? 'A reconciliação pode demorar. Os valores ainda não estão disponíveis; zeros provisórios não devem ser interpretados como desempenho.'
+              ? 'Consultando os indicadores já conciliados. A captura da origem e as leituras da IA continuam separadamente.'
               : clickDeskPersistedMetrics?.erro
                 ? clickDeskPersistedMetrics.erro
                 : 'A cobertura deste período/equipe permanece inconclusiva. Não é possível afirmar que os atendimentos ou avaliações sejam zero.'}
@@ -8222,7 +8223,7 @@ function ChatModuleDashboard({
         <p className="mt-2">A contagem não inclui tickets ainda não descobertos; consulte a cobertura da captura. Conferência {formatDateTime(clickDeskPersistedMetrics.reconciliation.captured_at)}. Casos inconclusivos não recebem crédito arbitrário nem são tratados como resoluções ou avaliações.</p>
         <ul className="mt-2 space-y-1">{clickDeskPersistedMetrics.reconciliation.pending.map(item => <li key={item.ticket_id}>Ticket {item.ticket_id}: {reconciliationReason(item.reason)}</li>)}</ul>
       </details>}
-      {chatActiveTab === 'overview' && (
+      {chatActiveTab === 'overview' && chatMetricsReady && (
         <section className="workspace-page-heading">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -8249,7 +8250,7 @@ function ChatModuleDashboard({
       )}
 
 
-      {chatActiveTab === 'overview' && (
+      {chatActiveTab === 'overview' && chatMetricsReady && (
         <details className="overflow-hidden rounded-2xl border border-cyan-300/15 bg-slate-950/35 shadow-[0_22px_70px_rgba(2,8,23,0.28)]">
           <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-cyan-100">Briefing e radar da operação · abrir detalhes</summary>
           <div className="border-b border-white/10 px-5 py-4 sm:px-6">
@@ -8544,7 +8545,7 @@ function ChatModuleDashboard({
         </section>
       )}
 
-      {chatActiveTab === 'prototype' && (
+      {chatActiveTab === 'prototype' && chatMetricsReady && (
         <section className="workspace-page-heading">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
@@ -8643,7 +8644,7 @@ function ChatModuleDashboard({
           </details>
       </section>
 
-      {chatActiveTab === 'podium' && (
+      {chatActiveTab === 'podium' && chatMetricsReady && (
         <section className="workspace-page-heading">
           <p className="workspace-eyebrow">Gestão e ações</p>
           <h2 className="mt-2 text-2xl font-bold">Onde agir e o que acompanhar?</h2>
@@ -8651,7 +8652,7 @@ function ChatModuleDashboard({
         </section>
       )}
 
-      {chatActiveTab === 'reports' && (
+      {chatActiveTab === 'reports' && chatMetricsReady && (
         <section className="workspace-page-heading">
           <p className="workspace-eyebrow">Fechamento mensal</p>
           <h2 className="mt-2 text-2xl font-bold">{chatReportInProgress ? 'Acompanhar a competência em andamento' : 'Consolidar, reconhecer e comunicar'}</h2>
@@ -8659,7 +8660,7 @@ function ChatModuleDashboard({
         </section>
       )}
 
-      {chatActiveTab === 'prototype' && (
+      {chatActiveTab === 'prototype' && chatMetricsReady && (
         <div className="space-y-7">
           <section className="workspace-content-section rounded-xl border border-cyan-300/15 p-4">
             <div className="flex flex-wrap items-center gap-4">
