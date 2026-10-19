@@ -44,7 +44,7 @@ export async function GET(request: Request) {
     const monthStart = today.slice(0, 7) + '-01'
 
     stage = 'ledger_and_teams'
-    const [tickets, coverage, rosterResult, analystsResult, snapshotsResult, latestSyncResult] = await Promise.all([
+    const [tickets, coverage, rosterResult, analystsResult, snapshotsResult, latestSyncResult, numericClock] = await Promise.all([
       readFinalLedger(admin, { start: monthStart, end: today }),
       readLedgerCoverage(admin).then(coverage=>scopeLedgerCoverage(coverage,{start:monthStart,end:today})),
       admin.from('chat_teams').select('id,name,active').eq('active', true),
@@ -59,6 +59,7 @@ export async function GET(request: Request) {
         .order('finished_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
+      admin.rpc('get_clickdesk_sync_clock',{p_start:monthStart,p_end:today}),
     ])
     if (rosterResult.error) throw new ApiError(503, 'Cadastro de equipes indisponível.')
     if (analystsResult.error) throw new ApiError(503, 'Cadastro de analistas indisponível.')
@@ -75,6 +76,8 @@ export async function GET(request: Request) {
       throw new ApiError(503, 'Conferência de vínculo ou duplicidade do ledger falhou.')
     }
     const lastReconciledAt=tickets.reduce<string|null>((latest,row)=>!latest||row.verified_at>latest?row.verified_at:latest,null)
+    const visibleCheckAt=[lastReconciledAt,latestSyncResult.data?.finished_at,!numericClock.error&&typeof numericClock.data==='string'?numericClock.data:null].filter((value):value is string=>Boolean(value)).sort((a,b)=>Date.parse(b)-Date.parse(a))[0]??null
+
     stage = 'serialize'
 
     const latestByDepartment = new Map<number, ReportSnapshotRow>()
@@ -106,9 +109,7 @@ export async function GET(request: Request) {
       queue_report_status: snapshotsResult.error
         ? 'unavailable' : queueReports.length ? 'available' : 'not_captured',
       ledger_coverage: coverage.complete ? 'complete' : 'partial',
-      latest_sync: lastReconciledAt && (!latestSyncResult.data?.finished_at || lastReconciledAt > latestSyncResult.data.finished_at)
-        ? {finished_at:lastReconciledAt,source:'canonical_ledger_reconciliation'}
-        : latestSyncResult.error ? null : latestSyncResult.data ?? null,
+      latest_sync: visibleCheckAt ? {finished_at:visibleCheckAt,source:'canonical_background_check'} : null,
       sync_status: latestSyncResult.error ? 'unavailable' : 'available',
       semantics: {
         teams: 'Contagem de um ticket por ultimo autor publico humano verificado e ativo, agrupado pelo vinculo cadastral.',

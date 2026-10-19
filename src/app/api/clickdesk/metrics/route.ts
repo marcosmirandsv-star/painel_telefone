@@ -305,8 +305,8 @@ export async function GET(request: Request) {
     if (latestSync.error) throw new ApiError(503, 'Não foi possível consultar o status da sincronização.')
 
     let visibleSyncFinishedAt = latestSync.data?.finished_at ?? null
-    if (!access.isManagement) {
-      // A sessão só pode obter o horário, nunca as linhas globais de sincronização.
+    {
+      // Retorna apenas o horário da verificação; não atesta cobertura nem expõe linhas globais.
       const clock = await access.admin.rpc('get_clickdesk_sync_clock', {
         p_start: filters.start, p_end: filters.end,
       })
@@ -371,13 +371,11 @@ export async function GET(request: Request) {
         excluded_apprentice_grouped_rows: apprenticeRows.length,
         excluded_apprentice_attendances: aggregate(apprenticeRows).attendances,
       },
-      latest_sync: access.isManagement
-        ? lastReconciledAt && (!latestSync.data?.finished_at || lastReconciledAt > latestSync.data.finished_at)
-          ? { finished_at: lastReconciledAt, source: 'canonical_ledger_reconciliation' }
-          : latestSync.data ?? null
-        : visibleSyncFinishedAt
-          ? { finished_at: visibleSyncFinishedAt }
-          : null,
+      latest_sync: visibleSyncFinishedAt
+        ? access.isManagement && latestSync.data?.finished_at === visibleSyncFinishedAt
+          ? latestSync.data
+          : { finished_at: visibleSyncFinishedAt, source: 'canonical_background_check' }
+        : null,
       sync_schedule: {
         interval_minutes: CLICKDESK_SYNC_INTERVAL_MINUTES,
         window_brt: '09:00-19:55',

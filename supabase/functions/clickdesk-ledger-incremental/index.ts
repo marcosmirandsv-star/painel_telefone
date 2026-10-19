@@ -181,6 +181,7 @@ Deno.serve(async(req:Request)=>{
   // Never allow a scoped recovery job to refresh historical audited credits.
   if(targeted&&refresh)return Response.json({error:'scoped_refresh_not_supported'},{status:400})
   try {
+    if(!dry)await admin.from('clickdesk_reconciliation_health').upsert({singleton:true,status:'running',last_started_at:new Date().toISOString(),error_code:null})
     const [selection,roster]=await Promise.all([
       admin.rpc('get_clickdesk_reconciliation_batch',{p_limit:batch,p_refresh:refresh,p_start:targeted?targetStart:null,p_end:targeted?targetEnd:null}),
       admin.from('chat_analysts').select('id,name,team_id,csat_goal'),
@@ -251,6 +252,7 @@ Deno.serve(async(req:Request)=>{
       if(result.error)throw Error('coverage_write_failed')
     }
     if(!dry) await admin.rpc('assess_clickdesk_period_inventory',{p_period:businessDate(new Date().toISOString()).slice(0,7)})
+    if(!dry)await admin.from('clickdesk_reconciliation_health').upsert({singleton:true,status:'ready',last_finished_at:new Date().toISOString(),examined:evaluated.length,confirmed:confirmed.length,pending:unresolved.length,error_code:null})
     // No names, ticket IDs, content, credentials or session identifiers returned.
     const reasons:Record<string,number>={}
     for(const x of unresolved){const r=x.reason??'unspecified';reasons[r]=(reasons[r]??0)+1}
@@ -266,6 +268,7 @@ Deno.serve(async(req:Request)=>{
     })
   }catch(e){
     const msg=e instanceof Error?e.message:'unknown'
+    if(!dry)await admin.from('clickdesk_reconciliation_health').update({status:'error',error_code:'reconciliation_failed'}).eq('singleton',true)
     const safe=/^(candidate_source_|roster_unavailable|ledger_write_failed|pending_clear_failed|pending_write_failed|coverage_count_failed|coverage_write_failed|invalid_confirmed_evidence)/.test(msg)
     return Response.json({ok:false,error:safe?msg:'reconciliation_failed'},{status:503})
   }
