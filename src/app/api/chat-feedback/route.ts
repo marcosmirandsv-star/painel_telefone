@@ -233,6 +233,8 @@ function buildPrompt(body: ChatFeedbackRequest) {
       date: item.occurredDate ?? 'data não informada',
       analysis: normalizeQualitativeAnalysis(item.analysis, item.satisfactionLabel),
     }))
+  const selectedNegativeCount = qualitativeFindings.filter((item) => item.satisfaction === 'negative').length
+  const selectedPositiveCount = qualitativeFindings.filter((item) => item.satisfaction === 'positive').length
   const qualitativeCoverage =
     qualitativeContext && Number(qualitativeContext.analyzedCount) > 0
       ? `${Number(qualitativeContext.analyzedCount)} tickets selecionados para feedback; ${Number(qualitativeContext.negativeAnalyzed ?? 0)} de ${Number(qualitativeContext.negativeTotal ?? 0)} negativas e ${Number(qualitativeContext.positiveAnalyzed ?? 0)} de ${Number(qualitativeContext.positiveTotal ?? 0)} positivas.`
@@ -267,6 +269,9 @@ ${volumeRule}
 - Não mencione variação contra período anterior quando não houver um valor anterior real no histórico recebido.
 - Não invente a causa de um resultado. Quando a causa não estiver nos dados ou nas observações, registre que gestor e analista vão verificá-la juntos.
 - Quando houver evidências qualitativas, trate-as explicitamente como amostra dos tickets analisados. Nunca generalize um padrão da amostra para todos os atendimentos do mês.
+- Nunca use evidências de tickets positivos para explicar notas negativas ou o CSAT abaixo da meta. Um ponto de melhoria em ticket positivo não demonstra o motivo de outra avaliação.
+- Se não houver tickets negativos selecionados, diga que a causa das negativas ainda precisa ser investigada. Proíba conclusões como "isso explica as notas desfavoráveis", mesmo quando houver orientação prospectiva de CX.
+- Ao afirmar comportamento observado, cite o número de pelo menos um ticket selecionado que contenha essa evidência. Separe impacto possível de percepção explicitamente relatada pelo cliente. Não transforme correlação ou hipótese em causa comprovada.
 - Respeite o nível de confiança da análise qualitativa. Confiança baixa deve aparecer como hipótese ou ponto a validar, nunca como conclusão.
 - Só afirme uma falha comportamental quando coaching_signal.available for verdadeiro ou quando as observações do gestor trouxerem o mesmo comportamento de forma explícita. A seleção editorial não comprova culpa. Quando houver cx_coaching.practice_to_improve, você pode propor essa prática para o próximo caso, com exemplo e verificação, deixando claro que é orientação prospectiva e preservando attribution_caution.
 - Uma causa classificada como empresa, sistema, processo, cliente ou fator externo não deve ser convertida em culpa individual do analista.
@@ -315,6 +320,7 @@ Contexto específico fornecido pelo gestor: ${managerHasContext ? 'sim; ele deve
 
 Tickets selecionados pela gestão para compor o feedback:
 ${qualitativeCoverage}
+Escopo efetivamente recebido neste pedido: ${selectedNegativeCount} ticket(s) negativo(s) e ${selectedPositiveCount} positivo(s). ${selectedNegativeCount === 0 ? 'Nenhum transcript negativo foi fornecido: não atribua causa às negativas nem ligue o CSAT a comportamentos observados apenas em positivas.' : 'Restrinja qualquer hipótese sobre notas negativas aos tickets negativos identificados; a amostra não comprova a causa de todas as notas.'}
 
 Evidências qualitativas estruturadas dos tickets já analisados:
 ${qualitativeFindings.length ? JSON.stringify(qualitativeFindings, null, 2) : 'Nenhuma evidência qualitativa disponível.'}
