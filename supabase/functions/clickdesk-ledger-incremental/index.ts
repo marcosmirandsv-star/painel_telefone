@@ -4,7 +4,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 // historical message/event pagination. No production token, no transcripts stored.
 const HOMO = 'vvtorcvchnqhcredhorv.supabase.co'
 const BASE = 'https://api.desk.click.app/api/v1'
-const MAX_BATCH = 32
+const MAX_BATCH = 128
 export type Person = { id: string; name: string; team_id: string; csat_goal?: number }
 export type RecordValue = Record<string, unknown>
 export const object = (x: unknown): RecordValue => x && typeof x === 'object' && !Array.isArray(x) ? x as RecordValue : {}
@@ -223,10 +223,10 @@ Deno.serve(async(req:Request)=>{
     const backlogBefore=Number(selection.data.backlog_before)
     const scopedCount=selection.data.discovered_in_target_period
     const deadline=Date.now()+110000
-    const evaluated: Array<FinalTicket&{version:string}> = new Array(candidates.length)
-    let cursor=0
+    const results: Array<FinalTicket&{version:string}> = new Array(candidates.length)
+    let cursor=0,sourcePaused=false
     await Promise.all(Array.from({length:8},async()=>{
-      while(cursor<candidates.length){
+      while(cursor<candidates.length&&!sourcePaused){
         const index=cursor++,candidate=candidates[index]
         try{
           const evidence=await readTicketHistory(candidate.id,path=>{
@@ -234,15 +234,17 @@ Deno.serve(async(req:Request)=>{
             return clickdeskGet(path,key,account)
           })
           const row=finalHumanTicket(candidate.id,evidence.messages,evidence.events,evidence.ticket,people,evidence.complete)
-          evaluated[index]={...row,version:candidate.version}
+          results[index]={...row,version:candidate.version}
         }catch(e){
+          if(e instanceof Error&&/^clickdesk_http_(429|5\d\d)$/.test(e.message))sourcePaused=true
           const reason=e instanceof Error && (/^clickdesk_http_\d+$|^deadline$/.test(e.message))?e.message:'history_read_failed'
-          evaluated[index]={ticket_id:candidate.id,analyst_id:null,analyst_name:null,team_id:null,occurred_at:null,
+          results[index]={ticket_id:candidate.id,analyst_id:null,analyst_name:null,team_id:null,occurred_at:null,
             occurred_date:null,area:null,message_id:null,satisfaction_label:null,confirmed:false,
             reason,rating_timestamp_warning:false,version:candidate.version}
         }
       }
     }))
+    const evaluated=results.filter(Boolean)
     const confirmed=evaluated.filter(x=>x.confirmed)
     const unresolved=evaluated.filter(x=>!x.confirmed)
     if(confirmed.some(x=>!x.analyst_id||!x.team_id||!x.message_id||!x.occurred_at||!x.occurred_date))
@@ -259,9 +261,14 @@ Deno.serve(async(req:Request)=>{
           if(!Number.isSafeInteger(last)||page>=last||!items.length)break
         }
         if(deleted.length){
-          const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(deleted))))).map(x=>x.toString(16).padStart(2,'0')).join('')
-          const saved=await admin.rpc('record_clickdesk_source_deletions',{p_rows:deleted,p_hash:digest})
-          if(!saved.error&&Array.isArray(saved.data)){const proven=new Set(saved.data);for(const row of unresolved)if(proven.has(row.ticket_id))row.reason='deleted_in_source'}
+          const proven=new Set<string>()
+          for(let offset=0;offset<deleted.length;offset+=32){
+            const chunk=deleted.slice(offset,offset+32)
+            const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(chunk))))).map(x=>x.toString(16).padStart(2,'0')).join('')
+            const saved=await admin.rpc('record_clickdesk_source_deletions',{p_rows:chunk,p_hash:digest})
+            if(!saved.error&&Array.isArray(saved.data))for(const id of saved.data)proven.add(id)
+          }
+          for(const row of unresolved)if(proven.has(row.ticket_id))row.reason='deleted_in_source'
         }
       }catch{/* An unproven deletion remains an explicit HTTP failure. */}
     }

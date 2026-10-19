@@ -20,11 +20,11 @@ Deno.serve(async(req:Request)=>{
   const deadline=Date.now()+85000
   let examined=0,confirmed=0,rounds=0,interrupted=false
   try{
-   // Fixed endpoint, fixed batch size, at most 768 tickets inside the same 85-second deadline; source concurrency is bounded to eight by the ledger endpoint.
+   // Fixed endpoint, fixed batch size, at most 3072 tickets inside the same 85-second deadline; source concurrency is bounded to eight by the ledger endpoint.
    while(rounds<24&&Date.now()<deadline-20000){
     const r=await fetch('https://'+HOST+'/functions/v1/clickdesk-ledger-incremental',{
      method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
-     body:JSON.stringify({dry_run:false,commit_verified:true,limit:32}),
+     body:JSON.stringify({dry_run:false,commit_verified:true,limit:128}),
      signal:AbortSignal.timeout(Math.min(25000,deadline-Date.now()))})
     const result=await r.json()
     if(!r.ok||result.ok!==true)throw Error('numeric_batch_failed')
@@ -42,5 +42,5 @@ Deno.serve(async(req:Request)=>{
    if(!interrupted)await admin.from('clickdesk_reconciliation_cycle').update({lease_token:null,lease_until:null}).eq('singleton',true).eq('lease_token',leaseToken)
   }
  })())
- return Response.json({ok:true,status:'accepted',max_tickets:768,max_seconds:85},{status:202,headers:{'Cache-Control':'no-store'}})
+ return Response.json({ok:true,status:'accepted',max_tickets:3072,max_seconds:85},{status:202,headers:{'Cache-Control':'no-store'}})
 })

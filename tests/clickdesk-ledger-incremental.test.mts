@@ -115,5 +115,5 @@ test('recuperação seletiva por dia preserva a autoria final e não fabrica o z
   assert.match(worker,/confirmed_by_final_day:/)
   assert.match(worker,/last_public_at:x\.occurred_at/)
   assert.doesNotMatch(worker,/occurred_date:candidate\.sourceDay/)
-  assert.match(worker,/MAX_BATCH = 32/)
+  assert.match(worker,/MAX_BATCH = 128/)
 })
