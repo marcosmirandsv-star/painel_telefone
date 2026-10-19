@@ -12,7 +12,7 @@ import {
   buildChatPerformanceDiagnostic,
   type ChatPerformanceDiagnostic,
 } from '@/lib/chat-diagnostic'
-import { normalizeQualitativeAnalysis } from '@/lib/clickdesk-qualitative'
+import { normalizeQualitativeAnalysis, qualitativeAnalysisVersion, QUALITATIVE_ANALYSIS_VERSION } from '@/lib/clickdesk-qualitative'
 import { chatBusinessDate, chatPeriodBounds, selectChatPresentationRow } from '@/lib/chat-presentation'
 import { sumChatVoteRows } from '@/lib/clickdesk-csat'
 
@@ -6979,6 +6979,9 @@ function ChatModuleDashboard({
         .order('clickdesk_ticket_id', { ascending: true })
         .range(offset, offset + 499)
       if (result.error) throw new Error('Não foi possível carregar os tickets selecionados para feedback. Tente novamente.')
+      if ((result.data ?? []).some(item => qualitativeAnalysisVersion(item.analysis) < QUALITATIVE_ANALYSIS_VERSION)) {
+        throw new Error('Há tickets selecionados cujo conteúdo mudou ou cuja leitura precisa ser atualizada. Retome a leitura na Análise 360 antes de usar essas evidências no feedback. Os indicadores e as notas do cliente não dependem disso.')
+      }
       findings.push(...(result.data ?? []).map(item => ({
         ticketId: item.clickdesk_ticket_id,
         satisfactionLabel: item.satisfaction_label,

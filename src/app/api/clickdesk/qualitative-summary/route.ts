@@ -5,8 +5,8 @@ import {
   json,
 } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
-import { readFinalLedger, readLedgerCoverage } from '@/lib/clickdesk-ledger-server'
-import { normalizeQualitativeAnalysis } from '@/lib/clickdesk-qualitative'
+import { readFinalLedger, readLedgerCoverage, scopeLedgerCoverage } from '@/lib/clickdesk-ledger-server'
+import { normalizeQualitativeAnalysis, qualitativeAnalysisVersion, QUALITATIVE_ANALYSIS_VERSION } from '@/lib/clickdesk-qualitative'
 
 export const runtime = 'nodejs'
 
@@ -147,7 +147,7 @@ export async function GET(request: Request) {
     const [ledger, roster, ledgerCoverage] = await Promise.all([
       readFinalLedger(access.admin, { start, end, analystId, teamId }),
       access.admin.from('chat_analysts').select('id,name,active'),
-      readLedgerCoverage(access.admin),
+      readLedgerCoverage(access.admin).then(value => scopeLedgerCoverage(value,{start,end})),
     ])
     if (roster.error) throw new ApiError(503, 'Cadastro de analistas indisponível.')
     const nameById = new Map((roster.data ?? []).map(item => [item.id, item.name]))
@@ -175,24 +175,23 @@ export async function GET(request: Request) {
       }
     }
 
-    let analysisQuery = access.admin
-      .from('clickdesk_qualitative_analyses')
-      .select('clickdesk_ticket_id,analyst_id,satisfaction_label,analysis,validation_status,updated_at')
-      .gte('occurred_date', start)
-      .lte('occurred_date', end)
-      .order('updated_at', { ascending: false })
-
-    if (analystId) analysisQuery = analysisQuery.eq('analyst_id', analystId)
-
-    const analysisResult = await analysisQuery
-    if (analysisResult.error) {
-      throw new ApiError(503, 'Não foi possível carregar as análises qualitativas preservadas.')
+    const allAnalyses: AnalysisRow[] = []
+    for(let offset=0;offset<10000;offset+=500) {
+      let analysisQuery=access.admin.from('clickdesk_qualitative_analyses')
+        .select('clickdesk_ticket_id,analyst_id,satisfaction_label,analysis,validation_status,updated_at')
+        .gte('occurred_date',start).lte('occurred_date',end)
+        .order('clickdesk_ticket_id',{ascending:true}).range(offset,offset+499)
+      if(analystId)analysisQuery=analysisQuery.eq('analyst_id',analystId)
+      const result=await analysisQuery
+      if(result.error)throw new ApiError(503,'Não foi possível carregar as análises qualitativas preservadas.')
+      const page=(result.data??[]) as AnalysisRow[]
+      allAnalyses.push(...page)
+      if(page.length<500)break
+      if(offset+500>=10000)throw new ApiError(422,'Análises excederam o limite seguro de consulta.')
     }
-
-    const allAnalyses = (analysisResult.data ?? []) as AnalysisRow[]
     const currentOwner = new Map(evaluated.map(item => [item.clickdesk_ticket_id, item]))
     const analyses = allAnalyses.filter(item => {
-      if (!evaluatedTicketIds.has(item.clickdesk_ticket_id)) return false
+      if (!evaluatedTicketIds.has(item.clickdesk_ticket_id) || qualitativeAnalysisVersion(item.analysis) < QUALITATIVE_ANALYSIS_VERSION) return false
       const owner = currentOwner.get(item.clickdesk_ticket_id)
       return Boolean(owner && item.analyst_id === owner.analyst_id
         && item.satisfaction_label === owner.satisfaction_label)
