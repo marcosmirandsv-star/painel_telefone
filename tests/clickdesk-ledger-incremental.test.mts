@@ -1,7 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { finalHumanTicket } from '../src/lib/clickdesk-final-owner.ts'
+import { runInNewContext } from 'node:vm'
+import ts from 'typescript'
+import { object, text, businessDate, finalHumanTicket } from '../src/lib/clickdesk-final-owner.ts'
 
 const source = (p:string)=>readFileSync(new URL('../'+p,import.meta.url),'utf8')
 const worker = source('supabase/functions/clickdesk-ledger-incremental/index.ts')
@@ -116,4 +118,20 @@ test('recuperação seletiva por dia preserva a autoria final e não fabrica o z
   assert.match(worker,/last_public_at:x\.occurred_at/)
   assert.doesNotMatch(worker,/occurred_date:candidate\.sourceDay/)
   assert.match(worker,/MAX_BATCH = 128/)
+})
+
+test('period exclusion proves only the last public human date and never invents an author',()=>{
+ const start=worker.indexOf('export function provenOutsidePeriodAt('),end=worker.indexOf('type Candidate =',start)
+ assert.ok(start>0&&end>start)
+ const code=ts.transpileModule(worker.slice(start,end).replace('export function','function'),{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText
+ const proof=runInNewContext(code+'\nprovenOutsidePeriodAt',{object,text,businessDate}) as (messages:unknown[],complete:boolean,start:string)=>string|null
+ const message={id:'test-only',author_type:'agent',author:null,visibility:'public',created_at:'2026-09-30T23:59:00Z'}
+ assert.equal(proof([message],true,'2026-10-01'),message.created_at.replace('Z','.000Z'))
+ assert.equal(finalHumanTicket('test-only',[message],[],{},[],true).confirmed,false)
+ assert.equal(proof([message],false,'2026-10-01'),null)
+ assert.equal(proof([{...message,created_at:'invalid'}],true,'2026-10-01'),null)
+ assert.equal(proof([{...message,created_at:'2026-10-01T03:00:00Z'}],true,'2026-10-01'),null)
+ assert.equal(proof([{...message,created_at:'2026-10-01T02:59:59Z'}],true,'2026-10-01'),'2026-10-01T02:59:59.000Z')
+ assert.equal(proof([message,{...message,id:'internal-only',visibility:'internal',created_at:'2026-10-19T12:00:00Z'}],true,'2026-10-01'),'2026-09-30T23:59:00.000Z')
+ assert.equal(proof([],true,'2026-10-01'),null)
 })

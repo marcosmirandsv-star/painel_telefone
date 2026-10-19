@@ -159,6 +159,20 @@ export async function readTicketHistory(id: string, get: (path:string)=>Promise<
 }
 
 
+export function provenOutsidePeriodAt(messages:unknown[],complete:boolean,startDate:string):string|null {
+ if(!complete)return null
+ const human=messages.map(object).filter(m=>{
+  const visibility=text(m.visibility).toLowerCase()
+  return (visibility==='public'||m.public===true||m.is_public===true)&&m.public!==false&&m.is_public!==false&&!['private','internal'].includes(visibility)
+   &&text(m.author_type||object(m.author).type).toLowerCase()==='agent'
+ })
+ if(!human.length)return null
+ const times=human.map(m=>Date.parse(text(m.created_at||m.timestamp)))
+ if(times.some(t=>!Number.isFinite(t)))return null
+ const at=new Date(Math.max(...times)).toISOString()
+ return businessDate(at)<startDate?at:null
+}
+
 type Candidate = { id:string; version:string; sourceDay:string; origin:string }
 const str=(x:unknown)=>typeof x==='string'?x:''
 async function clickdeskGet(path:string,key:string,account:string) {
@@ -224,6 +238,7 @@ Deno.serve(async(req:Request)=>{
     const scopedCount=selection.data.discovered_in_target_period
     const deadline=Date.now()+110000
     const results: Array<FinalTicket&{version:string}> = new Array(candidates.length)
+    const outsidePeriodProofs:Array<{ticket_id:string;source_version:string;last_public_at:string}>=[]
     let cursor=0,sourcePaused=false
     await Promise.all(Array.from({length:8},async()=>{
       while(cursor<candidates.length&&!sourcePaused){
@@ -235,6 +250,10 @@ Deno.serve(async(req:Request)=>{
           })
           const row=finalHumanTicket(candidate.id,evidence.messages,evidence.events,evidence.ticket,people,evidence.complete)
           results[index]={...row,version:candidate.version}
+          if(row.reason==='final_author_ambiguous'){
+            const at=provenOutsidePeriodAt(evidence.messages,evidence.complete,businessDate(new Date().toISOString()).slice(0,7)+'-01')
+            if(at)outsidePeriodProofs.push({ticket_id:candidate.id,source_version:candidate.version,last_public_at:at})
+          }
         }catch(e){
           if(e instanceof Error&&/^clickdesk_http_(429|5\d\d)$/.test(e.message))sourcePaused=true
           const reason=e instanceof Error && (/^clickdesk_http_\d+$|^deadline$/.test(e.message))?e.message:'history_read_failed'
@@ -290,6 +309,11 @@ Deno.serve(async(req:Request)=>{
           unresolved.map(x=>({ticket_id:x.ticket_id,reason:x.reason??'history_incomplete',
             evidence_source:'clickdesk_incremental_edge',checked_at:now})),{onConflict:'ticket_id'})
         if(result.error)throw Error('pending_write_failed')
+      }
+      if(outsidePeriodProofs.length){
+        const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(outsidePeriodProofs))))).map(x=>x.toString(16).padStart(2,'0')).join('')
+        const saved=await admin.rpc('record_clickdesk_outside_period_proofs',{p_period:businessDate(now).slice(0,7),p_rows:outsidePeriodProofs,p_hash:digest})
+        if(saved.error)throw Error('outside_period_proof_write_failed')
       }
       const [ledgerCount,pendingCount]=await Promise.all([
         admin.from('clickdesk_final_ticket_ledger').select('ticket_id',{count:'exact',head:true}),
