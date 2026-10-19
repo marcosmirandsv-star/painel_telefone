@@ -76,6 +76,7 @@ async function recoveryHarness(options:{host?:string;lease?:boolean;reasons?:Rec
 test('recuperação é limitada a 24 lotes e 85 segundos e usa apenas o endpoint fixo de homologação',async()=>{
  const r=await recoveryHarness()
  assert.equal(r.response.status,202)
+ assert.equal((await r.response.json()).max_seconds,85)
  assert.equal(r.urls.length,24)
  assert.ok(r.urls.every(url=>url==='https://vvtorcvchnqhcredhorv.supabase.co/functions/v1/clickdesk-ledger-incremental'))
  assert.equal(r.releases,1)
@@ -100,4 +101,18 @@ test('retentativas preservam o início real da captura para conciliar alteraçõ
  const retry=inventory.slice(inventory.indexOf("if(state.data.status==='error')"),inventory.indexOf("if(state.data.status==='complete'"))
  assert.doesNotMatch(retry,/scan_watermark_at:/)
  assert.match(inventory,/scan_watermark_at:new Date\(\).toISOString\(\)/)
+})
+
+test('somente máximo documentado anterior ao período permite excluir um intervalo sem enumerar seus tickets',()=>{
+ const sourceCode=source('supabase/functions/clickdesk-period-inventory/index.ts')
+ const code=sourceCode.slice(sourceCode.indexOf('function outsidePeriod('),sourceCode.indexOf('async function hash'))
+ const verify=runInNewContext(ts.transpileModule(code,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText+'\noutsidePeriod',{list:(x:any)=>x.data}) as (payload:any,part:any,start:string)=>boolean
+ const part={created_from:'2024-01-01',created_to:'2024-12-31'}
+ const old={total:10000,data:[{id:1,created_at:'2024-05-01T00:00:00Z',updated_at:'2026-09-30T23:59:00Z'}]}
+ assert.equal(verify(old,part,'2026-10-01'),true)
+ assert.equal(verify({...old,data:[{...old.data[0],updated_at:'2026-10-01T00:00:00Z'}]},part,'2026-10-01'),false)
+ assert.equal(verify({...old,data:[{...old.data[0],created_at:'2025-01-01T00:00:00Z'}]},part,'2026-10-01'),false)
+ assert.equal(verify({...old,data:[{...old.data[0],updated_at:'invalid'}]},part,'2026-10-01'),false)
+ assert.equal(verify({...old,data:[]},part,'2026-10-01'),false)
+ assert.equal(verify({total:0,data:[]},part,'2026-10-01'),true)
 })

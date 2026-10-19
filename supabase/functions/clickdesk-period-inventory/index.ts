@@ -5,6 +5,14 @@ const today=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',ye
 const obj=(v:any)=>v&&typeof v==='object'&&!Array.isArray(v)?v:{}
 const list=(v:any):any[]=>Array.isArray(v)?v:Array.isArray(v?.data)?v.data:Array.isArray(v?.tickets)?v.tickets:listNested(v)
 function listNested(v:any):any[]{return Array.isArray(v?.data?.data)?v.data.data:Array.isArray(v?.data?.tickets)?v.data.tickets:[]}
+function outsidePeriod(payload:any,part:any,start:string){
+ const items=list(payload),total=Number(payload.total),head=items[0]
+ if(!Number.isSafeInteger(total)||total<0)return false
+ if(total===0)return items.length===0
+ if(items.length!==1||!head||!Number.isFinite(Date.parse(head.updated_at)))return false
+ const created=String(head.created_at||'').slice(0,10)
+ return created>=part.created_from&&created<=part.created_to&&Date.parse(head.updated_at)<Date.parse(start+'T00:00:00Z')
+}
 async function hash(v:any){return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(v))))).map(x=>x.toString(16).padStart(2,'0')).join('')}
 async function scan(admin:any,creds:any,run:any){
  const deadline=Date.now()+85000,base='https://api.desk.click.app/api/v1/tickets'
@@ -57,6 +65,15 @@ async function scan(admin:any,creds:any,run:any){
  await admin.rpc('set_clickdesk_recovery_cadence',{p_recovering:false})
  await admin.rpc('assess_clickdesk_period_inventory',{p_period:run.period_key})
  return
+ }
+ if(part.pass===1&&part.next_page===1){
+ const probe=await get(new URLSearchParams({inbox:'all',view:'all',sort:'updated_at',dir:'desc',per_page:'1',page:'1',created_from:part.created_from,created_to:part.created_to}))
+ if(outsidePeriod(probe,part,run.start_date)){
+ const proof=list(probe).map(t=>({ticket_id:String(t.id),created_at:t.created_at,updated_at:t.updated_at}))
+ const saved=await admin.from('clickdesk_inventory_partitions').update({status:'complete',total_items:0,total_pages:0,next_page:1,excluded_before_period:true,source_max_updated_at:list(probe)[0]?.updated_at||null,preflight_hash:await hash(proof),preflight_verified_at:new Date().toISOString(),preflight_reported_total:Number(probe.total)}).eq('id',part.id)
+ if(saved.error)throw Error('inventory_save_failed')
+ await new Promise(resolve=>setTimeout(resolve,350));continue
+ }
  }
  const params=new URLSearchParams({inbox:'all',view:'all',sort:'id',dir:'asc',per_page:'500',page:String(part.next_page),created_from:part.created_from,created_to:part.created_to})
  const payload=await get(params),items=list(payload),meta=obj(payload.meta)
