@@ -8206,8 +8206,8 @@ function ChatModuleDashboard({
         </p>
       )}
       {clickDeskPersistedMetrics?.reconciliation && ['overview','prototype','reports'].includes(chatActiveTab) && <details className="rounded-lg border border-white/10 p-3 text-xs text-slate-400">
-        <summary className="cursor-pointer">Tickets pendentes de conciliação: {clickDeskPersistedMetrics.reconciliation.pending_count}</summary>
-        <p className="mt-2">Snapshot {formatDateTime(clickDeskPersistedMetrics.reconciliation.captured_at)}. Casos inconclusivos não recebem crédito arbitrário nem são tratados como resoluções ou avaliações.</p>
+        <summary className="cursor-pointer">Tickets capturados com autoria inconclusiva neste recorte: {clickDeskPersistedMetrics.reconciliation.pending_count}</summary>
+        <p className="mt-2">A contagem não inclui tickets ainda não descobertos; consulte a cobertura da captura. Conferência {formatDateTime(clickDeskPersistedMetrics.reconciliation.captured_at)}. Casos inconclusivos não recebem crédito arbitrário nem são tratados como resoluções ou avaliações.</p>
         <ul className="mt-2 space-y-1">{clickDeskPersistedMetrics.reconciliation.pending.map(item => <li key={item.ticket_id}>Ticket {item.ticket_id}: {reconciliationReason(item.reason)}</li>)}</ul>
       </details>}
       {chatActiveTab === 'overview' && (

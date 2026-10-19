@@ -5,7 +5,6 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 const HOMO = 'vvtorcvchnqhcredhorv.supabase.co'
 const BASE = 'https://api.desk.click.app/api/v1'
 const MAX_BATCH = 32
-const MAX_SOURCE_ROWS = 20000
 export type Person = { id: string; name: string; team_id: string; csat_goal?: number }
 export type RecordValue = Record<string, unknown>
 export const object = (x: unknown): RecordValue => x && typeof x === 'object' && !Array.isArray(x) ? x as RecordValue : {}
@@ -134,17 +133,6 @@ export async function readTicketHistory(id: string, get: (path:string)=>Promise<
 
 type Candidate = { id:string; version:string; sourceDay:string; origin:string }
 const str=(x:unknown)=>typeof x==='string'?x:''
-async function sourceRows(admin:any,table:string,columns:string,order:string) {
-  const all:Record<string,unknown>[]=[]
-  for(let offset=0;offset<MAX_SOURCE_ROWS;offset+=500) {
-    const result=await admin.from(table).select(columns).order(order,{ascending:true}).range(offset,offset+499)
-    if(result.error)throw Error('candidate_source_unavailable_'+table)
-    const items=(result.data??[]) as Record<string,unknown>[]
-    all.push(...items)
-    if(items.length<500)return all
-  }
-  throw Error('candidate_source_exceeded_safe_limit_'+table)
-}
 async function clickdeskGet(path:string,key:string,account:string) {
   const ctl=new AbortController()
   const timer=setTimeout(()=>ctl.abort(),12000)
@@ -193,61 +181,17 @@ Deno.serve(async(req:Request)=>{
   // Never allow a scoped recovery job to refresh historical audited credits.
   if(targeted&&refresh)return Response.json({error:'scoped_refresh_not_supported'},{status:400})
   try {
-    const [verified,legacy,capture,ledger,pending,roster]=await Promise.all([
-      sourceRows(admin,'clickdesk_chat_verified_contributions','ticket_id,occurred_date,verified_at','ticket_id'),
-      sourceRows(admin,'clickdesk_chat_attendances','clickdesk_ticket_id,occurred_date,updated_at','clickdesk_ticket_id'),
-      sourceRows(admin,'clickdesk_chat_capture_queue','ticket_id,period_end,source_updated_at','ticket_id'),
-      sourceRows(admin,'clickdesk_final_ticket_ledger','ticket_id,evidence_version,verified_at','ticket_id'),
-      sourceRows(admin,'clickdesk_final_ticket_pending','ticket_id,checked_at,reason','ticket_id'),
+    const [selection,roster]=await Promise.all([
+      admin.rpc('get_clickdesk_reconciliation_batch',{p_limit:batch,p_refresh:refresh,p_start:targeted?targetStart:null,p_end:targeted?targetEnd:null}),
       admin.from('chat_analysts').select('id,name,team_id,csat_goal'),
     ])
+    if(selection.error||!selection.data)throw Error('candidate_source_unavailable_sql_batch')
     if(roster.error)throw Error('roster_unavailable')
     const people:Person[]=(roster.data??[]).map((p:any)=>({id:p.id,name:p.name,team_id:p.team_id,csat_goal:Number(p.csat_goal)}))
-    const map=new Map<string,Candidate>()
-    const add=(id:unknown,version:unknown,day:unknown,origin:string)=>{
-      const ticketId=text(id).trim()
-      if(!/^\d{1,25}$/.test(ticketId))return
-      const v=str(version), d=str(day)
-      const prev=map.get(ticketId)
-      if(!prev || v>prev.version || (d>prev.sourceDay && origin==='verified'))
-        map.set(ticketId,{id:ticketId,version:v,sourceDay:d,origin})
-    }
-    for(const x of capture)add(x.ticket_id,x.source_updated_at,x.period_end,'capture')
-    for(const x of legacy)add(x.clickdesk_ticket_id,x.updated_at,x.occurred_date,'legacy')
-    for(const x of verified)add(x.ticket_id,x.verified_at,x.occurred_date,'verified')
-    const scopedIds=targeted ? new Set([
-      ...verified.filter(x=>str(x.occurred_date)>=targetStart&&str(x.occurred_date)<=targetEnd)
-        .map(x=>str(x.ticket_id)),
-      ...legacy.filter(x=>str(x.occurred_date)>=targetStart&&str(x.occurred_date)<=targetEnd)
-        .map(x=>str(x.clickdesk_ticket_id)),
-    ]) : null
-    const revision=await admin.from('clickdesk_registry_revision').select('changed_at').eq('singleton',true).single()
-    if(revision.error)throw Error('roster_unavailable')
-    const rosterChangedAt=Date.parse(str(revision.data?.changed_at))||0
-    const done=new Map(ledger.map(x=>[str(x.ticket_id),{version:str(x.evidence_version),verified_at:str(x.verified_at)}]))
-    const blocked=new Map(pending.map(x=>[str(x.ticket_id),{checked_at:str(x.checked_at),reason:str(x.reason)}]))
-    // Pending authorship can become decidable after a new verified message,
-    // analyst registration, or a transient transport failure. Retry only when
-    // source evidence changed, or a narrow cooldown elapsed.
-    const eligible=(candidate:Candidate)=>{
-      if(refresh)return true
-      const existing=done.get(candidate.id)
-      if(existing) return Boolean(candidate.version && candidate.version > existing.version && candidate.version > existing.verified_at)
-      const previous=blocked.get(candidate.id)
-      if(!previous)return true
-      const checked=Date.parse(previous.checked_at)
-      const changed=Number.isFinite(checked)&&Number.isFinite(Date.parse(candidate.version))
-        && Date.parse(candidate.version)>checked
-      const age=Number.isFinite(checked)?Date.now()-checked:0
-      const rosterRetry=previous.reason==='final_author_not_in_eligible_registry'&&rosterChangedAt>checked
-      const transportRetry=/^(clickdesk_http_|history_read_failed|history_incomplete|deadline)/.test(previous.reason)&&age>1800000
-      return changed||rosterRetry||transportRetry
-    }
-    // Newest candidate first; previously confirmed historical evidence is
-    // preserved until an explicitly requested refresh, not blindly overwritten.
-    const remaining=[...map.values()].filter(c=>(!scopedIds||scopedIds.has(c.id))&&eligible(c))
-      .sort((a,b)=>b.sourceDay.localeCompare(a.sourceDay)||b.id.localeCompare(a.id))
-    const candidates=remaining.slice(0,batch)
+    const candidates:Candidate[]=selection.data.candidates??[]
+    const candidateCount=Number(selection.data.candidate_count)
+    const backlogBefore=Number(selection.data.backlog_before)
+    const scopedCount=selection.data.discovered_in_target_period
     const deadline=Date.now()+110000
     const evaluated: Array<FinalTicket&{version:string}> = new Array(candidates.length)
     let cursor=0
@@ -297,7 +241,7 @@ Deno.serve(async(req:Request)=>{
         admin.from('clickdesk_final_ticket_pending').select('ticket_id',{count:'exact',head:true}),
       ])
       if(ledgerCount.error||pendingCount.error)throw Error('coverage_count_failed')
-      const candidateCount=map.size, confirmedCount=Math.min(candidateCount,ledgerCount.count??0)
+      const confirmedCount=Math.min(candidateCount,ledgerCount.count??0)
       const result=await admin.from('clickdesk_final_coverage').upsert({
         source_key:'captured_candidates_reconcile',start_date:'2026-09-01',end_date:new Date().toISOString().slice(0,10),
         candidate_count:candidateCount,confirmed_count:confirmedCount,
@@ -310,12 +254,12 @@ Deno.serve(async(req:Request)=>{
     // No names, ticket IDs, content, credentials or session identifiers returned.
     const reasons:Record<string,number>={}
     for(const x of unresolved){const r=x.reason??'unspecified';reasons[r]=(reasons[r]??0)+1}
-    return Response.json({ok:true,mode:dry?'dry_run':'homologation_persisted',candidate_count:map.size,
-      backlog_before:remaining.length,
+    return Response.json({ok:true,mode:dry?'dry_run':'homologation_persisted',candidate_count:candidateCount,
+      backlog_before:backlogBefore,
       examined:evaluated.length,confirmed:confirmed.length,pending:unresolved.length,reasons,
-      uncovered_cumulative:true,needs_another_batch:remaining.length>evaluated.length,
+      uncovered_cumulative:true,needs_another_batch:backlogBefore>evaluated.length,
       target_period:targeted?{start:targetStart,end:targetEnd}:null,
-      discovered_in_target_period:scopedIds?.size??null,
+      discovered_in_target_period:scopedCount??null,
       confirmed_by_final_day:evaluated.filter(x=>x.confirmed).reduce<Record<string,number>>((acc,x)=>{
         const d=x.occurred_date??'unknown';acc[d]=(acc[d]??0)+1;return acc
       },{}),

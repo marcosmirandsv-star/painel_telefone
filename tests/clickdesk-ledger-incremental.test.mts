@@ -82,13 +82,12 @@ test('worker inclui o unwrapping exigido pelo leitor histórico',()=>{
   assert.match(worker,/const ticket = unwrap\(await get\(/)
 })
 
-test('recuperação retenta pendência somente após nova evidência ou cooldown seguro',()=>{
-  assert.match(worker,/const eligible=\(candidate:Candidate\)=>/)
-  assert.match(worker,/const changed=Number\.isFinite\(checked\)/)
-  assert.match(worker,/const rosterRetry=/)
-  assert.match(worker,/const transportRetry=/)
-  assert.match(worker,/backlog_before:remaining\.length/)
-  assert.match(worker,/needs_another_batch:remaining\.length>evaluated\.length/)
+test('recuperação consulta lote limitado no banco e retorna contagem integral',()=>{
+  assert.match(worker,/get_clickdesk_reconciliation_batch/)
+  assert.match(worker,/p_limit:batch/)
+  assert.match(worker,/backlog_before:backlogBefore/)
+  assert.match(worker,/needs_another_batch:backlogBefore>evaluated.length/)
+  assert.doesNotMatch(worker,/MAX_SOURCE_ROWS/)
 })
 
 test('360 nunca reutiliza análise de outro titular ou outra classificação',()=>{
@@ -107,10 +106,10 @@ test('fila 360 ordena pelo campo físico de data do ledger',()=>{
 test('recuperação seletiva por dia preserva a autoria final e não fabrica o zero',()=>{
   assert.match(worker,/target_start/)
   assert.match(worker,/target_end/)
-  assert.match(worker,/const scopedIds=targeted \? new Set/)
-  assert.match(worker,/verified\.filter\(x=>str\(x\.occurred_date\)>=targetStart/)
-  assert.match(worker,/legacy\.filter\(x=>str\(x\.occurred_date\)>=targetStart/)
-  assert.match(worker,/scopedIds\.has\(c\.id\)/)
+  assert.match(worker,/p_start:targeted\?targetStart:null/)
+  assert.match(worker,/p_end:targeted\?targetEnd:null/)
+
+
   assert.match(worker,/targetEnd<targetStart/)
   assert.match(worker,/targeted&&refresh/)
   assert.match(worker,/confirmed_by_final_day:/)
