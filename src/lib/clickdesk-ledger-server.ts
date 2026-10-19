@@ -82,13 +82,18 @@ export async function readLedgerCoverage(admin: SupabaseClient) {
 export async function readLedgerCoverageForAccess(
   admin: SupabaseClient,
   isManagement: boolean,
+  period?: {start:string;end:string},
 ) {
-  if (isManagement) return readLedgerCoverage(admin)
+  if (isManagement) {
+    const coverage=await readLedgerCoverage(admin)
+    return period?scopeLedgerCoverage(coverage,period):coverage
+  }
+  const attestation=period?await admin.rpc('get_clickdesk_period_attestation',{p_start:period.start,p_end:period.end}):null
   return {
-    complete: false,
+    complete: !attestation?.error&&attestation?.data?.complete===true,
     entries: [],
-    verified_at: null,
-    note: 'Cobertura da competência ainda em conferência; o acesso individual contém apenas tickets próprios confirmados.',
+    verified_at: typeof attestation?.data?.verified_at==='string'?attestation.data.verified_at:null,
+    note: 'Atestado do período sem contagens globais; somente os tickets próprios ficam disponíveis ao analista.',
   }
 }
 

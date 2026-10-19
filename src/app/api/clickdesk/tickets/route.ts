@@ -69,7 +69,7 @@ export async function GET(request: Request) {
     const admin = access.admin
     const [rows, coverage] = await Promise.all([
       readFinalLedger(admin, { start: date, end: date, analystId }),
-      readLedgerCoverageForAccess(admin, access.isManagement),
+      readLedgerCoverageForAccess(admin, access.isManagement, {start:date,end:date}),
     ])
 
     return json({
@@ -77,7 +77,7 @@ export async function GET(request: Request) {
       reconciliation: {
         captured_at: coverage.verified_at, pending: [], pending_count: 0,
         coverage: coverage.complete ? 'complete' : 'audit_sample_only',
-        note: 'Amostra parcial: pendências globais sem autoria não são atribuíveis por analista.',
+        note: coverage.complete?'A captura e a conciliação deste corte foram conferidas; um mês em andamento continua sendo acompanhamento.':'Amostra parcial: pendências globais sem autoria não são atribuíveis por analista.',
       },
       date,
       analyst_id: analystId,

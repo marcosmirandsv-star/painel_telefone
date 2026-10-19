@@ -356,7 +356,7 @@ export async function GET(request: Request) {
       points: withDeltas,
       official_months: withDeltas.filter((item) => item.source === 'official').length,
       live_month_included: withDeltas.some((item) => item.source === 'live'),
-      live_coverage: (await readLedgerCoverageForAccess(admin, access.isManagement)).complete ? 'complete' : 'audit_sample_only',
+      live_coverage: (await readLedgerCoverageForAccess(admin, access.isManagement, {start:currentMonth+'-01',end:today})).complete ? 'complete' : 'audit_sample_only',
     })
   })
 }

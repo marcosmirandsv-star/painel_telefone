@@ -4349,7 +4349,9 @@ function ChatAnalystPortal({
           <>
             <p className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-xs leading-5 text-amber-100">
               Fonte: último atendimento público humano comprovado · {formatDate(monthStart)} a {formatDate(monthEnd)} · horário de Brasília.
-              {' '}A conciliação histórica está pendente. Sincronização concluída não garante cobertura completa; esta leitura não substitui o fechamento oficial.
+              {' '}{metrics?.reconciliation?.coverage === 'complete'
+                ? 'A captura e a conciliação deste corte foram conferidas. Este atestado não substitui um fechamento mensal aprovado.'
+                : 'A conciliação histórica está pendente. Sincronização concluída não garante cobertura completa; esta leitura não substitui o fechamento oficial.'}
               {ownSelection.ambiguous && ' Há mais de uma fila para seu cadastro neste período. O resumo individual fica indisponível até a conferência, sem somar ou escolher uma fila por suposição.'}
               {metrics?.date_basis?.status === 'needs_validation' && ` ${metrics.date_basis.note}`}
             </p>
@@ -8225,9 +8227,11 @@ function ChatModuleDashboard({
         )}
       {['overview', 'prototype', 'podium', 'reports'].includes(chatActiveTab) && (
         <p className="rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-xs leading-5 text-amber-100">
-          Fonte individual: último atendimento público humano comprovado. A cobertura da descoberta permanece em conferência;
-          sincronização concluída ou ausência de registros não comprova cobertura completa nem zero atendimentos.
-          Valores parciais não substituem o fechamento oficial. Equipe de origem e fila são dimensões diferentes.
+          Fonte individual: último atendimento público humano comprovado.{' '}
+          {clickDeskPersistedMetrics?.reconciliation?.coverage === 'complete'
+            ? 'A captura e a conciliação do corte exibido foram conferidas. Esta consulta não aprova o fechamento mensal.'
+            : 'A cobertura da descoberta permanece em conferência; sincronização concluída ou ausência de registros não comprova cobertura completa nem zero atendimentos. Valores parciais não substituem o fechamento oficial.'}
+          {' '}Equipe de origem e fila são dimensões diferentes.
         </p>
       )}
       {clickDeskPersistedMetrics?.reconciliation && ['overview','prototype','reports'].includes(chatActiveTab) && <details className="rounded-lg border border-white/10 p-3 text-xs text-slate-400">

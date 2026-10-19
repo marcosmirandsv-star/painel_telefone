@@ -126,7 +126,7 @@ async function loadRowsFallback(
 ) {
   const [tickets, coverage, people] = await Promise.all([
     readFinalLedger(admin, { start: filters.start, end: filters.end, analystId: filters.analystId, teamId: filters.teamId }),
-    readLedgerCoverageForAccess(admin, isManagement),
+    readLedgerCoverageForAccess(admin, isManagement, filters),
     admin.from('chat_analysts').select('id,name,team_id,active'),
   ])
   if (people.error) throw new ApiError(503, 'Cadastro de analistas da homologação indisponível.')
@@ -168,7 +168,7 @@ async function loadRows(
 ) {
  const [result,coverage]=await Promise.all([
  admin.rpc('get_clickdesk_metric_rows',{p_start:filters.start,p_end:filters.end,p_analyst:filters.analystId,p_team:filters.teamId}),
- readLedgerCoverageForAccess(admin,isManagement),
+ readLedgerCoverageForAccess(admin,isManagement,filters),
  ])
  // Compatibility only while a migration is being rolled out; normal reads are one SQL aggregate.
  if(result.error?.code==='PGRST202')return loadRowsFallback(admin,filters,isManagement)
