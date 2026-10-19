@@ -91,6 +91,7 @@ test('acesso ClickDesk separa gestão de analista e exige vínculo individual', 
   const token = `eyJ${'b'.repeat(1200)}.payload.signature`
   let role = 'master'
   let chatAnalystId: string | null = null
+  let membershipActive = true
 
   t.mock.method(globalThis, 'fetch', async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input)
@@ -105,6 +106,7 @@ test('acesso ClickDesk separa gestão de analista e exige vínculo individual', 
       })
     }
 
+    if(url.includes('/rest/v1/chat_analysts'))return Response.json({id:chatAnalystId,active:membershipActive})
     assert.ok(url.includes('/rest/v1/profiles'))
     return Response.json({ role, chat_analyst_id: chatAnalystId })
   })
@@ -122,6 +124,9 @@ test('acesso ClickDesk separa gestão de analista e exige vínculo individual', 
   const analyst = await authorizeClickDeskSessionClient(request)
   assert.equal(analyst.isManagement, false)
   assert.equal(analyst.chatAnalystId, chatAnalystId)
+  membershipActive=false
+  await assert.rejects(authorizeClickDeskSessionClient(request),(error:unknown)=>error instanceof ApiError&&error.status===403)
+  membershipActive=true
 
   chatAnalystId = null
   await assert.rejects(

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
-import { object, text } from '../src/lib/clickdesk-final-owner.ts'
+import { object, text, finalHumanTicket } from '../src/lib/clickdesk-final-owner.ts'
 // Exercise the actual production reader without loading server credentials into tests.
 const source=readFileSync(new URL('../src/lib/clickdesk-final-owner-server.ts',import.meta.url),'utf8')
 const parsed=ts.createSourceFile('reader.ts',source,ts.ScriptTarget.Latest,true)
@@ -36,4 +36,29 @@ test('later messages present only in ticket detail invalidate coverage',async()=
 test('ticket ID mismatch cannot reconcile the wrong public-number alias',async()=>{
  const result=await read('1',async()=>({id:2,messages:[]}))
  assert.equal(result.complete,false)
+})
+
+function longEvidence(options:{wrongAuthor?:boolean;truncated?:boolean;internal?:boolean}={}) {
+ const messages=Array.from({length:201},(_,i)=>({id:String(i+1),created_at:new Date(Date.UTC(2026,9,5,12,i)).toISOString(),author_type:'agent',author:i===200?'Final Analyst':'First Analyst',visibility:options.internal&&i===200?'internal':'public'}))
+ const transcript=messages.slice(0,options.truncated?200:201).map(m=>{const d=m.created_at;return '['+d.slice(8,10)+'/'+d.slice(5,7)+'/'+d.slice(0,4)+' '+d.slice(11,16)+'] '+(options.wrongAuthor&&m.id==='201'?'Wrong Analyst':m.author)+(m.visibility==='internal'?' [nota interna]':'')+':\nMensagem\n'}).join('\n')
+ const get=async(path:string)=>path==='/tickets/1'?{id:1,messages}:path.includes('/events')?{events:[]}:path.endsWith('/transcript')?transcript:{messages:messages.slice(0,200)}
+ return {messages,get}
+}
+test('histórico com página truncada é recuperado somente com detalhe e transcrição integral corroborados',async()=>{
+ const fixture=longEvidence(),result=await read('1',fixture.get)
+ assert.equal(result.complete,true);assert.equal(result.messages.length,201)
+ const row=finalHumanTicket('1',result.messages,[],{satisfaction:{sentiment:'negative'}},[{id:'first',name:'First Analyst',team_id:'team'},{id:'final',name:'Final Analyst',team_id:'team'}],result.complete)
+ assert.equal(row.analyst_id,'final');assert.equal(row.satisfaction_label,'negative')
+})
+test('corroboração recusa transcrição truncada ou autoria divergente',async()=>{
+ for(const options of [{wrongAuthor:true},{truncated:true}]){
+  const fixture=longEvidence(options),result=await read('1',fixture.get)
+  assert.equal(result.complete,false)
+ }
+})
+test('nota interna corroborada nunca substitui a última resposta pública humana',async()=>{
+ const fixture=longEvidence({internal:true}),result=await read('1',fixture.get)
+ assert.equal(result.complete,true)
+ const row=finalHumanTicket('1',result.messages,[],{},[{id:'first',name:'First Analyst',team_id:'team'},{id:'final',name:'Final Analyst',team_id:'team'}],result.complete)
+ assert.equal(row.analyst_id,'first')
 })
