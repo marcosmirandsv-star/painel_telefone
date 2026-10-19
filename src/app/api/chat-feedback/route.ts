@@ -592,6 +592,10 @@ async function generateWithGitHubModels(prompt: string) {
 }
 
 async function generateExternalFeedback(prompt: string, style: ChatFeedbackRequest['feedbackStyle']) {
+  // Homologation may send feedback only to the provider explicitly authorized for this audit.
+  if(getServerSupabaseConfig().environment === 'homologacao'){
+    return {feedback:await generateWithGemini(prompt,style),source:'gemini'}
+  }
   const provider = process.env.CHAT_AI_PROVIDER?.trim()
   const errors: string[] = []
 

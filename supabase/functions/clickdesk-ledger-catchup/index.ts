@@ -20,7 +20,7 @@ Deno.serve(async(req:Request)=>{
   const deadline=Date.now()+85000
   let examined=0,confirmed=0,rounds=0,interrupted=false
   try{
-   // Fixed endpoint, fixed batch size, at most 768 tickets inside the same 85-second deadline; concurrency stays four.
+   // Fixed endpoint, fixed batch size, at most 768 tickets inside the same 85-second deadline; source concurrency is bounded to eight by the ledger endpoint.
    while(rounds<24&&Date.now()<deadline-20000){
     const r=await fetch('https://'+HOST+'/functions/v1/clickdesk-ledger-incremental',{
      method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},

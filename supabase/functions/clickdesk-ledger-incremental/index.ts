@@ -224,7 +224,7 @@ Deno.serve(async(req:Request)=>{
     const deadline=Date.now()+110000
     const evaluated: Array<FinalTicket&{version:string}> = new Array(candidates.length)
     let cursor=0
-    await Promise.all(Array.from({length:4},async()=>{
+    await Promise.all(Array.from({length:8},async()=>{
       while(cursor<candidates.length){
         const index=cursor++,candidate=candidates[index]
         try{
