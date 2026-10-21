@@ -80,6 +80,89 @@ function validUuid(value: string) {
   return /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value)
 }
 
+function normalizeSourceOwner(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLocaleLowerCase('pt-BR')
+    .replace(/\s+/g, ' ')
+}
+
+type OfficialPeriodMetric = {
+  source_owner_name: string
+  source_owner_key: string
+  attendances: number
+  positive_reviews: number
+  negative_reviews: number
+  captured_at: string
+}
+
+async function loadOfficialPeriodRows(
+  admin: Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],
+  filters: ReturnType<typeof parseFilters>,
+) {
+  const official = await admin
+    .from('clickdesk_official_period_metrics')
+    .select('source_owner_name,source_owner_key,attendances,positive_reviews,negative_reviews,captured_at')
+    .eq('period_start', filters.start)
+    .eq('period_end', filters.end)
+    .eq('source_scope', 'suporte_erp_fiscal')
+
+  if (official.error) throw new ApiError(503, 'A fotografia oficial do ClickDesk não está disponível.')
+  if (!official.data?.length) return null
+
+  const people = await admin.from('chat_analysts').select('id,name,team_id,active')
+  if (people.error) throw new ApiError(503, 'Cadastro de analistas da homologação indisponível.')
+
+  const roster = new Map(
+    (people.data ?? []).map(person => [normalizeSourceOwner(person.name), person]),
+  )
+  const rows = (official.data as OfficialPeriodMetric[])
+    .map(metric => {
+      const person = roster.get(metric.source_owner_key)
+      const isActive = Boolean(person?.active)
+      return {
+        occurred_date: filters.end,
+        team_id: person?.team_id ?? null,
+        analyst_id: person?.id ?? null,
+        area: 'Suporte - ERP e Suporte - Fiscal',
+        assignee_name: metric.source_owner_name,
+        // A linha sem responsável e vínculos que já não estão ativos participam
+        // do total oficial, mas nunca do filtro ou ranking de analistas ativos.
+        identity_role: isActive ? 'analyst' : 'unmapped',
+        attendances: Number(metric.attendances) || 0,
+        positive_reviews: Number(metric.positive_reviews) || 0,
+        negative_reviews: Number(metric.negative_reviews) || 0,
+        reviews: (Number(metric.positive_reviews) || 0) + (Number(metric.negative_reviews) || 0),
+        csat: null,
+        review_percentage: null,
+      } satisfies DailyMetricRow
+    })
+    .filter(row =>
+      (!filters.analystId || row.analyst_id === filters.analystId) &&
+      (!filters.teamId || row.team_id === filters.teamId),
+    )
+
+  const capturedAt = (official.data as OfficialPeriodMetric[])
+    .map(row => row.captured_at)
+    .sort()
+    .at(-1) ?? null
+
+  return {
+    rows,
+    coverage: {
+      complete: true,
+      verified_at: capturedAt,
+      entries: [],
+    },
+    admin,
+    excludedInactive: 0,
+    lastReconciledAt: capturedAt,
+    metricSource: 'clickdesk_official_period_metrics' as const,
+  }
+}
+
 function inclusiveDays(start: string, end: string) {
   return Math.round(
     (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000,
@@ -159,13 +242,16 @@ async function loadRowsFallback(
       review_percentage: null,
     }
   })
-  return { rows, coverage: isManagement ? scopeLedgerCoverage(coverage, filters) : coverage, admin, excludedInactive, lastReconciledAt: null as string | null }
+  return { rows, coverage: isManagement ? scopeLedgerCoverage(coverage, filters) : coverage, admin, excludedInactive, lastReconciledAt: null as string | null, metricSource: 'clickdesk_final_ticket_ledger' as const }
 }
 
 async function loadRows(
  admin: Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],
  filters: ReturnType<typeof parseFilters>, isManagement: boolean,
 ) {
+ const official = await loadOfficialPeriodRows(admin, filters)
+ if (official) return official
+
  const [result,coverage]=await Promise.all([
  admin.rpc('get_clickdesk_metric_rows',{p_start:filters.start,p_end:filters.end,p_analyst:filters.analystId,p_team:filters.teamId}),
  readLedgerCoverageForAccess(admin,isManagement,filters),
@@ -173,7 +259,7 @@ async function loadRows(
  // Compatibility only while a migration is being rolled out; normal reads are one SQL aggregate.
  if(result.error?.code==='PGRST202')return loadRowsFallback(admin,filters,isManagement)
  if(result.error||!result.data)throw new ApiError(503,'Não foi possível calcular os indicadores da base conciliada.')
- return {rows:result.data.rows as DailyMetricRow[],coverage:isManagement?scopeLedgerCoverage(coverage,filters):coverage,admin,excludedInactive:Number(result.data.excludedInactive)||0,lastReconciledAt:typeof result.data.last_reconciled_at==='string'?result.data.last_reconciled_at:null}
+ return {rows:result.data.rows as DailyMetricRow[],coverage:isManagement?scopeLedgerCoverage(coverage,filters):coverage,admin,excludedInactive:Number(result.data.excludedInactive)||0,lastReconciledAt:typeof result.data.last_reconciled_at==='string'?result.data.last_reconciled_at:null,metricSource:'clickdesk_final_ticket_ledger' as const}
 }
 
 function aggregate(rows: DailyMetricRow[]): Aggregate {
@@ -290,7 +376,7 @@ export async function GET(request: Request) {
         }
 
     stage = 'ledger_read'
-    const { rows, coverage, admin, excludedInactive, lastReconciledAt } = await loadRows(access.admin, filters, access.isManagement)
+    const { rows, coverage, admin, excludedInactive, lastReconciledAt, metricSource } = await loadRows(access.admin, filters, access.isManagement)
 
     stage = 'sync_status'
     const latestSync = await admin
@@ -331,7 +417,7 @@ export async function GET(request: Request) {
     stage = 'completed'
 
     return json({
-      source: 'clickdesk_final_ticket_ledger',
+      source: metricSource,
       reconciliation: {
         captured_at: coverage.verified_at,
         cache_window_minutes: 0,
