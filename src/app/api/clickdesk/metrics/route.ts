@@ -109,11 +109,23 @@ async function loadOfficialPeriodRows(
     .eq('period_end', filters.end)
     .eq('source_scope', 'suporte_erp_fiscal')
 
-  if (official.error) throw new ApiError(503, 'A fotografia oficial do ClickDesk não está disponível.')
+  if (official.error) {
+    console.warn('clickdesk_official_snapshot_unavailable', {
+      code: official.error.code,
+      message: official.error.message,
+    })
+    throw new ApiError(503, 'A fotografia oficial do ClickDesk não está disponível.')
+  }
   if (!official.data?.length) return null
 
   const people = await admin.from('chat_analysts').select('id,name,team_id,active')
-  if (people.error) throw new ApiError(503, 'Cadastro de analistas da homologação indisponível.')
+  if (people.error) {
+    console.warn('clickdesk_official_roster_unavailable', {
+      code: people.error.code,
+      message: people.error.message,
+    })
+    throw new ApiError(503, 'Cadastro de analistas da homologação indisponível.')
+  }
 
   const roster = new Map(
     (people.data ?? []).map(person => [normalizeSourceOwner(person.name), person]),
