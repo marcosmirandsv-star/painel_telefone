@@ -1,4 +1,4 @@
-import { ApiError, adminClient, authorizeClickDeskSessionClient, handle, json } from '@/lib/integration-server'
+import { ApiError, authorizeClickDeskSessionClient, handle, json } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 import { readFinalLedger, readLedgerCoverageForAccess, scopeLedgerCoverage } from '@/lib/clickdesk-ledger-server'
 import { randomUUID } from 'node:crypto'
@@ -103,11 +103,10 @@ async function loadOfficialPeriodRows(
   filters: ReturnType<typeof parseFilters>,
 ) {
   const official = await admin
-    .from('clickdesk_official_period_metrics')
-    .select('source_owner_name,source_owner_key,attendances,positive_reviews,negative_reviews,captured_at')
-    .eq('period_start', filters.start)
-    .eq('period_end', filters.end)
-    .eq('source_scope', 'suporte_erp_fiscal')
+    .rpc('get_scoped_clickdesk_official_period_metrics', {
+      p_start: filters.start,
+      p_end: filters.end,
+    })
 
   if (official.error) {
     console.warn('clickdesk_official_snapshot_unavailable', {
@@ -261,7 +260,7 @@ async function loadRows(
  admin: Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],
  filters: ReturnType<typeof parseFilters>, isManagement: boolean,
 ) {
- const official = await loadOfficialPeriodRows(adminClient(), filters)
+ const official = await loadOfficialPeriodRows(admin, filters)
  if (official) return official
 
  const [result,coverage]=await Promise.all([
