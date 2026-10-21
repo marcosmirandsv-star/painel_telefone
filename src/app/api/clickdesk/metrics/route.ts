@@ -260,7 +260,15 @@ async function loadRows(
  admin: Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],
  filters: ReturnType<typeof parseFilters>, isManagement: boolean,
 ) {
- const official = await loadOfficialPeriodRows(admin, filters)
+ let official
+ try {
+   official = await loadOfficialPeriodRows(admin, filters)
+ } catch (error) {
+   console.error('clickdesk_official_metrics_read_failed', {
+     message: error instanceof Error ? error.message : 'unexpected',
+   })
+   throw error
+ }
  if (official) return official
 
  const [result,coverage]=await Promise.all([
