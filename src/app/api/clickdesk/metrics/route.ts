@@ -1,4 +1,4 @@
-import { ApiError, authorizeClickDeskSessionClient, handle, json } from '@/lib/integration-server'
+import { ApiError, adminClient, authorizeClickDeskSessionClient, handle, json } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 import { readFinalLedger, readLedgerCoverageForAccess, scopeLedgerCoverage } from '@/lib/clickdesk-ledger-server'
 import { randomUUID } from 'node:crypto'
@@ -249,7 +249,7 @@ async function loadRows(
  admin: Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],
  filters: ReturnType<typeof parseFilters>, isManagement: boolean,
 ) {
- const official = await loadOfficialPeriodRows(admin, filters)
+ const official = await loadOfficialPeriodRows(adminClient(), filters)
  if (official) return official
 
  const [result,coverage]=await Promise.all([
