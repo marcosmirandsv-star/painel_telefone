@@ -159,7 +159,7 @@ function buildPrompt(body: ChatFeedbackRequest) {
   const generationMode = body.generationMode ?? 'generate'
   const serviceModule = body.serviceModule ?? 'chat'
   const moduleName = serviceModule === 'phone' ? 'telefone' : 'chat'
-  const sourceName = serviceModule === 'phone' ? 'lançamentos do painel de telefone' : 'dados do Zendesk'
+  const sourceName = serviceModule === 'phone' ? 'lançamentos do painel de telefone' : 'dados do ClickDesk'
   const cadenceRule = serviceModule === 'phone'
     ? '- O módulo telefone é alimentado semanalmente, mas a devolutiva final é mensal. Pode orientar acompanhamento semanal quando isso ajudar o fechamento.'
     : '- Não diga para acompanhar semanalmente, porque o módulo do chat é analisado mensalmente.'
@@ -483,7 +483,7 @@ export async function POST(request: Request) {
 
       const fallbackSource = body.serviceModule === 'phone'
         ? 'Usei a sugestão local baseada nos lançamentos do telefone e nas regras do painel.'
-        : 'Usei a sugestão local baseada nos números do Zendesk e nas regras do painel.'
+        : 'Usei a sugestão local baseada nos números do ClickDesk e nas regras do painel.'
 
       return NextResponse.json({
         feedback: fallbackFeedback,
