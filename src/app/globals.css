@@ -442,6 +442,171 @@ button:disabled {
   line-height: 1.45;
 }
 
+.app-shell {
+  background:
+    radial-gradient(circle at 16% -8%, rgb(8 145 178 / 0.2), transparent 31rem),
+    radial-gradient(circle at 92% 4%, rgb(79 70 229 / 0.14), transparent 28rem),
+    #020617;
+}
+
+.app-header {
+  border-bottom: 1px solid rgb(148 163 184 / 0.16);
+}
+
+.app-eyebrow {
+  color: rgb(103 232 249);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.workspace-launcher {
+  border: 1px solid rgb(148 163 184 / 0.15);
+  border-radius: 1rem;
+  background: rgb(15 23 42 / 0.58);
+  padding: 1.35rem;
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 0.16);
+}
+
+.workspace-launcher-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.workspace-launcher-heading h2 {
+  margin-top: 0.35rem;
+  color: white;
+  font-size: 1.25rem;
+  font-weight: 750;
+}
+
+.workspace-launcher-heading > p {
+  max-width: 33rem;
+  color: rgb(148 163 184);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.workspace-card {
+  position: relative;
+  display: grid;
+  min-height: 14rem;
+  align-content: start;
+  gap: 0.45rem;
+  overflow: hidden;
+  border: 1px solid rgb(148 163 184 / 0.18);
+  border-radius: 0.85rem;
+  background: linear-gradient(150deg, rgb(15 23 42 / 0.92), rgb(15 23 42 / 0.55));
+  padding: 1.25rem;
+  color: rgb(226 232 240);
+  text-align: left;
+  text-decoration: none;
+  transition: border-color 160ms ease, transform 160ms ease, background 160ms ease;
+}
+
+.workspace-card::after {
+  position: absolute;
+  right: -2rem;
+  bottom: -4rem;
+  width: 10rem;
+  height: 10rem;
+  border-radius: 999px;
+  background: rgb(6 182 212 / 0.08);
+  content: '';
+}
+
+.workspace-card:hover,
+.workspace-card-active {
+  transform: translateY(-2px);
+  border-color: rgb(103 232 249 / 0.62);
+  background: linear-gradient(150deg, rgb(8 47 73 / 0.94), rgb(15 23 42 / 0.78));
+}
+
+.workspace-card-management:hover {
+  border-color: rgb(251 191 36 / 0.7);
+  background: linear-gradient(150deg, rgb(69 39 11 / 0.58), rgb(15 23 42 / 0.86));
+}
+
+.workspace-icon {
+  display: inline-flex;
+  width: 2.45rem;
+  height: 2.45rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(103 232 249 / 0.36);
+  border-radius: 0.7rem;
+  background: rgb(6 182 212 / 0.12);
+  color: rgb(103 232 249);
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+
+.workspace-icon-violet {
+  border-color: rgb(167 139 250 / 0.4);
+  background: rgb(139 92 246 / 0.12);
+  color: rgb(196 181 253);
+}
+
+.workspace-icon-amber {
+  border-color: rgb(251 191 36 / 0.4);
+  background: rgb(245 158 11 / 0.11);
+  color: rgb(253 230 138);
+}
+
+.workspace-kicker {
+  margin-top: 0.35rem;
+  color: rgb(148 163 184);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.workspace-card strong {
+  color: white;
+  font-size: 1.2rem;
+}
+
+.workspace-card small {
+  max-width: 19rem;
+  color: rgb(203 213 225);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.workspace-card em {
+  align-self: end;
+  margin-top: auto;
+  color: rgb(103 232 249);
+  font-size: 0.8rem;
+  font-style: normal;
+  font-weight: 750;
+}
+
+.workspace-card-management em {
+  color: rgb(253 230 138);
+}
+
+.app-subnav {
+  border-bottom: 1px solid rgb(148 163 184 / 0.13);
+  padding-bottom: 1rem;
+}
+
+@media (max-width: 640px) {
+  .workspace-launcher-heading {
+    align-items: start;
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+
+  .workspace-card {
+    min-height: 12.5rem;
+  }
+}
+
 .analyst-avatar {
   position: relative;
   display: inline-flex;

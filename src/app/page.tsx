@@ -1242,13 +1242,11 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 px-5 py-6 text-white sm:px-8">
+    <main className="app-shell min-h-screen px-5 py-6 text-white sm:px-8">
       <section className="mx-auto max-w-7xl">
-        <header className="flex flex-col gap-5 border-b border-white/10 pb-6 lg:flex-row lg:items-start lg:justify-between">
+        <header className="app-header flex flex-col gap-5 pb-7 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-300">
-              Central de Performance
-            </p>
+            <p className="app-eyebrow">Central de Performance</p>
             <h1 className="mt-3 text-3xl font-bold sm:text-4xl">
               Gestão de Performance de Atendimento
             </h1>
@@ -1275,32 +1273,52 @@ export default function Home() {
         </header>
 
         {isManagementUser && (
-          <div className="mt-6 grid gap-3 md:grid-cols-2">
+          <section className="workspace-launcher mt-7">
+            <div className="workspace-launcher-heading">
+              <div>
+                <p className="app-eyebrow">Áreas de trabalho</p>
+                <h2>Escolha o que deseja gerenciar</h2>
+              </div>
+              <p>Operação, experiência do cliente e pessoas ficam separadas para tornar cada decisão mais clara.</p>
+            </div>
+            <div className="mt-5 grid gap-4 md:grid-cols-3">
             <button
-              className={activeModule === 'phone' ? 'module-card-active' : 'module-card'}
+              className={activeModule === 'phone' ? 'workspace-card workspace-card-active' : 'workspace-card'}
               type="button"
               onClick={() => {
                 setActiveModule('phone')
                 setActiveTab('dashboard')
               }}
             >
-              <span>Módulo telefone</span>
-              <strong>Performance de atendimento</strong>
-              <small>Dashboard, lançamentos, metas, pódio, SARE e IA preditiva.</small>
+              <span className="workspace-icon" aria-hidden="true">☎</span>
+              <span className="workspace-kicker">Operação</span>
+              <strong>Telefone</strong>
+              <small>Indicadores, metas, lançamentos, pódio e análises da operação telefônica.</small>
+              <em>{activeModule === 'phone' ? 'Área aberta' : 'Abrir operação'}</em>
             </button>
             <button
-              className={activeModule === 'chat' ? 'module-card-active' : 'module-card'}
+              className={activeModule === 'chat' ? 'workspace-card workspace-card-active' : 'workspace-card'}
               type="button"
               onClick={() => setActiveModule('chat')}
             >
-              <span>Módulo chat</span>
-              <strong>Performance de atendimento via chat</strong>
-              <small>Dados do ClickDesk, importação mensal, ranking, pódio e relatórios individuais.</small>
+              <span className="workspace-icon workspace-icon-violet" aria-hidden="true">◌</span>
+              <span className="workspace-kicker">Experiência do cliente</span>
+              <strong>Chat</strong>
+              <small>Dados do ClickDesk, importação, ranking, feedbacks e relatórios de atendimento.</small>
+              <em>{activeModule === 'chat' ? 'Área aberta' : 'Abrir experiência'}</em>
             </button>
-          </div>
+            <Link className="workspace-card workspace-card-management" href="/ferias">
+              <span className="workspace-icon workspace-icon-amber" aria-hidden="true">◫</span>
+              <span className="workspace-kicker">Gestão de pessoas</span>
+              <strong>Férias e capacidade</strong>
+              <small>Planejamento de ausências, cobertura, times, gestores e cadastro de pessoas.</small>
+              <em>Abrir gestão de pessoas <span aria-hidden="true">→</span></em>
+            </Link>
+            </div>
+          </section>
         )}
         {activeModule === 'phone' && (
-          <nav className="mt-6 flex flex-wrap gap-2">
+          <nav className="app-subnav mt-6 flex flex-wrap gap-2" aria-label="Navegação da operação telefônica">
           <TabButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')}>
             Dashboard
           </TabButton>
@@ -1323,7 +1341,6 @@ export default function Home() {
               <TabButton active={activeTab === 'users'} onClick={() => setActiveTab('users')}>
                 Usuários
               </TabButton>
-              <Link className="tab-button" href="/ferias">Férias e capacidade</Link>
               <Link className="tab-button" href="/integracoes">Fechamentos</Link>
             </>
           )}
