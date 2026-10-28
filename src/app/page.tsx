@@ -1323,6 +1323,7 @@ export default function Home() {
               <TabButton active={activeTab === 'users'} onClick={() => setActiveTab('users')}>
                 Usuários
               </TabButton>
+              <Link className="tab-button" href="/ferias">Férias e capacidade</Link>
               <Link className="tab-button" href="/integracoes">Fechamentos</Link>
             </>
           )}
