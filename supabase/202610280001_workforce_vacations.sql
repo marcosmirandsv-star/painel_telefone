@@ -142,7 +142,8 @@ update public.workforce_teams wt
 set manager_person_id = wp.id, updated_at = now()
 from public.workforce_people wp
 where (wt.name = 'Marcos Miranda - Chat Notas' and wp.name = 'Marcos Miranda')
-   or (wt.name = 'Polyana Ventura - Chat Outros' and wp.name = 'Polyana Ventura');
+   or (wt.name = 'Polyana Ventura - Chat Outros' and wp.name = 'Polyana Ventura')
+   or (wt.name = 'Telefone' and wp.name = 'Marcos Miranda');
 
 insert into public.workforce_assignment_history(person_id, team_id, manager_person_id, starts_on, reason)
 select wp.id, wp.team_id, wt.manager_person_id, current_date, 'Carga inicial do cadastro de férias'
