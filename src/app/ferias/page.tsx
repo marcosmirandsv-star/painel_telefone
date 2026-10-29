@@ -11,6 +11,8 @@ type Person = {
   photo_url: string | null
   team_id: string | null
   manager_person_id: string | null
+  phone_analyst_id: string | null
+  chat_analyst_id: string | null
   active: boolean
 }
 type Vacation = {
@@ -64,6 +66,8 @@ export default function VacationPage() {
   const [selectedPersonId, setSelectedPersonId] = useState('')
   const [personForm, setPersonForm] = useState(emptyPerson)
   const [vacationForm, setVacationForm] = useState(emptyVacation)
+  const [editingVacationId, setEditingVacationId] = useState<string | null>(null)
+  const [showCancelled, setShowCancelled] = useState(false)
   const [teamName, setTeamName] = useState('')
   const [message, setMessage] = useState('')
   const [saving, setSaving] = useState(false)
@@ -81,7 +85,7 @@ export default function VacationPage() {
 
     const [teamsResult, peopleResult, vacationsResult] = await Promise.all([
       supabase.from('workforce_teams').select('id,name,manager_person_id,active').order('name'),
-      supabase.from('workforce_people').select('id,name,photo_url,team_id,manager_person_id,active').order('name'),
+      supabase.from('workforce_people').select('id,name,photo_url,team_id,manager_person_id,phone_analyst_id,chat_analyst_id,active').order('name'),
       supabase.from('vacation_periods').select('id,person_id,start_date,end_date,days,status,hr_ticket,cash_bonus_days,thirteenth_advance,notes').order('start_date'),
     ])
     const firstError = teamsResult.error || peopleResult.error || vacationsResult.error
@@ -127,6 +131,16 @@ export default function VacationPage() {
     })
   }
 
+  const selectedPerson = selectedPersonId ? peopleLookup.get(selectedPersonId) : null
+  const selectedPersonComesFromExistingRegistry = Boolean(selectedPerson?.phone_analyst_id || selectedPerson?.chat_analyst_id)
+  const selectedPersonSource = selectedPerson?.phone_analyst_id && selectedPerson?.chat_analyst_id
+    ? 'Telefone e Chat'
+    : selectedPerson?.phone_analyst_id
+      ? 'Analistas de Telefone'
+      : selectedPerson?.chat_analyst_id
+        ? 'Analistas de Chat'
+        : null
+
   async function savePerson(event: FormEvent) {
     event.preventDefault()
     if (!personForm.name.trim()) return setMessage('Informe o nome da pessoa.')
@@ -169,15 +183,34 @@ export default function VacationPage() {
     event.preventDefault()
     if (!vacationForm.person_id || !vacationForm.start_date || !vacationForm.end_date || !chosenDays) return setMessage('Preencha pessoa, início e fim com datas válidas.')
     setSaving(true); setMessage('')
-    const { error } = await supabase.from('vacation_periods').insert({
+    const payload = {
       person_id: vacationForm.person_id, start_date: vacationForm.start_date, end_date: vacationForm.end_date,
       status: vacationForm.status, hr_ticket: vacationForm.hr_ticket.trim() || null,
       cash_bonus_days: vacationForm.cash_bonus_days ? Number(vacationForm.cash_bonus_days) : null,
       thirteenth_advance: vacationForm.thirteenth_advance, notes: vacationForm.notes.trim() || null,
-    })
+      updated_at: new Date().toISOString(),
+    }
+    const { error } = editingVacationId
+      ? await supabase.from('vacation_periods').update(payload).eq('id', editingVacationId)
+      : await supabase.from('vacation_periods').insert(payload)
     setSaving(false)
     if (error) return setMessage(error.message)
-    setVacationForm(emptyVacation); setMessage('Férias registradas.'); await load()
+    setVacationForm(emptyVacation); setEditingVacationId(null); setMessage(editingVacationId ? 'Período atualizado.' : 'Férias registradas.'); await load()
+  }
+
+  function editVacation(vacation: Vacation) {
+    setEditingVacationId(vacation.id)
+    setVacationForm({
+      person_id: vacation.person_id,
+      start_date: vacation.start_date,
+      end_date: vacation.end_date,
+      status: vacation.status,
+      hr_ticket: vacation.hr_ticket ?? '',
+      cash_bonus_days: vacation.cash_bonus_days?.toString() ?? '',
+      thirteenth_advance: vacation.thirteenth_advance ?? false,
+      notes: vacation.notes ?? '',
+    })
+    document.getElementById('programar-ferias')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   async function cancelVacation(id: string) {
@@ -202,8 +235,8 @@ export default function VacationPage() {
         {message && <p className="mt-5 rounded-lg border border-cyan-400/30 bg-cyan-400/10 p-3 text-sm text-cyan-100">{message}</p>}
 
         <section className="mt-6 grid gap-5 lg:grid-cols-3">
-          <form onSubmit={saveVacation} className="rounded-xl border border-slate-700 bg-slate-900 p-5 lg:col-span-2">
-            <h2 className="text-xl font-bold">Programar férias</h2><p className="mt-1 text-sm text-slate-400">A quantidade é calculada em dias corridos, incluindo início e fim.</p>
+          <form id="programar-ferias" onSubmit={saveVacation} className="rounded-xl border border-slate-700 bg-slate-900 p-5 lg:col-span-2">
+            <h2 className="text-xl font-bold">{editingVacationId ? 'Editar período de férias' : 'Programar férias'}</h2><p className="mt-1 text-sm text-slate-400">A quantidade é calculada em dias corridos, incluindo início e fim.</p>
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <label className="text-sm">Time
                 <select className="mt-1 w-full rounded bg-slate-800 p-2" value={teamFilter} onChange={(e) => { setTeamFilter(e.target.value); setVacationForm({ ...vacationForm, person_id: '' }) }}><option value="">Todos os times</option>{teams.filter((team) => team.active).map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}</select>
@@ -219,19 +252,20 @@ export default function VacationPage() {
               <label className="flex items-end gap-2 text-sm"><input type="checkbox" checked={vacationForm.thirteenth_advance} onChange={(e) => setVacationForm({ ...vacationForm, thirteenth_advance: e.target.checked })} />Adiantamento do 13º</label>
             </div>
             <label className="mt-3 block text-sm">Observações<textarea className="mt-1 w-full rounded bg-slate-800 p-2" rows={2} value={vacationForm.notes} onChange={(e) => setVacationForm({ ...vacationForm, notes: e.target.value })} /></label>
-            <div className="mt-4 flex flex-wrap items-center gap-3"><strong className="rounded bg-cyan-400/15 px-3 py-2 text-cyan-200">{chosenDays ? `${chosenDays} dias corridos` : 'Informe as datas'}</strong><button disabled={saving} className="rounded bg-cyan-500 px-4 py-2 font-bold text-slate-950 disabled:opacity-50">Registrar período</button></div>
+            <div className="mt-4 flex flex-wrap items-center gap-3"><strong className="rounded bg-cyan-400/15 px-3 py-2 text-cyan-200">{chosenDays ? `${chosenDays} dias corridos` : 'Informe as datas'}</strong><button disabled={saving} className="rounded bg-cyan-500 px-4 py-2 font-bold text-slate-950 disabled:opacity-50">{editingVacationId ? 'Salvar alteração' : 'Registrar período'}</button>{editingVacationId && <button type="button" className="rounded border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-200" onClick={() => { setEditingVacationId(null); setVacationForm(emptyVacation) }}>Cancelar edição</button>}</div>
           </form>
 
           <aside className="rounded-xl border border-slate-700 bg-slate-900 p-5"><h2 className="text-xl font-bold">Cobertura do período</h2>{!selectedTeam || !chosenDays ? <p className="mt-3 text-sm text-slate-400">Selecione pessoa e período para avaliar a disponibilidade da equipe.</p> : <><p className="mt-3 text-sm text-slate-300"><strong>{teamLookup.get(selectedTeam)?.name}</strong> terá <strong>{selectedTeamPeople.length - selectedAbsentPeople.size}</strong> de {selectedTeamPeople.length} pessoas ativas disponíveis.</p>{periodConflicts.length ? <ul className="mt-4 space-y-2 text-sm text-amber-200">{periodConflicts.map((vacation) => <li key={vacation.id}>Conflito: {peopleLookup.get(vacation.person_id)?.name} — {formatDate(vacation.start_date)} a {formatDate(vacation.end_date)}</li>)}</ul> : <p className="mt-4 text-sm text-emerald-300">Nenhuma sobreposição registrada para este time.</p>}</>}</aside>
         </section>
 
         <section className="mt-6 grid gap-5 lg:grid-cols-3">
-          <form onSubmit={savePerson} className="rounded-xl border border-slate-700 bg-slate-900 p-5 lg:col-span-2"><div className="flex flex-wrap justify-between gap-2"><div><h2 className="text-xl font-bold">Cadastro de pessoas</h2><p className="text-sm text-slate-400">Foto, time e gestor ficam centralizados aqui. Alterações preservam o histórico de lotação.</p></div><button type="button" className="text-sm text-cyan-300" onClick={() => { setSelectedPersonId(''); setPersonForm(emptyPerson) }}>Novo cadastro</button></div>
-            <div className="mt-4 grid gap-3 md:grid-cols-2"><label className="text-sm">Pessoa<select className="mt-1 w-full rounded bg-slate-800 p-2" value={selectedPersonId} onChange={(e) => choosePerson(e.target.value)}><option value="">Novo cadastro</option>{people.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label><label className="text-sm">Nome<input required className="mt-1 w-full rounded bg-slate-800 p-2" value={personForm.name} onChange={(e) => setPersonForm({ ...personForm, name: e.target.value })} /></label><label className="text-sm">Time<select className="mt-1 w-full rounded bg-slate-800 p-2" value={personForm.team_id} onChange={(e) => setPersonForm({ ...personForm, team_id: e.target.value })}><option value="">Sem time</option>{teams.filter((team) => team.active).map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}</select></label><label className="text-sm">Gestor<select className="mt-1 w-full rounded bg-slate-800 p-2" value={personForm.manager_person_id} onChange={(e) => setPersonForm({ ...personForm, manager_person_id: e.target.value })}><option value="">Sem gestor definido</option>{people.filter((person) => person.id !== selectedPersonId && person.active).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label><label className="text-sm md:col-span-2">URL da foto<input type="url" placeholder="https://…" className="mt-1 w-full rounded bg-slate-800 p-2" value={personForm.photo_url} onChange={(e) => setPersonForm({ ...personForm, photo_url: e.target.value })} /></label></div><label className="mt-3 flex gap-2 text-sm"><input type="checkbox" checked={personForm.active} onChange={(e) => setPersonForm({ ...personForm, active: e.target.checked })} />Pessoa ativa</label><button disabled={saving} className="mt-4 rounded bg-cyan-500 px-4 py-2 font-bold text-slate-950 disabled:opacity-50">Salvar cadastro</button></form>
+          <form onSubmit={savePerson} className="rounded-xl border border-slate-700 bg-slate-900 p-5 lg:col-span-2"><div className="flex flex-wrap justify-between gap-2"><div><h2 className="text-xl font-bold">Vínculo de pessoas</h2><p className="text-sm text-slate-400">O cadastro de analista e usuário continua sendo a fonte oficial. Aqui ficam somente time, gestor e planejamento de férias.</p></div><button type="button" className="text-sm text-cyan-300" onClick={() => { setSelectedPersonId(''); setPersonForm(emptyPerson) }}>Adicionar colaborador sem cadastro de analista</button></div>
+            {selectedPersonComesFromExistingRegistry && <p className="mt-4 rounded-lg border border-cyan-400/20 bg-cyan-400/10 p-3 text-sm text-cyan-100">Este colaborador vem de <strong>{selectedPersonSource}</strong>. Nome, foto e situação ativa são atualizados pelo cadastro de origem; altere aqui apenas o time e o gestor.</p>}
+            <div className="mt-4 grid gap-3 md:grid-cols-2"><label className="text-sm">Pessoa<select className="mt-1 w-full rounded bg-slate-800 p-2" value={selectedPersonId} onChange={(e) => choosePerson(e.target.value)}><option value="">Novo colaborador sem cadastro de analista</option>{people.map((person) => <option key={person.id} value={person.id}>{person.name}{person.phone_analyst_id || person.chat_analyst_id ? ' · cadastro existente' : ''}</option>)}</select></label><label className="text-sm">Nome<input required disabled={selectedPersonComesFromExistingRegistry} className="mt-1 w-full rounded bg-slate-800 p-2 disabled:cursor-not-allowed disabled:opacity-55" value={personForm.name} onChange={(e) => setPersonForm({ ...personForm, name: e.target.value })} /></label><label className="text-sm">Time<select className="mt-1 w-full rounded bg-slate-800 p-2" value={personForm.team_id} onChange={(e) => setPersonForm({ ...personForm, team_id: e.target.value })}><option value="">Sem time</option>{teams.filter((team) => team.active).map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}</select></label><label className="text-sm">Gestor<select className="mt-1 w-full rounded bg-slate-800 p-2" value={personForm.manager_person_id} onChange={(e) => setPersonForm({ ...personForm, manager_person_id: e.target.value })}><option value="">Sem gestor definido</option>{people.filter((person) => person.id !== selectedPersonId && person.active).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label><label className="text-sm md:col-span-2">URL da foto<input type="url" disabled={selectedPersonComesFromExistingRegistry} placeholder="https://…" className="mt-1 w-full rounded bg-slate-800 p-2 disabled:cursor-not-allowed disabled:opacity-55" value={personForm.photo_url} onChange={(e) => setPersonForm({ ...personForm, photo_url: e.target.value })} /></label></div><label className="mt-3 flex gap-2 text-sm"><input type="checkbox" disabled={selectedPersonComesFromExistingRegistry} checked={personForm.active} onChange={(e) => setPersonForm({ ...personForm, active: e.target.checked })} />Pessoa ativa</label><button disabled={saving} className="mt-4 rounded bg-cyan-500 px-4 py-2 font-bold text-slate-950 disabled:opacity-50">Salvar vínculo</button></form>
           <form onSubmit={saveTeam} className="rounded-xl border border-slate-700 bg-slate-900 p-5"><h2 className="text-xl font-bold">Times</h2><label className="mt-3 block text-sm">Novo time<input className="mt-1 w-full rounded bg-slate-800 p-2" value={teamName} onChange={(e) => setTeamName(e.target.value)} /></label><button disabled={saving} className="mt-3 rounded border border-cyan-400 px-3 py-2 text-sm font-bold text-cyan-200">Criar time</button><ul className="mt-5 space-y-2 text-sm text-slate-300">{teams.filter((team) => team.active).map((team) => <li key={team.id}>{team.name}<span className="block text-xs text-slate-500">{team.manager_person_id ? `Gestor: ${peopleLookup.get(team.manager_person_id)?.name ?? 'Cadastro pendente'}` : 'Gestor a definir'}</span></li>)}</ul></form>
         </section>
 
-        <section className="mt-6 rounded-xl border border-slate-700 bg-slate-900 p-5"><h2 className="text-xl font-bold">Períodos cadastrados</h2><div className="mt-4 overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="border-b border-slate-700 text-slate-400"><tr><th className="p-2">Pessoa</th><th className="p-2">Time</th><th className="p-2">Período</th><th className="p-2">Dias</th><th className="p-2">Situação</th><th className="p-2">DP</th><th className="p-2"></th></tr></thead><tbody>{vacations.filter((vacation) => !teamFilter || peopleLookup.get(vacation.person_id)?.team_id === teamFilter).map((vacation) => { const person = peopleLookup.get(vacation.person_id); return <tr className="border-b border-slate-800" key={vacation.id}><td className="p-2">{person?.name ?? 'Pessoa removida'}</td><td className="p-2">{person?.team_id ? teamLookup.get(person.team_id)?.name : '—'}</td><td className="p-2">{formatDate(vacation.start_date)} a {formatDate(vacation.end_date)}</td><td className="p-2">{vacation.days}</td><td className="p-2">{statusLabel(vacation.status)}</td><td className="p-2">{vacation.hr_ticket ?? '—'}</td><td className="p-2">{vacation.status !== 'cancelled' && <button disabled={saving} onClick={() => cancelVacation(vacation.id)} className="text-amber-300">Cancelar</button>}</td></tr> })}</tbody></table></div></section>
+        <section className="mt-6 rounded-xl border border-slate-700 bg-slate-900 p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold">Períodos cadastrados</h2><p className="mt-1 text-sm text-slate-400">Períodos cancelados não entram na visão operacional nem no cálculo de cobertura.</p></div><label className="flex items-center gap-2 text-sm text-slate-300"><input type="checkbox" checked={showCancelled} onChange={(event) => setShowCancelled(event.target.checked)} /> Mostrar histórico cancelado ({vacations.filter((vacation) => vacation.status === 'cancelled').length})</label></div><div className="mt-4 overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="border-b border-slate-700 text-slate-400"><tr><th className="p-2">Pessoa</th><th className="p-2">Time</th><th className="p-2">Período</th><th className="p-2">Dias</th><th className="p-2">Situação</th><th className="p-2">DP</th><th className="p-2">Ações</th></tr></thead><tbody>{vacations.filter((vacation) => (showCancelled || vacation.status !== 'cancelled') && (!teamFilter || peopleLookup.get(vacation.person_id)?.team_id === teamFilter)).map((vacation) => { const person = peopleLookup.get(vacation.person_id); return <tr className="border-b border-slate-800" key={vacation.id}><td className="p-2">{person?.name ?? 'Pessoa removida'}</td><td className="p-2">{person?.team_id ? teamLookup.get(person.team_id)?.name : '—'}</td><td className="p-2">{formatDate(vacation.start_date)} a {formatDate(vacation.end_date)}</td><td className="p-2">{vacation.days}</td><td className="p-2">{statusLabel(vacation.status)}</td><td className="p-2">{vacation.hr_ticket ?? '—'}</td><td className="p-2 whitespace-nowrap"><button disabled={saving} onClick={() => editVacation(vacation)} className="mr-3 text-cyan-300">Editar</button>{vacation.status !== 'cancelled' && <button disabled={saving} onClick={() => cancelVacation(vacation.id)} className="text-amber-300">Cancelar</button>}</td></tr> })}</tbody></table></div></section>
       </div>
     </main>
   )
