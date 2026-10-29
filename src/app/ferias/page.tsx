@@ -89,7 +89,7 @@ export default function VacationPage() {
   const [personForm, setPersonForm] = useState(emptyPerson)
   const [vacationForm, setVacationForm] = useState(emptyVacation)
   const [editingVacationId, setEditingVacationId] = useState<string | null>(null)
-  const [activeSection, setActiveSection] = useState<VacationSection>('planning')
+  const [activeSection, setActiveSection] = useState<VacationSection>('history')
   const [periodTeamFilter, setPeriodTeamFilter] = useState('')
   const [periodPersonFilter, setPeriodPersonFilter] = useState('')
   const [periodStatusFilter, setPeriodStatusFilter] = useState<VacationListStatus>('all')
@@ -273,9 +273,9 @@ export default function VacationPage() {
         {message && <p className="mt-5 rounded-lg border border-cyan-400/30 bg-cyan-400/10 p-3 text-sm text-cyan-100">{message}</p>}
 
         <nav className="mt-6 flex flex-wrap gap-2 border-b border-slate-700 pb-4" aria-label="Áreas do controle de férias">
+          <button type="button" onClick={() => setActiveSection('history')} className={activeSection === 'history' ? 'rounded-lg bg-cyan-400 px-4 py-2 font-bold text-slate-950' : 'rounded-lg border border-slate-600 px-4 py-2 font-semibold text-slate-200'}>Períodos e histórico</button>
           <button type="button" onClick={() => setActiveSection('planning')} className={activeSection === 'planning' ? 'rounded-lg bg-cyan-400 px-4 py-2 font-bold text-slate-950' : 'rounded-lg border border-slate-600 px-4 py-2 font-semibold text-slate-200'}>Planejamento e cobertura</button>
           <button type="button" onClick={() => setActiveSection('people')} className={activeSection === 'people' ? 'rounded-lg bg-cyan-400 px-4 py-2 font-bold text-slate-950' : 'rounded-lg border border-slate-600 px-4 py-2 font-semibold text-slate-200'}>Pessoas e times</button>
-          <button type="button" onClick={() => setActiveSection('history')} className={activeSection === 'history' ? 'rounded-lg bg-cyan-400 px-4 py-2 font-bold text-slate-950' : 'rounded-lg border border-slate-600 px-4 py-2 font-semibold text-slate-200'}>Períodos e histórico</button>
         </nav>
 
         {activeSection === 'planning' && <section className="mt-6 grid gap-5 lg:grid-cols-3">
