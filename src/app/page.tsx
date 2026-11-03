@@ -14,6 +14,7 @@ import {
 } from '@/lib/chat-diagnostic'
 import { normalizeQualitativeAnalysis, qualitativeAnalysisVersion, QUALITATIVE_ANALYSIS_VERSION } from '@/lib/clickdesk-qualitative'
 import { chatBusinessDate, chatPeriodBounds, selectChatPresentationRow } from '@/lib/chat-presentation'
+import { clickDeskPublicationDay, publishedClickDeskEnd } from '@/lib/clickdesk-publication'
 import { sumChatVoteRows } from '@/lib/clickdesk-csat'
 
 // Homologação: IA qualitativa liberada no acesso individual com governança separada da gestão.
@@ -3975,7 +3976,7 @@ function ChatAnalystPortal({
   const businessToday = chatBusinessDate()
   const [monthKey, setMonthKey] = useState(() => businessToday.slice(0, 7))
   const { start: monthStart, end: calendarMonthEnd } = chatPeriodBounds(monthKey)
-  const monthEnd = calendarMonthEnd < businessToday ? calendarMonthEnd : businessToday
+  const monthEnd = publishedClickDeskEnd(calendarMonthEnd)
   const monthLabel = new Intl.DateTimeFormat('pt-BR', {
     month: 'long',
     year: 'numeric',
@@ -8274,7 +8275,7 @@ function ChatModuleDashboard({
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">
-                    Hoje na operação · Command Center
+                    Operação até D-1 · Command Center
                   </p>
                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-slate-400">
                     leitura automática
@@ -8863,7 +8864,7 @@ function ChatModuleDashboard({
 
                 <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
                   <MetricCard label="Atendimentos na competência" value={formatChatCount(chat2LiveAttendances)} />
-                  <MetricCard label="Atendimentos hoje" value={formatChatCount(chat2TodayAttendances)} />
+                  <MetricCard label="Resolvidos em D-1" value={clickDeskPersistedMetrics?.source === 'clickdesk_official_period_metrics' ? '—' : formatChatCount(chat2TodayAttendances)} />
                   <MetricCard
                     label="CSAT acumulado da competência"
                     value={chat2LiveCandidateCsat === null ? '—' : formatChatPercent(chat2LiveCandidateCsat)}
@@ -8891,7 +8892,7 @@ function ChatModuleDashboard({
                   <p className="mt-3 text-xs text-slate-500">
                     Período selecionado: {formatDate(clickDeskPersistedMetrics.period.start)} a {formatDate(clickDeskPersistedMetrics.period.end)}
                     {chat2DailyCoverageStart ? ` · base diária desde ${formatDate(chat2DailyCoverageStart)}` : ''}
-                    {' '}· Hoje: {clickDeskPersistedMetrics.today?.date ? formatDate(clickDeskPersistedMetrics.today.date) : '—'}.
+                    {' '}· D-1: dados publicados até {formatDate(clickDeskPublicationDay())}.
                   </p>
                 )}
 
@@ -18592,7 +18593,7 @@ function getChatMonthPeriod(year: number, monthNumber: number) {
   return {
     label: `${month} ${year}`,
     start: `${year}-${paddedMonth}-01`,
-    end: `${year}-${paddedMonth}-${String(lastDay).padStart(2, '0')}`,
+    end: publishedClickDeskEnd(`${year}-${paddedMonth}-${String(lastDay).padStart(2, '0')}`),
   }
 }
 

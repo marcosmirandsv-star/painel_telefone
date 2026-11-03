@@ -1,8 +1,10 @@
+import { loadOfficialPeriodRows } from '@/lib/clickdesk-official-metrics'
 import { ApiError, authorizeManagerSessionClient, handle, json } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 import { readFinalLedger, readLedgerCoverage, scopeLedgerCoverage } from '@/lib/clickdesk-ledger-server'
 import { summarizeVerifiedTeams } from '@/lib/clickdesk-team-summary'
 import { partitionChatLedgerByActiveRoster } from '@/lib/clickdesk-active-analysts'
+import { clickDeskPublicationDay } from '@/lib/clickdesk-publication'
 
 export const runtime = 'nodejs'
 
@@ -21,14 +23,6 @@ type ReportSnapshotRow = {
   captured_at: string
 }
 
-function businessDay() {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(new Date())
-  const p = Object.fromEntries(parts.map(part => [part.type, part.value]))
-  return `${p.year}-${p.month}-${p.day}`
-}
-
 export async function GET(request: Request) {
   const started = Date.now()
   let stage = 'runtime'
@@ -40,17 +34,18 @@ export async function GET(request: Request) {
     stage = 'authorization'
     // Reuse the same JWT/session and RLS authorization path as /api/clickdesk/metrics.
     const { admin } = await authorizeManagerSessionClient(request)
-    const today = businessDay()
+    const today = clickDeskPublicationDay()
     const monthStart = today.slice(0, 7) + '-01'
 
     stage = 'ledger_and_teams'
-    const [tickets, coverage, rosterResult, analystsResult, snapshotsResult, latestSyncResult, numericClock] = await Promise.all([
+    const [tickets, coverage, rosterResult, analystsResult, snapshotsResult, latestSyncResult, numericClock, official] = await Promise.all([
       readFinalLedger(admin, { start: monthStart, end: today }),
       readLedgerCoverage(admin).then(coverage=>scopeLedgerCoverage(coverage,{start:monthStart,end:today})),
       admin.from('chat_teams').select('id,name,active').eq('active', true),
       admin.from('chat_analysts').select('id,active'),
       admin.from('clickdesk_chat_report_snapshots')
         .select('period_date,department_id,department_name,report_created,report_resolved,report_open_now,report_waiting_now,csat_pct,csat_total,captured_at')
+        .lte('period_date', today)
         .order('captured_at', { ascending: false })
         .limit(100),
       admin.from('clickdesk_chat_sync_runs')
@@ -60,6 +55,7 @@ export async function GET(request: Request) {
         .limit(1)
         .maybeSingle(),
       admin.rpc('get_clickdesk_sync_clock',{p_start:monthStart,p_end:today}),
+      loadOfficialPeriodRows(admin,{start:monthStart,end:today}),
     ])
     if (rosterResult.error) throw new ApiError(503, 'Cadastro de equipes indisponível.')
     if (analystsResult.error) throw new ApiError(503, 'Cadastro de analistas indisponível.')
@@ -74,6 +70,16 @@ export async function GET(request: Request) {
       )
     } catch {
       throw new ApiError(503, 'Conferência de vínculo ou duplicidade do ledger falhou.')
+    }
+    if (official) {
+      teamSummaries = teamSummaries.map(team => {
+        const rows = official.rows.filter(row => row.team_id === team.team_id && row.identity_role === 'analyst')
+        const totals = rows.reduce((sum,row)=>({attendances:sum.attendances+row.attendances,positive_reviews:sum.positive_reviews+row.positive_reviews,negative_reviews:sum.negative_reviews+row.negative_reviews}),{attendances:0,positive_reviews:0,negative_reviews:0})
+        const reviews = totals.positive_reviews + totals.negative_reviews
+        return {...team,...totals,reviews,csat_pct:reviews?Math.round(totals.positive_reviews/reviews*10000)/100:null,
+          review_percentage:totals.attendances?Math.round(reviews/totals.attendances*10000)/100:null,
+          available:rows.length>0,coverage_status:'complete',latest_verified_at:official.lastReconciledAt}
+      })
     }
     const lastReconciledAt=tickets.reduce<string|null>((latest,row)=>!latest||row.verified_at>latest?row.verified_at:latest,null)
     const visibleCheckAt=[lastReconciledAt,latestSyncResult.data?.finished_at,!numericClock.error&&typeof numericClock.data==='string'?numericClock.data:null].filter((value):value is string=>Boolean(value)).sort((a,b)=>Date.parse(b)-Date.parse(a))[0]??null
@@ -101,7 +107,7 @@ export async function GET(request: Request) {
     }))
 
     return json({
-      source: 'clickdesk_final_ticket_ledger',
+      source: official ? 'clickdesk_official_period_metrics' : 'clickdesk_final_ticket_ledger',
       period: { start: monthStart, end: today, timezone: 'America/Sao_Paulo' },
       team_summaries: teamSummaries,
       excluded_inactive_analyst_tickets: excludedInactive,
@@ -109,6 +115,8 @@ export async function GET(request: Request) {
       queue_report_status: snapshotsResult.error
         ? 'unavailable' : queueReports.length ? 'available' : 'not_captured',
       ledger_coverage: coverage.complete ? 'complete' : 'partial',
+      metric_coverage: official ? 'official_period' : 'ledger_sample',
+      publication: {mode:'d1',available_through:today},
       latest_sync: visibleCheckAt ? {finished_at:visibleCheckAt,source:'canonical_background_check'} : null,
       sync_status: latestSyncResult.error ? 'unavailable' : 'available',
       semantics: {

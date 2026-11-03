@@ -1,5 +1,6 @@
 import { ApiError, authorizeManagerSessionClient, handle, json } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
+import { clickDeskPublicationDay, publishedClickDeskEnd } from '@/lib/clickdesk-publication'
 
 export const runtime = 'nodejs'
 
@@ -844,10 +845,10 @@ async function parsePeriod(request: Request) {
   const today = businessDate(new Date().toISOString())
   if (!today) throw new ApiError(503, 'Não foi possível determinar a data operacional.')
 
-  const defaultStart = `${today.slice(0, 8)}01`
+  const defaultStart = `${clickDeskPublicationDay().slice(0, 8)}01`
   const start = typeof body.start === 'string' && body.start ? body.start : defaultStart
   const requestedEnd = typeof body.end === 'string' && body.end ? body.end : today
-  const end = requestedEnd > today ? today : requestedEnd
+  const end = publishedClickDeskEnd(requestedEnd)
   const triggerMode = body.trigger_mode === 'automatic' ? 'automatic' : 'manual'
 
   if (!validDate(start) || !validDate(end) || start > end) {

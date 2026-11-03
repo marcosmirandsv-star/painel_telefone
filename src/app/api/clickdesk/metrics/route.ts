@@ -1,8 +1,10 @@
+import { loadOfficialPeriodRows } from '@/lib/clickdesk-official-metrics'
 import { ApiError, authorizeClickDeskSessionClient, handle, json } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 import { readFinalLedger, readLedgerCoverageForAccess, scopeLedgerCoverage } from '@/lib/clickdesk-ledger-server'
 import { randomUUID } from 'node:crypto'
 import { partitionChatLedgerByActiveRoster } from '@/lib/clickdesk-active-analysts'
+import { clickDeskPublicationDay, publishedClickDeskEnd } from '@/lib/clickdesk-publication'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -80,99 +82,6 @@ function validUuid(value: string) {
   return /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value)
 }
 
-function normalizeSourceOwner(value: string) {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim()
-    .toLocaleLowerCase('pt-BR')
-    .replace(/\s+/g, ' ')
-}
-
-type OfficialPeriodMetric = {
-  source_owner_name: string
-  source_owner_key: string
-  attendances: number
-  positive_reviews: number
-  negative_reviews: number
-  captured_at: string
-}
-
-async function loadOfficialPeriodRows(
-  admin: Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],
-  filters: ReturnType<typeof parseFilters>,
-) {
-  const official = await admin
-    .rpc('get_scoped_clickdesk_official_period_metrics', {
-      p_start: filters.start,
-      p_end: filters.end,
-    })
-
-  if (official.error) {
-    console.warn('clickdesk_official_snapshot_unavailable', {
-      code: official.error.code,
-      message: official.error.message,
-    })
-    throw new ApiError(503, 'A fotografia oficial do ClickDesk não está disponível.')
-  }
-  if (!official.data?.length) return null
-
-  const people = await admin.from('chat_analysts').select('id,name,team_id,active')
-  if (people.error) {
-    console.warn('clickdesk_official_roster_unavailable', {
-      code: people.error.code,
-      message: people.error.message,
-    })
-    throw new ApiError(503, 'Cadastro de analistas da homologação indisponível.')
-  }
-
-  const roster = new Map(
-    (people.data ?? []).map(person => [normalizeSourceOwner(person.name), person]),
-  )
-  const rows = (official.data as OfficialPeriodMetric[])
-    .map(metric => {
-      const person = roster.get(metric.source_owner_key)
-      const isActive = Boolean(person?.active)
-      return {
-        occurred_date: filters.end,
-        team_id: person?.team_id ?? null,
-        analyst_id: person?.id ?? null,
-        area: 'Suporte - ERP e Suporte - Fiscal',
-        assignee_name: metric.source_owner_name,
-        // A linha sem responsável e vínculos que já não estão ativos participam
-        // do total oficial, mas nunca do filtro ou ranking de analistas ativos.
-        identity_role: isActive ? 'analyst' : 'unmapped',
-        attendances: Number(metric.attendances) || 0,
-        positive_reviews: Number(metric.positive_reviews) || 0,
-        negative_reviews: Number(metric.negative_reviews) || 0,
-        reviews: (Number(metric.positive_reviews) || 0) + (Number(metric.negative_reviews) || 0),
-        csat: null,
-        review_percentage: null,
-      } satisfies DailyMetricRow
-    })
-    .filter(row =>
-      (!filters.analystId || row.analyst_id === filters.analystId) &&
-      (!filters.teamId || row.team_id === filters.teamId),
-    )
-
-  const capturedAt = (official.data as OfficialPeriodMetric[])
-    .map(row => row.captured_at)
-    .sort()
-    .at(-1) ?? null
-
-  return {
-    rows,
-    coverage: {
-      complete: true,
-      verified_at: capturedAt,
-      entries: [],
-    },
-    admin,
-    excludedInactive: 0,
-    lastReconciledAt: capturedAt,
-    metricSource: 'clickdesk_official_period_metrics' as const,
-  }
-}
 
 function inclusiveDays(start: string, end: string) {
   return Math.round(
@@ -191,14 +100,16 @@ function parseFilters(request: Request) {
   }
 
   const today = businessDate(new Date().toISOString())
-  const defaultStart = `${today.slice(0, 8)}01`
+  const publicationDay = clickDeskPublicationDay()
+  const defaultStart = `${publicationDay.slice(0, 8)}01`
   const start = params.get('start') || defaultStart
   const requestedEnd = params.get('end') || today
-  const end = requestedEnd > today ? today : requestedEnd
+  const end = publishedClickDeskEnd(requestedEnd)
   const analystId = params.get('analyst_id')
   const teamId = params.get('team_id')
 
-  if (!validDate(start) || !validDate(end) || start > end || inclusiveDays(start, end) > 93) {
+  const emptyCurrentDay = start === today && requestedEnd === publicationDay
+  if (!validDate(start) || !validDate(requestedEnd) || (start > requestedEnd && !emptyCurrentDay) || inclusiveDays(start, requestedEnd) > 93) {
     throw new ApiError(400, 'Período inválido. Use até 93 dias no formato AAAA-MM-DD.')
   }
 
@@ -260,6 +171,7 @@ async function loadRows(
  admin: Awaited<ReturnType<typeof authorizeClickDeskSessionClient>>['admin'],
  filters: ReturnType<typeof parseFilters>, isManagement: boolean,
 ) {
+ if (filters.start > filters.end) return { rows: [] as DailyMetricRow[], coverage: {complete:false,verified_at:null,entries:[]},admin,excludedInactive:0,lastReconciledAt:null,metricSource:'clickdesk_final_ticket_ledger' as const }
  let official
  try {
    official = await loadOfficialPeriodRows(admin, filters)
@@ -423,7 +335,7 @@ export async function GET(request: Request) {
 
     const apprenticeRows = rows.filter((row) => row.identity_role === 'apprentice')
     const includedRows = rows.filter((row) => row.identity_role !== 'apprentice')
-    const todayRows = includedRows.filter((row) => row.occurred_date === filters.today)
+    const todayRows = metricSource === 'clickdesk_official_period_metrics' ? [] : includedRows.filter((row) => row.occurred_date === clickDeskPublicationDay())
     const performanceRows = includedRows.filter((row) => row.identity_role === 'analyst')
     const managementRows = includedRows.filter((row) => row.identity_role === 'management')
     const unmatchedRows = includedRows.filter((row) => row.identity_role === 'unmapped')
@@ -456,17 +368,18 @@ export async function GET(request: Request) {
         business_time_zone: BUSINESS_TIME_ZONE,
       },
       today: {
-        date: filters.today,
+        date: clickDeskPublicationDay(),
         included_in_period:
-          filters.today >= filters.start && filters.today <= filters.end,
+          clickDeskPublicationDay() >= filters.start && clickDeskPublicationDay() <= filters.end,
         ...aggregate(todayRows),
       },
       accumulated: aggregate(includedRows),
       performance_accumulated: aggregate(performanceRows),
       management_support: aggregate(managementRows),
-      daily: groupDaily(includedRows),
-      performance_daily: groupDaily(performanceRows),
-      by_analyst: groupAnalysts(performanceRows, filters.today),
+      daily: metricSource === 'clickdesk_official_period_metrics' ? [] : groupDaily(includedRows),
+      performance_daily: metricSource === 'clickdesk_official_period_metrics' ? [] : groupDaily(performanceRows),
+      by_analyst: groupAnalysts(performanceRows, clickDeskPublicationDay()).map(row => metricSource === 'clickdesk_official_period_metrics' ? {...row,daily:[],today:aggregate([])} : row),
+      publication: { mode: 'd1', available_through: clickDeskPublicationDay(), daily_available: metricSource !== 'clickdesk_official_period_metrics' },
       self_podium_context: selfPodiumContext,
       data_quality: {
         grouped_rows: includedRows.length,
@@ -491,7 +404,9 @@ export async function GET(request: Request) {
         status: dateBasisNeedsValidation ? 'needs_validation' : 'validated',
         note: dateBasisNeedsValidation
           ? 'AMOSTRA PARCIAL: somente tickets com autoria final auditada. Não usar estes valores como fechamento oficial, ranking ou confirmação de metas.'
-          : 'Data operacional: última resposta pública humana, em Brasília. Cobertura validada conforme fontes documentadas.',
+          : metricSource === 'clickdesk_official_period_metrics'
+            ? 'Fechamento do período ClickDesk: resolvidos por responsável e avaliações pelo atendente avaliado; filas ERP e Fiscal, time de lotação e corte D-1. O total mensal não é distribuído artificialmente por dia.'
+            : 'Data operacional: última resposta pública humana, em Brasília. Cobertura validada conforme fontes documentadas.',
       },
     })
   })

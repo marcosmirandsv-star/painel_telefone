@@ -1,6 +1,7 @@
 import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ApiError } from './integration-server'
+import { publishedClickDeskEnd } from './clickdesk-publication'
 import type { FinalTicket } from './clickdesk-final-owner'
 
 type LedgerRow = {
@@ -22,12 +23,14 @@ export async function readFinalLedger(
   admin: SupabaseClient,
   filters: { start: string; end: string; analystId?: string | null; teamId?: string | null },
 ): Promise<LedgerRow[]> {
+  const publishedEnd = publishedClickDeskEnd(filters.end)
+  if (filters.start > publishedEnd) return []
   const records: LedgerRow[] = []
   for (let offset = 0; offset < 50000; offset += 500) {
     let query = admin.from('clickdesk_final_ticket_ledger')
       .select('ticket_id,analyst_id,team_id,last_public_message_id,last_public_at,occurred_date,area,satisfaction_label,rating_timestamp_warning,evidence_source,verified_at')
       .gte('occurred_date', filters.start)
-      .lte('occurred_date', filters.end)
+      .lte('occurred_date', publishedEnd)
       .order('ticket_id', { ascending: true })
     if (filters.analystId) query = query.eq('analyst_id', filters.analystId)
     if (filters.teamId) query = query.eq('team_id', filters.teamId)
