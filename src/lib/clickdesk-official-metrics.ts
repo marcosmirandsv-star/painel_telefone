@@ -75,8 +75,7 @@ export async function loadOfficialPeriodRows(
         analyst_id: person?.id ?? null,
         area: 'Suporte - ERP e Suporte - Fiscal',
         assignee_name: metric.source_owner_name,
-        // A linha sem responsável e vínculos que já não estão ativos participam
-        // do total oficial, mas nunca do filtro ou ranking de analistas ativos.
+        // The scoped RPC already restricts owners to the approved performance roster.
         identity_role: isActive ? 'analyst' : 'unmapped',
         attendances: Number(metric.attendances) || 0,
         positive_reviews: Number(metric.positive_reviews) || 0,

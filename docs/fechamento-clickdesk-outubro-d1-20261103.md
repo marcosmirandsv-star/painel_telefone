@@ -68,5 +68,10 @@ completa apenas porque o total mensal está conciliado. Não há promoção para
 Validação: 133 testes de integração, 14 de escalas, TypeScript e build aprovados;
 captura real de outubro HTTP 200 com 15 titulares e os totais acima; captura D-1
 real em 03/11 com término 02/11; RPC gerencial reproduz o fechamento.
-Inspeção visual autenticada deve ser registrada separadamente, sem inferir aprovação
-apenas dos testes automatizados e da consulta administrativa.
+Inspeção autenticada de gestão confirmou outubro, Todas as equipes, Fiscal/Notas
+e o resumo individual (João Pedro: 621 resolvidos, 137 positivas, 29 negativas,
+CSAT 82,53%). Consulta com o perfil SQL de João Vitor retornou somente sua linha:
+485 resolvidos, 86 positivas, 32 negativas. A verificação SQL de escopo não substitui
+uma navegação completa em sessão de analista. Não foram criados usuários de teste.
+Na inspeção também foi corrigida a comparação temporária contra o filtro anterior;
+a comparação só é exibida quando as datas do retorno correspondem à competência esperada.
