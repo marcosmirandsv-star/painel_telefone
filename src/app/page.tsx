@@ -1281,7 +1281,7 @@ export default function Home() {
               </div>
               <p>Operação, experiência do cliente e pessoas ficam separadas para tornar cada decisão mais clara.</p>
             </div>
-            <div className="mt-5 grid gap-4 md:grid-cols-3">
+            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <button
               className={activeModule === 'phone' ? 'workspace-card workspace-card-active' : 'workspace-card'}
               type="button"
@@ -1307,6 +1307,13 @@ export default function Home() {
               <small>Dados do ClickDesk, importação, ranking, feedbacks e relatórios de atendimento.</small>
               <em>{activeModule === 'chat' ? 'Área aberta' : 'Abrir experiência'}</em>
             </button>
+            <Link className="workspace-card workspace-card-management" href="/gestao-inteligente">
+              <span className="workspace-icon workspace-icon-amber" aria-hidden="true">◎</span>
+              <span className="workspace-kicker">Melhoria e desenvolvimento</span>
+              <strong>Gestão Inteligente — CX 360º</strong>
+              <small>Investigações, evidências, decisões e acompanhamento de ações pela gestão.</small>
+              <em>Abrir Gestão Inteligente <span aria-hidden="true">→</span></em>
+            </Link>
             <Link className="workspace-card workspace-card-management" href="/ferias">
               <span className="workspace-icon workspace-icon-amber" aria-hidden="true">◫</span>
               <span className="workspace-kicker">Gestão de pessoas</span>
