@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { supabase } from '@/lib/supabase'
 import { caseStates, stateLabels, transitions, type CaseState, type CxCase } from '@/lib/cx360'
+import { readCxResponse, withCxDeadline } from '@/lib/cx360-client'
+import CxDiagnostics from '@/components/CxDiagnostics'
 
 type Catalog = { teams: { id: string; name: string }[]; managers: { id: string; full_name: string }[] }
 type Payload = Catalog & { user_id: string; cases: CxCase[]; truncated: boolean; retrieved_at: string; diagnostics: { note: string } }
@@ -19,10 +21,11 @@ const dateTime = (value: string) => new Date(value).toLocaleString('pt-BR', { ti
 export default function CxManagement() {
   const [access, setAccess] = useState(false), [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('Validando acesso…')
+  const [accessAttempt, setAccessAttempt] = useState(0), [authorizing, setAuthorizing] = useState(true)
   const [data, setData] = useState<Payload | null>(null)
   const [catalog, setCatalog] = useState<Catalog>({ teams: [], managers: [] })
   const [team, setTeam] = useState(''), [status, setStatus] = useState('')
-  const [tab, setTab] = useState<'cases' | 'new' | 'summary'>('cases')
+  const [tab, setTab] = useState<'diagnostics' | 'cases' | 'new' | 'summary'>('diagnostics')
   const [registration, setRegistration] = useState<Registration>(empty)
   const [selected, setSelected] = useState<CxCase | null>(null)
   const [approval, setApproval] = useState(false)
@@ -30,12 +33,13 @@ export default function CxManagement() {
   const requestVersion = useRef(0), historyVersion = useRef(0)
 
   const api = useCallback(async (path = '', options?: RequestInit) => {
-    const { data: { session } } = await supabase.auth.getSession()
+    const { data: { session } } = await withCxDeadline(supabase.auth.getSession())
     if (!session) throw new Error('Entre no painel com sua conta de gestão.')
-    const response = await fetch(`/api/gestao-inteligente${path}`, { ...options, cache: 'no-store', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` } })
-    const payload = await response.json()
-    if (!response.ok) throw new Error(payload.erro || 'Consulta indisponível.')
-    return payload
+    const controller = new AbortController()
+    return await withCxDeadline((async () => {
+      const response = await fetch(`/api/gestao-inteligente${path}`, { ...options, signal: controller.signal, cache: 'no-store', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` } })
+      return await readCxResponse(response) as Payload & { events: Audit[] }
+    })(), 20000, () => controller.abort())
   }, [])
   const load = useCallback(async () => {
     const version = ++requestVersion.current
@@ -53,22 +57,38 @@ export default function CxManagement() {
 
   useEffect(() => {
     let active = true
-    const invalidate = () => { ++requestVersion.current; ++historyVersion.current }
+    let authorizationVersion = 0
+    const invalidate = () => { ++authorizationVersion; ++requestVersion.current; ++historyVersion.current }
     const { data: listener } = supabase.auth.onAuthStateChange(event => {
-      if (event === 'SIGNED_OUT') { invalidate(); setAccess(false); setData(null); setCatalog({ teams: [], managers: [] }); setSelected(null); setHistory([]); setMessage('Sessão encerrada. Entre novamente no painel.') }
+      if (event === 'SIGNED_OUT') { invalidate(); setAuthorizing(false); setAccess(false); setData(null); setCatalog({ teams: [], managers: [] }); setSelected(null); setHistory([]); setMessage('Sessão encerrada. Entre novamente no painel.') }
     })
     async function authorize() {
-      const { data: { user }, error } = await supabase.auth.getUser()
-      if (!active) return
-      if (!user || error) { setMessage('Entre no painel com sua conta de gestão.'); return }
-      const profile = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-      if (!active) return
-      if (profile.error || !['master', 'coordenadora'].includes(String(profile.data?.role).toLowerCase())) { setMessage('Esta área é exclusiva da gestão.'); return }
-      setAccess(true); setMessage('Consulte os acompanhamentos para começar.')
+      const version = ++authorizationVersion
+      setAuthorizing(true); setMessage('Validando acesso…')
+      try {
+        const { data: { user }, error } = await withCxDeadline(supabase.auth.getUser())
+        if (!active || version !== authorizationVersion) return
+        if (!user || error) { setMessage('Entre no painel com sua conta de gestão.'); return }
+        const profile = await withCxDeadline(supabase.from('profiles').select('role').eq('id', user.id).maybeSingle())
+        if (!active || version !== authorizationVersion) return
+        if (profile.error) { setMessage('Não foi possível validar seu perfil. Tente novamente.'); return }
+        if (!['master', 'coordenadora'].includes(String(profile.data?.role).toLowerCase())) { setMessage('Esta área é exclusiva da gestão.'); return }
+        setAccess(true); setMessage('Carregando acompanhamentos…')
+      } catch (error) {
+        if (active && version === authorizationVersion) setMessage((error as Error).message)
+      } finally {
+        if (active && version === authorizationVersion) setAuthorizing(false)
+      }
     }
     void authorize()
     return () => { active = false; invalidate(); listener.subscription.unsubscribe() }
-  }, [])
+  }, [accessAttempt])
+  useEffect(() => {
+    if (!access) return
+    // Defer the external query and cancel it if the filter/session changes first.
+    const task = setTimeout(() => { void load() }, 0)
+    return () => clearTimeout(task)
+  }, [access, load])
   function clear() { ++requestVersion.current; ++historyVersion.current; setData(null); setSelected(null); setHistory([]); setMessage('Filtros alterados. Clique em consultar.') }
   async function register(event: FormEvent) {
     event.preventDefault(); setBusy(true)
@@ -103,11 +123,13 @@ export default function CxManagement() {
     <Link href="/" className="text-cyan-300 underline">Voltar ao Sistema de Performance</Link>
     <header className={`${panel} border-cyan-900`}><p className="text-xs font-semibold uppercase tracking-widest text-cyan-200">Gestão e desenvolvimento · acesso restrito</p><h1 className="mt-3 text-3xl font-semibold">Gestão Inteligente — CX 360º</h1><p className="mt-3 max-w-3xl text-slate-300">Investigue situações, reúna evidências e acompanhe ações de melhoria. Cada conclusão e encaminhamento depende da validação de um gestor.</p></header>
     <p role="status" aria-live="polite" className="rounded-xl border border-slate-700 p-3">{message}</p>
+    {!access && !authorizing && <div className="flex gap-4"><button className={button} onClick={() => setAccessAttempt(value => value + 1)}>Tentar validar acesso novamente</button><Link href="/" className="self-center text-cyan-300 underline">Entrar no painel</Link></div>}
     {access && <>
-      <section className={`${panel} border-amber-900/70`}><h2 className="font-semibold text-amber-100">Fontes de diagnóstico</h2><p className="mt-2 text-sm text-slate-300">{data?.diagnostics.note ?? 'Os diagnósticos automáticos da IA 360º ainda não estão integrados à produção. Esta versão trabalha com observações e evidências registradas pela gestão.'}</p><p className="mt-2 text-sm text-slate-400">Indicadores oficiais, produtividade, CSAT e pódio permanecem nas áreas de operação. Poucos tickets atribuídos não comprovam ociosidade; encerramento por inatividade não comprova resolução.</p></section>
+      <section className={`${panel} border-amber-900/70`}><h2 className="font-semibold text-amber-100">Fontes de diagnóstico</h2><p className="mt-2 text-sm text-slate-300">{data?.diagnostics.note ?? 'Carregando a situação das fontes de produção…'}</p><p className="mt-2 text-sm text-slate-400">Indicadores oficiais, produtividade, CSAT e pódio permanecem nas áreas de operação. Poucos tickets atribuídos não comprovam ociosidade; encerramento por inatividade não comprova resolução.</p></section>
       <form onSubmit={event => { event.preventDefault(); void load() }}><fieldset disabled={busy} className={`${panel} flex flex-wrap items-end gap-4`}><legend className="px-2 font-semibold">Acompanhamentos</legend><label>Equipe<select className={input} value={team} onChange={event => { clear(); setTeam(event.target.value) }}><option value="">Todas as equipes</option>{catalog.teams.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>Etapa<select className={input} value={status} onChange={event => { clear(); setStatus(event.target.value) }}><option value="">Todas as etapas</option>{caseStates.map(item => <option key={item} value={item}>{stateLabels[item]}</option>)}</select></label><button className={button}>{busy ? 'Consultando…' : 'Consultar'}</button></fieldset></form>
       {data && <>
-        <nav className="flex flex-wrap gap-2" aria-label="Visões da gestão">{([['cases', 'Acompanhamentos'], ['new', 'Registrar ocorrência'], ['summary', 'Resumo gerencial']] as const).map(([key, label]) => <button key={key} disabled={busy} className={tab === key ? button : 'rounded-lg border border-slate-600 px-4 py-2'} aria-pressed={tab === key} onClick={() => setTab(key)}>{label}</button>)}</nav>
+        <nav className="flex flex-wrap gap-2" aria-label="Visões da gestão">{([['diagnostics', 'Análise dos atendimentos'], ['cases', 'Acompanhamentos'], ['new', 'Registrar ocorrência'], ['summary', 'Resumo gerencial']] as const).map(([key, label]) => <button key={key} disabled={busy} className={tab === key ? button : 'rounded-lg border border-slate-600 px-4 py-2'} aria-pressed={tab === key} onClick={() => setTab(key)}>{label}</button>)}</nav>
+        {tab === 'diagnostics' && <CxDiagnostics onCaseCreated={() => { setTab('cases'); void load() }} />}
         {data.truncated && <p className="text-amber-100">Exibindo os 200 acompanhamentos mais recentes deste recorte. Use os filtros para detalhar.</p>}
         {tab === 'new' && <form onSubmit={register} className={`${panel} space-y-4`}><h2 className="text-xl font-semibold">Registrar uma situação para investigação</h2><p className="text-sm text-slate-300">Descreva fatos observáveis e a referência exata do atendimento. Evite dados pessoais do cliente. A origem e o identificador ficam preservados, sem associação automática com outros sistemas ou atribuição individual de performance.</p><fieldset disabled={busy} className="grid gap-4 sm:grid-cols-2">
           <label className="sm:col-span-2">Título<input className={input} required minLength={5} maxLength={200} value={registration.title} onChange={event => field('title', event.target.value)} /></label>

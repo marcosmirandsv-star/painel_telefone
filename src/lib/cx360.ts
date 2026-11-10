@@ -25,6 +25,7 @@ export type CxCase = {
   approved_by: string | null; approved_at: string | null; version: number; created_at: string; updated_at: string;
 }
 export function validateCaseUpdate(previous: CxCase, input: Record<string, unknown>) {
+  if (previous.status === 'concluido') throw new Error('Acompanhamentos concluídos não podem ser alterados.')
   const status = input.status as CaseState
   if (!caseStates.includes(status) || (status !== previous.status && !transitions[previous.status].includes(status))) throw new Error('Transição de acompanhamento inválida.')
   const text = (key: string, max: number) => {

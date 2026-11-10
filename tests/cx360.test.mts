@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { validateCaseUpdate, validDate, type CxCase } from '../src/lib/cx360.ts'
+import { validateCaseUpdate, validDate, caseStates, transitions, type CxCase } from '../src/lib/cx360.ts'
 
 const base = { id: 'b6652876-caf3-414c-bd25-9a7516ca5777', status: 'identificado', action: '', owner_id: 'b6652876-caf3-414c-bd25-9a7516ca5777', review_date: null, decision_notes: '', outcome: '', approved_by: null } as CxCase
 const input = (extra: Record<string, unknown>) => ({ ...base, ...extra })
@@ -29,4 +29,13 @@ test('datas impossíveis e responsáveis inválidos são rejeitados', () => {
   assert.equal(validDate('2026-02-30'), false)
   assert.equal(validDate('2028-02-29'), true)
   assert.throws(() => validateCaseUpdate(base, input({ owner_id: 'inexistente' })))
+})
+
+test('todas as etapas seguem o fluxo e casos concluídos recusam até edição sem troca de etapa', () => {
+  for (const from of caseStates) for (const to of caseStates) {
+    const previous = { ...base, status: from }
+    const update = input({ status: to, action: 'Plano sintético de teste', review_date: '2026-11-13', decision_notes: 'Evidências verificadas', outcome: 'Resultado registrado', approve: true })
+    if (from !== 'concluido' && (from === to || transitions[from].includes(to))) assert.equal(validateCaseUpdate(previous, update).status, to)
+    else assert.throws(() => validateCaseUpdate(previous, update))
+  }
 })
