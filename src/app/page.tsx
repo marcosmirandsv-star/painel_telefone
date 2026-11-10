@@ -16,6 +16,7 @@ import { normalizeQualitativeAnalysis, qualitativeAnalysisVersion, QUALITATIVE_A
 import { chatBusinessDate, chatPeriodBounds, selectChatPresentationRow } from '@/lib/chat-presentation'
 import { clickDeskPublicationDay, publishedClickDeskEnd } from '@/lib/clickdesk-publication'
 import { sumChatVoteRows } from '@/lib/clickdesk-csat'
+import ClickDeskSourceReport from '@/components/chat/ClickDeskSourceReport'
 
 // Homologação: IA qualitativa liberada no acesso individual com governança separada da gestão.
 const QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS = true
@@ -1250,6 +1251,7 @@ function CentralOverview({
   onOpenChat: (teamId?: string) => void
 }) {
   const activeTeams = chatTeams.filter((team) => team.active)
+  const officialSource = chatOverview?.source === 'clickdesk_official_period_metrics'
   const verifiedByTeam = new Map(
     (chatOverview?.team_summaries ?? []).map((team) => [team.team_id, team]),
   )
@@ -1271,7 +1273,7 @@ function CentralOverview({
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">Visão executiva</p>
             <h2 className="mt-2 text-2xl font-bold">Onde vale olhar primeiro?</h2>
             <p className="mt-2 text-sm text-slate-400">
-              Telefone e Chat aparecem juntos com fontes independentes. Os números de equipe do Chat vêm do ledger auditado; as filas Fiscal/ERP aparecem separadamente.
+              Telefone e Chat aparecem juntos com fontes independentes. {officialSource ? 'O Chat usa resolvidos e avaliações do relatório ClickDesk, nas filas ERP e Fiscal, agrupados pelo time de lotação.' : 'O Chat usa créditos de autoria final comprovada em cobertura parcial.'} Os relatórios de filas aparecem separadamente.
             </p>
           </div>
           <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-right">
@@ -1314,27 +1316,27 @@ function CentralOverview({
             <button key={team.id} type="button" onClick={() => onOpenChat(team.id)} className="rounded-2xl border border-white/10 bg-slate-900/55 p-5 text-left transition hover:border-cyan-300/35">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">Chat · atendimentos comprovados</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{officialSource ? 'Chat · relatório ClickDesk D-1' : 'Chat · atendimentos comprovados'}</p>
                   <h3 className="mt-2 text-lg font-bold">{team.name}</h3>
                 </div>
                 <span className={available ? 'text-xs font-semibold text-amber-200' : 'text-xs font-semibold text-slate-400'}>
-                  {available ? '● Base parcial auditada' : chatOverviewLoading ? '● Atualizando' : '● Em conferência'}
+                  {available ? officialSource ? '● Relatório do período' : '● Base parcial auditada' : chatOverviewLoading ? '● Atualizando' : '● Em conferência'}
                 </span>
               </div>
               <div className="mt-5 grid grid-cols-3 gap-3">
-                <div><span className="text-xs text-slate-500">CSAT parcial</span><strong className="mt-1 block text-lg">{available && verified?.csat_pct !== null && verified?.csat_pct !== undefined ? formatPercent(verified?.csat_pct ?? 0) : '—'}</strong></div>
+                <div><span className="text-xs text-slate-500">{officialSource ? 'CSAT do período' : 'CSAT parcial'}</span><strong className="mt-1 block text-lg">{available && verified?.csat_pct !== null && verified?.csat_pct !== undefined ? formatPercent(verified?.csat_pct ?? 0) : '—'}</strong></div>
                 <div><span className="text-xs text-slate-500">Atendimentos</span><strong className="mt-1 block text-lg">{available ? formatChatCount(verified?.attendances ?? 0) : '—'}</strong></div>
                 <div><span className="text-xs text-slate-500">Avaliações</span><strong className="mt-1 block text-lg">{available ? formatChatCount(verified?.reviews ?? 0) : '—'}</strong></div>
               </div>
               <div className="mt-4 rounded-lg bg-slate-950/35 px-3 py-2 text-xs text-slate-400">
                 {available
-                  ? `Créditos verificados · ${formatChatCount(verified?.positive_reviews ?? 0)} positivas · ${formatChatCount(verified?.negative_reviews ?? 0)} negativas. Sem fechamento oficial.`
+                  ? `${officialSource ? 'Resolvidos ERP/Fiscal por time de lotação' : 'Créditos verificados'} · ${formatChatCount(verified?.positive_reviews ?? 0)} positivas · ${formatChatCount(verified?.negative_reviews ?? 0)} negativas. Sem aprovação de fechamento.`
                   : chatOverviewError ? 'Não foi possível consultar a base de créditos.' : 'Ainda não existem créditos finais comprovados para esta equipe.'}
               </div>
               <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-4 text-xs">
                 <span className="text-slate-500">
                   {available
-                    ? `${chatOverview?.period?.start ? formatDate(chatOverview.period.start) : 'Início do mês'} a ${chatOverview?.period?.end ? formatDate(chatOverview.period.end) : 'hoje'} · leitura parcial`
+                    ? `${chatOverview?.period?.start ? formatDate(chatOverview.period.start) : 'Início do mês'} a ${chatOverview?.period?.end ? formatDate(chatOverview.period.end) : 'hoje'} · ${officialSource ? 'corte D-1' : 'leitura parcial'}`
                     : 'Não confundir ausência de leitura com zero atendimentos'}
                 </span>
                 <span className="font-semibold text-cyan-200">Abrir Chat →</span>
@@ -1354,7 +1356,7 @@ function CentralOverview({
               </span>
             ))}
           </div>
-          <p className="mt-2 text-xs text-slate-500">Os números de filas não são somados aos tickets creditados por último analista humano.</p>
+          <p className="mt-2 text-xs text-slate-500">Os números de filas não são somados aos indicadores por equipe; são dimensões diferentes.</p>
         </section>
       )}
       <section className="rounded-2xl border border-violet-300/15 bg-violet-300/[0.04] px-5 py-4">
@@ -1367,10 +1369,10 @@ function CentralOverview({
                 : missingChatTeams > 0 && !chatOverviewLoading
                   ? `${missingChatTeams} equipe(s) de Chat ainda não têm crédito final confirmado nesta competência. Não interpretar como zero operacional.`
                   : phoneAttention > 0
-                    ? `O Telefone possui ${phoneAttention} ponto(s) de atenção no último período manual. Chat mostra somente tickets com último autor humano validado, em cobertura parcial.`
+                    ? `O Telefone possui ${phoneAttention} ponto(s) de atenção no último período manual. ${officialSource ? 'Chat: relatório ERP/Fiscal por time de lotação, até D-1.' : 'Chat: tickets com último autor humano validado, em cobertura parcial.'}`
                     : phoneHasData
-                      ? 'Telefone: período manual; Chat: ledger parcial da competência. Não tratar fontes ou datas como equivalentes nem utilizar o Chat para fechamento.'
-                      : 'O Chat utiliza apenas os créditos de autoria final validados; os relatórios de filas permanecem independentes.'}
+                      ? `Telefone: período manual; Chat: ${officialSource ? 'relatório ClickDesk até D-1' : 'ledger parcial da competência'}. Não tratar fontes ou datas como equivalentes nem presumir aprovação do fechamento.`
+                      : officialSource ? 'O Chat utiliza o relatório ERP/Fiscal por time de lotação; os relatórios de filas permanecem independentes.' : 'O Chat utiliza apenas os créditos de autoria final validados; os relatórios de filas permanecem independentes.'}
             </p>
           </div>
           <span className="text-xs text-slate-500">
@@ -8243,6 +8245,7 @@ function ChatModuleDashboard({
         <p className="mt-2">A contagem não inclui tickets ainda não descobertos; consulte a cobertura da captura. Conferência {formatDateTime(clickDeskPersistedMetrics.reconciliation.captured_at)}. Casos inconclusivos não recebem crédito arbitrário nem são tratados como resoluções ou avaliações.</p>
         <ul className="mt-2 space-y-1">{clickDeskPersistedMetrics.reconciliation.pending.map(item => <li key={item.ticket_id}>Ticket {item.ticket_id}: {reconciliationReason(item.reason)}</li>)}</ul>
       </details>}
+      {chatActiveTab === 'overview' && isManagementUser && <ClickDeskSourceReport key={`${chat2SelectedPeriod.start}:${chat2SelectedPeriod.end}`} start={chat2SelectedPeriod.start} end={chat2SelectedPeriod.end} />}
       {chatActiveTab === 'overview' && chatMetricsReady && (
         <section className="workspace-page-heading">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">

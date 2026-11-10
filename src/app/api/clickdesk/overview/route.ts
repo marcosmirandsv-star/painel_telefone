@@ -120,7 +120,7 @@ export async function GET(request: Request) {
       latest_sync: visibleCheckAt ? {finished_at:visibleCheckAt,source:'canonical_background_check'} : null,
       sync_status: latestSyncResult.error ? 'unavailable' : 'available',
       semantics: {
-        teams: 'Contagem de um ticket por ultimo autor publico humano verificado e ativo, agrupado pelo vinculo cadastral.',
+        teams: official ? 'Resolvidos e avaliações do relatório ClickDesk nas filas ERP/Fiscal, agrupados pelo time de lotação do quadro aprovado.' : 'Contagem de um ticket por ultimo autor publico humano verificado e ativo, agrupado pelo vinculo cadastral.',
         inactive: 'Creditos de autores inativos mantidos no ledger para auditoria, mas excluidos da visao operacional atual.',
         queues: 'Criados, resolvidos e CSAT dos relatorios oficiais Fiscal/ERP; nao representam exclusivamente a equipe.',
         incomplete: 'Cobertura parcial nao pode ser usada como fechamento nem pontuacao final.',

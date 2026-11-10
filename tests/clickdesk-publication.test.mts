@@ -31,7 +31,7 @@ async function runCapture({conflict=false,incomplete=false,token=true}={}) {
     }
     return {upsert:async(rows:typeof saved)=>{saved=rows;return {error:null}}}
   }}
-  const compiled=ts.transpileModule(source.replace(/^import .*\n/,''),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText
+  const compiled=ts.transpileModule(source.replace(/^import[^\r\n]*\r?\n/,''),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText
   const context={createClient:()=>db,Date,URLSearchParams,Response,console:{error(){}},
     Deno:{env:{get:(name:string)=>name==='SUPABASE_URL'?'https://example.test':name==='SUPABASE_SERVICE_ROLE_KEY'?'fixture':undefined},serve:(fn:typeof handler)=>{handler=fn}},
     fetch:async(input:string)=>{
