@@ -3697,12 +3697,13 @@ function ChatModuleDashboard({
                 <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatPercent(chatReviewRate)}</td>
                 <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatCount(totals.tickets)}</td>
                 <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatCount(totals.validTickets)}</td>
-                <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatCount(totals.inactive)}</td>
-                <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatPercent(chatInactiveRate)}</td>
                 <td className="whitespace-nowrap px-3 py-3 tabular-nums">{formatChatPercent(chatSendingRate)}</td>
               </tr>
             </tfoot>
           </table>
+          <p className="mt-3 text-sm text-slate-300">
+            Inativos no filtro: {formatChatCount(totals.inactive)} ({formatChatPercent(chatInactiveRate)})
+          </p>
           {!visibleMetrics.length && <EmptyState text="Nenhum dado importado para o filtro selecionado." />}
         </div>
       </section>
