@@ -17,7 +17,7 @@ function harness(responder:(url:string,options:RequestInit)=>unknown,claims:unkn
    let action='';const entry={kind:'table',name,args:[] as unknown[]};calls.push(entry)
    const query:Record<string,unknown>={}
    const proxy=new Proxy(query,{get(_target,key){
-    if(key==='then')return(resolve:(v:unknown)=>unknown,reject:(e:unknown)=>unknown)=>Promise.resolve({error:null,data:name==='cx360_sources'?[{team_id:'fiscal-id',source_name:'Suporte - Fiscal'},{team_id:'erp-id',source_name:'Suporte - ERP'}]:action==='update'?[{id:'saved'}]:[]}).then(resolve,reject)
+    if(key==='then')return(resolve:(v:unknown)=>unknown,reject:(e:unknown)=>unknown)=>Promise.resolve({error:null,data:name==='cx360_sources'?[{team_id:'fiscal-id',source_name:'Suporte - Fiscal'},{team_id:'erp-id',source_name:'Suporte - ERP'}]:name==='chat_analysts'?[{name:'Carlos Lemos',team_id:'fiscal-id',active:true}]:action==='update'?[{id:'saved'}]:[]}).then(resolve,reject)
     return(...args:unknown[])=>{entry.args.push([String(key),...args]);if(['insert','update'].includes(String(key))||!action)action=String(key);return proxy}
    }})
    return proxy
@@ -51,6 +51,13 @@ test('tipo de atendimento ausente não exclui pessoa avaliada do quadro aprovado
  const h=harness(()=>({data:[{...rating(1),attendance:null,rated_at:'05/11/2026 10:00'}],total:1,page:1,last_page:1}))
  const result=await h.api.syncCx('2026-11-01','2026-11-09',null)
  assert.equal(result.eligible,1)
+})
+test('fila de origem é preservada mas acompanhamento segue o time cadastrado do avaliado',async()=>{
+ const h=harness(()=>({data:[{...rating(1),team:'Suporte - ERP'}],total:1,page:1,last_page:1}))
+ await h.api.syncCx('2026-10-01','2026-10-31',null)
+ const rpc=h.calls.find(c=>c.name==='cx360_ingest')!
+ const [row]=(rpc.args[0] as {p_rows:Record<string,unknown>[]}).p_rows
+ assert.equal(row.team_id,'fiscal-id');assert.equal(row.source_team,'Suporte - ERP')
 })
 const analysis={factor:'produto',confidence:'media',observation:'Cliente relata erro na emissão.',hypothesis:'Hipótese: erro ainda não resolvido contribuiu para a nota.',impact:'A emissão pode ter permanecido pendente.',behavior:'O analista verificou a rejeição relatada.',practice:'Combinar o próximo retorno de acompanhamento.',suggested_phrase:'Vou conferir o resultado deste teste com você.',verification:'Conferir o próximo passo registrado no histórico.',limitations:['Anexos não inspecionados.'],evidence_ids:['10']}
 const job={id:'rating-1',ticket_id:'123',owner_name:'Carlos Henrique',rated_at:'2026-10-05T13:00:00Z',label:'Ruim',source_team:'Suporte - Fiscal',comment:'',source_hash:'source-v1',lease_token:'lease-1',attempts:1}

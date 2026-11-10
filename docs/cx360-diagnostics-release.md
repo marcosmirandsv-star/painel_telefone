@@ -1,8 +1,12 @@
 # CX 360º — pacote de análise dos atendimentos
 
-Preparado em 09/11/2026. Situação: implementação local pronta para revisão; ativação de produção bloqueada até aprovação específica. A tentativa de aplicar a migração foi rejeitada pela revisão automática antes da execução. Não houve nova publicação, alteração de credenciais nem implantação de agendamento.
+Preparado em 09/11/2026 e ativado em produção em 10/11/2026 após autorização explícita do gestor. As tabelas aditivas foram criadas, as credenciais ClickDesk existentes foram habilitadas para produção e o segredo exclusivo do agendamento foi configurado. A chamada autenticada do cron retornou 202; a chamada sem credencial e a consulta anônima de diagnósticos retornaram 401. A primeira execução automática das 6h ainda deve ser observada.
 
-Revisado em 10/11/2026 sobre a produção a5ef372, preservando integralmente a restauração Zendesk e o alinhamento dos totais do chat. Nesta rodada, 35 testes, TypeScript, lint dos arquivos CX alterados e compilação Next.js passaram. A revisão automática recusou habilitar CLICKDESK_API_KEY para produção e consultar mensagens reais sem autorização específica; as solicitações de aprovação estão pendentes. Nenhuma migração, processamento real, publicação deste pacote ou alteração de credencial foi executada nesta rodada. O código permanece preparado para revisão; não constitui ativação concluída.
+Base a5ef372, preservando integralmente a restauração Zendesk e o alinhamento dos totais do chat. Validação: 27 testes CX e 12 das integrações, TypeScript, lint e build aprovados nas respectivas rodadas. O teste SQL transacional passou e desfez os dados sintéticos por rollback. As quatro tabelas têm RLS, anon sem SELECT e authenticated sem escrita direta. As recusas automáticas iniciais foram resolvidas após a autorização específica e a identificação dos recursos; nenhuma recusa foi contornada.
+
+Carga inicial real: outubro com 310 avaliações negativas, 280 elegíveis e 30 excluídas; novembro de 01 a 09 com 38, 36 e 2, respectivamente. O time de análise e encaminhamento é o cadastrado do avaliado; a fila de origem continua preservada em source_team. Para outubro, o vínculo cadastral confere 146 avaliações Especializado/Fiscal e 134 ERP. attendance ausente não exclui um nome aprovado. Autores humanos são preservados por mensagem e uma sugestão de coaching não é aceita como evidência suficiente de causa humana. Leituras anteriores ao critério v3 retornam à fila.
+
+O processamento real ainda é parcial. O provedor retornou HTTP 503 e limite de requisições; os casos permanecem pendentes, com retomada e erro visíveis. O limite de requisições não consome as três tentativas. Não declarar cobertura completa enquanto houver pendentes, erros ou casos inconclusivos. Não houve validação/rejeição gerencial em massa, criação de achados reais de teste ou alteração de CSAT, produtividade e pódio.
 
 ## Entrega proposta
 
@@ -16,7 +20,7 @@ Revisado em 10/11/2026 sobre a produção a5ef372, preservando integralmente a r
 - Reconciliar mudanças da fonte, invalidar análises antigas e controlar processamento concorrente com concessões temporárias. Erros e limites do provedor permanecem visíveis e podem ser retomados.
 - Agendamento proposto: diariamente às 6h de Brasília, atualizando os últimos sete dias fechados e retomando pendências de até 62 dias. O ciclo é limitado pelo tempo do servidor; a cobertura não é presumida completa quando sobram pendentes.
 
-## Impacto exato da aprovação solicitada
+## Configuração de produção autorizada
 
 Projeto de banco: produção `qmetbydkepfdgfqkdkai`.
 
@@ -24,7 +28,7 @@ Projeto de banco: produção `qmetbydkepfdgfqkdkai`.
 2. Acrescentar `diagnostic_id` e `diagnostic_hash` em `cx360_cases`, índices e uma proteção para não reescrever a referência de uma investigação já registrada.
 3. Criar rotinas de importação e tomada de trabalho, restritas ao serviço do servidor. Habilitar RLS, permitindo leitura apenas à gestão. As tabelas de diagnóstico não recebem escrita direta do navegador.
 4. Mapear as duas equipes antigas para as denominações Especializado / Suporte Fiscal e Suporte ERP nesta área, sem renomear o cadastro histórico global.
-5. Habilitar no servidor de produção as credenciais ClickDesk já existentes no projeto (hoje destinadas a preview), usando a configuração segura da Vercel. Usar a integração Google Gemini existente para analisar textos redigidos. Criar um segredo exclusivo para o agendamento, sem expor chaves ao navegador, ao repositório ou aos relatórios.
+5. Habilitar no servidor de produção as credenciais ClickDesk já existentes no projeto, preservando também preview e sem substituir valores. Usar a integração Google Gemini existente para analisar textos redigidos. Criar um segredo exclusivo para o agendamento, sem expor chaves ao navegador, ao repositório ou aos relatórios.
 6. Publicar a aplicação com os novos fluxos e o agendamento diário. Fazer importação inicial de outubro e novembro e conferir cobertura e exclusões antes de considerar a ativação concluída.
 
 Os scripts são aditivos. Não alteram cálculos, créditos, produtividade, CSAT ou pódio. O novo processamento armazena avaliações, histórico redigido e pareceres gerenciais, e pode gerar custo no provedor de IA já utilizado pela aplicação. Não há nova atribuição automática de falha ou decisão disciplinar.
