@@ -29,6 +29,8 @@ export async function syncCx(start: string,end: string,userId: string|null) {
   try {
     const sources = await admin.from('cx360_sources').select('*')
     if (sources.error || sources.data?.length!==2) throw new Error('source_mapping')
+    const roster=await admin.from('chat_analysts').select('name,team_id,active')
+    if(roster.error)throw new Error('roster_mapping')
     const params=new URLSearchParams({from:start,to:end,satisfaction:'negative',per_page:'100',page:'1'})
     const first=await source(`/support/reports/ratings?${params}`)
     if (!Array.isArray(first.data) || !Number.isInteger(first.total) || !Number.isInteger(first.last_page) || first.last_page<1 || first.last_page>100) throw new Error('pagination_contract')
@@ -50,8 +52,11 @@ export async function syncCx(start: string,end: string,userId: string|null) {
       const id=`${r.ticket_id}:${rated_at}`
       if(seen.has(id))throw new Error('duplicate_rating')
       seen.add(id)
-      const owner=canonicalOwner(String(r.owner??'')),eligible=r.attendance!=='ai'&&eligibleOwner(owner)
-      const row={id,ticket_id:String(r.ticket_id),number:String(r.number??r.ticket_id),team_id:mapping.team_id,source_team:mapping.source_name,subject:redactText(r.subject)||'Sem assunto',rated_at,rated_day,label:String(r.label??'Negativa'),owner_name:owner,eligible,
+      const owner=canonicalOwner(String(r.owner??'')),approved=r.attendance!=='ai'&&eligibleOwner(owner)
+      const links=(roster.data??[]).filter(person=>normalizeName(canonicalOwner(person.name))===normalizeName(owner))
+      if(approved&&(links.length!==1||!(sources.data as Source[]).some(s=>s.team_id===links[0].team_id)))throw new Error('roster_mapping')
+      const eligible=approved&&links[0].active===true
+      const row={id,ticket_id:String(r.ticket_id),number:String(r.number??r.ticket_id),team_id:eligible?links[0].team_id:mapping.team_id,source_team:mapping.source_name,subject:redactText(r.subject)||'Sem assunto',rated_at,rated_day,label:String(r.label??'Negativa'),owner_name:owner,eligible,
         excluded_reason:eligible?null:'Fora do quadro aprovado para análise individual (inclui aprendizes, IA e sem responsável).',comment:redactText(r.comment)}
       rows.push({...row,source_hash:hash(row)})
     }
