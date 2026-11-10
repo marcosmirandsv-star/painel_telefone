@@ -1,8 +1,8 @@
-export const CX_ANALYSIS_VERSION = 'cx-production-20261109-v1'
+export const CX_ANALYSIS_VERSION = 'cx-production-20261110-v2'
 export const factors = ['produto', 'operacao', 'externo', 'conducao', 'misto', 'inconclusivo'] as const
 export type Factor = typeof factors[number]
 export const factorLabels: Record<Factor, string> = { produto: 'Produto / sistema', operacao: 'Processo / operação', externo: 'Dependência externa', conducao: 'Condução humana', misto: 'Fatores combinados', inconclusivo: 'Inconclusivo' }
-export type Evidence = { id: string; at: string; role: string; text: string; attachments: number }
+export type Evidence = { id: string; at: string; role: string; author?: string; text: string; attachments: number }
 export type Diagnosis = {
   factor: Factor; confidence: 'baixa' | 'media' | 'alta'; observation: string; hypothesis: string;
   impact: string; behavior: string; practice: string; suggested_phrase: string; verification: string;
@@ -68,7 +68,9 @@ export function prepareMessages(raw: unknown, ratedAt: string): { messages: Evid
     if (role === 'Analista' || role === 'Sistema / IA') sensitive = credentialRequest
     if (credentialRequest && role === 'Cliente') sensitive = true
     if (!/^\d+$/.test(String(m.id))) throw new Error('Mensagem sem identificador verificável.')
-    messages.push({ id: String(m.id), at: m.created_at, role: m.visibility === 'internal' ? `${role} · nota interna` : role, text, attachments: Array.isArray(m.attachments) ? m.attachments.length : 0 })
+    messages.push({ id: String(m.id), at: m.created_at, role: m.visibility === 'internal' ? `${role} · nota interna` : role,
+      ...(role === 'Analista' ? { author: typeof m.author === 'string' ? redactText(m.author) : 'Autor humano não identificado' } : {}),
+      text, attachments: Array.isArray(m.attachments) ? m.attachments.length : 0 })
   }
   if (messages.length > 1200 || JSON.stringify(messages).length > 180000) throw new Error('Histórico extenso: requer leitura específica, sem truncamento silencioso.')
   return { messages, human: messages.some(m => m.role === 'Analista'), limitations: ['Data da avaliação fornecida com precisão de minuto: mensagens do mesmo minuto e posteriores foram desconsideradas por cautela.', 'Anexos e atendimentos paralelos não foram inspecionados.', 'A nota não comprova a causa da insatisfação nem a responsabilidade individual.'] }
@@ -88,8 +90,8 @@ export function validateDiagnosis(raw: unknown, messages: Evidence[], human: boo
   result.limitations = (r.limitations as string[]).slice(0,6).map(redactText)
   if (!human) {
     if(result.factor === 'conducao' || result.factor === 'misto'){result.factor='inconclusivo';result.confidence='baixa'}
-    result.behavior = 'Não há resposta humana pública anterior à avaliação neste histórico. Não atribuir a nota ao responsável atual.'
-    result.limitations.push('Nenhuma resposta humana pública foi identificada antes da nota.')
+    result.behavior = 'Não há resposta humana pública atribuível à pessoa avaliada antes da nota neste histórico. Não atribuir a nota ao responsável atual nem a autores não identificados.'
+    result.limitations.push('Nenhuma resposta humana pública da pessoa avaliada foi identificada antes da nota.')
   }
   return result
 }

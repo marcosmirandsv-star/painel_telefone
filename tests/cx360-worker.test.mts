@@ -48,7 +48,7 @@ test('mudança de total ou duplicação na fonte não publica recorte parcial',a
  }
 })
 const analysis={factor:'produto',confidence:'media',observation:'Cliente relata erro na emissão.',hypothesis:'Hipótese: erro ainda não resolvido contribuiu para a nota.',impact:'A emissão pode ter permanecido pendente.',behavior:'O analista verificou a rejeição relatada.',practice:'Combinar o próximo retorno de acompanhamento.',suggested_phrase:'Vou conferir o resultado deste teste com você.',verification:'Conferir o próximo passo registrado no histórico.',limitations:['Anexos não inspecionados.'],evidence_ids:['10']}
-const job={id:'rating-1',ticket_id:'123',rated_at:'2026-10-05T13:00:00Z',label:'Ruim',source_team:'Suporte - Fiscal',comment:'',source_hash:'source-v1',lease_token:'lease-1',attempts:1}
+const job={id:'rating-1',ticket_id:'123',owner_name:'Carlos Henrique',rated_at:'2026-10-05T13:00:00Z',label:'Ruim',source_team:'Suporte - Fiscal',comment:'',source_hash:'source-v1',lease_token:'lease-1',attempts:1}
 test('processamento cita mensagens anteriores à nota e salva com trava da fonte e da concessão',async()=>{
  const h=harness(url=>url.includes('googleapis')?{candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify(analysis)}]}}]}:{messages:[{id:10,created_at:'2026-10-05T12:59:00Z',author_type:'agent',visibility:'public',body:'Vou verificar a rejeição informada.',attachments:[]},{id:11,created_at:'2026-10-05T13:01:00Z',author_type:'agent',visibility:'public',body:'Esta resposta veio depois da nota.',attachments:[]}]},[[job],[]])
  const result=await h.api.processCx('2026-10-01','2026-10-31',null,71000)

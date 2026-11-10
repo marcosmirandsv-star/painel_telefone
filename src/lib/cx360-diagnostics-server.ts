@@ -2,7 +2,7 @@ import 'server-only'
 import { createHash, timingSafeEqual } from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { adminClient, ApiError } from './integration-server'
-import { CX_ANALYSIS_VERSION, canonicalOwner, eligibleOwner, ratingTimestamp, redactText, prepareMessages, validateDiagnosis, type DiagnosticRow, type Evidence, type Diagnosis } from './cx360-diagnostics'
+import { CX_ANALYSIS_VERSION, canonicalOwner, normalizeName, eligibleOwner, ratingTimestamp, redactText, prepareMessages, validateDiagnosis, type DiagnosticRow, type Evidence, type Diagnosis } from './cx360-diagnostics'
 
 type Source = { team_id: string; source_name: string; display_name: string }
 type Rating = DiagnosticRow & { comment: string; source_hash: string; lease_token: string; attempts: number }
@@ -75,13 +75,14 @@ async function analyze(row: Rating) {
   if(!/^[a-zA-Z0-9.-]{1,100}$/.test(model))throw new Error('invalid_model')
   const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{
     method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':process.env.GEMINI_API_KEY},signal:AbortSignal.timeout(60000),
-    body:JSON.stringify({systemInstruction:{parts:[{text:systemPrompt}]},contents:[{role:'user',parts:[{text:JSON.stringify({satisfaction:row.label,comment:row.comment,team:row.source_team,history:prepared.messages,limitations:prepared.limitations})}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:3000,thinkingConfig:{thinkingLevel:'low'}}})
+    body:JSON.stringify({systemInstruction:{parts:[{text:systemPrompt+' O campo evaluated_owner identifica a pessoa avaliada. O histórico pode conter vários analistas: use o campo author para distinguir quem fez cada intervenção. Não atribua mensagens de terceiros à pessoa avaliada; autoria ausente não comprova participação dela.'}]},contents:[{role:'user',parts:[{text:JSON.stringify({evaluated_owner:row.owner_name,satisfaction:row.label,comment:row.comment,team:row.source_team,history:prepared.messages,limitations:prepared.limitations})}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:3000,thinkingConfig:{thinkingLevel:'low'}}})
   })
   if(!response.ok)throw new Error(response.status===429?'provider_rate_limit':'provider_unavailable')
   const result=await response.json()
   if(result.candidates?.[0]?.finishReason!=='STOP')throw new Error('provider_incomplete')
   const output=(result.candidates?.[0]?.content?.parts??[]).map((p:{text?:string})=>p.text??'').join('').trim()
-  const analysis=validateDiagnosis(JSON.parse(output.replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'')),prepared.messages,prepared.human)
+  const evaluatedHuman=prepared.messages.some(m=>m.role==='Analista'&&m.author&&normalizeName(canonicalOwner(m.author))===normalizeName(canonicalOwner(row.owner_name)))
+  const analysis=validateDiagnosis(JSON.parse(output.replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'')),prepared.messages,Boolean(evaluatedHuman))
   analysis.limitations=[...new Set([...analysis.limitations,...prepared.limitations,'Políticas internas ainda não documentadas neste módulo; práticas sugeridas dependem de validação gerencial.'])]
   return {analysis,messages:prepared.messages,status:analysis.factor==='inconclusivo'?'inconclusive':'analyzed',model}
 }
@@ -140,5 +141,5 @@ export async function readAllCx(client:SupabaseClient,start:string,end:string,te
 export function evidenceForCase(row:DiagnosticRow,evidence:Evidence[],analysis:Diagnosis) {
   const cited=evidence.filter(e=>analysis.evidence_ids.includes(e.id))
   if(!cited.length)throw new ApiError(409,'Análise sem evidência verificável. Atualize a consulta.')
-  return cited.map(e=>`${e.at} · mensagem ${e.id} · ${e.role}: ${e.text}`).join('\n').slice(0,2800)
+  return cited.map(e=>`${e.at} · mensagem ${e.id} · ${e.role}${e.author?` · ${e.author}`:''}: ${e.text}`).join('\n').slice(0,2800)
 }

@@ -37,6 +37,10 @@ test('credenciais e identificadores são omitidos antes de enviar para IA ou arm
  assert.ok(!redactText('contato: exemplo@empresa.test, 123.456.789-00, https://site.test?token=abc').includes('empresa.test'))
 })
 const diagnosis={factor:'conducao',confidence:'media',observation:'Cliente pediu uma orientação específica.',hypothesis:'Hipótese a conferir pela gestão.',impact:'A solicitação permaneceu pendente.',behavior:'O analista pediu detalhes adicionais.',practice:'Registrar o próximo passo combinado.',suggested_phrase:'Posso conferir o resultado com você?',verification:'Conferir o próximo passo nas mensagens.',limitations:['Anexos não inspecionados.'],evidence_ids:['1']}
+test('preserva autores humanos distintos sem guardar o nome do cliente como autoria',()=>{
+ const result=prepareMessages({messages:[{...message(1,'2026-11-06T20:00:00Z'),author:'Carlos Henrique'},{...message(2,'2026-11-06T20:01:00Z'),author:'Vanessa Silva'},{...message(3,'2026-11-06T20:02:00Z','contact'),author:'Cliente de teste'}]},'2026-11-06T21:27:00Z')
+ assert.deepEqual(result.messages.map(m=>m.author),['Carlos Henrique','Vanessa Silva',undefined])
+})
 test('saída da IA exige evidências reais e todos os campos, sem aceitar IDs inventados',()=>{
  const messages=prepareMessages({messages:[message(1,'2026-11-06T20:00:00Z')]},'2026-11-06T21:27:00Z').messages
  assert.equal(validateDiagnosis(diagnosis,messages,true).factor,'conducao')
