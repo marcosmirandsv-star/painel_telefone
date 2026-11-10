@@ -43,7 +43,7 @@ test('preserva autores humanos distintos sem guardar o nome do cliente como auto
 })
 test('saída da IA exige evidências reais e todos os campos, sem aceitar IDs inventados',()=>{
  const messages=prepareMessages({messages:[message(1,'2026-11-06T20:00:00Z')]},'2026-11-06T21:27:00Z').messages
- assert.equal(validateDiagnosis(diagnosis,messages,true).factor,'conducao')
+ assert.equal(validateDiagnosis({...diagnosis,human_gap:'Falha concreta indicada na mensagem.',human_gap_evidence_ids:['1']},messages,true).factor,'conducao')
  assert.throws(()=>validateDiagnosis({...diagnosis,evidence_ids:['999']},messages,true),/verificáveis/)
  assert.throws(()=>validateDiagnosis({...diagnosis,evidence_ids:[]},messages,true),/referências/)
  assert.throws(()=>validateDiagnosis({...diagnosis,observation:''},messages,true),/incompleta/)
@@ -55,4 +55,10 @@ test('sem humano anterior à nota não permite concluir falha de condução huma
  assert.equal(result.factor,'inconclusivo')
  assert.equal(result.confidence,'baixa')
  assert.match(result.behavior,/Não há resposta humana/)
+})
+test('oportunidade de coaching não basta para classificar causa humana e mensagem de terceiro não sustenta falha',()=>{
+ const messages=prepareMessages({messages:[{...message(1,'2026-11-06T20:00:00Z'),author:'Carlos Henrique'}]},'2026-11-06T21:27:00Z').messages
+ assert.equal(validateDiagnosis(diagnosis,messages,true,'Carlos Henrique').factor,'inconclusivo')
+ assert.equal(validateDiagnosis({...diagnosis,human_gap:'Falha alegada em mensagem de terceiro.',human_gap_evidence_ids:['1']},messages,true,'Vanessa Silva').factor,'inconclusivo')
+ assert.equal(validateDiagnosis({...diagnosis,human_gap:'Falha alegada em mensagem inexistente.',human_gap_evidence_ids:['999']},messages,true,'Carlos Henrique').factor,'inconclusivo')
 })

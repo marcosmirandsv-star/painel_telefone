@@ -1,4 +1,4 @@
-export const CX_ANALYSIS_VERSION = 'cx-production-20261110-v2'
+export const CX_ANALYSIS_VERSION = 'cx-production-20261110-v3'
 export const factors = ['produto', 'operacao', 'externo', 'conducao', 'misto', 'inconclusivo'] as const
 export type Factor = typeof factors[number]
 export const factorLabels: Record<Factor, string> = { produto: 'Produto / sistema', operacao: 'Processo / operação', externo: 'Dependência externa', conducao: 'Condução humana', misto: 'Fatores combinados', inconclusivo: 'Inconclusivo' }
@@ -6,7 +6,7 @@ export type Evidence = { id: string; at: string; role: string; author?: string; 
 export type Diagnosis = {
   factor: Factor; confidence: 'baixa' | 'media' | 'alta'; observation: string; hypothesis: string;
   impact: string; behavior: string; practice: string; suggested_phrase: string; verification: string;
-  limitations: string[]; evidence_ids: string[]
+  limitations: string[]; evidence_ids: string[]; human_gap?: string | null; human_gap_evidence_ids?: string[]
 }
 export type DiagnosticRow = {
   id: string; ticket_id: string; number: string; subject: string; team_id: string; source_team: string;
@@ -75,7 +75,7 @@ export function prepareMessages(raw: unknown, ratedAt: string): { messages: Evid
   if (messages.length > 1200 || JSON.stringify(messages).length > 180000) throw new Error('Histórico extenso: requer leitura específica, sem truncamento silencioso.')
   return { messages, human: messages.some(m => m.role === 'Analista'), limitations: ['Data da avaliação fornecida com precisão de minuto: mensagens do mesmo minuto e posteriores foram desconsideradas por cautela.', 'Anexos e atendimentos paralelos não foram inspecionados.', 'A nota não comprova a causa da insatisfação nem a responsabilidade individual.'] }
 }
-export function validateDiagnosis(raw: unknown, messages: Evidence[], human: boolean): Diagnosis {
+export function validateDiagnosis(raw: unknown, messages: Evidence[], human: boolean, evaluatedOwner?: string): Diagnosis {
   if (!raw || typeof raw !== 'object') throw new Error('Análise inválida.')
   const r = raw as Record<string, unknown>
   if (!factors.includes(r.factor as Factor) || !['baixa','media','alta'].includes(String(r.confidence))) throw new Error('Classificação inválida.')
@@ -88,6 +88,17 @@ export function validateDiagnosis(raw: unknown, messages: Evidence[], human: boo
   result.evidence_ids = [...new Set(r.evidence_ids as string[])]
   if (!Array.isArray(r.limitations) || r.limitations.some(v => typeof v !== 'string')) throw new Error('Limitações ausentes.')
   result.limitations = (r.limitations as string[]).slice(0,6).map(redactText)
+  result.human_gap = typeof r.human_gap === 'string' && r.human_gap.trim().length >= 10 ? redactText(r.human_gap) : null
+  const gapIds = Array.isArray(r.human_gap_evidence_ids) ? r.human_gap_evidence_ids : []
+  const supportedGap = human && result.human_gap && gapIds.length > 0 && gapIds.length <= 4 && gapIds.every(id =>
+    typeof id === 'string' && result.evidence_ids.includes(id) && messages.some(m => m.id === id && m.role === 'Analista' &&
+      (!evaluatedOwner || (m.author && normalizeName(canonicalOwner(m.author)) === normalizeName(canonicalOwner(evaluatedOwner))))))
+  result.human_gap_evidence_ids = supportedGap ? [...new Set(gapIds as string[])] : []
+  if (!supportedGap) result.human_gap = null
+  if ((result.factor === 'conducao' || result.factor === 'misto') && !supportedGap) {
+    result.factor = 'inconclusivo'; result.confidence = 'baixa'
+    result.limitations.push('A leitura não demonstrou uma falha humana observada com mensagens atribuíveis à pessoa avaliada. Oportunidade de melhoria não comprova causa humana da nota.')
+  }
   if (!human) {
     if(result.factor === 'conducao' || result.factor === 'misto'){result.factor='inconclusivo';result.confidence='baixa'}
     result.behavior = 'Não há resposta humana pública atribuível à pessoa avaliada antes da nota neste histórico. Não atribuir a nota ao responsável atual nem a autores não identificados.'
