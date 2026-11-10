@@ -9985,9 +9985,9 @@ function ChatModuleDashboard({
             </div>
             <div className="rounded-lg bg-slate-900 p-4">
               <p className="text-xs text-slate-500">Média por dia com movimento</p>
-              <strong className="mt-2 block text-2xl tabular-nums">{formatChatCount(chat2OperationDailyAverage)}</strong>
+              <strong className="mt-2 block text-2xl tabular-nums">{clickDeskPersistedMetrics?.source === 'clickdesk_official_period_metrics' ? '—' : formatChatCount(chat2OperationDailyAverage)}</strong>
               <span className="mt-1 block text-xs text-slate-500">
-                {formatChatCount(chat2OperationDaysWithVolume.length)} dia(s) com atendimento
+                {clickDeskPersistedMetrics?.source === 'clickdesk_official_period_metrics' ? 'Distribuição diária ainda não conciliada' : `${formatChatCount(chat2OperationDaysWithVolume.length)} dia(s) com atendimento`}
               </span>
             </div>
             <div className="rounded-lg bg-slate-900 p-4">
@@ -10106,8 +10106,8 @@ function ChatModuleDashboard({
               <p className="text-sm font-semibold uppercase tracking-[0.14em] text-cyan-300">Leitura por equipe</p>
               <h3 className="mt-1 text-xl font-bold">Como estão as equipes do Chat?</h3>
             </div>
-            <span className="text-xs text-slate-500">Autoria humana final · equipe cadastrada · cobertura parcial</span>
-            <p className="mt-1 text-xs text-slate-500">Renovação, Suporte N3 e fila não comprovada são históricos de roteamento, não equipes. O ticket permanece creditado à equipe cadastrada do último autor humano.</p>
+            <span className="text-xs text-slate-500">{clickDeskPersistedMetrics?.source === 'clickdesk_official_period_metrics' ? 'Relatório ERP/Fiscal · time de lotação · até D-1' : 'Autoria humana final · equipe cadastrada · cobertura parcial'}</span>
+            <p className="mt-1 text-xs text-slate-500">{clickDeskPersistedMetrics?.source === 'clickdesk_official_period_metrics' ? 'Resolvidos e avaliações são agrupados pelo cadastro do quadro aprovado. Atendimento em outra fila acompanha o time de lotação; o total da fila não equivale ao total do time.' : 'Renovação, Suporte N3 e fila não comprovada são históricos de roteamento, não equipes. O ticket permanece creditado à equipe cadastrada do último autor humano.'}</p>
           </div>
 
           {chat2OperationTeams.length > 0 ? (
