@@ -6,7 +6,6 @@ import * as XLSX from 'xlsx'
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { calculateAverageCsat, calculateChatAverage, calculateTeamPerformance } from '@/lib/indicators'
-import { buildClickDeskMetricRows } from '@/lib/clickdesk-import'
 
 type Goal = {
   id: string
@@ -1304,7 +1303,7 @@ export default function Home() {
               <span className="workspace-icon workspace-icon-violet" aria-hidden="true">◌</span>
               <span className="workspace-kicker">Experiência do cliente</span>
               <strong>Chat</strong>
-              <small>Dados do ClickDesk, importação, ranking, feedbacks e relatórios de atendimento.</small>
+              <small>Dados do Zendesk, importação, ranking, feedbacks e relatórios de atendimento.</small>
               <em>{activeModule === 'chat' ? 'Área aberta' : 'Abrir experiência'}</em>
             </button>
             <Link className="workspace-card workspace-card-management" href="/gestao-inteligente">
@@ -1501,7 +1500,7 @@ function ChatModuleDashboard({
   const [chatImportYear, setChatImportYear] = useState(String(new Date().getFullYear()))
   const [chatImportMonth, setChatImportMonth] = useState(String(new Date().getMonth() + 1))
   const [chatSatisfactionFile, setChatSatisfactionFile] = useState<File | null>(null)
-  const [chatAttendanceFile, setChatAttendanceFile] = useState<File | null>(null)
+  const [chatInactiveFile, setChatInactiveFile] = useState<File | null>(null)
   const [chatFileInputResetKey, setChatFileInputResetKey] = useState(0)
   const [chatImportSaving, setChatImportSaving] = useState(false)
   const [chatMonthDeleting, setChatMonthDeleting] = useState(false)
@@ -1553,8 +1552,8 @@ function ChatModuleDashboard({
     event.preventDefault()
     setChatImportMessage('')
 
-    if (!chatSatisfactionFile || !chatAttendanceFile) {
-      setChatImportMessage('Selecione o arquivo de avaliações e o relatório de atendimentos do ClickDesk antes de importar.')
+    if (!chatSatisfactionFile || !chatInactiveFile) {
+      setChatImportMessage('Selecione a planilha de satisfação e a planilha de inativos antes de importar.')
       return
     }
 
@@ -1569,14 +1568,14 @@ function ChatModuleDashboard({
     setChatImportSaving(true)
 
     try {
-      const [satisfactionRows, attendanceRows] = await Promise.all([
+      const [satisfactionRows, inactiveRows] = await Promise.all([
         readSheetRows(chatSatisfactionFile),
-        readClickDeskAttendanceRows(chatAttendanceFile),
+        readSheetRows(chatInactiveFile),
       ])
       const period = getChatMonthPeriod(year, monthNumber)
-      const importRows = buildClickDeskMetricRows({
-        evaluationRows: satisfactionRows,
-        attendanceRows,
+      const importRows = buildChatMetricRowsFromSheets({
+        satisfactionRows,
+        inactiveRows,
         analysts,
         year,
         monthNumber,
@@ -1610,9 +1609,9 @@ function ChatModuleDashboard({
         satisfaction_file_name: chatSatisfactionFile.name,
         satisfaction_file_size: chatSatisfactionFile.size,
         satisfaction_rows: satisfactionRows.length,
-        inactivity_file_name: chatAttendanceFile.name,
-        inactivity_file_size: chatAttendanceFile.size,
-        inactivity_rows: attendanceRows.length,
+        inactivity_file_name: chatInactiveFile.name,
+        inactivity_file_size: chatInactiveFile.size,
+        inactivity_rows: inactiveRows.length,
         analysts_processed: importRows.length,
         status: 'completed',
         created_by: importingUser?.id ?? null,
@@ -1629,7 +1628,7 @@ function ChatModuleDashboard({
       setChatImportMessage('')
       setExpandedChatImportId('')
       setChatSatisfactionFile(null)
-      setChatAttendanceFile(null)
+      setChatInactiveFile(null)
       setChatFileInputResetKey((key) => key + 1)
     } catch (error) {
       setChatImportMessage(getErrorMessage(error))
@@ -1996,7 +1995,7 @@ function ChatModuleDashboard({
               ? `O fechamento geral é saudável, mas o pódio depende de contexto operacional: ${chatBelowVolumeCount} analista(s) ficaram abaixo da média de ${averageTickets} atendimentos.`
               : 'Fechamento saudável: qualidade, amostra de avaliações e volume sustentam a leitura do período.'
   const chatTacticalPlan = !calculationMetrics.length
-    ? ['Importar os arquivos de avaliações e atendimentos do ClickDesk.', 'Conferir se mês, equipe e analistas foram reconhecidos.', 'Selecionar equipe e período para liberar a leitura de gestão.']
+    ? ['Importar as planilhas do Zendesk.', 'Conferir se mês, equipe e analistas foram reconhecidos.', 'Selecionar equipe e período para liberar a leitura de gestão.']
     : [
         chatBelowCsatCount
           ? `Qualidade: ouvir duas interações mal avaliadas de ${chatNameList(chatBelowCsatNames)}, identificar o comportamento que prejudicou a experiência do cliente e combinar uma mudança objetiva com cada pessoa.`
@@ -2041,7 +2040,7 @@ function ChatModuleDashboard({
         : 'Importe meses anteriores para liberar tendência e comparação.',
     },
     {
-      label: 'Base ClickDesk',
+      label: 'Base Zendesk',
       value: `${calculationMetrics.length} analista(s)`,
       detail: `${totals.tickets} atendimentos, ${totals.validTickets} válidos e ${totals.reviews} avaliações.`,
     },
@@ -2588,7 +2587,7 @@ function ChatModuleDashboard({
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Módulo chat</p>
             <h2 className="mt-3 text-3xl font-bold">Performance mensal do chat</h2>
             <p className="section-subtitle">
-              Leitura consolidada dos atendimentos e avaliações importados do ClickDesk.
+              Leitura consolidada dos dados históricos e das importações mensais do Zendesk.
             </p>
           </div>
 
@@ -2654,7 +2653,7 @@ function ChatModuleDashboard({
                 type="button"
               >
                 <strong>Importação</strong>
-                <span>Atualizar a base mensal do ClickDesk</span>
+                <span>Atualizar a base mensal do Zendesk</span>
               </button>
               <button
                 className={chatActiveTab === 'settings' ? 'chat-tools-option chat-tools-option-active' : 'chat-tools-option'}
@@ -2717,7 +2716,7 @@ function ChatModuleDashboard({
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Importação mensal</p>
             <h3 className="mt-2 text-2xl font-bold">Atualizar base do chat</h3>
             <p className="section-subtitle">
-              Importe o arquivo de avaliações e o relatório de atendimentos do ClickDesk. Cada resultado é atribuído ao analista responsável e ao seu time de lotação.
+              Use as planilhas de satisfação e inatividade baixadas do Zendesk. O cálculo segue a regra original do painel do chat.
             </p>
           </div>
 
@@ -2741,7 +2740,7 @@ function ChatModuleDashboard({
                 onChange={(event) => setChatImportYear(event.target.value)}
               />
             </Field>
-            <Field label="Avaliações do ClickDesk">
+            <Field label="Satisfação">
               <input
                 key={`satisfaction-${chatFileInputResetKey}`}
                 accept=".xlsx,.xls,.csv,text/csv"
@@ -2751,15 +2750,15 @@ function ChatModuleDashboard({
               />
               {chatSatisfactionFile && <SelectedImportFile file={chatSatisfactionFile} />}
             </Field>
-            <Field label="Relatório de atendimentos">
+            <Field label="Inatividade">
               <input
-                key={`attendance-${chatFileInputResetKey}`}
+                key={`inactivity-${chatFileInputResetKey}`}
                 accept=".xlsx,.xls,.csv,text/csv"
                 className="form-input"
                 type="file"
-                onChange={(event) => setChatAttendanceFile(event.target.files?.[0] ?? null)}
+                onChange={(event) => setChatInactiveFile(event.target.files?.[0] ?? null)}
               />
-              {chatAttendanceFile && <SelectedImportFile file={chatAttendanceFile} />}
+              {chatInactiveFile && <SelectedImportFile file={chatInactiveFile} />}
             </Field>
             <button className="btn-primary min-h-12 self-end" disabled={chatImportSaving || chatMonthDeleting} type="submit">
               {chatImportSaving ? 'Importando...' : 'Importar mês'}
@@ -2821,13 +2820,13 @@ function ChatModuleDashboard({
                   {isExpanded && (
                     <div className="grid gap-3 border-t border-white/10 p-4 md:grid-cols-2">
                       <ImportFileSummary
-                        label="Arquivo de avaliações"
+                        label="Planilha de satisfação"
                         name={item.satisfaction_file_name}
                         size={item.satisfaction_file_size}
                         rows={item.satisfaction_rows}
                       />
                       <ImportFileSummary
-                        label="Relatório de atendimentos"
+                        label="Planilha de inatividade"
                         name={item.inactivity_file_name}
                         size={item.inactivity_file_size}
                         rows={item.inactivity_rows}
@@ -2917,7 +2916,7 @@ function ChatModuleDashboard({
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Inteligência de gestão</p>
           <h2 className="mt-2 text-2xl font-bold">Três camadas para decidir o próximo movimento</h2>
           <p className="section-subtitle">
-            Leitura preditiva local baseada no ClickDesk: diagnóstico operacional, plano tático e decisão estratégica para o fechamento mensal.
+            Leitura preditiva local baseada no Zendesk: diagnóstico operacional, plano tático e decisão estratégica para o fechamento mensal.
           </p>
         </div>
 
@@ -3634,7 +3633,7 @@ function ChatModuleDashboard({
           <div>
             <h2 className="section-title">Base e produtividade</h2>
             <p className="section-subtitle">
-              {metrics.length} registros carregados nas importações mensais do ClickDesk. Use esta seção para conferir os números de produtividade e validar a importação antes do fechamento.
+              {metrics.length} registros carregados nas importações mensais do Zendesk. Use esta seção para conferir os números de produtividade e validar a importação antes do fechamento.
             </p>
           </div>
           <span className="rounded-md bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-200">
@@ -8384,7 +8383,7 @@ async function exportChatIndividualReport({
         <div class="header">
           <div class="header-content">
             ${photoHtml}
-            <div><h1>Relatório de Performance - ${safeName}</h1><p class="subtitle">Período: ${escapeHtml(periodLabel)} | Fonte: ClickDesk</p></div>
+            <div><h1>Relatório de Performance - ${safeName}</h1><p class="subtitle">Período: ${escapeHtml(periodLabel)} | Fonte: Zendesk</p></div>
           </div>
         </div>
 
@@ -9350,39 +9349,6 @@ async function readSheetRows(file: File) {
     defval: '',
     raw: false,
   })
-}
-
-async function readClickDeskAttendanceRows(file: File) {
-  if (file.name.toLowerCase().endsWith('.csv')) {
-    const lines = (await file.text()).replace(/^\uFEFF/, '').split(/\r?\n/).filter((line) => line.trim())
-    const headerIndex = lines.findIndex((line) => normalizeChatText(line).includes('"atendente"'))
-    if (headerIndex < 0) throw new Error('Não encontrei a tabela de atendentes no relatório do ClickDesk.')
-
-    const delimiter = detectCsvDelimiter(lines[headerIndex])
-    const headers = parseCsvLine(lines[headerIndex], delimiter).map((header) => header.trim())
-    return lines.slice(headerIndex + 1).map((line) => {
-      const values = parseCsvLine(line, delimiter)
-      return headers.reduce<Record<string, string>>((row, header, index) => {
-        row[header] = values[index]?.trim() ?? ''
-        return row
-      }, {})
-    }).filter((row) => Boolean(row.Atendente))
-  }
-
-  const buffer = await file.arrayBuffer()
-  const workbook = XLSX.read(buffer, { type: 'array' })
-  const sheetName = workbook.SheetNames[0]
-  if (!sheetName) return []
-  const grid = XLSX.utils.sheet_to_json<(string | number | null)[]>(workbook.Sheets[sheetName], { header: 1, defval: '' })
-  const headerIndex = grid.findIndex((row) => normalizeChatText(String(row[0] ?? '')) === 'atendente')
-  if (headerIndex < 0) throw new Error('Não encontrei a tabela de atendentes no relatório do ClickDesk.')
-  const headers = grid[headerIndex].map((value) => String(value).trim())
-  return grid.slice(headerIndex + 1)
-    .filter((row) => String(row[0] ?? '').trim())
-    .map((row) => headers.reduce<Record<string, string>>((result, header, index) => {
-      result[header] = String(row[index] ?? '').trim()
-      return result
-    }, {}))
 }
 
 function parseCsvRows(text: string) {
