@@ -1,6 +1,7 @@
 import { ApiError, handle, json } from '@/lib/integration-server'
 import { authorizeCx, cxBody } from '@/lib/cx360-server'
 import { caseStates, isUuid, validateCaseUpdate, type CxCase } from '@/lib/cx360'
+import { configured } from '@/lib/cx360-diagnostics-server'
 
 export const runtime = 'nodejs'
 export async function GET(request: Request) {
@@ -14,15 +15,16 @@ export async function GET(request: Request) {
     let query = client.from('cx360_cases').select('*').order('updated_at', { ascending: false }).limit(201)
     if (team) query = query.eq('team_id', team)
     if (status) query = query.eq('status', status)
-    const [cases, teams, managers] = await Promise.all([
+    const [cases, teams, managers, sources] = await Promise.all([
       query,
       client.from('chat_teams').select('id,name').order('name'),
       client.from('profiles').select('id,full_name,role').in('role', ['master', 'coordenadora']).order('full_name'),
+      client.from('cx360_sources').select('team_id,display_name'),
     ])
-    if (cases.error || teams.error || managers.error) throw new ApiError(503, 'Não foi possível carregar a área de gestão.')
+    if (cases.error || teams.error || managers.error || sources.error) throw new ApiError(503, 'Não foi possível carregar a área de gestão.')
     return json({ environment: 'producao', user_id: userId, cases: (cases.data ?? []).slice(0, 200), truncated: (cases.data ?? []).length > 200,
-      teams: teams.data, managers: managers.data, retrieved_at: new Date().toISOString(),
-      diagnostics: { available: false, note: 'A fonte de diagnósticos automáticos da IA 360º ainda não está integrada à produção. Os registros abaixo são observações e decisões da gestão.' } })
+      teams: (teams.data??[]).map(team=>({...team,name:sources.data?.find(s=>s.team_id===team.id)?.display_name??team.name})), managers: managers.data, retrieved_at: new Date().toISOString(),
+      diagnostics: { available: configured(), note: configured()?'ClickDesk de produção integrado à análise dos atendimentos. Cobertura e pendências aparecem na aba Análise dos atendimentos; resultados até D-1.':'Integração ClickDesk aguardando configuração segura no servidor. Registros manuais continuam disponíveis.' } })
   })
 }
 export async function POST(request: Request) {
