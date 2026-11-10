@@ -5,7 +5,7 @@ import type { sourceReportRows } from '@/lib/clickdesk-source-report'
 
 type Report = { scope: { start: string; end: string; department_id: number }; rows: ReturnType<typeof sourceReportRows>; captured_at: string; note: string }
 const pct = (n: number | null) => n === null ? '—' : `${n.toLocaleString('pt-BR')}%`
-const duration = (n: number | null) => n === null ? '—' : n < 60 ? `${Math.floor(n)}s` : `${Math.floor(n / 60)}min`
+const duration = (n: number | null) => n === null ? '—' : n < 60 ? `${Math.round(n)}s` : `${Math.round(n / 60)}min`
 export default function ClickDeskSourceReport({ start, end }: { start: string; end: string }) {
   const [from, setFrom] = useState(start), [to, setTo] = useState(end), [department, setDepartment] = useState('12')
   const [data, setData] = useState<Report | null>(null), [busy, setBusy] = useState(false), [message, setMessage] = useState('')
