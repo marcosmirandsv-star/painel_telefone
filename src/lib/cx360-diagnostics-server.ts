@@ -50,7 +50,7 @@ export async function syncCx(start: string,end: string,userId: string|null) {
       const id=`${r.ticket_id}:${rated_at}`
       if(seen.has(id))throw new Error('duplicate_rating')
       seen.add(id)
-      const owner=canonicalOwner(String(r.owner??'')),eligible=r.attendance==='human'&&eligibleOwner(owner)
+      const owner=canonicalOwner(String(r.owner??'')),eligible=r.attendance!=='ai'&&eligibleOwner(owner)
       const row={id,ticket_id:String(r.ticket_id),number:String(r.number??r.ticket_id),team_id:mapping.team_id,source_team:mapping.source_name,subject:redactText(r.subject)||'Sem assunto',rated_at,rated_day,label:String(r.label??'Negativa'),owner_name:owner,eligible,
         excluded_reason:eligible?null:'Fora do quadro aprovado para análise individual (inclui aprendizes, IA e sem responsável).',comment:redactText(r.comment)}
       rows.push({...row,source_hash:hash(row)})
@@ -77,7 +77,7 @@ async function analyze(row: Rating) {
     method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':process.env.GEMINI_API_KEY},signal:AbortSignal.timeout(60000),
     body:JSON.stringify({systemInstruction:{parts:[{text:systemPrompt+' O campo evaluated_owner identifica a pessoa avaliada. O histórico pode conter vários analistas: use o campo author para distinguir quem fez cada intervenção. Não atribua mensagens de terceiros à pessoa avaliada; autoria ausente não comprova participação dela.'}]},contents:[{role:'user',parts:[{text:JSON.stringify({evaluated_owner:row.owner_name,satisfaction:row.label,comment:row.comment,team:row.source_team,history:prepared.messages,limitations:prepared.limitations})}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:3000,thinkingConfig:{thinkingLevel:'low'}}})
   })
-  if(!response.ok)throw new Error(response.status===429?'provider_rate_limit':'provider_unavailable')
+  if(!response.ok)throw new Error(response.status===429?'provider_rate_limit':`provider_http_${response.status}`)
   const result=await response.json()
   if(result.candidates?.[0]?.finishReason!=='STOP')throw new Error('provider_incomplete')
   const output=(result.candidates?.[0]?.content?.parts??[]).map((p:{text?:string})=>p.text??'').join('').trim()
@@ -102,7 +102,8 @@ export async function processCx(start:string,end:string,teamId:string|null=null,
         if(saved.error || saved.data?.length!==1)throw new Error('lease_or_source_changed')
         completed++
       }catch(error){
-        const code=error instanceof ApiError&&error.status===429?'source_rate_limit':error instanceof Error&&error.message==='provider_rate_limit'?'provider_rate_limit':'analysis_unavailable'
+        const code=error instanceof ApiError?(error.status===429?'source_rate_limit':'source_unavailable'):error instanceof SyntaxError?'provider_invalid_json':error instanceof Error&&/^(provider_(rate_limit|incomplete|not_configured|http_\d{3})|invalid_model|lease_or_source_changed)$/.test(error.message)?error.message:'analysis_unavailable'
+        console.warn('CX360 analysis retry', { code })
         const limited=code.endsWith('rate_limit')
         if(limited)throttled=true
         await admin.from('cx360_ratings').update({status:row.attempts>=3&&!limited?'failed':'pending',error_code:code,attempts:limited?Math.max(0,row.attempts-1):row.attempts,next_attempt_at:new Date(Date.now()+ (limited?300000:60000*row.attempts)).toISOString(),lease_token:null,lease_until:null,updated_at:new Date().toISOString()}).eq('id',row.id).eq('lease_token',row.lease_token)
