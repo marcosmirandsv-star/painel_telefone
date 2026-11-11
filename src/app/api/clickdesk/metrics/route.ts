@@ -307,7 +307,11 @@ export async function GET(request: Request) {
         }
 
     stage = 'ledger_read'
-    const { rows, coverage, admin, excludedInactive, lastReconciledAt, metricSource } = await loadRows(access.admin, filters, access.isManagement)
+    const loaded = await loadRows(access.admin, filters, access.isManagement)
+    const { rows, coverage, admin, excludedInactive, lastReconciledAt, metricSource } = loaded
+    const officialDaily = 'dailyRows' in loaded ? loaded.dailyRows : null
+    const dailyRows = metricSource === 'clickdesk_official_period_metrics' ? officialDaily : rows
+    const dailyAvailable = dailyRows !== null
 
     stage = 'sync_status'
     const latestSync = await admin
@@ -335,7 +339,7 @@ export async function GET(request: Request) {
 
     const apprenticeRows = rows.filter((row) => row.identity_role === 'apprentice')
     const includedRows = rows.filter((row) => row.identity_role !== 'apprentice')
-    const todayRows = metricSource === 'clickdesk_official_period_metrics' ? [] : includedRows.filter((row) => row.occurred_date === clickDeskPublicationDay())
+    const todayRows = (dailyRows ?? []).filter((row) => row.occurred_date === clickDeskPublicationDay() && row.identity_role !== 'apprentice')
     const performanceRows = includedRows.filter((row) => row.identity_role === 'analyst')
     const managementRows = includedRows.filter((row) => row.identity_role === 'management')
     const unmatchedRows = includedRows.filter((row) => row.identity_role === 'unmapped')
@@ -376,10 +380,13 @@ export async function GET(request: Request) {
       accumulated: aggregate(includedRows),
       performance_accumulated: aggregate(performanceRows),
       management_support: aggregate(managementRows),
-      daily: metricSource === 'clickdesk_official_period_metrics' ? [] : groupDaily(includedRows),
-      performance_daily: metricSource === 'clickdesk_official_period_metrics' ? [] : groupDaily(performanceRows),
-      by_analyst: groupAnalysts(performanceRows, clickDeskPublicationDay()).map(row => metricSource === 'clickdesk_official_period_metrics' ? {...row,daily:[],today:aggregate([])} : row),
-      publication: { mode: 'd1', available_through: clickDeskPublicationDay(), daily_available: metricSource !== 'clickdesk_official_period_metrics' },
+      daily: groupDaily((dailyRows ?? []).filter(row=>row.identity_role!=='apprentice')),
+      performance_daily: groupDaily((dailyRows ?? []).filter(row=>row.identity_role==='analyst')),
+      by_analyst: groupAnalysts(performanceRows, clickDeskPublicationDay()).map(row => {
+        const own=(dailyRows ?? []).filter(d=>d.analyst_id===row.analyst_id)
+        return {...row,daily:groupDaily(own),today:aggregate(own.filter(d=>d.occurred_date===clickDeskPublicationDay()))}
+      }),
+      publication: { mode: 'd1', available_through: clickDeskPublicationDay(), daily_available: dailyAvailable },
       self_podium_context: selfPodiumContext,
       data_quality: {
         grouped_rows: includedRows.length,

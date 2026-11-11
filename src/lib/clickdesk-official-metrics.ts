@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ApiError } from './integration-server'
+import { reconciledDaily } from './clickdesk-official-daily'
 
 export type OfficialDailyMetricRow = {
   occurred_date: string
@@ -95,8 +96,16 @@ export async function loadOfficialPeriodRows(
     .sort()
     .at(-1) ?? null
 
+  const daily = await admin.rpc('get_scoped_clickdesk_official_daily_metrics', {p_start:filters.start,p_end:filters.end})
+  const candidates:OfficialDailyMetricRow[] = daily.error ? [] : (daily.data ?? []).flatMap((metric:OfficialPeriodMetric & {occurred_date:string})=>{
+    const person=rows.find(row=>row.assignee_name===metric.source_owner_name)
+    return person ? [{...person,occurred_date:metric.occurred_date,attendances:Number(metric.attendances),positive_reviews:Number(metric.positive_reviews),negative_reviews:Number(metric.negative_reviews),reviews:Number(metric.positive_reviews)+Number(metric.negative_reviews)}] : []
+  })
+  const dailyRows=reconciledDaily<OfficialDailyMetricRow>(rows,candidates,filters.start,filters.end)
+
   return {
     rows,
+    dailyRows,
     coverage: {
       complete: true,
       verified_at: capturedAt,

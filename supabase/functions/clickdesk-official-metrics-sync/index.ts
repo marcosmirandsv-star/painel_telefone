@@ -157,7 +157,7 @@ Deno.serve(async (req) => {
     const body = await req.json()
     if (body.start || body.end) {
       if (!/^20\d{2}-\d{2}-\d{2}$/.test(body.start ?? '') || !/^20\d{2}-\d{2}-\d{2}$/.test(body.end ?? '') ||
-          body.start > body.end || body.end > end || monthStart(body.end) !== body.start ||
+          body.start > body.end || body.end > end || (monthStart(body.end) !== body.start && body.start !== body.end) ||
           new Date(body.start+'T12:00:00Z').toISOString().slice(0,10)!==body.start ||
           new Date(body.end+'T12:00:00Z').toISOString().slice(0,10)!==body.end) {
         return Response.json({error:'Período inválido; somente dias encerrados em Brasília.'},{status:400})
