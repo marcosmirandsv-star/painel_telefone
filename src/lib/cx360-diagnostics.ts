@@ -1,9 +1,13 @@
-export const CX_ANALYSIS_VERSION = 'cx-production-20261110-v3'
+export const CX_ANALYSIS_VERSION = 'cx-production-20261111-v4'
 export const factors = ['produto', 'operacao', 'externo', 'conducao', 'misto', 'inconclusivo'] as const
 export type Factor = typeof factors[number]
 export const factorLabels: Record<Factor, string> = { produto: 'Produto / sistema', operacao: 'Processo / operação', externo: 'Dependência externa', conducao: 'Condução humana', misto: 'Fatores combinados', inconclusivo: 'Inconclusivo' }
 export type Evidence = { id: string; at: string; role: string; author?: string; text: string; attachments: number }
+export const serviceCriteria = ['acolhimento','entendimento','clareza','diligencia','continuidade','encerramento'] as const
+export const serviceLabels = {acolhimento:'Acolhimento',entendimento:'Entendimento da demanda',clareza:'Clareza da orientação',diligencia:'Diligência e acompanhamento',continuidade:'Continuidade',encerramento:'Encerramento'}
+export type ServiceCriterion = {criterion:typeof serviceCriteria[number];result:'adequado'|'melhoria'|'falha'|'nao_observavel';finding:string;evidence_ids:string[]}
 export type Diagnosis = {
+  service_assessment?: ServiceCriterion[]
   factor: Factor; confidence: 'baixa' | 'media' | 'alta'; observation: string; hypothesis: string;
   impact: string; behavior: string; practice: string; suggested_phrase: string; verification: string;
   limitations: string[]; evidence_ids: string[]; human_gap?: string | null; human_gap_evidence_ids?: string[]
@@ -46,8 +50,8 @@ export function ratingTimestamp(value: unknown): string {
 export function redactText(value: unknown): string {
   if (typeof value !== 'string') return ''
   const plain = value.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/&gt;/g,'>').replace(/&lt;/g,'<').replace(/\s+/g,' ').trim()
-  if (/senha|password|token|api.?key|login\s*[:=]|usu[aá]rio\s*[:=]|teamviewer|anydesk/i.test(plain)) return '[Dados de acesso omitidos]'
-  return plain.replace(/https?:\/\/\S+/gi, '[link omitido]').replace(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi,'[email omitido]').replace(/(?:\+?\d[\d\s().\/-]{6,}\d)/g,'[identificador omitido]').slice(0, 4000)
+  if (/senha|password|token|api.?key|login\s*[:=]|usu[aá]rio\s*[:=]|(?:teamviewer|anydesk)\s*[:=]\s*\S+/i.test(plain)) return '[Dados de acesso omitidos]'
+  return plain.replace(/https?:\/\/\S+/gi, '[link omitido]').replace(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi,'[email omitido]').replace(/(?:\+?\d[\d\s().\/-]{6,}\d)/g,'[identificador omitido]')
 }
 export function prepareMessages(raw: unknown, ratedAt: string): { messages: Evidence[]; limitations: string[]; human: boolean } {
   const root = raw as { messages?: unknown[]; data?: unknown[]; last_page?: number }
@@ -75,6 +79,28 @@ export function prepareMessages(raw: unknown, ratedAt: string): { messages: Evid
   }
   if (messages.length > 1200 || JSON.stringify(messages).length > 180000) throw new Error('Histórico extenso: requer leitura específica, sem truncamento silencioso.')
   return { messages, human: messages.some(m => m.role === 'Analista'), limitations: ['Data da avaliação fornecida com precisão de minuto: mensagens do mesmo minuto e posteriores foram desconsideradas por cautela.', 'Anexos e atendimentos paralelos não foram inspecionados.', 'A nota não comprova a causa da insatisfação nem a responsabilidade individual.'] }
+}
+/** Evaluates service independently of the unknown reason for a rating. */
+export function validateServiceAssessment(raw:unknown,messages:Evidence[],owner:string,analysis:Diagnosis):ServiceCriterion[] {
+  if(!Array.isArray(raw)||raw.length!==serviceCriteria.length)throw new Error('Avaliação humana incompleta: seis critérios obrigatórios.')
+  const own=(id:string)=>messages.some(m=>m.id===id&&m.role==='Analista'&&m.author&&normalizeName(canonicalOwner(m.author))===normalizeName(canonicalOwner(owner)))
+  const seen=new Set<string>()
+  return raw.map(item=>{
+    const r=item as ServiceCriterion
+    if(!r||!serviceCriteria.includes(r.criterion)||seen.has(r.criterion)||!['adequado','melhoria','falha','nao_observavel'].includes(r.result)||typeof r.finding!=='string'||r.finding.trim().length<10||r.finding.length>1200||!Array.isArray(r.evidence_ids)||r.evidence_ids.length>4||r.evidence_ids.some(id=>typeof id!=='string'||!messages.some(m=>m.id===id)))throw new Error('Critério humano sem evidência verificável.')
+    seen.add(r.criterion)
+    if(r.result!=='nao_observavel'&&!r.evidence_ids.some(own))throw new Error('Conduta sem mensagem pública da pessoa avaliada.')
+    if(r.result==='falha'&&(!analysis.human_gap||!r.evidence_ids.some(id=>analysis.human_gap_evidence_ids?.includes(id))))throw new Error('Falha humana sem prova específica para revisão crítica.')
+    return {...r,finding:redactText(r.finding),evidence_ids:[...new Set(r.evidence_ids)]}
+  })
+}
+export function serviceVerdict(analysis:Diagnosis):string {
+  const criteria=analysis.service_assessment
+  if(!criteria)return 'Avaliação humana detalhada ainda não disponível nesta versão'
+  if(criteria.some(c=>c.result==='falha')&&analysis.human_review?.confirmed)return 'Falha humana demonstrada e revisada'
+  if(criteria.some(c=>c.result==='melhoria'))return 'Oportunidades de melhoria; falha humana não comprovada'
+  if(criteria.some(c=>c.result==='adequado'))return 'Condutas adequadas nos critérios observáveis; falha humana não demonstrada'
+  return 'Conduta humana não avaliável no histórico disponível'
 }
 export function validateDiagnosis(raw: unknown, messages: Evidence[], human: boolean, evaluatedOwner?: string): Diagnosis {
   if (!raw || typeof raw !== 'object') throw new Error('Análise inválida.')

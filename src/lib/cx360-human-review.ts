@@ -12,6 +12,6 @@ export function applyHumanReview(analysis:Diagnosis,raw:unknown,messages:Evidenc
  const confirmed=r.confirmed&&r.confidence==='alta'&&own&&basis&&!uncertain&&evidence.length<=4
  const review={version:HUMAN_REVIEW_VERSION,confirmed,basis:String(r.basis),reason:redactText(r.reason),evidence_ids:r.evidence_ids as string[]}
  if(confirmed)return {...analysis,evidence_ids:evidence,human_review:review}
- return {...analysis,factor:'inconclusivo',confidence:'baixa',human_gap:null,human_gap_evidence_ids:[],human_review:review,
+ return {...analysis,service_assessment:analysis.service_assessment?.map(c=>c.result==='falha'?{...c,result:'nao_observavel',finding:'A falha proposta não foi confirmada na revisão crítica: '+review.reason}:c),factor:'inconclusivo',confidence:'baixa',human_gap:null,human_gap_evidence_ids:[],human_review:review,
  limitations:[...analysis.limitations,'A atribuição humana não foi confirmada com alta confiança e prova adequada. Revisão crítica: '+review.reason,'Oportunidade de melhoria, discordância técnica não validada ou término do expediente não comprovam falha humana.']}
 }
