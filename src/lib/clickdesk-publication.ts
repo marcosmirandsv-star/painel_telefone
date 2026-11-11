@@ -1,4 +1,8 @@
 /** Publication follows complete business days in Brasília (D-1). */
+export function clickDeskDailyAvailable(metrics?: {source?:string;publication?:{daily_available?:boolean}} | null) {
+  if(!metrics)return false
+  return metrics.publication?.daily_available ?? metrics.source !== 'clickdesk_official_period_metrics'
+}
 export function clickDeskPublicationDay(now = new Date()) {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
