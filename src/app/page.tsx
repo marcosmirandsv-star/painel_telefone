@@ -16,6 +16,8 @@ import { normalizeQualitativeAnalysis, qualitativeAnalysisVersion, QUALITATIVE_A
 import { chatBusinessDate, chatPeriodBounds, selectChatPresentationRow } from '@/lib/chat-presentation'
 import { clickDeskDailyAvailable, clickDeskPublicationDay, publishedClickDeskEnd } from '@/lib/clickdesk-publication'
 import { sumChatVoteRows } from '@/lib/clickdesk-csat'
+import ChatTimeFilter from '@/components/chat/ChatTimeFilter'
+import { chatTimeRange, type ChatTimeMode } from '@/lib/chat-time-filter'
 import ClickDeskSourceReport from '@/components/chat/ClickDeskSourceReport'
 
 // Homologação: IA qualitativa liberada no acesso individual com governança separada da gestão.
@@ -3745,7 +3747,7 @@ function ChatSharedPerformanceSummary({ metric, csatGoal, dailyAvailable = true 
   return (
             <div className="mt-6">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                Resumo da competência
+                Resumo do intervalo selecionado
               </p>
               <div className="mt-3 grid gap-4 lg:grid-cols-3">
                 <div className="rounded-xl border border-white/10 bg-slate-950/40 p-5">
@@ -3980,8 +3982,9 @@ function ChatAnalystPortal({
 
   const businessToday = chatBusinessDate()
   const [monthKey, setMonthKey] = useState(() => businessToday.slice(0, 7))
-  const { start: monthStart, end: calendarMonthEnd } = chatPeriodBounds(monthKey)
-  const monthEnd = publishedClickDeskEnd(calendarMonthEnd)
+  const [timeMode,setTimeMode]=useState<ChatTimeMode>('month')
+  const [timeReference,setTimeReference]=useState('')
+  const {start:monthStart,end:monthEnd}=chatTimeRange(monthKey,timeMode,timeReference)
   const monthLabel = new Intl.DateTimeFormat('pt-BR', {
     month: 'long',
     year: 'numeric',
@@ -4228,12 +4231,10 @@ function ChatAnalystPortal({
     podiumContext.position <= 3
   const historyPoints = history?.points ?? []
   const todayKey = businessToday
-  const visibleDayCount =
-    businessToday.slice(0, 7) === monthKey
-      ? Number(businessToday.slice(-2))
-      : Number(monthEnd.slice(-2))
+  const firstVisibleDay=Number(monthStart.slice(-2))
+  const visibleDayCount=monthEnd<monthStart?0:Number(monthEnd.slice(-2))-firstVisibleDay+1
   const ruler = Array.from({ length: visibleDayCount }, (_, index) => {
-    const day = String(index + 1).padStart(2, '0')
+    const day = String(index + firstVisibleDay).padStart(2, '0')
     const date = `${monthKey}-${day}`
     const source = daily.find((item) => item.date === date)
     return {
@@ -4263,6 +4264,7 @@ function ChatAnalystPortal({
             onInput={event => changeRoutineMonth(event.currentTarget.value)}
             onChange={event => changeRoutineMonth(event.currentTarget.value)} />
         </label>
+        <ChatTimeFilter month={monthKey} mode={timeMode} reference={timeReference} onChange={(mode,reference)=>{const next=chatTimeRange(monthKey,mode,reference);if(next.start!==monthStart||next.end!==monthEnd){setMetrics(null);setSelectedRoutineDate(null);setDailyTickets(null);setOpenQualitativeTicketId(null)}setTimeMode(mode);setTimeReference(reference)}} />
         <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
             <div className="flex items-center gap-4">
@@ -4275,7 +4277,7 @@ function ChatAnalystPortal({
                 <p className="text-sm text-slate-400">{team?.name ?? 'Equipe do Chat'}</p>
                 <h2 className="text-3xl font-bold">{analyst.name}</h2>
                 <p className="mt-1 text-sm text-slate-400">
-                  {displayMonthLabel} · ClickDesk
+                  {displayMonthLabel} · {timeMode==='month'?'Mês':timeMode==='week'?'Semana':'Dia'} · ClickDesk
                 </p>
                 <div className="mt-2">
                   <ClickDeskSyncStatus
@@ -4367,7 +4369,7 @@ function ChatAnalystPortal({
               <ul className="mt-2 space-y-1">{metrics.reconciliation.pending.map(item => <li key={item.ticket_id}>Ticket {item.ticket_id}: {reconciliationReason(item.reason)}</li>)}</ul>
               <ul className="mt-2 space-y-1">{metrics.reconciliation.excluded?.map(item => <li key={item.ticket_id}>Ticket {item.ticket_id}: {reconciliationReason(item.reason)}</li>)}</ul>
             </details>}
-            <ChatSharedPerformanceSummary metric={accumulated} csatGoal={csatGoal} dailyAvailable={clickDeskDailyAvailable(metrics)} />
+            <ChatSharedPerformanceSummary metric={accumulated} csatGoal={csatGoal} dailyAvailable={clickDeskDailyAvailable(metrics) && monthStart<=clickDeskPublicationDay() && monthEnd>=clickDeskPublicationDay()} />
 
             <ChatPerformanceDiagnosticPanel diagnostic={diagnostic} />
 
@@ -4463,10 +4465,10 @@ function ChatAnalystPortal({
               {activeRoutineDays.length} {activeRoutineDays.length === 1 ? 'dia com atividade' : 'dias com atividade'}
             </span>
             <span className="rounded-md border border-amber-300/15 bg-amber-300/5 px-3 py-2 text-xs text-amber-100">
-              {formatChatCount(accumulated?.negative_reviews ?? 0)} negativas no mês
+              {formatChatCount(accumulated?.negative_reviews ?? 0)} negativas no intervalo
             </span>
             <span className="rounded-md border border-emerald-400/15 bg-emerald-400/5 px-3 py-2 text-xs text-emerald-200">
-              {formatChatCount(accumulated?.positive_reviews ?? 0)} positivas no mês
+              {formatChatCount(accumulated?.positive_reviews ?? 0)} positivas no intervalo
             </span>
           </div>
         </div>
@@ -4780,6 +4782,8 @@ function ChatModuleDashboard({
   }, [metrics])
   const [selectedTeamId, setSelectedTeamId] = useState('all')
   const [selectedPeriodKey, setSelectedPeriodKey] = useState('')
+  const [chatTimeMode,setChatTimeMode]=useState<ChatTimeMode>('month')
+  const [chatTimeReference,setChatTimeReference]=useState('')
   const [chatImportYear, setChatImportYear] = useState(String(new Date().getFullYear()))
   const [chatImportMonth, setChatImportMonth] = useState(String(new Date().getMonth() + 1))
   const [chatSatisfactionFile, setChatSatisfactionFile] = useState<File | null>(null)
@@ -5835,7 +5839,11 @@ function ChatModuleDashboard({
   const chatAuditNow = new Date()
   const chatAuditYear = Number(chatAuditYearText) || chatAuditNow.getFullYear()
   const chatAuditMonthNumber = Number(chatAuditMonthText) || chatAuditNow.getMonth() + 1
-  const chatAuditPeriod = getChatMonthPeriod(chatAuditYear, chatAuditMonthNumber)
+  const chatMonthPeriod = getChatMonthPeriod(chatAuditYear, chatAuditMonthNumber)
+  const chatFilterMonth = `${chatAuditYear}-${String(chatAuditMonthNumber).padStart(2,'0')}`
+  const chatRangeEnabled = ['overview','prototype'].includes(chatActiveTab)
+  const chatRange = chatTimeRange(chatFilterMonth,chatRangeEnabled?chatTimeMode:'month',chatTimeReference)
+  const chatAuditPeriod = chatRangeEnabled && chatTimeMode!=='month' ? {...chatMonthPeriod,...chatRange,label:`${chatTimeMode==='day'?'Dia':'Semana'} · ${formatDate(chatRange.start)} a ${formatDate(chatRange.end)}`} : chatMonthPeriod
   const clickDeskAuditPeriodMatches =
     clickDeskPersistedMetrics?.period?.start === chatAuditPeriod.start &&
     Boolean(clickDeskPersistedMetrics?.period?.end) &&
@@ -7355,10 +7363,12 @@ function ChatModuleDashboard({
   ).sort((a, b) => b.start.localeCompare(a.start))
   const chat2PeriodOptions =
     chatActiveTab === 'reports' ? chatReportPeriods : chat2Periods
-  const chat2SelectedPeriod =
+  const chat2MonthPeriod =
     chat2PeriodOptions.find((period) => period.key === chat2PeriodKey) ??
     chat2PeriodOptions[0] ??
     chat2Periods[0]
+  const chat2SelectedPeriod = chatRangeEnabled && chatTimeMode!=='month' ? {...chat2MonthPeriod,...chatAuditPeriod} : chat2MonthPeriod
+  const chat2D1InRange=chat2SelectedPeriod.start<=clickDeskPublicationDay()&&chat2SelectedPeriod.end>=clickDeskPublicationDay()
   useEffect(() => {
     if (!isManagementUser || chatActiveTab !== 'analysis') {
       setClickDeskVerifiedCoverage(null)
@@ -7765,7 +7775,7 @@ function ChatModuleDashboard({
     }))
   const chat2OperationPeakWeekday =
     [...chat2OperationWeekdayPoints].sort((a, b) => b.value - a.value)[0] ?? null
-  const clickDeskPreviousPeriodMatches = clickDeskPreviousMetrics?.period?.start === chat2PreviousPeriod.start && clickDeskPreviousMetrics?.period?.end === chat2PreviousPeriod.end
+  const clickDeskPreviousPeriodMatches = (!chatRangeEnabled || chatTimeMode==='month') && clickDeskPreviousMetrics?.period?.start === chat2PreviousPeriod.start && clickDeskPreviousMetrics?.period?.end === chat2PreviousPeriod.end
   const chat2PreviousAccumulated = clickDeskPreviousPeriodMatches ? clickDeskPreviousMetrics?.performance_accumulated ?? null : null
   const chat2HasPreviousComparison = clickDeskPreviousPeriodMatches && (clickDeskPreviousMetrics?.by_analyst?.length ?? 0) > 0
   const chat2OperationCsatDelta =
@@ -8175,6 +8185,7 @@ function ChatModuleDashboard({
           </div>
         </div>
 
+        {chatRangeEnabled && <ChatTimeFilter month={chatFilterMonth} mode={chatTimeMode} reference={chatTimeReference} onChange={(mode,reference)=>{const next=chatTimeRange(chatFilterMonth,mode,reference);if(next.start!==chatRange.start||next.end!==chatRange.end){setClickDeskPersistedMetrics(null);setChat2DailyDateFilter('all')}setChatTimeMode(mode);setChatTimeReference(reference)}} />}
         <div className="mt-4 border-t border-white/10 pt-4">
           <ClickDeskSyncStatus
             latestSyncAt={clickDeskPersistedMetrics?.latest_sync?.finished_at}
@@ -8253,7 +8264,7 @@ function ChatModuleDashboard({
               <p className="workspace-eyebrow">Visão da operação</p>
               <h2 className="mt-2 text-2xl font-bold">Como está a operação agora?</h2>
               <p className="section-subtitle">
-                Resumo do mês, comparação anterior e alertas para decisão rápida.
+                Resumo do intervalo selecionado e alertas para decisão rápida. Comparação mensal disponível na visão Mês.
               </p>
             </div>
             <div className="text-left lg:text-right">
@@ -8373,7 +8384,7 @@ function ChatModuleDashboard({
                 <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
                   <p className="text-xs uppercase tracking-[0.12em] text-slate-500">D-1</p>
                   <strong className="mt-2 block text-2xl tabular-nums">
-                    {!clickDeskDailyAvailable(clickDeskPersistedMetrics) ? '—' : formatChatCount(chat2OperationTodayTickets)}
+                    {!clickDeskDailyAvailable(clickDeskPersistedMetrics) || !chat2D1InRange ? '—' : formatChatCount(chat2OperationTodayTickets)}
                   </strong>
                   <span className="mt-1 block text-xs text-slate-500">
                     média diária da base: {formatChatCount(chat2OperationDailyAverage)}
@@ -8696,7 +8707,7 @@ function ChatModuleDashboard({
               </div>
             </div>
             {sharedIndividualSelection.ambiguous && <p className="mt-3 text-sm text-amber-200">Mais de uma fila encontrada para o analista. Resumo indisponível até a conferência; nenhuma soma automática foi realizada.</p>}
-            <ChatSharedPerformanceSummary metric={sharedIndividualSelection.row} csatGoal={Number(sharedIndividualPerson?.csat_goal ?? 90)} dailyAvailable={clickDeskDailyAvailable(clickDeskPersistedMetrics)} />
+            <ChatSharedPerformanceSummary metric={sharedIndividualSelection.row} csatGoal={Number(sharedIndividualPerson?.csat_goal ?? 90)} dailyAvailable={clickDeskDailyAvailable(clickDeskPersistedMetrics) && chat2D1InRange} />
           </section>
           {sharedIndividualPerson && sharedIndividualSelection.row && (
             <ManagementDailyFeedback
@@ -8870,10 +8881,10 @@ function ChatModuleDashboard({
                 </div>
 
                 <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-                  <MetricCard label="Atendimentos na competência" value={formatChatCount(chat2LiveAttendances)} />
-                  <MetricCard label="Resolvidos em D-1" value={!clickDeskDailyAvailable(clickDeskPersistedMetrics) ? '—' : formatChatCount(chat2TodayAttendances)} />
+                  <MetricCard label="Atendimentos no intervalo" value={formatChatCount(chat2LiveAttendances)} />
+                  <MetricCard label="Resolvidos em D-1" value={!clickDeskDailyAvailable(clickDeskPersistedMetrics) || !chat2D1InRange ? '—' : formatChatCount(chat2TodayAttendances)} />
                   <MetricCard
-                    label="CSAT acumulado da competência"
+                    label="CSAT do intervalo selecionado"
                     value={chat2LiveCandidateCsat === null ? '—' : formatChatPercent(chat2LiveCandidateCsat)}
                   />
                   <MetricCard label="Avaliações positivas" value={formatChatCount(chat2LivePositive)} tone="success" />
@@ -8891,7 +8902,7 @@ function ChatModuleDashboard({
                 <p className="mt-3 text-xs text-amber-200">
                   {chat2SelectedPeriod.label} · último autor humano confirmado · {chat2LivePositive} positiva(s),
                   {' '}{chat2LiveNegative} negativa(s) · {chat2LiveReviews} avaliação(ões).
-                  O percentual diário pode ser diferente do acumulado desta competência.
+                  O percentual diário pode ser diferente do resultado do intervalo selecionado.
                 </p>
                 <ChatPerformanceDiagnosticPanel diagnostic={chat2LiveDiagnostic} />
 
