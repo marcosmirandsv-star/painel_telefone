@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { d1, scopeDates, eligibleOwner, ratingTimestamp, prepareMessages, redactText, validateDiagnosis } from '../src/lib/cx360-diagnostics.ts'
+import { d1, scopeDates, eligibleOwner, ratingTimestamp, prepareMessages, redactText, validateDiagnosis, validateServiceAssessment, serviceCriteria, serviceVerdict, type Diagnosis } from '../src/lib/cx360-diagnostics.ts'
 
 test('D-1 usa Brasília, respeita virada de mês e limita consultas futuras',()=>{
  assert.equal(d1(new Date('2026-11-10T01:00:00Z')),'2026-11-08')
@@ -61,4 +61,22 @@ test('oportunidade de coaching não basta para classificar causa humana e mensag
  assert.equal(validateDiagnosis(diagnosis,messages,true,'Carlos Henrique').factor,'inconclusivo')
  assert.equal(validateDiagnosis({...diagnosis,human_gap:'Falha alegada em mensagem de terceiro.',human_gap_evidence_ids:['1']},messages,true,'Vanessa Silva').factor,'inconclusivo')
  assert.equal(validateDiagnosis({...diagnosis,human_gap:'Falha alegada em mensagem inexistente.',human_gap_evidence_ids:['999']},messages,true,'Carlos Henrique').factor,'inconclusivo')
+})
+
+
+test('avalia conduta sem exigir conhecimento do motivo da nota e rejeita autoria ou referências falsas',()=>{
+ const messages=[{id:'1',at:'2026-11-01T10:00:00Z',role:'Analista',author:'Carlos Henrique',text:'Expliquei cada etapa e acompanhei o teste.',attachments:0}]
+ const diagnosis={factor:'inconclusivo',human_gap:null} as Diagnosis
+ const criteria=serviceCriteria.map(criterion=>({criterion,result:'adequado',finding:'Orientação e acompanhamento documentados nesta mensagem.',evidence_ids:['1']}))
+ diagnosis.service_assessment=validateServiceAssessment(criteria,messages,'Carlos Lemos',diagnosis)
+ assert.match(serviceVerdict(diagnosis),/Condutas adequadas/)
+ assert.throws(()=>validateServiceAssessment(criteria,messages,'Vanessa Silva',diagnosis),/pessoa avaliada/)
+ assert.throws(()=>validateServiceAssessment(criteria.map(c=>({...c,evidence_ids:['999']})),messages,'Carlos Lemos',diagnosis),/verificável/)
+ assert.throws(()=>validateServiceAssessment(criteria.map(c=>({...c,result:'falha'})),messages,'Carlos Lemos',diagnosis),/revisão crítica/)
+ assert.throws(()=>validateServiceAssessment(Array(6).fill(criteria[0]),messages,'Carlos Lemos',diagnosis),/verificável/)
+})
+test('preserva contexto de acesso remoto sem expor credenciais e não corta mensagens silenciosamente',()=>{
+ assert.equal(redactText('Realizei o acesso pelo TeamViewer e expliquei a rotina.'),'Realizei o acesso pelo TeamViewer e expliquei a rotina.')
+ assert.equal(redactText('AnyDesk: segredo-do-acesso'),'[Dados de acesso omitidos]')
+ assert.equal(redactText('a'.repeat(5000)).length,5000)
 })
