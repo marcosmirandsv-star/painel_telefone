@@ -20,3 +20,10 @@ test('exige prova do mesmo autor, confiança alta e rejeita referência inventad
  assert.equal(applyHumanReview(candidate,review,messages,'Outro analista').factor,'inconclusivo')
  assert.throws(()=>applyHumanReview(candidate,{...review,evidence_ids:['999']},messages,'João Pedro Santana'))
 })
+
+test('rejeitar falha humana não apaga hipótese independente do produto nem mantém a acusação no critério',()=>{
+ const result=applyHumanReview({...candidate,factor:'produto',service_assessment:[{criterion:'continuidade',result:'falha',finding:'Encerramento ao fim do expediente.',evidence_ids:['1']}]},{confirmed:false,confidence:'alta',basis:'insuficiente',reason:'Não existe prova de obrigação de continuar após o expediente.',evidence_ids:['1']},messages,'João Pedro Santana')
+ assert.equal(result.factor,'produto')
+ assert.equal(result.service_assessment?.[0].result,'nao_observavel')
+ assert.equal(result.human_gap,null)
+})
