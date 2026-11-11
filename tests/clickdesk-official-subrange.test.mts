@@ -9,30 +9,30 @@ const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.
 function load(missing=false,monthlyAttendances=10,team='fiscal') {
  const calls:unknown[]=[]
  const person={id:'own',name:'Analista',team_id:team,active:true}
- const metric={source_owner_name:'Analista',source_owner_key:'analista',attendances:monthlyAttendances,positive_reviews:4,negative_reviews:1,captured_at:'2026-11-11T10:00:00Z'}
+ const metric={source_owner_name:'Analista',source_owner_key:'analista',attendances:monthlyAttendances,positive_reviews:4,negative_reviews:1,captured_at:'2026-10-11T10:00:00Z'}
  const admin={from:()=>({select:async()=>({data:[person],error:null})}),rpc:async(name:string,args:{p_start:string;p_end:string})=>{
  calls.push([name,args])
- if(name==='get_scoped_clickdesk_official_period_metrics')return {data:args.p_start==='2026-11-01'&&args.p_end==='2026-11-10'?[metric]:[],error:null}
- return {data:Array.from({length:missing?9:10},(_,i)=>({...metric,occurred_date:`2026-11-${String(i+1).padStart(2,'0')}`,attendances:1,positive_reviews:i<4?1:0,negative_reviews:i===4?1:0})),error:null}
+ if(name==='get_scoped_clickdesk_official_period_metrics')return {data:args.p_start==='2026-10-01'&&args.p_end==='2026-10-10'?[metric]:[],error:null}
+ return {data:Array.from({length:missing?9:10},(_,i)=>({...metric,occurred_date:`2026-10-${String(i+1).padStart(2,'0')}`,attendances:1,positive_reviews:i<4?1:0,negative_reviews:i===4?1:0})),error:null}
  }}
  const exports:Record<string,unknown>={}
- runInNewContext(compiled,{exports,require:(id:string)=>id==='./integration-server'?{ApiError:class extends Error {constructor(_status:number,message:string){super(message)}}}:id==='./clickdesk-official-daily'?daily:id==='./clickdesk-publication'?{publishedClickDeskEnd:()=> '2026-11-10'}:{},Date,console})
+ runInNewContext(compiled,{exports,require:(id:string)=>id==='./integration-server'?{ApiError:class extends Error {constructor(_status:number,message:string){super(message)}}}:id==='./clickdesk-official-daily'?daily:id==='./clickdesk-publication'?{publishedClickDeskEnd:()=> '2026-10-10'}:{},Date,console})
  return {admin,calls,read:exports.loadOfficialPeriodRows as (admin:unknown,filters:unknown)=>Promise<{rows:{attendances:number;reviews:number;analyst_id:string}[];dailyRows:unknown[]}>}
 }
 test('semana deriva do calendário conciliado e conserva o vínculo individual e filtros de equipe',async()=>{
- const h=load();const result=await h.read(h.admin,{start:'2026-11-02',end:'2026-11-08',analystId:'own',teamId:'fiscal'})
+ const h=load();const result=await h.read(h.admin,{start:'2026-10-02',end:'2026-10-08',analystId:'own',teamId:'fiscal'})
  assert.equal(result.rows[0].attendances,7);assert.equal(result.rows[0].reviews,4);assert.equal(result.rows[0].analyst_id,'own');assert.equal(result.dailyRows.length,7)
- await assert.rejects(h.read(h.admin,{start:'2026-11-02',end:'2026-11-08',analystId:'other'}),/distribuição diária/)
+ await assert.rejects(h.read(h.admin,{start:'2026-10-02',end:'2026-10-08',analystId:'other'}),/distribuição diária/)
 })
 test('dia ausente impede publicar semana parcial como se fosse completa',async()=>{
  const h=load(true)
- await assert.rejects(h.read(h.admin,{start:'2026-11-02',end:'2026-11-08'}),/distribuição diária/)
+ await assert.rejects(h.read(h.admin,{start:'2026-10-02',end:'2026-10-08'}),/distribuição diária/)
 })
 
 test('resoluções sem resposta pública já incluídas na origem são preservadas uma vez em ERP e Fiscal',async()=>{
  for(const team of ['erp','fiscal']) {
    const h=load(false,107,team)
-   const result=await h.read(h.admin,{start:'2026-11-01',end:'2026-11-10',analystId:'own',teamId:team})
+   const result=await h.read(h.admin,{start:'2026-10-01',end:'2026-10-10',analystId:'own',teamId:team})
    // O total oficial inclui triagens. Ausência de mensagens públicas não reduz para 103 nem autoriza adicionar quatro novamente.
    assert.equal(result.rows[0].attendances,107)
    assert.equal(result.rows[0].reviews,5)

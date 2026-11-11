@@ -4,33 +4,17 @@ import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 import { readFinalLedger, readLedgerCoverageForAccess, scopeLedgerCoverage } from '@/lib/clickdesk-ledger-server'
 import { randomUUID } from 'node:crypto'
 import { partitionChatLedgerByActiveRoster } from '@/lib/clickdesk-active-analysts'
-import { clickDeskPublicationDay, publishedClickDeskEnd } from '@/lib/clickdesk-publication'
+import { clickDeskPublicationDay, publishedClickDeskEnd, nextChatSyncAt, isOfficialClickDeskSource } from '@/lib/clickdesk-publication'
+import { chatMetricTotals } from '@/lib/chat-metric-totals'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
 const BUSINESS_TIME_ZONE = 'America/Sao_Paulo'
-const CLICKDESK_SYNC_INTERVAL_MINUTES = 5
-const CLICKDESK_SYNC_START_UTC_HOUR = 12
-const CLICKDESK_SYNC_END_UTC_HOUR = 22
+const CLICKDESK_SYNC_INTERVAL_MINUTES = 30
 
 function getNextClickDeskSyncAt(now = new Date()) {
-  for (
-    let hour = CLICKDESK_SYNC_START_UTC_HOUR;
-    hour <= CLICKDESK_SYNC_END_UTC_HOUR;
-    hour += 1
-  ) {
-    for (let minute = 0; minute < 60; minute += CLICKDESK_SYNC_INTERVAL_MINUTES) {
-      const candidate = new Date(now)
-      candidate.setUTCHours(hour, minute, 0, 0)
-      if (candidate.getTime() > now.getTime()) return candidate.toISOString()
-    }
-  }
-
-  const nextDay = new Date(now)
-  nextDay.setUTCDate(nextDay.getUTCDate() + 1)
-  nextDay.setUTCHours(CLICKDESK_SYNC_START_UTC_HOUR, 0, 0, 0)
-  return nextDay.toISOString()
+  return nextChatSyncAt(now)
 }
 
 type DailyMetricRow = {
@@ -46,6 +30,10 @@ type DailyMetricRow = {
   reviews: number
   csat: number | null
   review_percentage: number | null
+  excluded_neutrals?: number
+  neutral_human?: number
+  neutral_external?: number
+  neutral_pending?: number
 }
 
 type Aggregate = {
@@ -194,28 +182,7 @@ async function loadRows(
 }
 
 function aggregate(rows: DailyMetricRow[]): Aggregate {
-  const totals = rows.reduce(
-    (acc, row) => {
-      acc.attendances += Number(row.attendances) || 0
-      acc.positive_reviews += Number(row.positive_reviews) || 0
-      acc.negative_reviews += Number(row.negative_reviews) || 0
-      acc.reviews += Number(row.reviews) || 0
-      return acc
-    },
-    { attendances: 0, positive_reviews: 0, negative_reviews: 0, reviews: 0 },
-  )
-
-  return {
-    ...totals,
-    csat:
-      totals.reviews > 0
-        ? Math.round((totals.positive_reviews / totals.reviews) * 10000) / 100
-        : null,
-    review_percentage:
-      totals.attendances > 0
-        ? Math.round((totals.reviews / totals.attendances) * 10000) / 100
-        : null,
-  }
+  return chatMetricTotals(rows)
 }
 
 function groupDaily(rows: DailyMetricRow[]) {
@@ -310,7 +277,7 @@ export async function GET(request: Request) {
     const loaded = await loadRows(access.admin, filters, access.isManagement)
     const { rows, coverage, admin, excludedInactive, lastReconciledAt, metricSource } = loaded
     const officialDaily = 'dailyRows' in loaded ? loaded.dailyRows : null
-    const dailyRows = metricSource === 'clickdesk_official_period_metrics' ? officialDaily : rows
+    const dailyRows = isOfficialClickDeskSource(metricSource) ? officialDaily : rows
     const dailyAvailable = dailyRows !== null
 
     stage = 'sync_status'
@@ -336,6 +303,7 @@ export async function GET(request: Request) {
     }
 
     if (lastReconciledAt && (!visibleSyncFinishedAt || lastReconciledAt > visibleSyncFinishedAt)) visibleSyncFinishedAt = lastReconciledAt
+    if(metricSource==='clickdesk_event_receipts')visibleSyncFinishedAt=lastReconciledAt
 
     const apprenticeRows = rows.filter((row) => row.identity_role === 'apprentice')
     const includedRows = rows.filter((row) => row.identity_role !== 'apprentice')
@@ -386,7 +354,7 @@ export async function GET(request: Request) {
         const own=(dailyRows ?? []).filter(d=>d.analyst_id===row.analyst_id)
         return {...row,daily:groupDaily(own),today:aggregate(own.filter(d=>d.occurred_date===clickDeskPublicationDay()))}
       }),
-      publication: { mode: 'd1', available_through: clickDeskPublicationDay(), daily_available: dailyAvailable },
+      publication: { mode: 'intraday', available_through: clickDeskPublicationDay(), daily_available: dailyAvailable, current_day_in_progress:filters.end===filters.today },
       self_podium_context: selfPodiumContext,
       data_quality: {
         grouped_rows: includedRows.length,
@@ -403,7 +371,7 @@ export async function GET(request: Request) {
         : null,
       sync_schedule: {
         interval_minutes: CLICKDESK_SYNC_INTERVAL_MINUTES,
-        window_brt: '09:00-19:55',
+        window_brt: '00:00-23:30',
         next_sync_at: getNextClickDeskSyncAt(),
       },
       date_basis: {
@@ -411,6 +379,8 @@ export async function GET(request: Request) {
         status: dateBasisNeedsValidation ? 'needs_validation' : 'validated',
         note: dateBasisNeedsValidation
           ? 'AMOSTRA PARCIAL: somente tickets com autoria final auditada. Não usar estes valores como fechamento oficial, ranking ou confirmação de metas.'
+          : metricSource === 'clickdesk_event_receipts'
+            ? 'Atendimentos pela data do recebimento por cada analista. Transferências posteriores ficam no dia do evento. Avaliações pela data da resposta; CSAT ajustado exclui somente neutros externos verificados.'
           : metricSource === 'clickdesk_official_period_metrics'
             ? filters.start >= '2026-11-01'
               ? 'ClickDesk: Recebidos por responsável nas filas ERP e Fiscal, avaliações pelo atendente avaliado, time de lotação e corte D-1. Resolvidos não são somados aos recebidos. O calendário diário exige conciliação com o período.'

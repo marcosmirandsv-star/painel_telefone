@@ -133,7 +133,7 @@ export async function POST(request: Request) {
     const payload = {
       ...snapshot,
       status: 'fechado',
-      fechado_com_regras: 'clickdesk-human-v1',
+      fechado_com_regras: snapshot.regras,
     }
 
     const { data, error } = await admin

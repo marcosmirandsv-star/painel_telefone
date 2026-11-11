@@ -2,6 +2,9 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { ApiError } from '@/lib/integration-server'
 import { readFinalLedger, readLedgerCoverage } from '@/lib/clickdesk-ledger-server'
 import { createHash } from 'node:crypto'
+import {loadEventPeriodRows} from './clickdesk-event-metrics'
+import {chatMetricTotals} from './chat-metric-totals'
+import {clickDeskPublicationDay,publishedClickDeskEnd} from './clickdesk-publication'
 
 export type ClickDeskClosurePeriod = {
   month: string
@@ -98,6 +101,7 @@ export async function buildClickDeskClosureSnapshot(
   admin: SupabaseClient,
   period: ClickDeskClosurePeriod,
 ) {
+  if(period.start>='2026-11-01')return buildEventClosure(admin,period)
   if (period.team !== 'all') {
     const { data, error } = await admin
       .from('chat_teams')
@@ -345,4 +349,36 @@ export async function buildClickDeskClosureSnapshot(
       pendencias: issues,
     },
   }
+}
+
+async function buildEventClosure(admin:SupabaseClient,period:ClickDeskClosurePeriod){
+ const today=clickDeskPublicationDay(),end=publishedClickDeskEnd(period.end)
+ const [published,people,teams]=await Promise.all([
+  loadEventPeriodRows(admin,{start:period.start,end,teamId:period.team==='all'?null:period.team}),
+  admin.from('chat_analysts').select('id,name,team_id,active,csat_goal'),
+  admin.from('chat_teams').select('id,name,manager_name')])
+ if(people.error||teams.error)throw new ApiError(503,'Cadastro do fechamento indisponível.')
+ const names=new Map((people.data??[]).map(p=>[p.id,p])),teamNames=new Map((teams.data??[]).map(t=>[t.id,t]))
+ const rows=published.rows,totals=chatMetricTotals(rows),empty=chatMetricTotals([])
+ const analysts=rows.map(row=>{const person=names.get(row.analyst_id!),value=chatMetricTotals([row]),goal=Number(person?.csat_goal);return {
+  analyst_id:row.analyst_id,name:person?.name??row.assignee_name,team_id:row.team_id,team_name:teamNames.get(row.team_id!)?.name??null,
+  active_at_closure:person?.active??null,csat_goal:Number.isFinite(goal)?goal:null,review_goal:25,...value,
+  csat_goal_met:value.csat!==null&&Number.isFinite(goal)?value.csat>=goal:null,review_goal_met:value.review_percentage!==null&&value.review_percentage>=25}})
+ const teamRows=[...new Set(rows.map(r=>r.team_id))].map(id=>{const own=rows.filter(r=>r.team_id===id),performance=chatMetricTotals(own);return {
+  team_id:id,team_name:teamNames.get(id!)?.name??null,manager_name:teamNames.get(id!)?.manager_name??null,
+  operational:performance,performance,management_support:empty,analyst_count:own.length,average_attendances:own.length?round(performance.attendances/own.length):0}})
+ const daily=published.dailyRows.map(({occurred_date,analyst_id,attendances,positive_reviews,negative_reviews,excluded_neutrals,neutral_pending})=>({occurred_date,analyst_id,attendances,positive_reviews,negative_reviews,excluded_neutrals,neutral_pending}))
+ const ledgerHash=createHash('sha256').update(JSON.stringify(daily)).digest('hex')
+ const issues=period.end>=today?['A competência ainda está aberta.']:[]
+ return {versao:'4',regras:'clickdesk-event-neutral-v1',fonte:published.metricSource,consultado_em:new Date().toISOString(),status:'parcial',canal:'chat',
+  mes:period.month,inicio:period.start,fim:period.end,equipe:period.team,tem_dados:totals.attendances>0||totals.reviews>0,
+  regra_periodo:'recebimentos_por_analista_e_avaliacoes_por_data_do_evento',regra_data:'Primeiro recebimento por ticket e analista; avaliações na data da resposta à pesquisa, em Brasília.',
+  metas:{review_percentage:25,csat:'meta individual congelada por analista no fechamento'},operacao:totals,performance:totals,apoio_gestao:empty,
+  analistas:analysts,equipes:teamRows,gestao:[],
+  qualidade_dados:{coverage_complete:true,coverage_sources:[],excluded_inactive_attendances:0,ledger_sha256:ledgerHash,qualitative_analysis_required:false,
+   feedback_selection_required:false,unmapped_attendances:0,fallback_timestamp_attendances:0,missing_team_attendances:0,analyst_metadata_issues:0,
+   neutral_pending:totals.neutral_pending,excluded_neutrals:totals.excluded_neutrals},
+  sincronizacao:{ultima:{finished_at:published.lastReconciledAt},fechamento_do_ultimo_dia:null},
+  fechamento:{pronto:(totals.attendances>0||totals.reviews>0)&&!issues.length,formulas:{csat:'positivas / (positivas + negativas - neutros externos comprovados) × 100',
+   review_percentage:'(positivas + negativas originais) / recebimentos × 100',review_goal:25},ledger_sha256:ledgerHash,pendencias:issues}}
 }
