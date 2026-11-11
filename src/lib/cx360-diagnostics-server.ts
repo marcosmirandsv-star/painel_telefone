@@ -1,6 +1,7 @@
 import 'server-only'
 import { createHash, timingSafeEqual } from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { cxRetry } from './cx360-retry'
 import { adminClient, ApiError } from './integration-server'
 import { CX_ANALYSIS_VERSION, canonicalOwner, normalizeName, eligibleOwner, ratingTimestamp, redactText, prepareMessages, validateDiagnosis, type DiagnosticRow, type Evidence, type Diagnosis } from './cx360-diagnostics'
 
@@ -99,7 +100,7 @@ export async function processCx(start:string,end:string,teamId:string|null=null,
   if(invalidate.error)throw new Error('queue_unavailable')
   await admin.from('cx360_ratings').update({status:'failed',error_code:'lease_expired',lease_token:null,lease_until:null}).eq('status','processing').gte('attempts',3).lt('lease_until',new Date().toISOString())
   while(Date.now()<deadline-70000) {
-    const claim=await admin.rpc('cx360_claim',{p_start:start,p_end:end,p_team:teamId,p_limit:3})
+    const claim=await admin.rpc('cx360_claim',{p_start:start,p_end:end,p_team:teamId,p_limit:1})
     if(claim.error)throw new Error('queue_unavailable')
     if(!claim.data?.length)break
     let throttled=false
@@ -110,11 +111,13 @@ export async function processCx(start:string,end:string,teamId:string|null=null,
         if(saved.error || saved.data?.length!==1)throw new Error('lease_or_source_changed')
         completed++
       }catch(error){
-        const code=error instanceof ApiError?(error.status===429?'source_rate_limit':'source_unavailable'):error instanceof SyntaxError?'provider_invalid_json':error instanceof Error&&/^(provider_(rate_limit|incomplete|not_configured|http_\d{3})|invalid_model|lease_or_source_changed)$/.test(error.message)?error.message:'analysis_unavailable'
+        const code=error instanceof ApiError?(error.status===429?'source_rate_limit':'source_unavailable'):error instanceof SyntaxError?'provider_invalid_json':error instanceof Error&&['TimeoutError','AbortError','TypeError'].includes(error.name)?'network_timeout':error instanceof Error&&/^(provider_(rate_limit|incomplete|not_configured|http_\d{3})|invalid_model|lease_or_source_changed)$/.test(error.message)?error.message:'analysis_unavailable'
         console.warn('CX360 analysis retry', { code })
-        const limited=code.endsWith('rate_limit')
+        const retry=cxRetry(code,row.attempts)
+        const limited=retry.temporary
         if(limited)throttled=true
-        await admin.from('cx360_ratings').update({status:row.attempts>=3&&!limited?'failed':'pending',error_code:code,attempts:limited?Math.max(0,row.attempts-1):row.attempts,next_attempt_at:new Date(Date.now()+ (limited?300000:60000*row.attempts)).toISOString(),lease_token:null,lease_until:null,updated_at:new Date().toISOString()}).eq('id',row.id).eq('lease_token',row.lease_token)
+        const saved=await admin.from('cx360_ratings').update({status:retry.status,error_code:code,attempts:retry.attempts,next_attempt_at:new Date(Date.now()+retry.delayMs).toISOString(),lease_token:null,lease_until:null,updated_at:new Date().toISOString()}).eq('id',row.id).eq('lease_token',row.lease_token)
+        if(saved.error)throw new Error('queue_retry_not_saved')
         failed++
       }
     }))

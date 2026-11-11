@@ -5,6 +5,7 @@ import { createRequire } from 'node:module'
 import vm from 'node:vm'
 import ts from 'typescript'
 import * as core from '../src/lib/cx360-diagnostics.ts'
+import * as retry from '../src/lib/cx360-retry.ts'
 const require=createRequire(import.meta.url)
 class ApiError extends Error {constructor(public status:number,message:string){super(message)}}
 const body=await readFile(new URL('../src/lib/cx360-diagnostics-server.ts',import.meta.url),'utf8')
@@ -25,7 +26,7 @@ function harness(responder:(url:string,options:RequestInit)=>unknown,claims:unkn
   async rpc(name:string,args:Record<string,unknown>){calls.push({kind:'rpc',name,args:[args]});return {error:null,data:name==='cx360_claim'?(claims.shift()??[]):Array.isArray(args.p_rows)?args.p_rows.length:true}}
  }
  const vmModule={exports:{}}
- vm.runInNewContext(compiled,{exports:vmModule.exports,module:vmModule,require:(id:string)=>id==='server-only'?{}:id==='./cx360-diagnostics'?core:id==='./integration-server'?{ApiError,adminClient:()=>admin}:require(id),process:{env:{NEXT_PUBLIC_SUPABASE_URL:'https://qmetbydkepfdgfqkdkai.supabase.co',CLICKDESK_API_KEY:'test-only',CLICKDESK_ACCOUNT_ID:'test-account',GEMINI_API_KEY:'test-provider',SUPABASE_SERVICE_ROLE_KEY:'test-only',CRON_SECRET:'test-cron-token'}},URLSearchParams,AbortSignal,Buffer,Date,console,fetch:async(url:string,options:RequestInit)=>{calls.push({kind:'http',name:url,args:[]});const result=await responder(url,options);const status=(result as {http_status?:number})?.http_status??200;return {ok:status<400,status,json:async()=>result}}})
+ vm.runInNewContext(compiled,{exports:vmModule.exports,module:vmModule,require:(id:string)=>id==='server-only'?{}:id==='./cx360-retry'?retry:id==='./cx360-diagnostics'?core:id==='./integration-server'?{ApiError,adminClient:()=>admin}:require(id),process:{env:{NEXT_PUBLIC_SUPABASE_URL:'https://qmetbydkepfdgfqkdkai.supabase.co',CLICKDESK_API_KEY:'test-only',CLICKDESK_ACCOUNT_ID:'test-account',GEMINI_API_KEY:'test-provider',SUPABASE_SERVICE_ROLE_KEY:'test-only',CRON_SECRET:'test-cron-token'}},URLSearchParams,AbortSignal,Buffer,Date,console,fetch:async(url:string,options:RequestInit)=>{calls.push({kind:'http',name:url,args:[]});const result=await responder(url,options);const status=(result as {http_status?:number})?.http_status??200;return {ok:status<400,status,json:async()=>result}}})
  return {api:vmModule.exports as {syncCx:(s:string,e:string,u:null)=>Promise<Record<string,unknown>>;processCx:(s:string,e:string,t:null,b:number)=>Promise<Record<string,number>>;isCxCron:(r:Request)=>boolean},calls}
 }
 const rating=(id:number)=>({ticket_id:id,number:id+100,team:'Suporte - Fiscal',sentiment:'negative',rated_at:'05/10/2026 10:00',owner:'Carlos Henrique',attendance:'human',label:'Ruim',subject:'Erro na emissão',comment:null})
