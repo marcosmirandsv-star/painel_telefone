@@ -2,6 +2,7 @@ import 'server-only'
 import { createHash, timingSafeEqual } from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { cxRetry } from './cx360-retry'
+import { diagnosisSchema } from './cx360-output-schema'
 import { adminClient, ApiError } from './integration-server'
 import { CX_ANALYSIS_VERSION, canonicalOwner, normalizeName, eligibleOwner, ratingTimestamp, redactText, prepareMessages, validateDiagnosis, type DiagnosticRow, type Evidence, type Diagnosis } from './cx360-diagnostics'
 
@@ -82,7 +83,7 @@ async function analyze(row: Rating) {
   if(!/^[a-zA-Z0-9.-]{1,100}$/.test(model))throw new Error('invalid_model')
   const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{
     method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':process.env.GEMINI_API_KEY},signal:AbortSignal.timeout(60000),
-    body:JSON.stringify({systemInstruction:{parts:[{text:systemPrompt+' O campo evaluated_owner identifica a pessoa avaliada. O histórico pode conter vários analistas: use o campo author para distinguir quem fez cada intervenção. Não atribua mensagens de terceiros à pessoa avaliada; autoria ausente não comprova participação dela.'}]},contents:[{role:'user',parts:[{text:JSON.stringify({evaluated_owner:row.owner_name,satisfaction:row.label,comment:row.comment,team:row.source_team,history:prepared.messages,limitations:prepared.limitations})}]}],generationConfig:{responseMimeType:'application/json',maxOutputTokens:3000,thinkingConfig:{thinkingLevel:'low'}}})
+    body:JSON.stringify({systemInstruction:{parts:[{text:systemPrompt+' O campo evaluated_owner identifica a pessoa avaliada. O histórico pode conter vários analistas: use o campo author para distinguir quem fez cada intervenção. Não atribua mensagens de terceiros à pessoa avaliada; autoria ausente não comprova participação dela.'}]},contents:[{role:'user',parts:[{text:JSON.stringify({evaluated_owner:row.owner_name,satisfaction:row.label,comment:row.comment,team:row.source_team,history:prepared.messages,limitations:prepared.limitations})}]}],generationConfig:{responseMimeType:'application/json',responseJsonSchema:diagnosisSchema(prepared.messages),maxOutputTokens:4000,thinkingConfig:{thinkingLevel:'low'}}})
   })
   if(!response.ok)throw new Error(response.status===429?'provider_rate_limit':`provider_http_${response.status}`)
   const result=await response.json()
