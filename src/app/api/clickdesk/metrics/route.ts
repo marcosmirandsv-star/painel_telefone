@@ -412,7 +412,7 @@ export async function GET(request: Request) {
         note: dateBasisNeedsValidation
           ? 'AMOSTRA PARCIAL: somente tickets com autoria final auditada. Não usar estes valores como fechamento oficial, ranking ou confirmação de metas.'
           : metricSource === 'clickdesk_official_period_metrics'
-            ? 'Fechamento do período ClickDesk: resolvidos por responsável e avaliações pelo atendente avaliado; filas ERP e Fiscal, time de lotação e corte D-1. O total mensal não é distribuído artificialmente por dia.'
+            ? 'Fechamento do período ClickDesk: resolvidos por responsável, inclusive resoluções sem resposta pública já contadas na origem, e avaliações pelo atendente avaliado; filas ERP e Fiscal, time de lotação e corte D-1. O total mensal não é distribuído artificialmente por dia.'
             : 'Data operacional: última resposta pública humana, em Brasília. Cobertura validada conforme fontes documentadas.',
       },
     })
