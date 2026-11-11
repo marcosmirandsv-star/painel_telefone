@@ -4357,7 +4357,7 @@ function ChatAnalystPortal({
         {!loading && !metrics?.erro && (
           <>
             <p className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-xs leading-5 text-amber-100">
-              Fonte: {metrics?.source==='clickdesk_official_period_metrics'?'resolvidos por responsável no relatório ClickDesk':'último atendimento público humano comprovado'} · {formatDate(monthStart)} a {formatDate(monthEnd)} · horário de Brasília.
+              Fonte: {metrics?.source==='clickdesk_official_period_metrics'?'volume por responsável no relatório ClickDesk':'último atendimento público humano comprovado'} · {formatDate(monthStart)} a {formatDate(monthEnd)} · horário de Brasília.
               {' '}{metrics?.reconciliation?.coverage === 'complete'
                 ? 'A captura e a conciliação deste corte foram conferidas. Este atestado não substitui um fechamento mensal aprovado.'
                 : 'A conciliação histórica está pendente. Sincronização concluída não garante cobertura completa; esta leitura não substitui o fechamento oficial.'}
@@ -8246,7 +8246,7 @@ function ChatModuleDashboard({
         )}
       {['overview', 'prototype', 'podium', 'reports'].includes(chatActiveTab) && (
         <p className="rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-xs leading-5 text-amber-100">
-          Fonte individual: {clickDeskPersistedMetrics?.source === 'clickdesk_official_period_metrics' ? 'relatório ClickDesk de resolvidos e atendente avaliado, até D-1' : 'último atendimento público humano comprovado, até D-1'}.{' '}
+          Fonte individual: {clickDeskPersistedMetrics?.source === 'clickdesk_official_period_metrics' ? 'relatório ClickDesk de volume por responsável e atendente avaliado, até D-1' : 'último atendimento público humano comprovado, até D-1'}.{' '}
           {clickDeskPersistedMetrics?.reconciliation?.coverage === 'complete'
             ? 'A captura e a conciliação do corte exibido foram conferidas. Esta consulta não aprova o fechamento mensal.'
             : 'A cobertura da descoberta permanece em conferência; sincronização concluída ou ausência de registros não comprova cobertura completa nem zero atendimentos. Valores parciais não substituem o fechamento oficial.'}
@@ -8798,7 +8798,7 @@ function ChatModuleDashboard({
           </section>
 
           <p className="workspace-content-section rounded-xl border border-white/10 p-4 text-xs text-slate-400">
-            {clickDeskPersistedMetrics?.source === 'clickdesk_official_period_metrics' ? 'Totais do relatório ClickDesk conciliados por atendente avaliado, responsável pelas resoluções e time de lotação. A distribuição diária é publicada somente após conciliar com o período. ' : ''}
+            {clickDeskPersistedMetrics?.source === 'clickdesk_official_period_metrics' ? 'Totais do relatório ClickDesk conciliados por atendente avaliado, responsável pelo volume e time de lotação. A distribuição diária é publicada somente após conciliar com o período. ' : ''}
             {clickDeskPersistedMetrics?.source === 'clickdesk_official_period_metrics' ? 'A ausência de resposta pública não exclui uma resolução já registrada no relatório de origem. ' : 'Exibição exclusiva dos atendimentos auditados por último respondente humano. '}
             Participações históricas e capturas auxiliares ficam em Ferramentas → Conferência da base. Os dados deste mês ainda são parciais.
           </p>
