@@ -22,6 +22,7 @@ import ClickDeskSourceReport from '@/components/chat/ClickDeskSourceReport'
 
 // Homologação: IA qualitativa liberada no acesso individual com governança separada da gestão.
 const QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS = true
+const OFFICIAL_RESOLUTION_POLICY = 'O volume inclui tickets resolvidos pelo responsável mesmo sem resposta pública, como triagem de notificações por e-mail. Essas resoluções já fazem parte do total do ClickDesk: não são somadas novamente e não geram avaliações. A regra é a mesma para ERP e Fiscal.'
 
 function reconciliationReason(reason: string | null) {
   const labels: Record<string,string> = {
@@ -4356,10 +4357,11 @@ function ChatAnalystPortal({
         {!loading && !metrics?.erro && (
           <>
             <p className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-xs leading-5 text-amber-100">
-              Fonte: último atendimento público humano comprovado · {formatDate(monthStart)} a {formatDate(monthEnd)} · horário de Brasília.
+              Fonte: {metrics?.source==='clickdesk_official_period_metrics'?'resolvidos por responsável no relatório ClickDesk':'último atendimento público humano comprovado'} · {formatDate(monthStart)} a {formatDate(monthEnd)} · horário de Brasília.
               {' '}{metrics?.reconciliation?.coverage === 'complete'
                 ? 'A captura e a conciliação deste corte foram conferidas. Este atestado não substitui um fechamento mensal aprovado.'
                 : 'A conciliação histórica está pendente. Sincronização concluída não garante cobertura completa; esta leitura não substitui o fechamento oficial.'}
+              {metrics?.source==='clickdesk_official_period_metrics' && <span className="mt-2 block">{OFFICIAL_RESOLUTION_POLICY}</span>}
               {ownSelection.ambiguous && ' Há mais de uma fila para seu cadastro neste período. O resumo individual fica indisponível até a conferência, sem somar ou escolher uma fila por suposição.'}
               {metrics?.date_basis?.status === 'needs_validation' && ` ${metrics.date_basis.note}`}
             </p>
@@ -8249,6 +8251,7 @@ function ChatModuleDashboard({
             ? 'A captura e a conciliação do corte exibido foram conferidas. Esta consulta não aprova o fechamento mensal.'
             : 'A cobertura da descoberta permanece em conferência; sincronização concluída ou ausência de registros não comprova cobertura completa nem zero atendimentos. Valores parciais não substituem o fechamento oficial.'}
           {' '}Equipe de origem e fila são dimensões diferentes.
+          {clickDeskPersistedMetrics?.source==='clickdesk_official_period_metrics' && <span className="mt-2 block">{OFFICIAL_RESOLUTION_POLICY}</span>}
         </p>
       )}
       {clickDeskPersistedMetrics?.reconciliation && ['overview','prototype','reports'].includes(chatActiveTab) && <details className="rounded-lg border border-white/10 p-3 text-xs text-slate-400">
@@ -8796,8 +8799,8 @@ function ChatModuleDashboard({
 
           <p className="workspace-content-section rounded-xl border border-white/10 p-4 text-xs text-slate-400">
             {clickDeskPersistedMetrics?.source === 'clickdesk_official_period_metrics' ? 'Totais do relatório ClickDesk conciliados por atendente avaliado, responsável pelas resoluções e time de lotação. A distribuição diária é publicada somente após conciliar com o período. ' : ''}
-            Exibição exclusiva dos atendimentos auditados por último respondente humano. Participações históricas
-            e capturas auxiliares ficam em Ferramentas → Conferência da base. Os dados deste mês ainda são parciais.
+            {clickDeskPersistedMetrics?.source === 'clickdesk_official_period_metrics' ? 'A ausência de resposta pública não exclui uma resolução já registrada no relatório de origem. ' : 'Exibição exclusiva dos atendimentos auditados por último respondente humano. '}
+            Participações históricas e capturas auxiliares ficam em Ferramentas → Conferência da base. Os dados deste mês ainda são parciais.
           </p>
 
           <details className="workspace-content-section workspace-content-section-divided phone-ai-layers">
