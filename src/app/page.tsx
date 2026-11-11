@@ -14,7 +14,7 @@ import {
 } from '@/lib/chat-diagnostic'
 import { normalizeQualitativeAnalysis, qualitativeAnalysisVersion, QUALITATIVE_ANALYSIS_VERSION } from '@/lib/clickdesk-qualitative'
 import { chatBusinessDate, chatPeriodBounds, selectChatPresentationRow } from '@/lib/chat-presentation'
-import { clickDeskPublicationDay, publishedClickDeskEnd } from '@/lib/clickdesk-publication'
+import { clickDeskDailyAvailable, clickDeskPublicationDay, publishedClickDeskEnd } from '@/lib/clickdesk-publication'
 import { sumChatVoteRows } from '@/lib/clickdesk-csat'
 import ClickDeskSourceReport from '@/components/chat/ClickDeskSourceReport'
 
@@ -499,6 +499,7 @@ type ClickDeskVerifiedCoverage = {
 }
 
 type ClickDeskPersistedMetrics = {
+  publication?: {mode:string;available_through:string;daily_available?:boolean}
   reconciliation?: {
     captured_at: string
     pending_count: number
@@ -4365,7 +4366,7 @@ function ChatAnalystPortal({
               <ul className="mt-2 space-y-1">{metrics.reconciliation.pending.map(item => <li key={item.ticket_id}>Ticket {item.ticket_id}: {reconciliationReason(item.reason)}</li>)}</ul>
               <ul className="mt-2 space-y-1">{metrics.reconciliation.excluded?.map(item => <li key={item.ticket_id}>Ticket {item.ticket_id}: {reconciliationReason(item.reason)}</li>)}</ul>
             </details>}
-            <ChatSharedPerformanceSummary metric={accumulated} csatGoal={csatGoal} dailyAvailable={metrics?.source !== 'clickdesk_official_period_metrics'} />
+            <ChatSharedPerformanceSummary metric={accumulated} csatGoal={csatGoal} dailyAvailable={clickDeskDailyAvailable(metrics)} />
 
             <ChatPerformanceDiagnosticPanel diagnostic={diagnostic} />
 
@@ -7717,9 +7718,7 @@ function ChatModuleDashboard({
     chat2OperationReferenceDate
       ? chat2OperationDailyRuler.find((item) => item.date === chat2OperationReferenceDate) ?? null
       : null
-  const chat2OperationCompletedVolumeDays = chat2OperationDaysWithVolume.filter(
-    (item) => !chat2OperationTodayDate || item.date < chat2OperationTodayDate,
-  )
+  const chat2OperationCompletedVolumeDays = chat2OperationDaysWithVolume
   const chat2OperationLastCompletedDay = chat2OperationCompletedVolumeDays.at(-1) ?? null
   const chat2OperationPreviousCompletedDay = chat2OperationCompletedVolumeDays.at(-2) ?? null
   const chat2OperationClosedDayDelta =
@@ -8027,7 +8026,7 @@ function ChatModuleDashboard({
       ? 'A Central ainda não recebeu base suficiente para gerar um briefing executivo desta competência.'
       : [
           chat2OperationStatus + '.',
-          (clickDeskPersistedMetrics?.source === 'clickdesk_official_period_metrics' ? 'Distribuição diária ainda em conferência;' : formatChatCount(chat2OperationTodayTickets) + ' atendimento(s) em D-1;'),
+          (!clickDeskDailyAvailable(clickDeskPersistedMetrics) ? 'Distribuição diária ainda em conferência;' : formatChatCount(chat2OperationTodayTickets) + ' atendimento(s) em D-1;'),
           'o CSAT acumulado está em ' +
             (chat2ProductivityCsat === null ? '—' : formatChatPercent(chat2ProductivityCsat)) +
             ' e a participação nas avaliações em ' +
@@ -8373,7 +8372,7 @@ function ChatModuleDashboard({
                 <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
                   <p className="text-xs uppercase tracking-[0.12em] text-slate-500">D-1</p>
                   <strong className="mt-2 block text-2xl tabular-nums">
-                    {clickDeskPersistedMetrics?.source === 'clickdesk_official_period_metrics' ? '—' : formatChatCount(chat2OperationTodayTickets)}
+                    {!clickDeskDailyAvailable(clickDeskPersistedMetrics) ? '—' : formatChatCount(chat2OperationTodayTickets)}
                   </strong>
                   <span className="mt-1 block text-xs text-slate-500">
                     média diária da base: {formatChatCount(chat2OperationDailyAverage)}
@@ -8696,7 +8695,7 @@ function ChatModuleDashboard({
               </div>
             </div>
             {sharedIndividualSelection.ambiguous && <p className="mt-3 text-sm text-amber-200">Mais de uma fila encontrada para o analista. Resumo indisponível até a conferência; nenhuma soma automática foi realizada.</p>}
-            <ChatSharedPerformanceSummary metric={sharedIndividualSelection.row} csatGoal={Number(sharedIndividualPerson?.csat_goal ?? 90)} dailyAvailable={clickDeskPersistedMetrics?.source !== 'clickdesk_official_period_metrics'} />
+            <ChatSharedPerformanceSummary metric={sharedIndividualSelection.row} csatGoal={Number(sharedIndividualPerson?.csat_goal ?? 90)} dailyAvailable={clickDeskDailyAvailable(clickDeskPersistedMetrics)} />
           </section>
           {sharedIndividualPerson && sharedIndividualSelection.row && (
             <ManagementDailyFeedback
@@ -8784,7 +8783,7 @@ function ChatModuleDashboard({
           </section>
 
           <p className="workspace-content-section rounded-xl border border-white/10 p-4 text-xs text-slate-400">
-            {clickDeskPersistedMetrics?.source === 'clickdesk_official_period_metrics' ? 'Totais do relatório ClickDesk conciliados por atendente avaliado, responsável pelas resoluções e time de lotação. A distribuição diária permanece em conferência. ' : ''}
+            {clickDeskPersistedMetrics?.source === 'clickdesk_official_period_metrics' ? 'Totais do relatório ClickDesk conciliados por atendente avaliado, responsável pelas resoluções e time de lotação. A distribuição diária é publicada somente após conciliar com o período. ' : ''}
             Exibição exclusiva dos atendimentos auditados por último respondente humano. Participações históricas
             e capturas auxiliares ficam em Ferramentas → Conferência da base. Os dados deste mês ainda são parciais.
           </p>
@@ -8871,7 +8870,7 @@ function ChatModuleDashboard({
 
                 <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
                   <MetricCard label="Atendimentos na competência" value={formatChatCount(chat2LiveAttendances)} />
-                  <MetricCard label="Resolvidos em D-1" value={clickDeskPersistedMetrics?.source === 'clickdesk_official_period_metrics' ? '—' : formatChatCount(chat2TodayAttendances)} />
+                  <MetricCard label="Resolvidos em D-1" value={!clickDeskDailyAvailable(clickDeskPersistedMetrics) ? '—' : formatChatCount(chat2TodayAttendances)} />
                   <MetricCard
                     label="CSAT acumulado da competência"
                     value={chat2LiveCandidateCsat === null ? '—' : formatChatPercent(chat2LiveCandidateCsat)}
@@ -9962,7 +9961,7 @@ function ChatModuleDashboard({
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <div className="rounded-lg bg-slate-900 p-4">
-              <p className="text-xs text-slate-500">{chat2OperationIsCurrentPeriod ? 'Ontem' : 'Dia anterior ao fechamento'}</p>
+              <p className="text-xs text-slate-500">{chat2OperationIsCurrentPeriod ? 'Dia anterior ao último publicado' : 'Dia anterior ao fechamento'}</p>
               <strong className="mt-2 block text-2xl tabular-nums">
                 {chat2OperationPreviousDay?.covered
                   ? formatChatCount(chat2OperationPreviousDay.attendances)
@@ -9985,9 +9984,9 @@ function ChatModuleDashboard({
             </div>
             <div className="rounded-lg bg-slate-900 p-4">
               <p className="text-xs text-slate-500">Média por dia com movimento</p>
-              <strong className="mt-2 block text-2xl tabular-nums">{clickDeskPersistedMetrics?.source === 'clickdesk_official_period_metrics' ? '—' : formatChatCount(chat2OperationDailyAverage)}</strong>
+              <strong className="mt-2 block text-2xl tabular-nums">{!clickDeskDailyAvailable(clickDeskPersistedMetrics) ? '—' : formatChatCount(chat2OperationDailyAverage)}</strong>
               <span className="mt-1 block text-xs text-slate-500">
-                {clickDeskPersistedMetrics?.source === 'clickdesk_official_period_metrics' ? 'Distribuição diária ainda não conciliada' : `${formatChatCount(chat2OperationDaysWithVolume.length)} dia(s) com atendimento`}
+                {!clickDeskDailyAvailable(clickDeskPersistedMetrics) ? 'Distribuição diária ainda não conciliada' : `${formatChatCount(chat2OperationDaysWithVolume.length)} dia(s) com atendimento`}
               </span>
             </div>
             <div className="rounded-lg bg-slate-900 p-4">
@@ -10078,7 +10077,7 @@ function ChatModuleDashboard({
                           {item.covered ? formatChatCount(item.attendances) : '—'}
                         </strong>
                         <span className="mt-1 block text-[10px] text-slate-500">
-                          {isPeak ? 'pico' : isToday ? 'hoje' : ''}
+                          {isPeak ? 'pico' : isToday ? 'D-1' : ''}
                         </span>
                       </div>
                     )

@@ -3,7 +3,14 @@ import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import {runInNewContext} from 'node:vm'
 import ts from 'typescript'
-import {clickDeskPublicationDay,publishedClickDeskEnd} from '../src/lib/clickdesk-publication.ts'
+import {clickDeskDailyAvailable,clickDeskPublicationDay,publishedClickDeskEnd} from '../src/lib/clickdesk-publication.ts'
+
+test('daily display follows reconciled availability, not the source name',()=>{
+ assert.equal(clickDeskDailyAvailable({source:'clickdesk_official_period_metrics',publication:{daily_available:true}}),true)
+ assert.equal(clickDeskDailyAvailable({source:'clickdesk_official_period_metrics',publication:{daily_available:false}}),false)
+ assert.equal(clickDeskDailyAvailable({source:'clickdesk_official_period_metrics'}),false)
+ assert.equal(clickDeskDailyAvailable(null),false)
+})
 
 test('D-1 respects Brasília midnight, month and leap-year boundaries',()=>{
   assert.equal(clickDeskPublicationDay(new Date('2026-11-03T02:59:59Z')),'2026-11-01')
