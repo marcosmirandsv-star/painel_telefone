@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test:integrations": "node --experimental-transform-types --test tests/integrations.test.mts tests/integration-keys.test.mts",
-    "test:cx360": "node --experimental-transform-types --test tests/cx360.test.mts tests/cx360-client.test.mts tests/cx360-diagnostics.test.mts tests/cx360-worker.test.mts tests/cx360-retry.test.mts"
+    "test:cx360": "node --experimental-transform-types --test tests/cx360.test.mts tests/cx360-client.test.mts tests/cx360-diagnostics.test.mts tests/cx360-worker.test.mts tests/cx360-retry.test.mts tests/cx360-human-review.test.mts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.5",
