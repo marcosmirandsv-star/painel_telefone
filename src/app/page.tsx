@@ -4287,7 +4287,7 @@ function ChatAnalystPortal({
                 <p className="text-sm text-slate-400">{team?.name ?? 'Equipe do Chat'}</p>
                 <h2 className="text-3xl font-bold">{analyst.name}</h2>
                 <p className="mt-1 text-sm text-slate-400">
-                  {displayMonthLabel} · {timeMode==='month'?'Mês':timeMode==='week'?'Semana':'Dia'} · ClickDesk
+                  {displayMonthLabel} · {timeMode==='month'?'Mês':timeMode==='week'?'Semana':timeMode==='custom'?'Personalizado':'Dia'} · ClickDesk
                 </p>
                 <div className="mt-2">
                   <ClickDeskSyncStatus
@@ -5855,7 +5855,7 @@ function ChatModuleDashboard({
   const chatFilterMonth = `${chatAuditYear}-${String(chatAuditMonthNumber).padStart(2,'0')}`
   const chatRangeEnabled = ['overview','prototype'].includes(chatActiveTab)
   const chatRange = chatTimeRange(chatFilterMonth,chatRangeEnabled?chatTimeMode:'month',chatTimeReference)
-  const chatAuditPeriod = chatRangeEnabled && chatTimeMode!=='month' ? {...chatMonthPeriod,...chatRange,label:`${chatTimeMode==='day'?'Dia':'Semana'} · ${formatDate(chatRange.start)} a ${formatDate(chatRange.end)}`} : chatMonthPeriod
+  const chatAuditPeriod = chatRangeEnabled && chatTimeMode!=='month' ? {...chatMonthPeriod,...chatRange,label:`${chatTimeMode==='day'?'Dia':chatTimeMode==='custom'?'Personalizado':'Semana'} · ${formatDate(chatRange.start)} a ${formatDate(chatRange.end)}`} : chatMonthPeriod
   const clickDeskAuditPeriodMatches =
     clickDeskPersistedMetrics?.period?.start === chatAuditPeriod.start &&
     Boolean(clickDeskPersistedMetrics?.period?.end) &&

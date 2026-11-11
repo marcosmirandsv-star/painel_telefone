@@ -17,3 +17,14 @@ test('semana respeita virada de mês, dia fechado em Brasília e troca de compet
 test('primeiro dia do mês não publica dias futuros nem derruba a tela',()=>{
  assert.deepEqual(chatTimeRange('2026-11','month','',new Date('2026-11-01T12:00:00Z')),{start:'2026-11-01',end:'2026-11-01'})
 })
+
+test('custom interval preserves both inclusive dates requested by the manager',()=>{
+ assert.deepEqual(chatTimeRange('2026-11','custom','2026-11-01/2026-11-11',now),{start:'2026-11-01',end:'2026-11-11'})
+ assert.deepEqual(chatTimeRange('2026-11','custom','2026-11-05/2026-11-09',now),{start:'2026-11-05',end:'2026-11-09'})
+ assert.deepEqual(chatTimeRange('2026-11','custom','2026-11-05/2026-11-05',now),{start:'2026-11-05',end:'2026-11-05'})
+})
+test('custom interval clamps future days and resets invalid or previous-month selections',()=>{
+ assert.deepEqual(chatTimeRange('2026-11','custom','2026-11-05/2026-11-30',now),{start:'2026-11-05',end:'2026-11-11'})
+ for(const reference of ['','2026-11-09/2026-11-05','2026-11-31/2026-11-31','2026-10-05/2026-10-09'])assert.deepEqual(chatTimeRange('2026-11','custom',reference,now),{start:'2026-11-01',end:'2026-11-11'})
+ assert.deepEqual(chatTimeRange('2024-02','custom','2024-02-28/2024-02-29',now),{start:'2024-02-28',end:'2024-02-29'})
+})
