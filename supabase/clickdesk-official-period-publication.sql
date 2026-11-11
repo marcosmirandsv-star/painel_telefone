@@ -1,5 +1,8 @@
 -- Homologation only. Scope affects Chat performance, not login or personnel records.
 begin;
+alter table public.clickdesk_official_period_metrics
+  add column if not exists attendance_basis text not null default 'resolved'
+  check (attendance_basis in ('received','resolved'));
 update public.clickdesk_official_owner_registry
 set active = false, updated_at = now()
 where source_scope = 'suporte_erp_fiscal'
@@ -25,7 +28,7 @@ begin
   -- Future days must never leak even when the client supplies a different range.
   if p_end >= (now() at time zone 'America/Sao_Paulo')::date then return; end if;
   return query
-    select m.source_owner_name,m.source_owner_key,m.resolved,
+    select m.source_owner_name,m.source_owner_key,m.attendances,
            m.positive_reviews,m.negative_reviews,m.captured_at
     from public.clickdesk_official_period_metrics m
     join public.clickdesk_official_owner_registry r
@@ -37,6 +40,7 @@ begin
         '[^a-zA-Z0-9]+',' ','g'))=m.source_owner_key
     where m.period_start=p_start and m.period_end=p_end
       and m.source_scope='suporte_erp_fiscal'
+      and (m.period_start < date '2026-11-01' or m.attendance_basis='received')
       and r.clickdesk_owner_id not in (1,12,21,26,57,59,61,77)
       and (v_role in ('master','coordenadora','coordinator') or a.id=v_analyst_id);
 end;

@@ -22,7 +22,7 @@ import ClickDeskSourceReport from '@/components/chat/ClickDeskSourceReport'
 
 // Homologação: IA qualitativa liberada no acesso individual com governança separada da gestão.
 const QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS = true
-const OFFICIAL_RESOLUTION_POLICY = 'O volume inclui tickets resolvidos pelo responsável mesmo sem resposta pública, como triagem de notificações por e-mail. Essas resoluções já fazem parte do total do ClickDesk: não são somadas novamente e não geram avaliações. A regra é a mesma para ERP e Fiscal.'
+const OFFICIAL_RESOLUTION_POLICY = 'A partir de novembro/2026, o volume usa Recebidos do ClickDesk, por responsável, nas filas ERP e Fiscal. Tickets de e-mail também contam uma única vez. Resolvidos e Respondidas são indicadores diferentes; não são somados ao volume recebido. As avaliações e o cálculo do CSAT são preservados. A regra é a mesma para os dois times.'
 
 function reconciliationReason(reason: string | null) {
   const labels: Record<string,string> = {
