@@ -5,6 +5,7 @@ import { readFinalLedger, readLedgerCoverage, scopeLedgerCoverage } from '@/lib/
 import { summarizeVerifiedTeams } from '@/lib/clickdesk-team-summary'
 import { partitionChatLedgerByActiveRoster } from '@/lib/clickdesk-active-analysts'
 import { clickDeskPublicationDay } from '@/lib/clickdesk-publication'
+import { chatMetricTotals } from '@/lib/chat-metric-totals'
 
 export const runtime = 'nodejs'
 
@@ -74,15 +75,15 @@ export async function GET(request: Request) {
     if (official) {
       teamSummaries = teamSummaries.map(team => {
         const rows = official.rows.filter(row => row.team_id === team.team_id && row.identity_role === 'analyst')
-        const totals = rows.reduce((sum,row)=>({attendances:sum.attendances+row.attendances,positive_reviews:sum.positive_reviews+row.positive_reviews,negative_reviews:sum.negative_reviews+row.negative_reviews}),{attendances:0,positive_reviews:0,negative_reviews:0})
+        const totals = chatMetricTotals(rows)
         const reviews = totals.positive_reviews + totals.negative_reviews
-        return {...team,...totals,reviews,csat_pct:reviews?Math.round(totals.positive_reviews/reviews*10000)/100:null,
+        return {...team,...totals,reviews,csat_pct:totals.csat,
           review_percentage:totals.attendances?Math.round(reviews/totals.attendances*10000)/100:null,
           available:rows.length>0,coverage_status:'complete',latest_verified_at:official.lastReconciledAt}
       })
     }
     const lastReconciledAt=tickets.reduce<string|null>((latest,row)=>!latest||row.verified_at>latest?row.verified_at:latest,null)
-    const visibleCheckAt=[lastReconciledAt,latestSyncResult.data?.finished_at,!numericClock.error&&typeof numericClock.data==='string'?numericClock.data:null].filter((value):value is string=>Boolean(value)).sort((a,b)=>Date.parse(b)-Date.parse(a))[0]??null
+    const visibleCheckAt=official?.lastReconciledAt ?? [lastReconciledAt,latestSyncResult.data?.finished_at,!numericClock.error&&typeof numericClock.data==='string'?numericClock.data:null].filter((value):value is string=>Boolean(value)).sort((a,b)=>Date.parse(b)-Date.parse(a))[0]??null
 
     stage = 'serialize'
 
@@ -107,7 +108,7 @@ export async function GET(request: Request) {
     }))
 
     return json({
-      source: official ? 'clickdesk_official_period_metrics' : 'clickdesk_final_ticket_ledger',
+      source: official?.metricSource ?? 'clickdesk_final_ticket_ledger',
       period: { start: monthStart, end: today, timezone: 'America/Sao_Paulo' },
       team_summaries: teamSummaries,
       excluded_inactive_analyst_tickets: excludedInactive,
@@ -116,11 +117,11 @@ export async function GET(request: Request) {
         ? 'unavailable' : queueReports.length ? 'available' : 'not_captured',
       ledger_coverage: coverage.complete ? 'complete' : 'partial',
       metric_coverage: official ? 'official_period' : 'ledger_sample',
-      publication: {mode:'d1',available_through:today},
+      publication: {mode:'intraday',available_through:today},
       latest_sync: visibleCheckAt ? {finished_at:visibleCheckAt,source:'canonical_background_check'} : null,
       sync_status: latestSyncResult.error ? 'unavailable' : 'available',
       semantics: {
-        teams: official ? 'Resolvidos e avaliações do relatório ClickDesk nas filas ERP/Fiscal, agrupados pelo time de lotação do quadro aprovado.' : 'Contagem de um ticket por ultimo autor publico humano verificado e ativo, agrupado pelo vinculo cadastral.',
+        teams: official ? 'Recebimentos por data do evento e avaliações por data da pesquisa nas filas ERP/Fiscal, agrupados pelo time de lotação. CSAT ajustado exclui apenas neutros externos comprovados.' : 'Contagem de um ticket por ultimo autor publico humano verificado e ativo, agrupado pelo vinculo cadastral.',
         inactive: 'Creditos de autores inativos mantidos no ledger para auditoria, mas excluidos da visao operacional atual.',
         queues: 'Criados, resolvidos e CSAT dos relatorios oficiais Fiscal/ERP; nao representam exclusivamente a equipe.',
         incomplete: 'Cobertura parcial nao pode ser usada como fechamento nem pontuacao final.',

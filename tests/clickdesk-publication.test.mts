@@ -13,13 +13,13 @@ test('daily display follows reconciled availability, not the source name',()=>{
  assert.equal(clickDeskDailyAvailable(null),false)
 })
 
-test('D-1 respects Brasília midnight, month and leap-year boundaries',()=>{
-  assert.equal(clickDeskPublicationDay(new Date('2026-11-03T02:59:59Z')),'2026-11-01')
-  assert.equal(clickDeskPublicationDay(new Date('2026-11-03T03:00:00Z')),'2026-11-02')
-  assert.equal(clickDeskPublicationDay(new Date('2026-11-01T12:00:00Z')),'2026-10-31')
-  assert.equal(clickDeskPublicationDay(new Date('2024-03-01T12:00:00Z')),'2024-02-29')
+test('Current day respects Brasília midnight, month and leap-year boundaries',()=>{
+  assert.equal(clickDeskPublicationDay(new Date('2026-11-03T02:59:59Z')),'2026-11-02')
+  assert.equal(clickDeskPublicationDay(new Date('2026-11-03T03:00:00Z')),'2026-11-03')
+  assert.equal(clickDeskPublicationDay(new Date('2026-11-01T12:00:00Z')),'2026-11-01')
+  assert.equal(clickDeskPublicationDay(new Date('2024-03-01T12:00:00Z')),'2024-03-01')
   assert.equal(publishedClickDeskEnd('2026-10-31',new Date('2026-11-03T12:00:00Z')),'2026-10-31')
-  assert.equal(publishedClickDeskEnd('2026-12-31',new Date('2026-11-03T12:00:00Z')),'2026-11-02')
+  assert.equal(publishedClickDeskEnd('2026-12-31',new Date('2026-11-03T12:00:00Z')),'2026-11-03')
 })
 
 async function runCapture({conflict=false,incomplete=false,token=true,november=false,mismatch=false}={}) {

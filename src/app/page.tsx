@@ -14,15 +14,16 @@ import {
 } from '@/lib/chat-diagnostic'
 import { normalizeQualitativeAnalysis, qualitativeAnalysisVersion, QUALITATIVE_ANALYSIS_VERSION } from '@/lib/clickdesk-qualitative'
 import { chatBusinessDate, chatPeriodBounds, selectChatPresentationRow } from '@/lib/chat-presentation'
-import { clickDeskDailyAvailable, clickDeskPublicationDay, publishedClickDeskEnd } from '@/lib/clickdesk-publication'
+import { clickDeskDailyAvailable, clickDeskPublicationDay, publishedClickDeskEnd, isOfficialClickDeskSource } from '@/lib/clickdesk-publication'
 import { sumChatVoteRows } from '@/lib/clickdesk-csat'
 import ChatTimeFilter from '@/components/chat/ChatTimeFilter'
+import ChatNeutralReviews from '@/components/chat/ChatNeutralReviews'
 import { chatTimeRange, type ChatTimeMode } from '@/lib/chat-time-filter'
 import ClickDeskSourceReport from '@/components/chat/ClickDeskSourceReport'
 
 // Homologação: IA qualitativa liberada no acesso individual com governança separada da gestão.
 const QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS = true
-const OFFICIAL_RESOLUTION_POLICY = 'A partir de novembro/2026, o volume usa Recebidos do ClickDesk, por responsável, nas filas ERP e Fiscal. Tickets de e-mail também contam uma única vez. Resolvidos e Respondidas são indicadores diferentes; não são somados ao volume recebido. As avaliações e o cálculo do CSAT são preservados. A regra é a mesma para os dois times.'
+const OFFICIAL_RESOLUTION_POLICY = 'Recebimentos pela data em que cada analista assumiu o ticket nas filas ERP/Fiscal. Transferências posteriores ficam no dia do evento. O CSAT ajustado exclui somente neutros externos comprovados; todas as avaliações continuam na participação.'
 
 function reconciliationReason(reason: string | null) {
   const labels: Record<string,string> = {
@@ -480,6 +481,11 @@ type ClickDeskPersistedAggregate = {
   negative_reviews: number
   reviews: number
   csat: number | null
+  csat_original?: number | null
+  excluded_neutrals?: number
+  neutral_human?: number
+  neutral_external?: number
+  neutral_pending?: number
   review_percentage: number | null
 }
 
@@ -1256,7 +1262,7 @@ function CentralOverview({
   onOpenChat: (teamId?: string) => void
 }) {
   const activeTeams = chatTeams.filter((team) => team.active)
-  const officialSource = chatOverview?.source === 'clickdesk_official_period_metrics'
+  const officialSource = isOfficialClickDeskSource(chatOverview?.source)
   const verifiedByTeam = new Map(
     (chatOverview?.team_summaries ?? []).map((team) => [team.team_id, team]),
   )
@@ -1278,7 +1284,7 @@ function CentralOverview({
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">Visão executiva</p>
             <h2 className="mt-2 text-2xl font-bold">Onde vale olhar primeiro?</h2>
             <p className="mt-2 text-sm text-slate-400">
-              Telefone e Chat aparecem juntos com fontes independentes. {officialSource ? 'O Chat usa volume de atendimentos e avaliações do relatório ClickDesk, nas filas ERP e Fiscal, agrupados pelo time de lotação. A partir de novembro/2026, o volume corresponde a Recebidos.' : 'O Chat usa créditos de autoria final comprovada em cobertura parcial.'} Os relatórios de filas aparecem separadamente.
+              Telefone e Chat aparecem juntos com fontes independentes. {officialSource ? 'O Chat usa volume de atendimentos e avaliações do relatório ClickDesk, nas filas ERP e Fiscal, agrupados pelo time de lotação. A partir de novembro/2026, cada recebimento segue a data do evento; transferências posteriores não mudam dias anteriores.' : 'O Chat usa créditos de autoria final comprovada em cobertura parcial.'} Os relatórios de filas aparecem separadamente.
             </p>
           </div>
           <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-right">
@@ -1321,7 +1327,7 @@ function CentralOverview({
             <button key={team.id} type="button" onClick={() => onOpenChat(team.id)} className="rounded-2xl border border-white/10 bg-slate-900/55 p-5 text-left transition hover:border-cyan-300/35">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{officialSource ? 'Chat · relatório ClickDesk D-1' : 'Chat · atendimentos comprovados'}</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{officialSource ? 'Chat · atualizado a cada 30 min' : 'Chat · atendimentos comprovados'}</p>
                   <h3 className="mt-2 text-lg font-bold">{team.name}</h3>
                 </div>
                 <span className={available ? 'text-xs font-semibold text-amber-200' : 'text-xs font-semibold text-slate-400'}>
@@ -1341,7 +1347,7 @@ function CentralOverview({
               <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-4 text-xs">
                 <span className="text-slate-500">
                   {available
-                    ? `${chatOverview?.period?.start ? formatDate(chatOverview.period.start) : 'Início do mês'} a ${chatOverview?.period?.end ? formatDate(chatOverview.period.end) : 'hoje'} · ${officialSource ? 'corte D-1' : 'leitura parcial'}`
+                    ? `${chatOverview?.period?.start ? formatDate(chatOverview.period.start) : 'Início do mês'} a ${chatOverview?.period?.end ? formatDate(chatOverview.period.end) : 'hoje'} · ${officialSource ? 'data dos eventos' : 'leitura parcial'}`
                     : 'Não confundir ausência de leitura com zero atendimentos'}
                 </span>
                 <span className="font-semibold text-cyan-200">Abrir Chat →</span>
@@ -1374,9 +1380,9 @@ function CentralOverview({
                 : missingChatTeams > 0 && !chatOverviewLoading
                   ? `${missingChatTeams} equipe(s) de Chat ainda não têm crédito final confirmado nesta competência. Não interpretar como zero operacional.`
                   : phoneAttention > 0
-                    ? `O Telefone possui ${phoneAttention} ponto(s) de atenção no último período manual. ${officialSource ? 'Chat: relatório ERP/Fiscal por time de lotação, até D-1.' : 'Chat: tickets com último autor humano validado, em cobertura parcial.'}`
+                    ? `O Telefone possui ${phoneAttention} ponto(s) de atenção no último período manual. ${officialSource ? 'Chat: relatório ERP/Fiscal por time de lotação, até última atualização.' : 'Chat: tickets com último autor humano validado, em cobertura parcial.'}`
                     : phoneHasData
-                      ? `Telefone: período manual; Chat: ${officialSource ? 'relatório ClickDesk até D-1' : 'ledger parcial da competência'}. Não tratar fontes ou datas como equivalentes nem presumir aprovação do fechamento.`
+                      ? `Telefone: período manual; Chat: ${officialSource ? 'relatório ClickDesk até última atualização' : 'ledger parcial da competência'}. Não tratar fontes ou datas como equivalentes nem presumir aprovação do fechamento.`
                       : officialSource ? 'O Chat utiliza o relatório ERP/Fiscal por time de lotação; os relatórios de filas permanecem independentes.' : 'O Chat utiliza apenas os créditos de autoria final validados; os relatórios de filas permanecem independentes.'}
             </p>
           </div>
@@ -3726,6 +3732,8 @@ function QualitativeSampleTicketList({
   )
 }
 
+function ChatMetricHelp({text}:{text:string}){return <details className="relative ml-1 inline-block align-middle"><summary className="cursor-pointer list-none text-xs text-cyan-300" aria-label="Entender indicador">ⓘ</summary><p className="absolute left-0 top-5 z-20 w-64 rounded-lg border border-white/10 bg-slate-950 p-3 text-xs font-normal leading-5 text-slate-300 shadow-xl">{text}</p></details>}
+
 function ChatSharedPerformanceSummary({ metric, csatGoal, dailyAvailable = true }: {
   metric: ClickDeskPersistedAggregate & { today?: ClickDeskPersistedAggregate } | null
   csatGoal: number
@@ -3750,14 +3758,15 @@ function ChatSharedPerformanceSummary({ metric, csatGoal, dailyAvailable = true 
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                 Resumo do intervalo selecionado
               </p>
+              {metric.csat_original!==undefined&&<details className="mt-2 text-xs text-slate-400"><summary className="cursor-pointer">CSAT original e ajustes</summary><p className="mt-2">Original: {metric.csat_original===null?'—':formatChatPercent(metric.csat_original)} · {metric.excluded_neutrals??0} neutro(s) externo(s) retirado(s) apenas do CSAT ajustado. As {metric.reviews} avaliações permanecem na participação; {metric.neutral_pending??0} neutro(s) aguardam revisão.</p></details>}
               <div className="mt-3 grid gap-4 lg:grid-cols-3">
                 <div className="rounded-xl border border-white/10 bg-slate-950/40 p-5">
-                  <p className="text-sm text-slate-400">Atendimentos</p>
+                  <p className="text-sm text-slate-400">Atendimentos <ChatMetricHelp text="Um recebimento por ticket e analista, na data em que foi assumido. Transferências podem gerar uma entrada para cada pessoa." /></p>
                   <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
                     {formatChatCount(accumulated?.attendances ?? 0)}
                   </strong>
                   <div className="mt-4 flex items-center justify-between gap-4 border-t border-white/10 pt-3 text-sm">
-                    <span className="text-slate-500">Atendimentos em D-1</span>
+                    <span className="text-slate-500">Atendimentos hoje</span>
                     <strong className="tabular-nums text-slate-200">
                       {dailyAvailable && today ? formatChatCount(today.attendances) : '—'}
                     </strong>
@@ -3773,7 +3782,7 @@ function ChatSharedPerformanceSummary({ metric, csatGoal, dailyAvailable = true 
                 }`}>
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="text-sm text-slate-400">CSAT</p>
+                      <p className="text-sm text-slate-400">CSAT ajustado <ChatMetricHelp text="Positivas ÷ avaliações consideradas. Apenas neutros externos comprovados são retirados deste cálculo; as respostas originais são preservadas." /></p>
                       <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
                         {csat === null ? '—' : formatChatPercent(csat)}
                       </strong>
@@ -3810,7 +3819,7 @@ function ChatSharedPerformanceSummary({ metric, csatGoal, dailyAvailable = true 
                 }`}>
                   <div className="flex items-start justify-between gap-4">
                     <div>
-                      <p className="text-sm text-slate-400">% de avaliações</p>
+                      <p className="text-sm text-slate-400">% de avaliações <ChatMetricHelp text="Avaliações recebidas ÷ atendimentos do período. Neutros externos continuam nesta quantidade; respostas podem se referir a atendimentos de dias anteriores." /></p>
                       <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
                         {reviewPercentage === null ? '—' : formatChatPercent(reviewPercentage)}
                       </strong>
@@ -4081,7 +4090,7 @@ function ChatAnalystPortal({
     // sem exigir que o analista recarregue a página manualmente.
     const refreshTimer = window.setInterval(() => {
       void loadOwnChatData()
-    }, 5 * 60 * 1000)
+    }, 30 * 60 * 1000)
 
     return () => {
       cancelled = true
@@ -4356,22 +4365,23 @@ function ChatAnalystPortal({
 
         {!loading && !metrics?.erro && (
           <>
-            <p className="mt-4 rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-xs leading-5 text-amber-100">
-              Fonte: {metrics?.source==='clickdesk_official_period_metrics'?'volume por responsável no relatório ClickDesk':'último atendimento público humano comprovado'} · {formatDate(monthStart)} a {formatDate(monthEnd)} · horário de Brasília.
+            <details className="mt-4 rounded-lg border border-white/10 p-3 text-xs leading-5 text-slate-400"><summary className="cursor-pointer">Como os números são contados</summary><p className="mt-2">
+              Fonte: {isOfficialClickDeskSource(metrics?.source)?'volume por responsável no relatório ClickDesk':'último atendimento público humano comprovado'} · {formatDate(monthStart)} a {formatDate(monthEnd)} · horário de Brasília.
               {' '}{metrics?.reconciliation?.coverage === 'complete'
                 ? 'A captura e a conciliação deste corte foram conferidas. Este atestado não substitui um fechamento mensal aprovado.'
                 : 'A conciliação histórica está pendente. Sincronização concluída não garante cobertura completa; esta leitura não substitui o fechamento oficial.'}
-              {metrics?.source==='clickdesk_official_period_metrics' && <span className="mt-2 block">{OFFICIAL_RESOLUTION_POLICY}</span>}
+              {isOfficialClickDeskSource(metrics?.source) && <span className="mt-2 block">{OFFICIAL_RESOLUTION_POLICY}</span>}
               {ownSelection.ambiguous && ' Há mais de uma fila para seu cadastro neste período. O resumo individual fica indisponível até a conferência, sem somar ou escolher uma fila por suposição.'}
               {metrics?.date_basis?.status === 'needs_validation' && ` ${metrics.date_basis.note}`}
-            </p>
-            {metrics?.reconciliation && <details className="mt-3 rounded-lg border border-white/10 p-3 text-xs text-slate-400">
+            </p></details>
+            {metrics?.reconciliation && metrics.source!=='clickdesk_event_receipts' && <details className="mt-3 rounded-lg border border-white/10 p-3 text-xs text-slate-400">
               <summary className="cursor-pointer">Conferência da autoria · {metrics.reconciliation.pending_count} ticket(s) pendente(s)</summary>
               <p className="mt-2">Um ticket tem um único crédito. Competência definida pela última resposta pública humana em Brasília. Snapshot: {formatDateTime(metrics.reconciliation.captured_at)}. Sem resposta ou cobertura comprovada, o ticket permanece fora dos indicadores.</p>
               <ul className="mt-2 space-y-1">{metrics.reconciliation.pending.map(item => <li key={item.ticket_id}>Ticket {item.ticket_id}: {reconciliationReason(item.reason)}</li>)}</ul>
               <ul className="mt-2 space-y-1">{metrics.reconciliation.excluded?.map(item => <li key={item.ticket_id}>Ticket {item.ticket_id}: {reconciliationReason(item.reason)}</li>)}</ul>
             </details>}
             <ChatSharedPerformanceSummary metric={accumulated} csatGoal={csatGoal} dailyAvailable={clickDeskDailyAvailable(metrics) && monthStart<=clickDeskPublicationDay() && monthEnd>=clickDeskPublicationDay()} />
+            {metrics?.source==='clickdesk_event_receipts' && <ChatNeutralReviews start={monthStart} end={monthEnd} analystId={analyst?.id} />}
 
             <ChatPerformanceDiagnosticPanel diagnostic={diagnostic} />
 
@@ -4707,7 +4717,7 @@ function ChatAnalystPortal({
                       <p className="mt-1 text-xs text-slate-500">
                         {item.source === 'official'
                           ? 'Resultado mensal preservado'
-                          : item.metric_source === 'clickdesk_official_period_metrics' ? 'Relatório ClickDesk do período · D-1' : 'Base de autoria humana · escopo diferente do relatório'}
+                          : isOfficialClickDeskSource(item.metric_source) ? 'Relatório ClickDesk do período · última atualização' : 'Base de autoria humana · escopo diferente do relatório'}
                       </p>
                     </div>
                     <div className="grid grid-cols-3 gap-4 text-right">
@@ -7449,7 +7459,7 @@ function ChatModuleDashboard({
         },
         selectedTeamId,
       )
-    }, 5 * 60 * 1000)
+    }, 30 * 60 * 1000)
 
     return () => window.clearInterval(refreshTimer)
   }, [
@@ -8039,7 +8049,7 @@ function ChatModuleDashboard({
       ? 'A Central ainda não recebeu base suficiente para gerar um briefing executivo desta competência.'
       : [
           chat2OperationStatus + '.',
-          (!clickDeskDailyAvailable(clickDeskPersistedMetrics) ? 'Distribuição diária ainda em conferência;' : formatChatCount(chat2OperationTodayTickets) + ' atendimento(s) em D-1;'),
+          (!clickDeskDailyAvailable(clickDeskPersistedMetrics) ? 'Distribuição diária ainda em conferência;' : formatChatCount(chat2OperationTodayTickets) + ' atendimento(s) em última atualização;'),
           'o CSAT acumulado está em ' +
             (chat2ProductivityCsat === null ? '—' : formatChatPercent(chat2ProductivityCsat)) +
             ' e a participação nas avaliações em ' +
@@ -8245,16 +8255,16 @@ function ChatModuleDashboard({
           </div>
         )}
       {['overview', 'prototype', 'podium', 'reports'].includes(chatActiveTab) && (
-        <p className="rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-xs leading-5 text-amber-100">
-          Fonte individual: {clickDeskPersistedMetrics?.source === 'clickdesk_official_period_metrics' ? 'relatório ClickDesk de volume por responsável e atendente avaliado, até D-1' : 'último atendimento público humano comprovado, até D-1'}.{' '}
+        <details className="rounded-lg border border-white/10 p-3 text-xs leading-5 text-slate-400"><summary className="cursor-pointer">Como os números são contados</summary><p className="mt-2">
+          Fonte individual: {isOfficialClickDeskSource(clickDeskPersistedMetrics?.source) ? 'relatório ClickDesk de volume por responsável e atendente avaliado, até última atualização' : 'último atendimento público humano comprovado, até última atualização'}.{' '}
           {clickDeskPersistedMetrics?.reconciliation?.coverage === 'complete'
             ? 'A captura e a conciliação do corte exibido foram conferidas. Esta consulta não aprova o fechamento mensal.'
             : 'A cobertura da descoberta permanece em conferência; sincronização concluída ou ausência de registros não comprova cobertura completa nem zero atendimentos. Valores parciais não substituem o fechamento oficial.'}
           {' '}Equipe de origem e fila são dimensões diferentes.
-          {clickDeskPersistedMetrics?.source==='clickdesk_official_period_metrics' && <span className="mt-2 block">{OFFICIAL_RESOLUTION_POLICY}</span>}
-        </p>
+          {isOfficialClickDeskSource(clickDeskPersistedMetrics?.source) && <span className="mt-2 block">{OFFICIAL_RESOLUTION_POLICY}</span>}
+        </p></details>
       )}
-      {clickDeskPersistedMetrics?.reconciliation && ['overview','prototype','reports'].includes(chatActiveTab) && <details className="rounded-lg border border-white/10 p-3 text-xs text-slate-400">
+      {clickDeskPersistedMetrics?.reconciliation && clickDeskPersistedMetrics.source!=='clickdesk_event_receipts' && ['overview','prototype','reports'].includes(chatActiveTab) && <details className="rounded-lg border border-white/10 p-3 text-xs text-slate-400">
         <summary className="cursor-pointer">Tickets capturados com autoria inconclusiva neste recorte: {clickDeskPersistedMetrics.reconciliation.pending_count}</summary>
         <p className="mt-2">A contagem não inclui tickets ainda não descobertos; consulte a cobertura da captura. Conferência {formatDateTime(clickDeskPersistedMetrics.reconciliation.captured_at)}. Casos inconclusivos não recebem crédito arbitrário nem são tratados como resoluções ou avaliações.</p>
         <ul className="mt-2 space-y-1">{clickDeskPersistedMetrics.reconciliation.pending.map(item => <li key={item.ticket_id}>Ticket {item.ticket_id}: {reconciliationReason(item.reason)}</li>)}</ul>
@@ -8295,7 +8305,7 @@ function ChatModuleDashboard({
               <div>
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">
-                    Operação até D-1 · Command Center
+                    Operação do Chat
                   </p>
                   <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] text-slate-400">
                     leitura automática
@@ -8385,7 +8395,7 @@ function ChatModuleDashboard({
                   </span>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-slate-950/40 p-4">
-                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">D-1</p>
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">última atualização</p>
                   <strong className="mt-2 block text-2xl tabular-nums">
                     {!clickDeskDailyAvailable(clickDeskPersistedMetrics) || !chat2D1InRange ? '—' : formatChatCount(chat2OperationTodayTickets)}
                   </strong>
@@ -8711,6 +8721,7 @@ function ChatModuleDashboard({
             </div>
             {sharedIndividualSelection.ambiguous && <p className="mt-3 text-sm text-amber-200">Mais de uma fila encontrada para o analista. Resumo indisponível até a conferência; nenhuma soma automática foi realizada.</p>}
             <ChatSharedPerformanceSummary metric={sharedIndividualSelection.row} csatGoal={Number(sharedIndividualPerson?.csat_goal ?? 90)} dailyAvailable={clickDeskDailyAvailable(clickDeskPersistedMetrics) && chat2D1InRange} />
+            {clickDeskPersistedMetrics?.source==='clickdesk_event_receipts' && <ChatNeutralReviews start={chat2SelectedPeriod.start} end={chat2SelectedPeriod.end} teamId={selectedTeamId==='all'?null:selectedTeamId} />}
           </section>
           {sharedIndividualPerson && sharedIndividualSelection.row && (
             <ManagementDailyFeedback
@@ -8797,11 +8808,11 @@ function ChatModuleDashboard({
             )}
           </section>
 
-          <p className="workspace-content-section rounded-xl border border-white/10 p-4 text-xs text-slate-400">
-            {clickDeskPersistedMetrics?.source === 'clickdesk_official_period_metrics' ? 'Totais do relatório ClickDesk conciliados por atendente avaliado, responsável pelo volume e time de lotação. A distribuição diária é publicada somente após conciliar com o período. ' : ''}
-            {clickDeskPersistedMetrics?.source === 'clickdesk_official_period_metrics' ? 'A ausência de resposta pública não exclui uma resolução já registrada no relatório de origem. ' : 'Exibição exclusiva dos atendimentos auditados por último respondente humano. '}
+          <details className="workspace-content-section rounded-xl border border-white/10 p-4 text-xs text-slate-400"><summary className="cursor-pointer">Entender datas e atribuição</summary><p className="mt-2">
+            {isOfficialClickDeskSource(clickDeskPersistedMetrics?.source) ? 'Totais do relatório ClickDesk conciliados por atendente avaliado, responsável pelo volume e time de lotação. A distribuição diária é publicada somente após conciliar com o período. ' : ''}
+            {isOfficialClickDeskSource(clickDeskPersistedMetrics?.source) ? 'Recebimentos de e-mail também contam, mesmo sem resposta pública. ' : 'Exibição exclusiva dos atendimentos auditados por último respondente humano. '}
             Participações históricas e capturas auxiliares ficam em Ferramentas → Conferência da base. Os dados deste mês ainda são parciais.
-          </p>
+          </p></details>
 
           <details className="workspace-content-section workspace-content-section-divided phone-ai-layers">
             <summary className="cursor-pointer px-5 py-4 text-sm font-semibold text-cyan-100">Diagnóstico complementar e histórico · pode usar fontes diferentes do resumo compartilhado</summary>
@@ -8885,7 +8896,7 @@ function ChatModuleDashboard({
 
                 <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
                   <MetricCard label="Atendimentos no intervalo" value={formatChatCount(chat2LiveAttendances)} />
-                  <MetricCard label="Resolvidos em D-1" value={!clickDeskDailyAvailable(clickDeskPersistedMetrics) || !chat2D1InRange ? '—' : formatChatCount(chat2TodayAttendances)} />
+                  <MetricCard label="Recebidos hoje" value={!clickDeskDailyAvailable(clickDeskPersistedMetrics) || !chat2D1InRange ? '—' : formatChatCount(chat2TodayAttendances)} />
                   <MetricCard
                     label="CSAT do intervalo selecionado"
                     value={chat2LiveCandidateCsat === null ? '—' : formatChatPercent(chat2LiveCandidateCsat)}
@@ -8913,7 +8924,7 @@ function ChatModuleDashboard({
                   <p className="mt-3 text-xs text-slate-500">
                     Período selecionado: {formatDate(clickDeskPersistedMetrics.period.start)} a {formatDate(clickDeskPersistedMetrics.period.end)}
                     {chat2DailyCoverageStart ? ` · base diária desde ${formatDate(chat2DailyCoverageStart)}` : ''}
-                    {' '}· D-1: dados publicados até {formatDate(clickDeskPublicationDay())}.
+                    {' '}· última atualização: dados publicados até {formatDate(clickDeskPublicationDay())}.
                   </p>
                 )}
 
@@ -9284,7 +9295,7 @@ function ChatModuleDashboard({
                             <p className="mt-1 text-xs text-slate-500">
                               {item.source === 'official'
                                 ? 'Snapshot mensal preservado'
-                                : item.metric_source === 'clickdesk_official_period_metrics' ? 'Relatório ClickDesk do período · D-1' : 'Base de autoria humana · escopo diferente do relatório'}
+                                : isOfficialClickDeskSource(item.metric_source) ? 'Relatório ClickDesk do período · última atualização' : 'Base de autoria humana · escopo diferente do relatório'}
                               {item.team_name ? ` · ${item.team_name}` : ''}
                             </p>
                           </div>
@@ -9352,7 +9363,7 @@ function ChatModuleDashboard({
                   </div>
 
                   <p className="text-xs leading-5 text-slate-500">
-                    Meses fechados preservam o snapshot aprovado. A competência atual usa a fonte identificada no cartão, com corte D-1, sem aprovação automática do fechamento.
+                    Meses fechados preservam o snapshot aprovado. A competência atual usa a fonte identificada no cartão, com data dos eventos, sem aprovação automática do fechamento.
                   </p>
                 </div>
               ) : (
@@ -9959,7 +9970,7 @@ function ChatModuleDashboard({
               <p className="text-sm font-semibold uppercase tracking-[0.14em] text-cyan-300">Volume diário da operação</p>
               <h3 className="mt-1 text-xl font-bold">Quanto atendemos em cada dia?</h3>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-                Visão coletiva dos atendimentos realizados no ClickDesk para {selectedTeamName.toLowerCase()}. A publicação considera somente dias encerrados, até D-1. O total mensal não substitui a conciliação diária.
+                Visão coletiva dos atendimentos realizados no ClickDesk para {selectedTeamName.toLowerCase()}. O dia atual fica em andamento; dias anteriores preservam a data dos eventos. O total mensal não substitui a conciliação diária.
               </p>
             </div>
             <div className="text-left lg:text-right">
@@ -9987,7 +9998,7 @@ function ChatModuleDashboard({
               </span>
             </div>
             <div className="rounded-lg bg-slate-900 p-4">
-              <p className="text-xs text-slate-500">{chat2OperationIsCurrentPeriod ? 'Último dia publicado · D-1' : 'Último dia da competência'}</p>
+              <p className="text-xs text-slate-500">{chat2OperationIsCurrentPeriod ? 'Hoje · em andamento' : 'Último dia da competência'}</p>
               <strong className="mt-2 block text-2xl tabular-nums text-cyan-200">
                 {chat2OperationReferenceDay?.covered
                   ? formatChatCount(chat2OperationReferenceDay.attendances)
@@ -10092,7 +10103,7 @@ function ChatModuleDashboard({
                           {item.covered ? formatChatCount(item.attendances) : '—'}
                         </strong>
                         <span className="mt-1 block text-[10px] text-slate-500">
-                          {isPeak ? 'pico' : isToday ? 'D-1' : ''}
+                          {isPeak ? 'pico' : isToday ? 'hoje' : ''}
                         </span>
                       </div>
                     )
@@ -10120,8 +10131,8 @@ function ChatModuleDashboard({
               <p className="text-sm font-semibold uppercase tracking-[0.14em] text-cyan-300">Leitura por equipe</p>
               <h3 className="mt-1 text-xl font-bold">Como estão as equipes do Chat?</h3>
             </div>
-            <span className="text-xs text-slate-500">{clickDeskPersistedMetrics?.source === 'clickdesk_official_period_metrics' ? 'Relatório ERP/Fiscal · time de lotação · até D-1' : 'Autoria humana final · equipe cadastrada · cobertura parcial'}</span>
-            <p className="mt-1 text-xs text-slate-500">{clickDeskPersistedMetrics?.source === 'clickdesk_official_period_metrics' ? 'Resolvidos e avaliações são agrupados pelo cadastro do quadro aprovado. Atendimento em outra fila acompanha o time de lotação; o total da fila não equivale ao total do time.' : 'Renovação, Suporte N3 e fila não comprovada são históricos de roteamento, não equipes. O ticket permanece creditado à equipe cadastrada do último autor humano.'}</p>
+            <span className="text-xs text-slate-500">{isOfficialClickDeskSource(clickDeskPersistedMetrics?.source) ? 'Relatório ERP/Fiscal · time de lotação · até última atualização' : 'Autoria humana final · equipe cadastrada · cobertura parcial'}</span>
+            <p className="mt-1 text-xs text-slate-500">{isOfficialClickDeskSource(clickDeskPersistedMetrics?.source) ? 'Recebimentos por evento e avaliações são agrupados pelo time de lotação. Atendimento em outra fila acompanha o time de lotação; o total da fila não equivale ao total do time.' : 'Renovação, Suporte N3 e fila não comprovada são históricos de roteamento, não equipes. O ticket permanece creditado à equipe cadastrada do último autor humano.'}</p>
           </div>
 
           {chat2OperationTeams.length > 0 ? (
@@ -16230,7 +16241,7 @@ function ClickDeskSyncStatus({
     latestSyncAt && !Number.isNaN(new Date(latestSyncAt).getTime())
       ? new Date(latestSyncAt).getTime()
       : null
-  const intervalMs = (schedule?.interval_minutes ?? 5) * 60 * 1000
+  const intervalMs = (schedule?.interval_minutes ?? 30) * 60 * 1000
   const currentBusinessHour = Number(
     new Intl.DateTimeFormat('en-US', {
       hour: '2-digit',
@@ -16238,7 +16249,7 @@ function ClickDeskSyncStatus({
       timeZone: 'America/Sao_Paulo',
     }).format(new Date(now)),
   )
-  const insideSyncWindow = currentBusinessHour >= 9 && currentBusinessHour <= 19
+  const insideSyncWindow = currentBusinessHour >= 0 && currentBusinessHour <= 23
   const latestSyncIsStale =
     insideSyncWindow &&
     (latestSyncTimestamp === null || now - latestSyncTimestamp > intervalMs + 10 * 60 * 1000)
@@ -16260,35 +16271,13 @@ function ClickDeskSyncStatus({
           ? `${hours}h ${String(minutes).padStart(2, '0')}m ${String(seconds).padStart(2, '0')}s`
           : `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
 
-  if (compact) {
-    return (
-      <p className="text-xs leading-5 text-slate-500">
-        Última sincronização: <strong className="font-semibold text-slate-300">{latestSyncAt ? formatDateTime(latestSyncAt) : 'não informada'}</strong>
-        {' '}· próxima {nextSyncTime ? `às ${nextSyncTime}` : 'não informada'}
-        {' '}· <span className={`tabular-nums ${isOverdue ? 'font-semibold text-amber-200' : 'text-cyan-200'}`}>{countdown}</span>
-      </p>
-    )
-  }
-
-  return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Sincronização ClickDesk</p>
-        <p className="mt-1 text-sm text-slate-300">
-          Última: <strong>{latestSyncAt ? formatDateTime(latestSyncAt) : 'não informada'}</strong>
-          {' '}· ciclo de {schedule?.interval_minutes ?? 5} minutos
-        </p>
-      </div>
-      <div className={`rounded-lg border px-4 py-2 text-right ${isOverdue ? 'border-amber-300/25 bg-amber-300/5' : 'border-cyan-300/20 bg-cyan-300/5'}`}>
-        <span className="block text-xs text-slate-500">
-          {isOverdue
-            ? nextSyncTime ? `Prevista às ${nextSyncTime}` : 'Sincronização prevista'
-            : nextSyncTime ? `Próxima às ${nextSyncTime}` : 'Próxima sincronização'}
-        </span>
-        <strong className={`mt-1 block text-lg tabular-nums ${isOverdue ? 'text-amber-200' : 'text-cyan-200'}`}>{countdown}</strong>
-      </div>
-    </div>
-  )
+  void compact
+  void countdown
+  return <p className="text-xs leading-5 text-slate-400" role="status">
+    Atualizado: <strong>{latestSyncAt ? formatDateTime(latestSyncAt) : 'em preparação'}</strong>
+    {' '}· Próxima: {nextSyncTime ?? 'aguardando agenda'}
+    {isOverdue&&<span className="ml-2 text-amber-200">Atualização pendente</span>}
+  </p>
 }
 
 function MetricCard({

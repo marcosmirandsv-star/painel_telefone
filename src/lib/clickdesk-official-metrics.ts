@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { ApiError } from './integration-server'
 import { reconciledDaily, sliceOfficialDaily } from './clickdesk-official-daily'
 import { publishedClickDeskEnd } from './clickdesk-publication'
+import { loadEventPeriodRows } from './clickdesk-event-metrics'
 
 export type OfficialDailyMetricRow = {
   occurred_date: string
@@ -16,6 +17,10 @@ export type OfficialDailyMetricRow = {
   reviews: number
   csat: number | null
   review_percentage: number | null
+  excluded_neutrals?: number
+  neutral_human?: number
+  neutral_external?: number
+  neutral_pending?: number
 }
 
 function normalizeSourceOwner(value: string) {
@@ -36,11 +41,12 @@ type OfficialPeriodMetric = {
   captured_at: string
 }
 
-type OfficialResult={rows:OfficialDailyMetricRow[];dailyRows:OfficialDailyMetricRow[]|null;coverage:{complete:boolean;verified_at:string|null;entries:never[]};admin:SupabaseClient;excludedInactive:number;lastReconciledAt:string|null;metricSource:'clickdesk_official_period_metrics'}
+type OfficialResult={rows:OfficialDailyMetricRow[];dailyRows:OfficialDailyMetricRow[]|null;coverage:{complete:boolean;verified_at:string|null;entries:never[]};admin:SupabaseClient;excludedInactive:number;lastReconciledAt:string|null;metricSource:'clickdesk_official_period_metrics'|'clickdesk_event_receipts'}
 export async function loadOfficialPeriodRows(
   admin: SupabaseClient,
   filters: {start:string;end:string;analystId?:string|null;teamId?:string|null},
 ):Promise<OfficialResult|null> {
+  if(filters.start>='2026-11-01')return loadEventPeriodRows(admin,filters)
   const official = await admin
     .rpc('get_scoped_clickdesk_official_period_metrics', {
       p_start: filters.start,

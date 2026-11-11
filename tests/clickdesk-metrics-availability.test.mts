@@ -109,6 +109,6 @@ test('réguas de gestão e individual não inferem zero onde não há dia no led
 
 test('gestor e analista recebem atualizações automáticas durante recuperação sem polling excessivo',()=>{
   const page=source('src/app/page.tsx')
-  assert.match(page,/void loadOwnChatData\(\)[\s\S]*?const refreshTimer = window\.setInterval\([\s\S]*?void loadOwnChatData\(\)[\s\S]*?5 \* 60 \* 1000/)
-  assert.match(page,/void loadClickDeskPersistedMetricsOnly\([\s\S]*?selectedTeamId,[\s\S]*?5 \* 60 \* 1000/)
+  assert.match(page,/void loadOwnChatData\(\)[\s\S]*?const refreshTimer = window\.setInterval\([\s\S]*?void loadOwnChatData\(\)[\s\S]*?30 \* 60 \* 1000/)
+  assert.match(page,/void loadClickDeskPersistedMetricsOnly\([\s\S]*?selectedTeamId,[\s\S]*?30 \* 60 \* 1000/)
 })

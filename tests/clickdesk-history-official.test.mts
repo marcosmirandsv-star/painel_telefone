@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import {runInNewContext} from 'node:vm'
 import ts from 'typescript'
+import * as totals from '../src/lib/chat-metric-totals.ts'
 test('histórico atual usa o mesmo relatório conciliado, mesmo se o ledger divergir',async()=>{
  const source=readFileSync(new URL('../src/app/api/clickdesk/history/route.ts',import.meta.url),'utf8')
  const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText
@@ -12,10 +13,11 @@ test('histórico atual usa o mesmo relatório conciliado, mesmo se o ledger dive
  }}
  const exports:Record<string,unknown>={}
  const mocks:Record<string,unknown>={
+  '@/lib/chat-metric-totals':totals,
   '@/lib/integration-server':{authorizeClickDeskSessionClient:async()=>({admin,isManagement:true}),handle:async(f:()=>unknown)=>f(),json:(value:unknown)=>Response.json(value),ApiError:Error},
   '@/lib/runtime-environment':{getServerSupabaseConfig:()=>({environment:'homologacao'})},
   '@/lib/clickdesk-ledger-server':{readFinalLedger:async()=>Array.from({length:131},()=>({satisfaction_label:'positive'})),readLedgerCoverageForAccess:async()=>({complete:true})},
-  '@/lib/clickdesk-official-metrics':{loadOfficialPeriodRows:async()=>({rows:[{attendances:107,positive_reviews:38,negative_reviews:2}]})},
+  '@/lib/clickdesk-official-metrics':{loadOfficialPeriodRows:async()=>({metricSource:'clickdesk_official_period_metrics',rows:[{attendances:107,positive_reviews:38,negative_reviews:2}]})},
   '@/lib/clickdesk-publication':{clickDeskPublicationDay:()=>new Date(Date.now()-86400000).toISOString().slice(0,10)}
  }
  runInNewContext(compiled,{exports,require:(id:string)=>{if(!(id in mocks))throw Error('Unexpected dependency '+id);return mocks[id]},Date,URL,console})
