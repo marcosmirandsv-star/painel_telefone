@@ -13,3 +13,14 @@ export function reconciledDaily<T extends Row>(period:T[],daily:T[],start:string
   }
   return daily
 }
+
+/** Counts come exclusively from the previously reconciled calendar; ratios stay in the existing aggregator. */
+export function sliceOfficialDaily<T extends Row>(period:T[],daily:T[],start:string,end:string) {
+ const selected=daily.filter(row=>row.occurred_date>=start&&row.occurred_date<=end)
+ const rows=period.map(row=>{
+   const own=selected.filter(day=>day.assignee_name===row.assignee_name)
+   return {...row,occurred_date:end,attendances:own.reduce((n,d)=>n+d.attendances,0),positive_reviews:own.reduce((n,d)=>n+d.positive_reviews,0),negative_reviews:own.reduce((n,d)=>n+d.negative_reviews,0)}
+ })
+ // reviews is derived from the two original counters, never summed percentages.
+ return {rows:rows.map(row=>({...row,reviews:row.positive_reviews+row.negative_reviews})),dailyRows:selected}
+}

@@ -62,7 +62,7 @@ test('Visões do Chat usam o mesmo período, ledger e cálculo ponderado',()=>{
   assert.match(page,/item\.team_id === chat2SelectedPersistedAnalyst\.team_id/)
   assert.match(page,/const chat2CurrentTeamTotals = chat2SelectedPeriod\.start >= '2026-10-01'/)
   assert.match(page,/CSAT consolidado por avaliações/)
-  assert.match(page,/O percentual diário pode ser diferente do acumulado desta competência/)
+  assert.match(page,/O percentual diário pode ser diferente do resultado do intervalo selecionado/)
   assert.match(api,/readFinalLedger\(admin, \{ start: filters\.start, end: filters\.end/)
   assert.match(api,/positive_reviews: Number\(ticket\.satisfaction_label === 'positive'\)/)
   assert.match(api,/negative_reviews: Number\(ticket\.satisfaction_label === 'negative'\)/)

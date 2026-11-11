@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ApiError } from './integration-server'
-import { reconciledDaily } from './clickdesk-official-daily'
+import { reconciledDaily, sliceOfficialDaily } from './clickdesk-official-daily'
+import { publishedClickDeskEnd } from './clickdesk-publication'
 
 export type OfficialDailyMetricRow = {
   occurred_date: string
@@ -35,10 +36,11 @@ type OfficialPeriodMetric = {
   captured_at: string
 }
 
+type OfficialResult={rows:OfficialDailyMetricRow[];dailyRows:OfficialDailyMetricRow[]|null;coverage:{complete:boolean;verified_at:string|null;entries:never[]};admin:SupabaseClient;excludedInactive:number;lastReconciledAt:string|null;metricSource:'clickdesk_official_period_metrics'}
 export async function loadOfficialPeriodRows(
   admin: SupabaseClient,
   filters: {start:string;end:string;analystId?:string|null;teamId?:string|null},
-) {
+):Promise<OfficialResult|null> {
   const official = await admin
     .rpc('get_scoped_clickdesk_official_period_metrics', {
       p_start: filters.start,
@@ -52,7 +54,19 @@ export async function loadOfficialPeriodRows(
     })
     throw new ApiError(503, 'A fotografia oficial do ClickDesk não está disponível.')
   }
-  if (!official.data?.length) return null
+  if (!official.data?.length) {
+    // A day/week can reuse only daily captures reconciled with the same scoped monthly source.
+    const monthStart=filters.start.slice(0,7)+'-01'
+    const [year,month]=filters.start.slice(0,7).split('-').map(Number)
+    const monthEnd=publishedClickDeskEnd(new Date(Date.UTC(year,month,0)).toISOString().slice(0,10))
+    if(filters.start.slice(0,7)===filters.end.slice(0,7)&&(filters.start!==monthStart||filters.end!==monthEnd)) {
+      const anchor=await loadOfficialPeriodRows(admin,{...filters,start:monthStart,end:monthEnd})
+      if(!anchor?.dailyRows)throw new ApiError(503,'A distribuição diária deste mês ainda não está conciliada com o ClickDesk. O intervalo selecionado não foi substituído pelo total mensal.')
+      const selected=sliceOfficialDaily(anchor.rows,anchor.dailyRows,filters.start,filters.end)
+      return {...anchor,rows:selected.rows,dailyRows:selected.dailyRows}
+    }
+    return null
+  }
 
   const people = await admin.from('chat_analysts').select('id,name,team_id,active')
   if (people.error) {
