@@ -1278,7 +1278,7 @@ function CentralOverview({
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">Visão executiva</p>
             <h2 className="mt-2 text-2xl font-bold">Onde vale olhar primeiro?</h2>
             <p className="mt-2 text-sm text-slate-400">
-              Telefone e Chat aparecem juntos com fontes independentes. {officialSource ? 'O Chat usa resolvidos e avaliações do relatório ClickDesk, nas filas ERP e Fiscal, agrupados pelo time de lotação.' : 'O Chat usa créditos de autoria final comprovada em cobertura parcial.'} Os relatórios de filas aparecem separadamente.
+              Telefone e Chat aparecem juntos com fontes independentes. {officialSource ? 'O Chat usa volume de atendimentos e avaliações do relatório ClickDesk, nas filas ERP e Fiscal, agrupados pelo time de lotação. A partir de novembro/2026, o volume corresponde a Recebidos.' : 'O Chat usa créditos de autoria final comprovada em cobertura parcial.'} Os relatórios de filas aparecem separadamente.
             </p>
           </div>
           <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-right">
@@ -1335,7 +1335,7 @@ function CentralOverview({
               </div>
               <div className="mt-4 rounded-lg bg-slate-950/35 px-3 py-2 text-xs text-slate-400">
                 {available
-                  ? `${officialSource ? 'Resolvidos ERP/Fiscal por time de lotação' : 'Créditos verificados'} · ${formatChatCount(verified?.positive_reviews ?? 0)} positivas · ${formatChatCount(verified?.negative_reviews ?? 0)} negativas. Sem aprovação de fechamento.`
+                  ? `${officialSource ? 'Volume ERP/Fiscal por time de lotação' : 'Créditos verificados'} · ${formatChatCount(verified?.positive_reviews ?? 0)} positivas · ${formatChatCount(verified?.negative_reviews ?? 0)} negativas. Sem aprovação de fechamento.`
                   : chatOverviewError ? 'Não foi possível consultar a base de créditos.' : 'Ainda não existem créditos finais comprovados para esta equipe.'}
               </div>
               <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-4 text-xs">
