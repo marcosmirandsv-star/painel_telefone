@@ -50,7 +50,7 @@ export async function GET(request:Request){return handle(async()=>{
   if(corrections.error)throw new ApiError(503,'Conferência de movimentações indisponível.')
   if(Number(corrections.data?.historical_changes)>0)alerts.push({kind:'historical_change',message:corrections.data.historical_changes+' movimentação(ões) posteriores foram registradas na base nos últimos 14 dias. Os dias publicados foram preservados e precisam de conferência.',tickets:[]})
 
-  if(inconclusive.length>=5||(completed.length>=10&&inconclusive.length/completed.length>=.2))alerts.push({kind:'inconclusive_volume',message:`${inconclusive.length} de ${completed.length} análises concluídas precisam de revisão da causa.`,tickets:inconclusive.map(row=>row.ticket_number)})
+  if(inconclusive.length>=5||(completed.length>=5&&inconclusive.length/completed.length>=.2))alerts.push({kind:'inconclusive_volume',message:`${inconclusive.length} de ${completed.length} análises concluídas precisam de revisão da causa.`,tickets:inconclusive.map(row=>row.ticket_number)})
   const groups=new Map<string,typeof mapped>()
   for(const row of mapped.filter(row=>row.date>=patternStart&&row.status==='needs_review'&&row.pattern!=='none')){const key=row.analyst_id+'|'+row.pattern;groups.set(key,[...(groups.get(key)??[]),row])}
   for(const group of groups.values())if(group.length>=3)alerts.push({kind:'possible_human_pattern',message:`${group[0].analyst_name}: ${group.length} casos inconclusivos com um sinal semelhante nos últimos 14 dias. É uma pista para investigar, não falha comprovada.`,tickets:group.map(row=>row.ticket_number)})
