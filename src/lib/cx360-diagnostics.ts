@@ -7,6 +7,7 @@ export type Diagnosis = {
   factor: Factor; confidence: 'baixa' | 'media' | 'alta'; observation: string; hypothesis: string;
   impact: string; behavior: string; practice: string; suggested_phrase: string; verification: string;
   limitations: string[]; evidence_ids: string[]; human_gap?: string | null; human_gap_evidence_ids?: string[]
+  human_review?: {version:string;confirmed:boolean;basis:string;reason:string;evidence_ids:string[]}
 }
 export type DiagnosticRow = {
   id: string; ticket_id: string; number: string; subject: string; team_id: string; source_team: string;

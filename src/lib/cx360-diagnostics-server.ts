@@ -3,6 +3,7 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { cxRetry } from './cx360-retry'
 import { diagnosisSchema } from './cx360-output-schema'
+import { applyHumanReview,humanReviewPrompt,humanReviewSchema } from './cx360-human-review'
 import { adminClient, ApiError } from './integration-server'
 import { CX_ANALYSIS_VERSION, canonicalOwner, normalizeName, eligibleOwner, ratingTimestamp, redactText, prepareMessages, validateDiagnosis, type DiagnosticRow, type Evidence, type Diagnosis } from './cx360-diagnostics'
 
@@ -90,7 +91,18 @@ async function analyze(row: Rating) {
   if(result.candidates?.[0]?.finishReason!=='STOP')throw new Error('provider_incomplete')
   const output=(result.candidates?.[0]?.content?.parts??[]).map((p:{text?:string})=>p.text??'').join('').trim()
   const evaluatedHuman=prepared.messages.some(m=>m.role==='Analista'&&m.author&&normalizeName(canonicalOwner(m.author))===normalizeName(canonicalOwner(row.owner_name)))
-  const analysis=validateDiagnosis(JSON.parse(output.replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'')),prepared.messages,Boolean(evaluatedHuman),row.owner_name)
+  let analysis=validateDiagnosis(JSON.parse(output.replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'')),prepared.messages,Boolean(evaluatedHuman),row.owner_name)
+  if(['conducao','misto'].includes(analysis.factor)){
+    const reviewResponse=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{
+      method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':process.env.GEMINI_API_KEY},signal:AbortSignal.timeout(60000),
+      body:JSON.stringify({systemInstruction:{parts:[{text:humanReviewPrompt}]},contents:[{role:'user',parts:[{text:JSON.stringify({evaluated_owner:row.owner_name,candidate:analysis,history:prepared.messages,internal_policies:null})}]}],generationConfig:{responseMimeType:'application/json',responseJsonSchema:humanReviewSchema,maxOutputTokens:2000,thinkingConfig:{thinkingLevel:'low'}}})
+    })
+    if(!reviewResponse.ok)throw new Error(reviewResponse.status===429?'provider_rate_limit':`provider_http_${reviewResponse.status}`)
+    const reviewed=await reviewResponse.json()
+    if(reviewed.candidates?.[0]?.finishReason!=='STOP')throw new Error('provider_incomplete')
+    const text=(reviewed.candidates?.[0]?.content?.parts??[]).map((p:{text?:string})=>p.text??'').join('').trim()
+    analysis=applyHumanReview(analysis,JSON.parse(text.replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'')),prepared.messages,row.owner_name)
+  }
   analysis.limitations=[...new Set([...analysis.limitations,...prepared.limitations,'Políticas internas ainda não documentadas neste módulo; práticas sugeridas dependem de validação gerencial.'])]
   return {analysis,messages:prepared.messages,status:analysis.factor==='inconclusivo'?'inconclusive':'analyzed',model}
 }
@@ -99,8 +111,11 @@ export async function processCx(start:string,end:string,teamId:string|null=null,
   let completed=0,failed=0
   const invalidate=await admin.from('cx360_ratings').update({status:'pending',analysis:null,analysis_hash:null,evidence:[],attempts:0,error_code:null,next_attempt_at:new Date().toISOString()}).eq('active',true).eq('eligible',true).not('analysis_version','is',null).neq('analysis_version',CX_ANALYSIS_VERSION).in('status',['analyzed','inconclusive'])
   if(invalidate.error)throw new Error('queue_unavailable')
+  const unreviewed=await admin.from('cx360_ratings').update({status:'pending',analysis:null,analysis_hash:null,evidence:[],attempts:0,error_code:null,next_attempt_at:new Date().toISOString()})
+    .eq('active',true).eq('eligible',true).in('status',['analyzed','inconclusive']).in('analysis->>factor',['conducao','misto']).is('analysis->human_review',null)
+  if(unreviewed.error)throw new Error('queue_unavailable')
   await admin.from('cx360_ratings').update({status:'failed',error_code:'lease_expired',lease_token:null,lease_until:null}).eq('status','processing').gte('attempts',3).lt('lease_until',new Date().toISOString())
-  while(Date.now()<deadline-70000) {
+  while(Date.now()<deadline-150000) {
     const claim=await admin.rpc('cx360_claim',{p_start:start,p_end:end,p_team:teamId,p_limit:1})
     if(claim.error)throw new Error('queue_unavailable')
     if(!claim.data?.length)break
@@ -112,7 +127,7 @@ export async function processCx(start:string,end:string,teamId:string|null=null,
         if(saved.error || saved.data?.length!==1)throw new Error('lease_or_source_changed')
         completed++
       }catch(error){
-        const code=error instanceof ApiError?(error.status===429?'source_rate_limit':'source_unavailable'):error instanceof SyntaxError?'provider_invalid_json':error instanceof Error&&['TimeoutError','AbortError','TypeError'].includes(error.name)?'network_timeout':error instanceof Error&&/^(provider_(rate_limit|incomplete|not_configured|http_\d{3})|invalid_model|lease_or_source_changed)$/.test(error.message)?error.message:'analysis_unavailable'
+        const code=error instanceof ApiError?(error.status===429?'source_rate_limit':'source_unavailable'):error instanceof SyntaxError?'provider_invalid_json':error instanceof Error&&['TimeoutError','AbortError','TypeError'].includes(error.name)?'network_timeout':error instanceof Error&&/^(provider_(rate_limit|incomplete|invalid_review|not_configured|http_\d{3})|invalid_model|lease_or_source_changed)$/.test(error.message)?error.message:'analysis_unavailable'
         console.warn('CX360 analysis retry', { code })
         const retry=cxRetry(code,row.attempts)
         const limited=retry.temporary
