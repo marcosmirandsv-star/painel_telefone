@@ -412,7 +412,9 @@ export async function GET(request: Request) {
         note: dateBasisNeedsValidation
           ? 'AMOSTRA PARCIAL: somente tickets com autoria final auditada. Não usar estes valores como fechamento oficial, ranking ou confirmação de metas.'
           : metricSource === 'clickdesk_official_period_metrics'
-            ? 'Fechamento do período ClickDesk: resolvidos por responsável, inclusive resoluções sem resposta pública já contadas na origem, e avaliações pelo atendente avaliado; filas ERP e Fiscal, time de lotação e corte D-1. O total mensal não é distribuído artificialmente por dia.'
+            ? filters.start >= '2026-11-01'
+              ? 'ClickDesk: Recebidos por responsável nas filas ERP e Fiscal, avaliações pelo atendente avaliado, time de lotação e corte D-1. Resolvidos não são somados aos recebidos. O calendário diário exige conciliação com o período.'
+              : 'Fotografia histórica do período ClickDesk: resolvidos por responsável e avaliações pelo atendente avaliado; filas ERP e Fiscal, time de lotação e corte D-1.'
             : 'Data operacional: última resposta pública humana, em Brasília. Cobertura validada conforme fontes documentadas.',
       },
     })

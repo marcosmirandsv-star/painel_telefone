@@ -1,4 +1,5 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
+import { receivedCount, receivedForOwner } from './received.ts'
 
 const CLICKDESK_BASE_URL = 'https://api.desk.click.app/api/v1'
 const BUSINESS_TIME_ZONE = 'America/Sao_Paulo'
@@ -189,6 +190,28 @@ Deno.serve(async (req) => {
       ? asRecord(agentsPayload).agents as unknown[]
       : []
 
+    // Preserve historical captures; the coordinator's received-volume rule starts in November.
+    const useReceived = start >= '2026-11-01'
+    const receivedByOwner = new Map<number, number>()
+    if (useReceived) {
+      // Bounded concurrency keeps the reporting API from receiving a request burst.
+      for (let offset = 0; offset < ownerIds.length; offset += 3) {
+        const batch = ownerIds.slice(offset, offset + 3)
+        const values = await Promise.all(batch.map(async ownerId => {
+          const payload = await clickDesk(
+            `/support/reports/agents?${query({ from: start, to: end, department_ids: REPORT_DEPARTMENTS, owner_ids: [ownerId] })}`,
+            apiKey, accountId,
+          )
+          return [ownerId, receivedForOwner(payload, ownerId)] as const
+        }))
+        for (const [ownerId, value] of values) receivedByOwner.set(ownerId, value)
+      }
+      const groupReceived = receivedCount(agentsPayload)
+      if ([...receivedByOwner.values()].reduce((n, value) => n + value, 0) !== groupReceived) {
+        throw new Error('Individual received counts do not reconcile with the owner-group report')
+      }
+    }
+
     const [erpRatings, fiscalRatings] = await Promise.all(
       REPORT_DEPARTMENTS.map((departmentId) =>
         ratingPages(departmentId, start, end, apiKey, accountId),
@@ -220,7 +243,10 @@ Deno.serve(async (req) => {
       return row
     }
 
-    for (const owner of registry) ensure(owner.source_owner_name)
+    for (const owner of registry) {
+      const row = ensure(owner.source_owner_name)
+      if (useReceived) row.attendances = receivedByOwner.get(owner.clickdesk_owner_id)!
+    }
 
     for (const raw of agentRows) {
       const row = asRecord(raw)
@@ -229,7 +255,7 @@ Deno.serve(async (req) => {
       // Source IDs establish aliases (Carlos Henrique = registered Carlos Lemos).
       if (typeof row.name === 'string') known.set(normalized(row.name), registered)
       const aggregateRow = ensure(registered.source_owner_name)
-      aggregateRow.attendances += numberValue(row.resolved)
+      if (!useReceived) aggregateRow.attendances += numberValue(row.resolved)
       aggregateRow.replies += numberValue(row.replies)
       aggregateRow.resolved += numberValue(row.resolved)
     }
@@ -276,7 +302,10 @@ Deno.serve(async (req) => {
       negative_reviews: row.negative_reviews,
       source_scope: 'suporte_erp_fiscal',
       captured_at: capturedAt,
-      source_note: 'ClickDesk D-1: resolved tickets and evaluated-owner ratings scoped to ERP/Fiscal and approved source owner IDs; deduplicated by technical ticket ID.',
+      attendance_basis: useReceived ? 'received' : 'resolved',
+      source_note: useReceived
+        ? 'ClickDesk D-1: received tickets from single-owner report headers, reconciled with group header; evaluated-owner ratings scoped to ERP/Fiscal; resolved retained separately.'
+        : 'ClickDesk D-1: resolved tickets and evaluated-owner ratings scoped to ERP/Fiscal and approved source owner IDs; deduplicated by technical ticket ID.',
     }))
 
     const save = await admin
