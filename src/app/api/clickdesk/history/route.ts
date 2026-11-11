@@ -6,6 +6,8 @@ import {
 } from '@/lib/integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 import { readFinalLedger, readLedgerCoverageForAccess } from '@/lib/clickdesk-ledger-server'
+import {loadOfficialPeriodRows} from '@/lib/clickdesk-official-metrics'
+import {clickDeskPublicationDay} from '@/lib/clickdesk-publication'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -36,6 +38,7 @@ type HistoryPoint = {
   month: string
   label: string
   source: 'official' | 'live'
+  metric_source?: string
   status: 'closed' | 'open'
   closure_id: string | null
   closed_at: string | null
@@ -276,23 +279,31 @@ export async function GET(request: Request) {
 
     const today = businessToday()
     const currentMonth = today.slice(0, 7)
+    const cutoff=clickDeskPublicationDay()
+    let currentOfficial=false
 
     if (!officialByMonth.has(currentMonth)) {
       const { start } = monthBounds(currentMonth)
-      const [liveRowsResult, teamResult] = await Promise.all([
-        readFinalLedger(admin, { start, end: today, analystId }),
+      const [liveRowsResult, teamResult,periodRows] = await Promise.all([
+        start<=cutoff?readFinalLedger(admin, { start, end: cutoff, analystId }):Promise.resolve([]),
         admin
           .from('chat_teams')
           .select('id,name')
           .eq('id', analystResult.data.team_id)
           .maybeSingle(),
+        start<=cutoff?loadOfficialPeriodRows(admin,{start,end:cutoff,analystId}):Promise.resolve(null),
       ])
 
       if (teamResult.error) {
         throw new ApiError(503, 'Equipe do analista indisponível.')
       }
 
-      const totals = aggregate(liveRowsResult)
+      currentOfficial=Boolean(periodRows?.rows.length)
+      const totals = currentOfficial && periodRows ? (()=>{
+        const summed=periodRows.rows.reduce((s,r)=>({attendances:s.attendances+r.attendances,positive_reviews:s.positive_reviews+r.positive_reviews,negative_reviews:s.negative_reviews+r.negative_reviews}),{attendances:0,positive_reviews:0,negative_reviews:0})
+        const reviews=summed.positive_reviews+summed.negative_reviews
+        return {...summed,reviews,csat:reviews?round(summed.positive_reviews/reviews*100):null,review_percentage:summed.attendances?round(reviews/summed.attendances*100):null}
+      })() : aggregate(liveRowsResult)
 
       officialByMonth.set(currentMonth, {
         priority: 3,
@@ -300,6 +311,7 @@ export async function GET(request: Request) {
           month: currentMonth,
           label: monthLabel(currentMonth),
           source: 'live',
+          metric_source:currentOfficial?'clickdesk_official_period_metrics':'clickdesk_final_ticket_ledger',
           status: 'open',
           closure_id: null,
           closed_at: null,
@@ -356,7 +368,7 @@ export async function GET(request: Request) {
       points: withDeltas,
       official_months: withDeltas.filter((item) => item.source === 'official').length,
       live_month_included: withDeltas.some((item) => item.source === 'live'),
-      live_coverage: (await readLedgerCoverageForAccess(admin, access.isManagement, {start:currentMonth+'-01',end:today})).complete ? 'complete' : 'audit_sample_only',
+      live_coverage: currentOfficial || (await readLedgerCoverageForAccess(admin, access.isManagement, {start:currentMonth+'-01',end:cutoff})).complete ? 'complete' : 'audit_sample_only',
     })
   })
 }

@@ -937,6 +937,7 @@ type ChatQualitativeFeedbackContext = {
 }
 
 type ClickDeskHistoryPoint = {
+  metric_source?: string
   month: string
   label: string
   source: 'official' | 'live'
@@ -4702,7 +4703,7 @@ function ChatAnalystPortal({
                       <p className="mt-1 text-xs text-slate-500">
                         {item.source === 'official'
                           ? 'Resultado mensal preservado'
-                          : 'Base viva persistida do ClickDesk'}
+                          : item.metric_source === 'clickdesk_official_period_metrics' ? 'Relatório ClickDesk do período · D-1' : 'Base de autoria humana · escopo diferente do relatório'}
                       </p>
                     </div>
                     <div className="grid grid-cols-3 gap-4 text-right">
@@ -9269,7 +9270,7 @@ function ChatModuleDashboard({
                             <p className="mt-1 text-xs text-slate-500">
                               {item.source === 'official'
                                 ? 'Snapshot mensal preservado'
-                                : 'Base viva persistida do ClickDesk'}
+                                : item.metric_source === 'clickdesk_official_period_metrics' ? 'Relatório ClickDesk do período · D-1' : 'Base de autoria humana · escopo diferente do relatório'}
                               {item.team_name ? ` · ${item.team_name}` : ''}
                             </p>
                           </div>
@@ -9337,7 +9338,7 @@ function ChatModuleDashboard({
                   </div>
 
                   <p className="text-xs leading-5 text-slate-500">
-                    Meses fechados usam exclusivamente o snapshot oficial. A competência atual usa a base viva persistida até o fechamento.
+                    Meses fechados preservam o snapshot aprovado. A competência atual usa a fonte identificada no cartão, com corte D-1, sem aprovação automática do fechamento.
                   </p>
                 </div>
               ) : (
