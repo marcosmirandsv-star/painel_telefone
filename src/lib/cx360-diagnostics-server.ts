@@ -1,7 +1,7 @@
 import 'server-only'
 import { createHash, timingSafeEqual } from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { cxRetry, cxErrorCode } from './cx360-retry'
+import { cxRetry, cxErrorCode, cxValidationDetail } from './cx360-retry'
 import { diagnosisSchema } from './cx360-output-schema'
 import { applyHumanReview,humanReviewPrompt,humanReviewSchema } from './cx360-human-review'
 import { adminClient, ApiError } from './integration-server'
@@ -131,7 +131,7 @@ export async function processCx(start:string,end:string,teamId:string|null=null,
         completed++
       }catch(error){
         const code=error instanceof ApiError?(error.status===429?'source_rate_limit':'source_unavailable'):cxErrorCode(error)
-        console.warn('CX360 analysis retry', { code })
+        console.warn('CX360 analysis retry', { code, validation:cxValidationDetail(error) })
         const retry=cxRetry(code,row.attempts)
         const limited=retry.temporary
         if(limited)throttled=true

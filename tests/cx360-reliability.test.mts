@@ -1,10 +1,19 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {composeCxCoverage} from '../src/lib/cx360-coverage.ts'
-import {cxErrorCode,cxRetry} from '../src/lib/cx360-retry.ts'
+import {cxErrorCode,cxRetry,cxValidationDetail} from '../src/lib/cx360-retry.ts'
 const capture=(start_date:string,end_date:string,status='complete',created_at='2026-11-12T09:00:00Z')=>({start_date,end_date,status,created_at})
 test('compõe intervalos completos sobrepostos sem exigir recaptura integral',()=>{
  const r=composeCxCoverage('2026-11-01','2026-11-11',[capture('2026-11-01','2026-11-10','complete','2026-11-11T12:42:00Z'),capture('2026-11-05','2026-11-11')]);assert.equal(r.status,'complete');assert.equal(r.composed,true);assert.equal(r.created_at,'2026-11-11T12:42:00Z');assert.deepEqual(r.missing_days,[])
+})
+
+test('diagnóstico técnico identifica a regra recusada sem expor dados ou mudar a decisão',()=>{
+ assert.equal(cxValidationDetail(new Error('Conduta sem mensagem pública da pessoa avaliada.')),'service_criterion_authorship')
+ assert.equal(cxValidationDetail(new Error('Falha humana sem prova específica para revisão crítica.')),'human_gap_support')
+ assert.equal(cxValidationDetail({message:'Análise sem referências verificáveis no histórico anterior à nota.'}),'diagnosis_references')
+ assert.equal(cxValidationDetail(new Error('mensagem privada do cliente')) ,null)
+ assert.equal(cxValidationDetail(null),null)
+ assert.equal(cxRetry('provider_evidence_invalid',3).status,'failed')
 })
 test('lacunas e capturas falhadas não viram cobertura confirmada',()=>{
  const r=composeCxCoverage('2026-11-01','2026-11-11',[capture('2026-11-01','2026-11-09'),capture('2026-11-10','2026-11-11','failed')]);assert.equal(r.status,'incomplete');assert.deepEqual(r.missing_days,['2026-11-10','2026-11-11'])
