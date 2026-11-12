@@ -8208,18 +8208,19 @@ function ChatModuleDashboard({
 
 
 
-      <nav aria-label="Visões principais do Chat" className="sticky top-0 z-20 flex flex-wrap gap-2 rounded-xl border border-white/10 bg-slate-950/95 p-2">
-        {([
-          ['overview', 'Operação'], ['prototype', 'Equipe e produtividade'],
-          ['podium', 'Gestão e ações'], ['reports', 'Fechamento'],
-        ] as const).map(([tab, label]) => (
-          <button key={tab} type="button" aria-current={chatActiveTab === tab ? 'page' : undefined}
-            onClick={() => onChatActiveTabChange(tab)}
-            className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${chatActiveTab === tab ? 'bg-cyan-300/15 text-cyan-100' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`}>
-            {label}
-          </button>
-        ))}
-      </nav>
+      <label className="block text-sm text-slate-400 lg:hidden">
+        Navegar no Chat
+        <select className="form-input mt-1" value={chatActiveTab} onChange={(event) => onChatActiveTabChange(event.target.value as ChatActiveTab)}>
+          <option value="overview">Operação</option>
+          <option value="prototype">Equipe e produtividade</option>
+          <option value="operation360">Análise 360º</option>
+          <option value="podium">Gestão e ações</option>
+          <option value="reports">Fechamento</option>
+          <option value="analysis">Conferência da base</option>
+          <option value="import">Importação</option>
+          <option value="settings">Cadastros</option>
+        </select>
+      </label>
       {['overview', 'prototype', 'podium', 'reports'].includes(chatActiveTab) &&
         (clickDeskMetricsLoading || clickDeskPersistedMetrics?.erro || !clickDeskPersistedMetrics ||
           (clickDeskPersistedMetrics.by_analyst?.length ?? 0) === 0) && (
@@ -8709,35 +8710,13 @@ function ChatModuleDashboard({
 
       {chatActiveTab === 'prototype' && chatMetricsReady && (
         <div className="space-y-7">
-          <section className="workspace-content-section rounded-xl border border-cyan-300/15 p-4">
-            <div className="flex flex-wrap items-center gap-4">
-              {sharedIndividualPerson && <AnalystAvatar name={sharedIndividualPerson.name} photoUrl={sharedIndividualPerson.photo_url ?? null} size="lg" />}
-              <div>
-                <p className="workspace-eyebrow">Resumo compartilhado com o analista</p>
-                <h3 className="mt-1 text-xl font-bold">{sharedIndividualPerson?.name ?? chat2SelectedPersistedAnalyst?.assignee_name ?? 'Selecione um analista abaixo'}</h3>
-                <p className="mt-1 text-xs text-slate-400">{chat2SelectedPeriod.label} · mesma fonte, mesmos valores retornados, sem recalcular indicadores</p>
-                {sharedIndividualPerson && <p className="mt-1 text-xs text-slate-400">{teams.find(team => team.id === sharedIndividualPerson.team_id)?.name ?? 'Equipe não identificada'}</p>}
-              </div>
-            </div>
-            {sharedIndividualSelection.ambiguous && <p className="mt-3 text-sm text-amber-200">Mais de uma fila encontrada para o analista. Resumo indisponível até a conferência; nenhuma soma automática foi realizada.</p>}
-            <ChatSharedPerformanceSummary metric={sharedIndividualSelection.row} csatGoal={Number(sharedIndividualPerson?.csat_goal ?? 90)} dailyAvailable={clickDeskDailyAvailable(clickDeskPersistedMetrics) && chat2D1InRange} />
-            {clickDeskPersistedMetrics?.source==='clickdesk_event_receipts' && <ChatNeutralReviews start={chat2SelectedPeriod.start} end={chat2SelectedPeriod.end} teamId={selectedTeamId==='all'?null:selectedTeamId} />}
-          </section>
-          {sharedIndividualPerson && sharedIndividualSelection.row && (
-            <ManagementDailyFeedback
-              key={sharedIndividualPerson.id + ':' + chat2SelectedPeriod.start + ':' + chat2SelectedPeriod.end}
-              analystId={sharedIndividualPerson.id}
-              days={sharedIndividualSelection.row.daily}
-              onSelectionSaved={() => setClickDeskQualitativeSummaryRefresh(current => current + 1)}
-            />
-          )}
           <section className="workspace-content-section">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <p className="workspace-eyebrow">Visão do time</p>
                 <h3 className="mt-2 text-2xl font-bold">Desempenho coletivo</h3>
                 <p className="section-subtitle">
-                  Leia primeiro o cenário coletivo. Depois, clique em um analista para abrir o detalhamento individual logo abaixo.
+                  Escolha um analista para ver seu resultado e os tickets do período.
                 </p>
               </div>
               <span className="rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-xs text-slate-400">
@@ -8780,7 +8759,11 @@ function ChatModuleDashboard({
                       <button
                         key={analystKey}
                         type="button"
-                        onClick={() => setChat2LiveAnalystKey(analystKey)}
+                        aria-pressed={selected}
+                        onClick={() => {
+                          setChat2LiveAnalystKey(analystKey)
+                          requestAnimationFrame(() => document.getElementById('chat-selected-analyst')?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+                        }}
                         className={`grid min-w-[680px] w-full grid-cols-[minmax(220px,1.6fr)_repeat(3,minmax(110px,0.7fr))] items-center gap-3 px-4 py-3 text-left text-sm transition ${
                           selected ? 'bg-cyan-300/10' : 'hover:bg-white/[0.03]'
                         }`}
@@ -8807,6 +8790,32 @@ function ChatModuleDashboard({
               </div>
             )}
           </section>
+          <section id="chat-selected-analyst" className="workspace-content-section scroll-mt-6 rounded-xl border border-cyan-300/15 p-4">
+            <div className="flex flex-wrap items-center gap-4">
+              {sharedIndividualPerson && <AnalystAvatar name={sharedIndividualPerson.name} photoUrl={sharedIndividualPerson.photo_url ?? null} size="lg" />}
+              <div>
+                <p className="workspace-eyebrow">Resumo compartilhado com o analista</p>
+                <h3 className="mt-1 text-xl font-bold">{sharedIndividualPerson?.name ?? chat2SelectedPersistedAnalyst?.assignee_name ?? 'Selecione um analista abaixo'}</h3>
+                <p className="mt-1 text-xs text-slate-400">{chat2SelectedPeriod.label} · resultado individual do período</p>
+                {sharedIndividualPerson && <p className="mt-1 text-xs text-slate-400">{teams.find(team => team.id === sharedIndividualPerson.team_id)?.name ?? 'Equipe não identificada'}</p>}
+              </div>
+            </div>
+            {sharedIndividualSelection.ambiguous && <p className="mt-3 text-sm text-amber-200">Mais de uma fila encontrada para o analista. Resumo indisponível até a conferência; nenhuma soma automática foi realizada.</p>}
+            <ChatSharedPerformanceSummary metric={sharedIndividualSelection.row} csatGoal={Number(sharedIndividualPerson?.csat_goal ?? 90)} dailyAvailable={clickDeskDailyAvailable(clickDeskPersistedMetrics) && chat2D1InRange} />
+            {clickDeskPersistedMetrics?.source==='clickdesk_event_receipts' && <ChatNeutralReviews start={chat2SelectedPeriod.start} end={chat2SelectedPeriod.end} teamId={selectedTeamId==='all'?null:selectedTeamId} />}
+          </section>
+          {sharedIndividualPerson && sharedIndividualSelection.row && (
+            <details className="rounded-xl border border-white/10 p-4">
+              <summary className="cursor-pointer text-sm font-semibold text-cyan-100">Selecionar tickets para feedback</summary>
+            <ManagementDailyFeedback
+              key={sharedIndividualPerson.id + ':' + chat2SelectedPeriod.start + ':' + chat2SelectedPeriod.end}
+              analystId={sharedIndividualPerson.id}
+              days={sharedIndividualSelection.row.daily}
+              onSelectionSaved={() => setClickDeskQualitativeSummaryRefresh(current => current + 1)}
+            />
+            </details>
+          )}
+
 
           <details className="workspace-content-section rounded-xl border border-white/10 p-4 text-xs text-slate-400"><summary className="cursor-pointer">Entender datas e atribuição</summary><p className="mt-2">
             {isOfficialClickDeskSource(clickDeskPersistedMetrics?.source) ? 'Totais do relatório ClickDesk conciliados por atendente avaliado, responsável pelo volume e time de lotação. A distribuição diária é publicada somente após conciliar com o período. ' : ''}
@@ -9217,12 +9226,13 @@ function ChatModuleDashboard({
             )}
           </details>
 
-          <section className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
-            <div className="panel">
+          <details className="panel">
+            <summary className="cursor-pointer text-sm font-semibold text-cyan-100">Histórico mensal do analista · abrir</summary>
+            <div className="mt-4">
               <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Evolução do analista</p>
               <h3 className="mt-2 text-2xl font-bold">Histórico ClickDesk</h3>
               <p className="section-subtitle">
-                A nova série histórica será formada somente com dados ClickDesk, sem misturar os números antigos do Zendesk.
+                Comparação por mês completo. Estes valores não acompanham o filtro de dias acima.
               </p>
 
               {clickDeskHistoryLoading ? (
@@ -9235,7 +9245,7 @@ function ChatModuleDashboard({
                 </div>
               ) : chat2HistoryPoints.length > 0 ? (
                 <div className="mt-5 space-y-5">
-                  <div className="grid gap-4 lg:grid-cols-3">
+                  {chat2HistoryPoints.length > 1 && <div className="grid gap-4 lg:grid-cols-3">
                     <TrendLineChart
                       label="CSAT mensal"
                       points={chat2HistoryPoints.map((item) => ({
@@ -9270,7 +9280,7 @@ function ChatModuleDashboard({
                       latestPointLabel="Última competência"
                       highlightedPointLabel="Competência destacada"
                     />
-                  </div>
+                  </div>}
 
                   <div className="space-y-3">
                     {[...chat2HistoryPoints].reverse().map((item) => (
@@ -9371,37 +9381,7 @@ function ChatModuleDashboard({
               )}
             </div>
 
-            <div className="panel">
-              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Nosso resultado</p>
-              <h3 className="mt-2 text-2xl font-bold">{chat2SelectedLiveHuman?.area ?? 'Meu time'}</h3>
-              <p className="section-subtitle">Contexto coletivo de performance dos analistas no período, sem incluir apoio de gestão.</p>
-
-              {chat2SelectedLiveHuman ? (
-                <div className="mt-5 grid gap-3">
-                  <div className="rounded-lg bg-slate-900 p-4">
-                    <p className="text-sm text-slate-400">CSAT do time</p>
-                    <strong className="mt-2 block text-2xl tabular-nums">
-                      {chat2LiveTeamCsat === null ? '—' : formatChatPercent(chat2LiveTeamCsat)}
-                    </strong>
-                  </div>
-                  <div className="rounded-lg bg-slate-900 p-4">
-                    <p className="text-sm text-slate-400">% de avaliações do time</p>
-                    <strong className="mt-2 block text-2xl tabular-nums">
-                      {chat2LiveTeamReviewPercentage === null ? '—' : formatChatPercent(chat2LiveTeamReviewPercentage)}
-                    </strong>
-                  </div>
-                  <div className="rounded-lg bg-slate-900 p-4">
-                    <p className="text-sm text-slate-400">Atendimentos do time</p>
-                    <strong className="mt-2 block text-2xl tabular-nums">{formatChatCount(chat2LiveTeamTickets)}</strong>
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-5">
-                  <EmptyState text="Leia os atendimentos do período para gerar o contexto coletivo ClickDesk." />
-                </div>
-              )}
-            </div>
-          </section>
+          </details>
 
 
 
@@ -9985,6 +9965,8 @@ function ChatModuleDashboard({
             </div>
           </div>
 
+          <details className="mt-4">
+            <summary className="cursor-pointer text-sm text-slate-400">Detalhes de volume · médias, pico e variação</summary>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <div className="rounded-lg bg-slate-900 p-4">
               <p className="text-xs text-slate-500">{chat2OperationIsCurrentPeriod ? 'Dia anterior ao último publicado' : 'Dia anterior ao fechamento'}</p>
@@ -10046,10 +10028,11 @@ function ChatModuleDashboard({
               </span>
             </div>
           </div>
+          </details>
 
           {chat2OperationCoveredDays.length > 0 ? (
             <>
-              <div className="mt-5 grid gap-4 xl:grid-cols-[1.45fr_0.85fr]">
+              <div className="mt-5 space-y-4">
                 <TrendLineChart
                   label="Evolução diária · últimos 14 dias cobertos"
                   points={chat2OperationRecentDailyPoints}
@@ -10057,16 +10040,19 @@ function ChatModuleDashboard({
                   latestPointLabel="Último dia"
                   highlightedPointLabel="Dia destacado"
                 />
+                <details>
+                  <summary className="cursor-pointer text-sm text-slate-400">Comparar dias da semana</summary>
                 <BarTrend
                   label="Média de atendimentos por dia da semana"
                   points={chat2OperationWeekdayPoints}
                 />
+                </details>
               </div>
 
               <div className="mt-5 rounded-lg border border-white/10 bg-slate-900/45 p-4">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Régua do mês</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Dias do período</p>
                     <strong className="mt-1 block text-sm text-slate-200">Volume consolidado por dia</strong>
                   </div>
                   <span className="text-xs text-slate-500">
@@ -10997,8 +10983,9 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <section className={chatActiveTab === 'overview' && chatMetricsReady ? 'panel' : 'hidden'}>
-        <div>
+      <details className={chatActiveTab === 'overview' && chatMetricsReady ? 'panel' : 'hidden'}>
+        <summary className="cursor-pointer text-sm font-semibold text-cyan-100">Histórico Zendesk · consultar meses anteriores</summary>
+        <div className="mt-4">
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Histórico anterior · Zendesk</p>
           <h2 className="mt-2 text-2xl font-bold">Série preservada dos fechamentos anteriores</h2>
           <p className="section-subtitle">
@@ -11049,7 +11036,7 @@ function ChatModuleDashboard({
             <strong className="mt-2 block text-2xl tabular-nums">{chatGoalsReachedCount}</strong>
           </div>
         </div>
-      </section>
+      </details>
 
       <section className={chatActiveTab === 'reports' && chatMetricsReady ? 'workspace-content-section workspace-content-section-divided' : 'hidden'}>
         <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
