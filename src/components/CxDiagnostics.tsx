@@ -73,8 +73,8 @@ export default function CxDiagnostics({onCaseCreated}:{onCaseCreated:()=>void}){
  return <section className="space-y-5" aria-label="Análise dos atendimentos">
   <div className={box}><h2 className="text-2xl font-semibold">Análise 360º dos atendimentos</h2><p className="mt-2 text-slate-300">Avaliações negativas do ClickDesk, incluindo Neutro. Resultados até D-1. A análise propõe melhorias e precisa de validação da gestão.</p><p className="mt-2 text-sm text-amber-100">Sem conclusão automática sobre culpa ou desempenho individual. Critérios internos ainda não documentados neste módulo.</p></div>
   <form onSubmit={event=>{event.preventDefault();void load()}} className={`${box} flex flex-wrap items-end gap-3`}><fieldset disabled={busy} className="contents">
-   <label>De<input className={input} type="date" value={start} max={d1()} onChange={e=>setStart(e.target.value)} required/></label>
-   <label>Até D-1<input className={input} type="date" value={end} max={d1()} onChange={e=>setEnd(e.target.value)} required/></label>
+   <label>De<input className={input} type="date" value={start} max={d1()} onInput={e=>setStart(e.currentTarget.value)} onChange={e=>setStart(e.target.value)} required/></label>
+   <label>Até D-1<input className={input} type="date" value={end} max={d1()} onInput={e=>setEnd(e.currentTarget.value)} onChange={e=>setEnd(e.target.value)} required/></label>
    <label>Equipe da análise<select className={input} value={team} onChange={e=>setTeam(e.target.value)}><option value="">ERP e Fiscal</option>{data?.sources.map(s=><option key={s.team_id} value={s.team_id}>{s.display_name}</option>)}</select></label>
    <button className={button}>Atualizar cobertura</button>
   </fieldset></form>
