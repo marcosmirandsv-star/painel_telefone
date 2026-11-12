@@ -1,3 +1,4 @@
+import { composeCxCoverage } from '@/lib/cx360-coverage'
 import { after } from 'next/server'
 import { authorizeCx, cxBody } from '@/lib/cx360-server'
 import { ApiError, adminClient, handle, json } from '@/lib/integration-server'
@@ -21,10 +22,10 @@ export async function GET(request:Request){return handle(async()=>{
   for(const key of params.keys())if(!['start','end','team_id'].includes(key)||params.getAll(key).length!==1)throw new ApiError(400,'Filtro inválido.')
   let scope;try{scope=scopeDates(params.get('start'),params.get('end'))}catch(error){throw new ApiError(400,(error as Error).message)}
   const team=params.get('team_id')||null;if(team&&!isUuid(team))throw new ApiError(400,'Equipe inválida.')
-  const [rows,sources,sync]=await Promise.all([readAllCx(client,scope.start,scope.end,team),client.from('cx360_sources').select('*').order('display_name'),client.from('cx360_sync_runs').select('*').lte('start_date',scope.start).gte('end_date',scope.end).order('created_at',{ascending:false}).limit(1)])
-  if(sources.error||sync.error)throw new ApiError(503,'Cobertura da fonte indisponível.')
+  const [rows,sources,sync]=await Promise.all([readAllCx(client,scope.start,scope.end,team),client.from('cx360_sources').select('*').order('display_name'),client.from('cx360_sync_runs').select('start_date,end_date,status,created_at,imported').lte('start_date',scope.end).gte('end_date',scope.start).order('created_at',{ascending:false}).limit(500)])
+  if(sources.error||sync.error||(sync.data?.length??0)>=500)throw new ApiError(503,'Cobertura da fonte indisponível.')
   const eligible=rows.filter(r=>r.eligible)
-  return json({scope,configured:configured(),sources:sources.data,rows:eligible,excluded:rows.length-eligible.length,total:rows.length,coverage:{eligible:eligible.length,analyzed:eligible.filter(r=>r.status==='analyzed').length,inconclusive:eligible.filter(r=>r.status==='inconclusive').length,pending:eligible.filter(r=>['pending','processing'].includes(r.status)).length,failed:eligible.filter(r=>r.status==='failed').length,validated:eligible.filter(r=>r.review_decision==='confirmed').length,rejected:eligible.filter(r=>r.review_decision==='rejected').length},sync:sync.data?.[0]??null,policy_note:'Políticas internas não documentadas neste módulo. Sugestões dependem de validação da gestão.'})
+  return json({scope,configured:configured(),sources:sources.data,rows:eligible,excluded:rows.length-eligible.length,total:rows.length,coverage:{eligible:eligible.length,analyzed:eligible.filter(r=>r.status==='analyzed').length,inconclusive:eligible.filter(r=>r.status==='inconclusive').length,pending:eligible.filter(r=>['pending','processing'].includes(r.status)).length,failed:eligible.filter(r=>r.status==='failed').length,validated:eligible.filter(r=>r.review_decision==='confirmed').length,rejected:eligible.filter(r=>r.review_decision==='rejected').length},sync:composeCxCoverage(scope.start,scope.end,sync.data??[]),policy_note:'Políticas internas não documentadas neste módulo. Sugestões dependem de validação da gestão.'})
 })}
 export async function POST(request:Request){return handle(async()=>{
   const {client,userId}=await authorizeCx(request),body=await cxBody(request)
