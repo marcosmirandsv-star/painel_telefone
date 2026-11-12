@@ -1,7 +1,7 @@
 import 'server-only'
 import { createHash, timingSafeEqual } from 'node:crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { cxRetry } from './cx360-retry'
+import { cxRetry, cxErrorCode } from './cx360-retry'
 import { diagnosisSchema } from './cx360-output-schema'
 import { applyHumanReview,humanReviewPrompt,humanReviewSchema } from './cx360-human-review'
 import { adminClient, ApiError } from './integration-server'
@@ -130,7 +130,7 @@ export async function processCx(start:string,end:string,teamId:string|null=null,
         if(saved.error || saved.data?.length!==1)throw new Error('lease_or_source_changed')
         completed++
       }catch(error){
-        const code=error instanceof ApiError?(error.status===429?'source_rate_limit':'source_unavailable'):error instanceof SyntaxError?'provider_invalid_json':error instanceof Error&&['TimeoutError','AbortError','TypeError'].includes(error.name)?'network_timeout':error instanceof Error&&/^(provider_(rate_limit|incomplete|invalid_review|not_configured|http_\d{3})|invalid_model|lease_or_source_changed)$/.test(error.message)?error.message:'analysis_unavailable'
+        const code=error instanceof ApiError?(error.status===429?'source_rate_limit':'source_unavailable'):cxErrorCode(error)
         console.warn('CX360 analysis retry', { code })
         const retry=cxRetry(code,row.attempts)
         const limited=retry.temporary
