@@ -6,6 +6,24 @@ export function cxRetry(code: string, attempts: number) {
     delayMs: temporary ? 300000 : Math.min(1800000, 60000 * 2 ** Math.max(0, attempts - 1)), temporary }
 }
 
+/** Fixed diagnostic labels only; provider output and conversation text never reach logs. */
+export function cxValidationDetail(error: unknown): string | null {
+ const message=(error as {message?:unknown}|null)?.message
+ if(typeof message!=='string')return null
+ const labels:Record<string,string>={
+  'Análise inválida.':'diagnosis_shape',
+  'Classificação inválida.':'diagnosis_classification',
+  'Análise incompleta.':'diagnosis_fields',
+  'Análise sem referências verificáveis no histórico anterior à nota.':'diagnosis_references',
+  'Limitações ausentes.':'diagnosis_limitations',
+  'Avaliação humana incompleta: seis critérios obrigatórios.':'service_criteria_count',
+  'Critério humano sem evidência verificável.':'service_criterion_shape_or_references',
+  'Conduta sem mensagem pública da pessoa avaliada.':'service_criterion_authorship',
+  'Falha humana sem prova específica para revisão crítica.':'human_gap_support',
+ }
+ return labels[message]??null
+}
+
 /** Only fixed codes are persisted: never leak a provider payload or customer text. */
 export function cxErrorCode(error: unknown): string {
  const failure=error as {name?:unknown;message?:unknown}|null
