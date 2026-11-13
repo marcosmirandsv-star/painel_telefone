@@ -7,6 +7,7 @@ export const serviceCriteria = ['acolhimento','entendimento','clareza','diligenc
 export const serviceLabels = {acolhimento:'Acolhimento',entendimento:'Entendimento da demanda',clareza:'Clareza da orientação',diligencia:'Diligência e acompanhamento',continuidade:'Continuidade',encerramento:'Encerramento'}
 export type ServiceCriterion = {criterion:typeof serviceCriteria[number];result:'adequado'|'melhoria'|'falha'|'nao_observavel';finding:string;evidence_ids:string[]}
 export type Diagnosis = {
+  attribution?: ReturnType<typeof lastHumanAttendance>
   service_assessment?: ServiceCriterion[]
   factor: Factor; confidence: 'baixa' | 'media' | 'alta'; observation: string; hypothesis: string;
   impact: string; behavior: string; practice: string; suggested_phrase: string; verification: string;
@@ -24,6 +25,18 @@ export const approvedOwners = ['João Pedro Vianey','João Vitor Almeida','Thiag
 export const normalizeName = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
 export function canonicalOwner(value: string) { return normalizeName(value) === 'carlos lemos' ? 'Carlos Henrique' : value.trim() }
 export function eligibleOwner(value: string) { return approvedOwners.some(name => normalizeName(name) === normalizeName(canonicalOwner(value))) }
+/** Never infer service from assignment, internal notes, automation or later replies. */
+export function lastHumanAttendance(messages:Evidence[],ratedAt:string,sourceOwner:string) {
+ const publicHuman=messages.filter(m=>m.role==='Analista'&&m.text.trim()&&Number.isFinite(Date.parse(m.at))&&Date.parse(m.at)<Date.parse(ratedAt)).sort((a,b)=>Date.parse(b.at)-Date.parse(a.at))
+ const last=publicHuman[0]
+ const owner=last?.author?canonicalOwner(last.author):null
+ const ambiguous=Boolean(last&&publicHuman.some(m=>Date.parse(m.at)===Date.parse(last.at)&&normalizeName(canonicalOwner(m.author??''))!==normalizeName(owner??'')))
+ const identified=Boolean(owner&&owner!=='Autor humano não identificado'&&!ambiguous)
+ return {policy:'last-public-human-before-rating-v1' as const,source_owner:sourceOwner,owner:identified?owner:null,message_id:last?.id??null,reason:!last?'no_public_human':!identified?'unidentified_or_ambiguous':!eligibleOwner(owner!)?'outside_approved_roster':'identified'}
+}
+export function serviceTextNeedsReview(analysis:Diagnosis) {
+ return analysis.service_assessment?.some(c=>c.result==='melhoria'&&/\b(falhou|falha comprovada|erro comprovado|incorreto|incorreta|abrupto|abrupta)\b/i.test(c.finding))??false
+}
 export function brtDay(now = new Date()) {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
 }

@@ -80,3 +80,37 @@ test('preserva contexto de acesso remoto sem expor credenciais e não corta mens
  assert.equal(redactText('AnyDesk: segredo-do-acesso'),'[Dados de acesso omitidos]')
  assert.equal(redactText('a'.repeat(5000)).length,5000)
 })
+
+// The evaluated analyst is established by actual public messages, never by assignment.
+test('ultimo atendimento segue cronologia anterior a nota, preservando titular original',async()=>{
+ const {lastHumanAttendance}=await import('../src/lib/cx360-diagnostics.ts')
+ const evidence=(id:string,at:string,author:string,role='Analista')=>({id,at,author,role,text:'Orientação pública de teste.',attachments:0})
+ const rated='2026-11-06T21:27:00Z'
+ const result=lastHumanAttendance([
+  evidence('later','2026-11-06T21:28:00Z','Carlos Henrique'),
+  evidence('last','2026-11-06T21:26:00Z','Vanessa Silva'),
+  evidence('first','2026-11-06T21:00:00Z','Carlos Henrique'),
+  evidence('client','2026-11-06T21:26:30Z','Cliente','Cliente'),
+ ],rated,'Carlos Lemos')
+ assert.equal(result.owner,'Vanessa Silva');assert.equal(result.message_id,'last')
+ assert.equal(result.source_owner,'Carlos Lemos');assert.equal(result.reason,'identified')
+})
+test('autoria ausente, empate e pessoa fora do quadro nao voltam ao analista anterior',async()=>{
+ const {lastHumanAttendance}=await import('../src/lib/cx360-diagnostics.ts')
+ const evidence=(id:string,author?:string)=>({id,at:'2026-11-06T21:26:00Z',author,role:'Analista',text:'Mensagem pública de teste.',attachments:0})
+ const rated='2026-11-06T21:27:00Z'
+ assert.equal(lastHumanAttendance([evidence('a','Carlos Lemos')],rated,'Vanessa Silva').owner,'Carlos Henrique')
+ assert.equal(lastHumanAttendance([evidence('a','Carlos Henrique'),evidence('b','Vanessa Silva')],rated,'Carlos Henrique').reason,'unidentified_or_ambiguous')
+ assert.equal(lastHumanAttendance([evidence('a')],rated,'Carlos Henrique').owner,null)
+ assert.equal(lastHumanAttendance([evidence('a','Pessoa nova')],rated,'Carlos Henrique').reason,'outside_approved_roster')
+ assert.equal(lastHumanAttendance([],rated,'Carlos Henrique').reason,'no_public_human')
+})
+
+test('melhoria com acusacao de falha exige revisao e nunca e tratada como indisponibilidade',async()=>{
+ const {serviceTextNeedsReview}=await import('../src/lib/cx360-diagnostics.ts')
+ const {cxErrorCode}=await import('../src/lib/cx360-retry.ts')
+ const base={...diagnosis,service_assessment:[{criterion:'clareza' as const,result:'melhoria' as const,finding:'O analista falhou na orientação.',evidence_ids:['1']}]}
+ assert.equal(serviceTextNeedsReview(base as Diagnosis),true)
+ assert.equal(serviceTextNeedsReview({...base,service_assessment:[{...base.service_assessment[0],finding:'Uma possibilidade é confirmar o entendimento antes de prosseguir.'}]} as Diagnosis),false)
+ assert.equal(cxErrorCode(new Error('Critério de melhoria contém afirmação de falha não revisada.')),'provider_evidence_invalid')
+})
