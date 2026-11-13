@@ -18,6 +18,7 @@ import { clickDeskDailyAvailable, clickDeskPublicationDay, publishedClickDeskEnd
 import { sumChatVoteRows } from '@/lib/clickdesk-csat'
 import ChatTimeFilter from '@/components/chat/ChatTimeFilter'
 import ChatNeutralReviews from '@/components/chat/ChatNeutralReviews'
+import AnalystReviews from '@/components/chat/AnalystReviews'
 import { chatTimeRange, type ChatTimeMode } from '@/lib/chat-time-filter'
 import ClickDeskSourceReport from '@/components/chat/ClickDeskSourceReport'
 
@@ -4461,6 +4462,9 @@ function ChatAnalystPortal({
         )}
       </section>
 
+      <AnalystReviews key={`${analyst.id}:${monthStart}:${monthEnd}`} start={monthStart} end={monthEnd} analystId={analyst.id}
+        onAnalyze={(id) => void analyzeQualitativeTicket(id)} loadingTicketId={qualitativeLoadingTicketId}
+        renderAnalysis={(id) => qualitativeByTicket[id] && openQualitativeTicketId === id ? <QualitativeAnalysisCard result={qualitativeByTicket[id]} reanalyzing={qualitativeLoadingTicketId === id} audience="analyst" /> : null} />
       <section id="minha-rotina" className={loading || metrics?.erro ? 'hidden' : 'panel scroll-mt-24'}>
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
@@ -4738,6 +4742,7 @@ function ChatAnalystPortal({
                       <div>
                         <p className="text-xs text-slate-500">Atendimentos</p>
                         <strong>{formatChatCount(item.attendances)}</strong>
+                        <p className="mt-2 text-xs text-slate-400">{item.reviews} avaliações · {item.positive_reviews} boas · {item.negative_reviews} ruins</p>
                       </div>
                     </div>
                   </div>
