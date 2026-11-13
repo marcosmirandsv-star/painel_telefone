@@ -64,6 +64,7 @@ async function clickDesk(
   accountId: string,
 ) {
   const response = await fetch(`${CLICKDESK_BASE_URL}${path}`, {
+    signal: AbortSignal.timeout(20000),
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'X-Account-Id': accountId,
@@ -195,8 +196,8 @@ Deno.serve(async (req) => {
     const receivedByOwner = new Map<number, number>()
     if (useReceived) {
       // Bounded concurrency keeps the reporting API from receiving a request burst.
-      for (let offset = 0; offset < ownerIds.length; offset += 3) {
-        const batch = ownerIds.slice(offset, offset + 3)
+      for (let offset = 0; offset < ownerIds.length; offset += 5) {
+        const batch = ownerIds.slice(offset, offset + 5)
         const values = await Promise.all(batch.map(async ownerId => {
           const payload = await clickDesk(
             `/support/reports/agents?${query({ from: start, to: end, department_ids: REPORT_DEPARTMENTS, owner_ids: [ownerId] })}`,
