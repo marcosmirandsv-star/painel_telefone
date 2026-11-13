@@ -9,7 +9,7 @@ test('November reads exact ClickDesk Recebidos and original votes instead of ass
  const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText
  const calls:string[]=[]
  const person={id:'joao',name:'João Pedro Vianey',team_id:'fiscal',active:true}
- const snapshot={source_owner_key:'joao pedro vianey',source_owner_name:person.name,attendances:190,positive_reviews:87,negative_reviews:3,captured_at:'2026-11-12T13:00:00Z'}
+ const snapshot={source_owner_key:'joao pedro vianey',source_owner_name:person.name,attendances:190,positive_reviews:87,negative_reviews:3,captured_at:new Date(Date.now()-31*60*1000).toISOString()}
  const admin={rpc:async(name:string)=>{calls.push(name);return {data:name==='get_scoped_clickdesk_official_period_metrics'?[snapshot]:[],error:null}},from:()=>({select:async()=>({data:[person],error:null})})}
  const exports:Record<string,unknown>={}
  runInNewContext(compiled,{exports,require:(name:string)=>{
@@ -27,4 +27,5 @@ test('November reads exact ClickDesk Recebidos and original votes instead of ass
  assert.equal(result.rows[0].reviews,90)
  assert.equal(result.metricSource,'clickdesk_official_period_metrics')
  assert.ok(calls.includes('get_scoped_clickdesk_official_neutral_counts'))
+ assert.ok(calls.includes('request_clickdesk_official_period'),'captura antiga solicita atualização sem substituir valores por eventos')
 })

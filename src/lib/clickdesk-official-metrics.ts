@@ -51,7 +51,7 @@ export async function loadOfficialPeriodRows(
       p_end: filters.end,
     })
 
-  if(filters.start>='2026-11-01'&&!official.error&&!official.data?.length){
+  if(filters.start>='2026-11-01'&&!official.error&&(!official.data?.length||official.data.some((metric:OfficialPeriodMetric)=>!Number.isFinite(Date.parse(metric.captured_at))||Date.now()-Date.parse(metric.captured_at)>=30*60*1000))){
     const requested=await admin.rpc('request_clickdesk_official_period',{p_start:filters.start,p_end:filters.end})
     if(requested.error)throw new ApiError(503,'Não foi possível solicitar a captura deste intervalo do ClickDesk.')
     for(let attempt=0;attempt<15&&!official.data?.length;attempt++){
