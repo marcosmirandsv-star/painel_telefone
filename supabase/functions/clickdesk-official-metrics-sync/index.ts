@@ -64,7 +64,7 @@ async function clickDesk(
   accountId: string,
 ) {
   const response = await fetch(`${CLICKDESK_BASE_URL}${path}`, {
-    signal: AbortSignal.timeout(45000),
+    signal: AbortSignal.timeout(90000),
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'X-Account-Id': accountId,
@@ -189,8 +189,8 @@ Deno.serve(async (req) => {
       (async () => {
         const counts = new Map<number, number>()
         if (useReceived) {
-          for (let offset = 0; offset < ownerIds.length; offset += 5) {
-            const values = await Promise.all(ownerIds.slice(offset, offset + 5).map(async ownerId => {
+          for (let offset = 0; offset < ownerIds.length; offset += 3) {
+            const values = await Promise.all(ownerIds.slice(offset, offset + 3).map(async ownerId => {
               const payload = await clickDesk(`/support/reports/agents?${query({ from: start, to: end, department_ids: REPORT_DEPARTMENTS, owner_ids: [ownerId] })}`, apiKey, accountId)
               return [ownerId, receivedForOwner(payload, ownerId)] as const
             }))

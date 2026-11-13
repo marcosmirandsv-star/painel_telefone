@@ -23,8 +23,8 @@ function harness(fail=false){
  }})
  return {run:()=>handle(new Request('https://example.test',{method:'POST',headers:{Authorization:'Bearer test-token'},body:JSON.stringify({start:'2026-11-01',end:'2026-11-11'})})),stats:()=>({maximum,published,signals})}
 }
-test('captura mensal usa lotes limitados de cinco e publica somente após conciliar os quinze responsáveis',async()=>{
- const h=harness(),response=await h.run();assert.equal(response.status,200);assert.equal((await response.json()).totals.attendances,15);assert.equal(h.stats().maximum,5);assert.equal(h.stats().published,1);assert.equal(h.stats().signals,18)
+test('captura mensal usa lotes limitados de três e publica somente após conciliar os quinze responsáveis',async()=>{
+ const h=harness(),response=await h.run();assert.equal(response.status,200);assert.equal((await response.json()).totals.attendances,15);assert.equal(h.stats().maximum,3);assert.equal(h.stats().published,1);assert.equal(h.stats().signals,18)
 })
 test('timeout da origem não publica captura parcial nem substitui valores anteriores',async()=>{
  const h=harness(true),response=await h.run();assert.equal(response.status,500);assert.equal(h.stats().published,0)
