@@ -23,7 +23,7 @@ import ClickDeskSourceReport from '@/components/chat/ClickDeskSourceReport'
 
 // Homologação: IA qualitativa liberada no acesso individual com governança separada da gestão.
 const QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS = true
-const OFFICIAL_RESOLUTION_POLICY = 'Recebimentos pela data em que cada analista assumiu o ticket nas filas ERP/Fiscal. Transferências posteriores ficam no dia do evento. O CSAT ajustado exclui somente neutros externos comprovados; todas as avaliações continuam na participação.'
+const OFFICIAL_RESOLUTION_POLICY = 'Campo Recebidos do relatório ClickDesk, nas filas ERP/Fiscal e no intervalo selecionado. A performance inclui somente os analistas do quadro aprovado; o total operacional pode incluir outros responsáveis e atendimentos sem responsável. As capturas são atualizadas a cada 30 minutos. O CSAT ajustado exclui somente neutros externos comprovados; todas as avaliações continuam na participação.'
 
 function reconciliationReason(reason: string | null) {
   const labels: Record<string,string> = {
@@ -1284,7 +1284,7 @@ function CentralOverview({
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">Visão executiva</p>
             <h2 className="mt-2 text-2xl font-bold">Onde vale olhar primeiro?</h2>
             <p className="mt-2 text-sm text-slate-400">
-              Telefone e Chat aparecem juntos com fontes independentes. {officialSource ? 'O Chat usa volume de atendimentos e avaliações do relatório ClickDesk, nas filas ERP e Fiscal, agrupados pelo time de lotação. A partir de novembro/2026, cada recebimento segue a data do evento; transferências posteriores não mudam dias anteriores.' : 'O Chat usa créditos de autoria final comprovada em cobertura parcial.'} Os relatórios de filas aparecem separadamente.
+              Telefone e Chat aparecem juntos com fontes independentes. {officialSource ? 'O Chat usa volume de atendimentos e avaliações do relatório ClickDesk, nas filas ERP e Fiscal, agrupados pelo time de lotação. A partir de novembro/2026, o volume usa o campo Recebidos do ClickDesk no mesmo intervalo selecionado.' : 'O Chat usa créditos de autoria final comprovada em cobertura parcial.'} Os relatórios de filas aparecem separadamente.
             </p>
           </div>
           <div className="rounded-xl border border-white/10 bg-slate-950/40 px-4 py-3 text-right">
@@ -4381,7 +4381,7 @@ function ChatAnalystPortal({
               <ul className="mt-2 space-y-1">{metrics.reconciliation.excluded?.map(item => <li key={item.ticket_id}>Ticket {item.ticket_id}: {reconciliationReason(item.reason)}</li>)}</ul>
             </details>}
             <ChatSharedPerformanceSummary metric={accumulated} csatGoal={csatGoal} dailyAvailable={clickDeskDailyAvailable(metrics) && monthStart<=clickDeskPublicationDay() && monthEnd>=clickDeskPublicationDay()} />
-            {metrics?.source==='clickdesk_event_receipts' && <ChatNeutralReviews start={monthStart} end={monthEnd} analystId={analyst?.id} />}
+            {isOfficialClickDeskSource(metrics?.source) && monthStart>='2026-11-01' && <ChatNeutralReviews start={monthStart} end={monthEnd} analystId={analyst?.id} />}
 
             <ChatPerformanceDiagnosticPanel diagnostic={diagnostic} />
 
@@ -8802,7 +8802,7 @@ function ChatModuleDashboard({
             </div>
             {sharedIndividualSelection.ambiguous && <p className="mt-3 text-sm text-amber-200">Mais de uma fila encontrada para o analista. Resumo indisponível até a conferência; nenhuma soma automática foi realizada.</p>}
             <ChatSharedPerformanceSummary metric={sharedIndividualSelection.row} csatGoal={Number(sharedIndividualPerson?.csat_goal ?? 90)} dailyAvailable={clickDeskDailyAvailable(clickDeskPersistedMetrics) && chat2D1InRange} />
-            {clickDeskPersistedMetrics?.source==='clickdesk_event_receipts' && <ChatNeutralReviews start={chat2SelectedPeriod.start} end={chat2SelectedPeriod.end} teamId={selectedTeamId==='all'?null:selectedTeamId} />}
+            {isOfficialClickDeskSource(clickDeskPersistedMetrics?.source) && chat2SelectedPeriod.start>='2026-11-01' && <ChatNeutralReviews start={chat2SelectedPeriod.start} end={chat2SelectedPeriod.end} teamId={selectedTeamId==='all'?null:selectedTeamId} />}
           </section>
           {sharedIndividualPerson && sharedIndividualSelection.row && (
             <details className="rounded-xl border border-white/10 p-4">

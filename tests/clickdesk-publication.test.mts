@@ -30,9 +30,10 @@ async function runCapture({conflict=false,incomplete=false,token=true,november=f
     {clickdesk_owner_id:12,source_owner_name:'Ana Julia',source_owner_key:'ana julia'},
   ]
   let saved: Record<string,unknown>[]=[]
+  let capturedVotes:Record<string,unknown>[]=[]
   let handler: (r:Request)=>Promise<Response>
   const queries:URL[]=[]
-  const db={rpc:async()=>({data:{api_key:'fixture',account_id:'fixture'},error:null}),from:(name:string)=>{
+  const db={rpc:async(name:string,args:{p_rows?:typeof saved;p_votes?:typeof capturedVotes})=>{if(name==='publish_clickdesk_official_capture'){saved=args.p_rows!;capturedVotes=args.p_votes!;return {data:true,error:null}}return {data:{api_key:'fixture',account_id:'fixture'},error:null}} ,from:(name:string)=>{
     if(name==='clickdesk_official_owner_registry') {
       const chain={select(){return chain},eq(){return chain},then(resolve:(r:unknown)=>unknown){return Promise.resolve({data:registry,error:null}).then(resolve)}}
       return chain
@@ -54,14 +55,14 @@ async function runCapture({conflict=false,incomplete=false,token=true,november=f
       }
       const page=Number(url.searchParams.get('page'))
       const department=Number(url.searchParams.get('department_id'))
-      const carlos={ticket_id:1059718,number:1115616,owner:'Carlos Henrique',sentiment:'positive'}
-      const joao={ticket_id:1081062,number:1136950,owner:'João Pedro Vianey',sentiment:'negative'}
+      const carlos={ticket_id:1059718,number:1115616,owner:'Carlos Henrique',sentiment:'positive',label:'Ótimo',rated_at:'05/11/2026 12:00'}
+      const joao={ticket_id:1081062,number:1136950,owner:'João Pedro Vianey',sentiment:'negative',label:'Neutro',rated_at:'05/11/2026 12:00'}
       if(department===3)return Response.json({data:page===1?[carlos]:[joao],last_page:2,total:incomplete?3:2})
       return Response.json({data:[{...carlos,sentiment:conflict?'negative':'positive'}],last_page:1,total:1})
     }}
   runInNewContext(compiled,context)
   const response=await handler!(new Request('https://example.test',{method:'POST',headers:token?{authorization:'Bearer fixture'}:{},body:JSON.stringify(november?{start:'2026-11-01',end:'2026-11-10'}:{start:'2026-10-01',end:'2026-10-31'})}))
-  return {response,saved,queries}
+  return {response,saved,queries,capturedVotes}
 }
 
 test('capture matches queue scope, uses resolved counts, canonical owner ID and technical ticket deduplication',async()=>{
@@ -98,6 +99,9 @@ test('capture rejects unauthenticated requests before reading ClickDesk',async()
 test('November received volume uses individual headers, reconciles the group and retains resolved separately',async()=>{
   const result=await runCapture({november:true})
   assert.equal(result.response.status,200)
+  assert.equal(result.capturedVotes.length,2)
+  assert.equal(result.capturedVotes.find(row=>row.source_owner_key==='joao pedro vianey')?.original_label,'Neutro')
+  assert.ok(result.queries.filter(url=>url.pathname.endsWith('/ratings')).every(url=>!url.searchParams.has('attendance')&&url.searchParams.get('per_page')==='100'))
   const carlos=result.saved.find(row=>row.source_owner_key==='carlos lemos')!
   assert.equal(carlos.attendances,112)
   assert.equal(carlos.resolved,352)

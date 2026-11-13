@@ -12,10 +12,9 @@ export async function GET(request:Request){return handle(async()=>{
  if(!access.isManagement&&!access.chatAnalystId)throw new ApiError(403,'Perfil sem vínculo individual.')
  const analyst=access.isManagement?requested:access.chatAnalystId
  const patternStart=new Date(Date.parse(end+'T12:00:00Z')-13*86400000).toISOString().slice(0,10)
- const from=patternStart<start?patternStart:start
  const rows:Record<string,unknown>[]=[]
  for(let offset=0;offset<10000;offset+=500){
-  let query=access.admin.from('clickdesk_event_ratings').select('ticket_id,ticket_number,analyst_id,team_id,occurred_date,original_label,source_hash,review:clickdesk_neutral_reviews(cause,status,attempts,analysis,exclusion_eligible,source_hash,reviewed_at,error_code)').eq('original_label','Neutro').gte('occurred_date',from).lte('occurred_date',end).order('ticket_id')
+  let query=access.admin.from('clickdesk_official_period_votes').select('ticket_id,ticket_number,analyst_id,team_id,occurred_date,original_label,source_hash').eq('original_label','Neutro').eq('period_start',start).eq('period_end',end).order('ticket_id')
   if(analyst)query=query.eq('analyst_id',analyst)
   if(access.isManagement&&team)query=query.eq('team_id',team)
   const result=await query.range(offset,offset+499)
@@ -23,6 +22,12 @@ export async function GET(request:Request){return handle(async()=>{
   rows.push(...(result.data??[]))
   if((result.data?.length??0)<500)break
   if(offset===9500)throw new ApiError(503,'Consulta excedeu a paginação segura.')
+ }
+ for(let offset=0;offset<rows.length;offset+=500){
+  const batch=rows.slice(offset,offset+500)
+  const reviews=await access.admin.from('clickdesk_neutral_reviews').select('ticket_id,cause,status,attempts,analysis,exclusion_eligible,source_hash,reviewed_at,error_code').in('ticket_id',batch.map(row=>String(row.ticket_id)))
+  if(reviews.error)throw new ApiError(503,'Revisões dos neutros indisponíveis.')
+  for(const row of batch)row.review=(reviews.data??[]).find(review=>review.ticket_id===row.ticket_id)??null
  }
  const people=await access.admin.from('chat_analysts').select('id,name')
  if(people.error)throw new ApiError(503,'Cadastro de analistas indisponível.')
@@ -40,7 +45,7 @@ export async function GET(request:Request){return handle(async()=>{
    evidence:Array.isArray(analysis.evidence_quotes)?analysis.evidence_quotes:[],
    pattern:analysis.pattern_supported===true?String(analysis.pattern):'none',reviewed_at:review.reviewed_at}
  })
- const selected=mapped.filter(row=>row.date>=start)
+ const selected=mapped
  const completed=selected.filter(row=>row.status==='verified'||row.status==='needs_review')
  const inconclusive=completed.filter(row=>row.status==='needs_review')
  const technical=selected.filter(row=>row.status==='technical_failure').length
