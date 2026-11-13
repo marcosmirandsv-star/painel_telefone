@@ -303,7 +303,7 @@ export async function GET(request: Request) {
     }
 
     if (lastReconciledAt && (!visibleSyncFinishedAt || lastReconciledAt > visibleSyncFinishedAt)) visibleSyncFinishedAt = lastReconciledAt
-    if(metricSource==='clickdesk_event_receipts')visibleSyncFinishedAt=lastReconciledAt
+    if(isOfficialClickDeskSource(metricSource))visibleSyncFinishedAt=lastReconciledAt
 
     const apprenticeRows = rows.filter((row) => row.identity_role === 'apprentice')
     const includedRows = rows.filter((row) => row.identity_role !== 'apprentice')
@@ -383,7 +383,7 @@ export async function GET(request: Request) {
             ? 'Atendimentos pela data do recebimento por cada analista. Transferências posteriores ficam no dia do evento. Avaliações pela data da resposta; CSAT ajustado exclui somente neutros externos verificados.'
           : metricSource === 'clickdesk_official_period_metrics'
             ? filters.start >= '2026-11-01'
-              ? 'ClickDesk: Recebidos por responsável nas filas ERP e Fiscal, avaliações pelo atendente avaliado, time de lotação e corte D-1. Resolvidos não são somados aos recebidos. O calendário diário exige conciliação com o período.'
+              ? 'ClickDesk: Recebidos por responsável nas filas ERP e Fiscal, avaliações pelo atendente avaliado, time de lotação e atualização a cada 30 minutos. Resolvidos não são somados aos recebidos. O calendário diário exige conciliação com o período.'
               : 'Fotografia histórica do período ClickDesk: resolvidos por responsável e avaliações pelo atendente avaliado; filas ERP e Fiscal, time de lotação e corte D-1.'
             : 'Data operacional: última resposta pública humana, em Brasília. Cobertura validada conforme fontes documentadas.',
       },

@@ -2,7 +2,6 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { ApiError } from './integration-server'
 import { reconciledDaily, sliceOfficialDaily } from './clickdesk-official-daily'
 import { publishedClickDeskEnd } from './clickdesk-publication'
-import { loadEventPeriodRows } from './clickdesk-event-metrics'
 
 export type OfficialDailyMetricRow = {
   occurred_date: string
@@ -46,12 +45,22 @@ export async function loadOfficialPeriodRows(
   admin: SupabaseClient,
   filters: {start:string;end:string;analystId?:string|null;teamId?:string|null},
 ):Promise<OfficialResult|null> {
-  if(filters.start>='2026-11-01')return loadEventPeriodRows(admin,filters)
-  const official = await admin
+  let official = await admin
     .rpc('get_scoped_clickdesk_official_period_metrics', {
       p_start: filters.start,
       p_end: filters.end,
     })
+
+  if(filters.start>='2026-11-01'&&!official.error&&!official.data?.length){
+    const requested=await admin.rpc('request_clickdesk_official_period',{p_start:filters.start,p_end:filters.end})
+    if(requested.error)throw new ApiError(503,'Não foi possível solicitar a captura deste intervalo do ClickDesk.')
+    for(let attempt=0;attempt<15&&!official.data?.length;attempt++){
+      await new Promise(resolve=>setTimeout(resolve,2000))
+      official=await admin.rpc('get_scoped_clickdesk_official_period_metrics',{p_start:filters.start,p_end:filters.end})
+      if(official.error)break
+    }
+    if(!official.error&&!official.data?.length)throw new ApiError(503,'O ClickDesk ainda está preparando este intervalo. Tente novamente em instantes.')
+  }
 
   if (official.error) {
     console.warn('clickdesk_official_snapshot_unavailable', {
@@ -86,11 +95,20 @@ export async function loadOfficialPeriodRows(
   const roster = new Map(
     (people.data ?? []).map(person => [normalizeSourceOwner(person.name), person]),
   )
+
+  const neutral=filters.start>='2026-11-01'?await admin.rpc('get_scoped_clickdesk_official_neutral_counts',{p_start:filters.start,p_end:filters.end}):{data:[],error:null}
+  if(neutral.error)throw new ApiError(503,'Não foi possível conferir os ajustes das avaliações neutras.')
+  type NeutralCounts={period_start:string;period_end:string;source_owner_key:string;excluded_neutrals:number;neutral_human:number;neutral_external:number;neutral_pending:number}
+  const counts=(key:string,start:string,end:string)=>{
+    const found=(neutral.data??[] as NeutralCounts[]).find((n:NeutralCounts)=>n.source_owner_key===key&&n.period_start===start&&n.period_end===end)
+    return {excluded_neutrals:Number(found?.excluded_neutrals??0),neutral_human:Number(found?.neutral_human??0),neutral_external:Number(found?.neutral_external??0),neutral_pending:Number(found?.neutral_pending??0)}
+  }
   const rows = (official.data as OfficialPeriodMetric[])
     .map(metric => {
       const person = roster.get(metric.source_owner_key)
       const isActive = Boolean(person?.active)
       return {
+        ...counts(metric.source_owner_key,filters.start,filters.end),
         occurred_date: filters.end,
         team_id: person?.team_id ?? null,
         analyst_id: person?.id ?? null,
@@ -119,7 +137,7 @@ export async function loadOfficialPeriodRows(
   const daily = await admin.rpc('get_scoped_clickdesk_official_daily_metrics', {p_start:filters.start,p_end:filters.end})
   const candidates:OfficialDailyMetricRow[] = daily.error ? [] : (daily.data ?? []).flatMap((metric:OfficialPeriodMetric & {occurred_date:string})=>{
     const person=rows.find(row=>row.assignee_name===metric.source_owner_name)
-    return person ? [{...person,occurred_date:metric.occurred_date,attendances:Number(metric.attendances),positive_reviews:Number(metric.positive_reviews),negative_reviews:Number(metric.negative_reviews),reviews:Number(metric.positive_reviews)+Number(metric.negative_reviews)}] : []
+    return person ? [{...person,...counts(metric.source_owner_key,metric.occurred_date,metric.occurred_date),occurred_date:metric.occurred_date,attendances:Number(metric.attendances),positive_reviews:Number(metric.positive_reviews),negative_reviews:Number(metric.negative_reviews),reviews:Number(metric.positive_reviews)+Number(metric.negative_reviews)}] : []
   })
   const dailyRows=reconciledDaily<OfficialDailyMetricRow>(rows,candidates,filters.start,filters.end)
 

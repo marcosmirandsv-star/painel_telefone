@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { ApiError } from '@/lib/integration-server'
 import { readFinalLedger, readLedgerCoverage } from '@/lib/clickdesk-ledger-server'
 import { createHash } from 'node:crypto'
-import {loadEventPeriodRows} from './clickdesk-event-metrics'
+import {loadOfficialPeriodRows} from './clickdesk-official-metrics'
 import {chatMetricTotals} from './chat-metric-totals'
 import {clickDeskPublicationDay,publishedClickDeskEnd} from './clickdesk-publication'
 
@@ -354,9 +354,10 @@ export async function buildClickDeskClosureSnapshot(
 async function buildEventClosure(admin:SupabaseClient,period:ClickDeskClosurePeriod){
  const today=clickDeskPublicationDay(),end=publishedClickDeskEnd(period.end)
  const [published,people,teams]=await Promise.all([
-  loadEventPeriodRows(admin,{start:period.start,end,teamId:period.team==='all'?null:period.team}),
+  loadOfficialPeriodRows(admin,{start:period.start,end,teamId:period.team==='all'?null:period.team}),
   admin.from('chat_analysts').select('id,name,team_id,active,csat_goal'),
   admin.from('chat_teams').select('id,name,manager_name')])
+ if(!published)throw new ApiError(503,'Captura oficial do período indisponível.')
  if(people.error||teams.error)throw new ApiError(503,'Cadastro do fechamento indisponível.')
  const names=new Map((people.data??[]).map(p=>[p.id,p])),teamNames=new Map((teams.data??[]).map(t=>[t.id,t]))
  const rows=published.rows,totals=chatMetricTotals(rows),empty=chatMetricTotals([])
@@ -367,12 +368,12 @@ async function buildEventClosure(admin:SupabaseClient,period:ClickDeskClosurePer
  const teamRows=[...new Set(rows.map(r=>r.team_id))].map(id=>{const own=rows.filter(r=>r.team_id===id),performance=chatMetricTotals(own);return {
   team_id:id,team_name:teamNames.get(id!)?.name??null,manager_name:teamNames.get(id!)?.manager_name??null,
   operational:performance,performance,management_support:empty,analyst_count:own.length,average_attendances:own.length?round(performance.attendances/own.length):0}})
- const daily=published.dailyRows.map(({occurred_date,analyst_id,attendances,positive_reviews,negative_reviews,excluded_neutrals,neutral_pending})=>({occurred_date,analyst_id,attendances,positive_reviews,negative_reviews,excluded_neutrals,neutral_pending}))
+ const daily=(published.dailyRows??published.rows).map(({occurred_date,analyst_id,attendances,positive_reviews,negative_reviews,excluded_neutrals,neutral_pending})=>({occurred_date,analyst_id,attendances,positive_reviews,negative_reviews,excluded_neutrals,neutral_pending}))
  const ledgerHash=createHash('sha256').update(JSON.stringify(daily)).digest('hex')
  const issues=period.end>=today?['A competência ainda está aberta.']:[]
- return {versao:'4',regras:'clickdesk-event-neutral-v1',fonte:published.metricSource,consultado_em:new Date().toISOString(),status:'parcial',canal:'chat',
+ return {versao:'4',regras:'clickdesk-received-neutral-v1',fonte:published.metricSource,consultado_em:new Date().toISOString(),status:'parcial',canal:'chat',
   mes:period.month,inicio:period.start,fim:period.end,equipe:period.team,tem_dados:totals.attendances>0||totals.reviews>0,
-  regra_periodo:'recebimentos_por_analista_e_avaliacoes_por_data_do_evento',regra_data:'Primeiro recebimento por ticket e analista; avaliações na data da resposta à pesquisa, em Brasília.',
+  regra_periodo:'recebimentos_por_analista_e_avaliacoes_por_data_do_evento',regra_data:'Recebidos e avaliações do mesmo relatório ClickDesk e intervalo, em Brasília.',
   metas:{review_percentage:25,csat:'meta individual congelada por analista no fechamento'},operacao:totals,performance:totals,apoio_gestao:empty,
   analistas:analysts,equipes:teamRows,gestao:[],
   qualidade_dados:{coverage_complete:true,coverage_sources:[],excluded_inactive_attendances:0,ledger_sha256:ledgerHash,qualitative_analysis_required:false,

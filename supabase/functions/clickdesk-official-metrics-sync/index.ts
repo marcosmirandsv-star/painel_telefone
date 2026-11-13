@@ -95,7 +95,7 @@ async function ratingPages(
   accountId: string,
 ) {
   const first = await clickDesk(
-    `/support/reports/ratings?${query({ from: start, to: end, department_id: departmentId, page: 1 })}`,
+    `/support/reports/ratings?${query({ from: start, to: end, department_id: departmentId, per_page:100, page: 1 })}`,
     apiKey,
     accountId,
   )
@@ -107,7 +107,7 @@ async function ratingPages(
     const batch = Array.from({ length: Math.min(6, lastPage - page + 1) }, (_, i) => page + i)
     pages.push(...await Promise.all(batch.map((current) =>
       clickDesk(
-        `/support/reports/ratings?${query({ from: start, to: end, department_id: departmentId, page: current })}`,
+        `/support/reports/ratings?${query({ from: start, to: end, department_id: departmentId, per_page:100, page: current })}`,
         apiKey,
         accountId,
       ),
@@ -151,17 +151,17 @@ Deno.serve(async (req) => {
   const today = businessDate()
   const yesterday = new Date(`${today}T12:00:00Z`)
   yesterday.setUTCDate(yesterday.getUTCDate() - 1)
-  let end = yesterday.toISOString().slice(0, 10)
+  let end = today
   let start = monthStart(end)
   // Explicit historical refreshes use the same authenticated capture path.
   try {
     const body = await req.json()
     if (body.start || body.end) {
       if (!/^20\d{2}-\d{2}-\d{2}$/.test(body.start ?? '') || !/^20\d{2}-\d{2}-\d{2}$/.test(body.end ?? '') ||
-          body.start > body.end || body.end > end || (monthStart(body.end) !== body.start && body.start !== body.end) ||
+          body.start > body.end || body.end > end || body.start.slice(0,7)!==body.end.slice(0,7) ||
           new Date(body.start+'T12:00:00Z').toISOString().slice(0,10)!==body.start ||
           new Date(body.end+'T12:00:00Z').toISOString().slice(0,10)!==body.end) {
-        return Response.json({error:'Período inválido; somente dias encerrados em Brasília.'},{status:400})
+        return Response.json({error:'Período inválido; datas até hoje em Brasília.'},{status:400})
       }
       start = body.start
       end = body.end
@@ -261,11 +261,12 @@ Deno.serve(async (req) => {
     }
 
     const seenRatings = new Map<string, string>()
+    const cohortVotes:Record<string,unknown>[]=[]
     for (const raw of ratings) {
       const row = asRecord(raw)
       const ticketId = String(row.ticket_id ?? '')
       if (!/^\d+$/.test(ticketId)) throw new Error('Rating without technical ClickDesk ticket ID')
-      const signature = JSON.stringify([row.owner, row.sentiment])
+      const signature = JSON.stringify([row.owner, row.sentiment,row.label,row.rated_at])
       if (seenRatings.has(ticketId)) {
         if (seenRatings.get(ticketId) !== signature) throw new Error('Conflicting duplicate rating')
         continue
@@ -275,6 +276,11 @@ Deno.serve(async (req) => {
       const registered = known.get(normalized(ownerName))
       if (!registered) continue
       const aggregateRow = ensure(registered.source_owner_name)
+      if(useReceived){
+       const m=/^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})(?::(\d{2}))?$/.exec(String(row.rated_at))
+       if(!m)throw Error('Rating timestamp missing')
+       cohortVotes.push({ticket_id:ticketId,ticket_number:String(row.number??''),source_owner_key:registered.source_owner_key,sentiment:row.sentiment,original_label:String(row.label??''),rated_at:`${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}:${m[6]||'00'}-03:00`})
+      }
       const sentiment = typeof row.sentiment === 'string' ? row.sentiment.toLowerCase() : ''
       if (sentiment === 'positive') aggregateRow.positive_reviews += 1
       if (sentiment === 'negative') aggregateRow.negative_reviews += 1
@@ -304,11 +310,11 @@ Deno.serve(async (req) => {
       captured_at: capturedAt,
       attendance_basis: useReceived ? 'received' : 'resolved',
       source_note: useReceived
-        ? 'ClickDesk D-1: received tickets from single-owner report headers, reconciled with group header; evaluated-owner ratings scoped to ERP/Fiscal; resolved retained separately.'
+        ? 'ClickDesk intraday: received tickets from single-owner report headers, reconciled with group header; evaluated-owner ratings scoped to ERP/Fiscal; resolved retained separately.'
         : 'ClickDesk D-1: resolved tickets and evaluated-owner ratings scoped to ERP/Fiscal and approved source owner IDs; deduplicated by technical ticket ID.',
     }))
 
-    const save = await admin
+    const save = useReceived ? await admin.rpc('publish_clickdesk_official_capture',{p_rows:records,p_votes:cohortVotes}) : await admin
       .from('clickdesk_official_period_metrics')
       .upsert(records, { onConflict: 'period_start,period_end,source_owner_key,source_scope' })
     if (save.error) throw new Error(save.error.message)
