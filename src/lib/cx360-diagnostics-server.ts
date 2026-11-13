@@ -5,7 +5,7 @@ import { cxRetry, cxErrorCode, cxValidationDetail } from './cx360-retry'
 import { diagnosisSchema } from './cx360-output-schema'
 import { applyHumanReview,humanReviewPrompt,humanReviewSchema } from './cx360-human-review'
 import { adminClient, ApiError } from './integration-server'
-import { CX_ANALYSIS_VERSION, canonicalOwner, normalizeName, eligibleOwner, ratingTimestamp, redactText, prepareMessages, validateDiagnosis, validateServiceAssessment, type DiagnosticRow, type Evidence, type Diagnosis } from './cx360-diagnostics'
+import { CX_ANALYSIS_VERSION, canonicalOwner, normalizeName, eligibleOwner, ratingTimestamp, redactText, prepareMessages, validateDiagnosis, validateServiceAssessment, lastHumanAttendance, serviceTextNeedsReview, type DiagnosticRow, type Evidence, type Diagnosis } from './cx360-diagnostics'
 
 type Source = { team_id: string; source_name: string; display_name: string }
 type Rating = DiagnosticRow & { comment: string; source_hash: string; lease_token: string; attempts: number }
@@ -79,34 +79,40 @@ Formato obrigatório (acrescente service_assessment ao objeto): {"factor":"produ
 async function analyze(row: Rating) {
   const raw=await source(`/tickets/${encodeURIComponent(row.ticket_id)}/messages`)
   const prepared=prepareMessages(raw,row.rated_at)
+  const attribution=lastHumanAttendance(prepared.messages,row.rated_at,row.owner_name)
+  const evaluatedOwner=attribution.reason==='identified'?attribution.owner!:''
   if(!prepared.messages.some(m=>m.text.length>10 && !m.text.startsWith('[Dados') && !m.text.startsWith('[Resposta')))return {analysis:null,messages:prepared.messages,status:'inconclusive',model:null}
   if(!process.env.GEMINI_API_KEY)throw new Error('provider_not_configured')
   const model=process.env.CX360_MODEL||'gemini-3.5-flash-lite'
   if(!/^[a-zA-Z0-9.-]{1,100}$/.test(model))throw new Error('invalid_model')
   const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{
     method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':process.env.GEMINI_API_KEY},signal:AbortSignal.timeout(60000),
-    body:JSON.stringify({systemInstruction:{parts:[{text:systemPrompt+' O campo evaluated_owner identifica a pessoa avaliada. O histórico pode conter vários analistas: use o campo author para distinguir quem fez cada intervenção. Não atribua mensagens de terceiros à pessoa avaliada; autoria ausente não comprova participação dela.'}]},contents:[{role:'user',parts:[{text:JSON.stringify({evaluated_owner:row.owner_name,satisfaction:row.label,comment:row.comment,team:row.source_team,history:prepared.messages,limitations:prepared.limitations})}]}],generationConfig:{responseMimeType:'application/json',responseJsonSchema:diagnosisSchema(prepared.messages),maxOutputTokens:4000,thinkingConfig:{thinkingLevel:'low'}}})
+    body:JSON.stringify({systemInstruction:{parts:[{text:systemPrompt+' evaluated_owner é o último analista com mensagem pública anterior à nota, identificado pelo servidor; source_owner é apenas a pessoa da avaliação original. A troca de responsável não comprova atendimento. Se evaluated_owner for null, não há referência individual autorizada: os seis critérios devem ser nao_observavel, explicando a limitação. Para adequado/melhoria/falha, cada critério deve citar ao menos um evaluated_owner_message_ids. Inclua cada um dos seis critérios exatamente uma vez. Melhoria deve descrever uma prática possível, sem afirmar que alguém falhou, errou ou encerrou abruptamente. Uma afirmação de falha exige result=falha, prova específica e revisão crítica. Não atribua falas de terceiros ao último atendente. Todas as human_gap_evidence_ids precisam constar também em evidence_ids.'}]},contents:[{role:'user',parts:[{text:JSON.stringify({evaluated_owner:evaluatedOwner||null,source_owner:row.owner_name,evaluated_owner_message_ids:prepared.messages.filter(m=>m.role==='Analista'&&m.author&&normalizeName(canonicalOwner(m.author))===normalizeName(evaluatedOwner)).map(m=>m.id),satisfaction:row.label,comment:row.comment,team:row.source_team,history:prepared.messages,limitations:prepared.limitations})}]}],generationConfig:{responseMimeType:'application/json',responseJsonSchema:diagnosisSchema(prepared.messages),maxOutputTokens:4000,thinkingConfig:{thinkingLevel:'low'}}})
   })
   if(!response.ok)throw new Error(response.status===429?'provider_rate_limit':`provider_http_${response.status}`)
   const result=await response.json()
   if(result.candidates?.[0]?.finishReason!=='STOP')throw new Error('provider_incomplete')
   const output=(result.candidates?.[0]?.content?.parts??[]).map((p:{text?:string})=>p.text??'').join('').trim()
-  const evaluatedHuman=prepared.messages.some(m=>m.role==='Analista'&&m.author&&normalizeName(canonicalOwner(m.author))===normalizeName(canonicalOwner(row.owner_name)))
+  const evaluatedHuman=Boolean(evaluatedOwner)
   const generated=JSON.parse(output.replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,''))
-  let analysis=validateDiagnosis(generated,prepared.messages,Boolean(evaluatedHuman),row.owner_name)
-  analysis.service_assessment=validateServiceAssessment(generated.service_assessment,prepared.messages,row.owner_name,analysis)
+  let analysis=validateDiagnosis(generated,prepared.messages,evaluatedHuman,evaluatedOwner)
+  analysis.service_assessment=validateServiceAssessment(generated.service_assessment,prepared.messages,evaluatedOwner,analysis)
+  if(serviceTextNeedsReview(analysis))throw new Error('Critério de melhoria contém afirmação de falha não revisada.')
   if(['conducao','misto'].includes(analysis.factor)||analysis.service_assessment.some(c=>c.result==='falha')){
     const reviewResponse=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{
       method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':process.env.GEMINI_API_KEY},signal:AbortSignal.timeout(60000),
-      body:JSON.stringify({systemInstruction:{parts:[{text:humanReviewPrompt}]},contents:[{role:'user',parts:[{text:JSON.stringify({evaluated_owner:row.owner_name,candidate:analysis,history:prepared.messages,internal_policies:null})}]}],generationConfig:{responseMimeType:'application/json',responseJsonSchema:humanReviewSchema,maxOutputTokens:2000,thinkingConfig:{thinkingLevel:'low'}}})
+      body:JSON.stringify({systemInstruction:{parts:[{text:humanReviewPrompt}]},contents:[{role:'user',parts:[{text:JSON.stringify({evaluated_owner:evaluatedOwner,candidate:analysis,history:prepared.messages,internal_policies:null})}]}],generationConfig:{responseMimeType:'application/json',responseJsonSchema:humanReviewSchema,maxOutputTokens:2000,thinkingConfig:{thinkingLevel:'low'}}})
     })
     if(!reviewResponse.ok)throw new Error(reviewResponse.status===429?'provider_rate_limit':`provider_http_${reviewResponse.status}`)
     const reviewed=await reviewResponse.json()
     if(reviewed.candidates?.[0]?.finishReason!=='STOP')throw new Error('provider_incomplete')
     const text=(reviewed.candidates?.[0]?.content?.parts??[]).map((p:{text?:string})=>p.text??'').join('').trim()
-    analysis=applyHumanReview(analysis,JSON.parse(text.replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'')),prepared.messages,row.owner_name)
+    analysis=applyHumanReview(analysis,JSON.parse(text.replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,'')),prepared.messages,evaluatedOwner)
   }
+  if(serviceTextNeedsReview(analysis))throw new Error('Critério de melhoria contém afirmação de falha não revisada.')
   analysis.limitations=[...new Set([...analysis.limitations,...prepared.limitations,'Políticas internas ainda não documentadas neste módulo; práticas sugeridas dependem de validação gerencial.'])]
+  analysis.attribution=attribution
+  if(!evaluatedOwner)analysis.limitations.push('Não foi identificado último atendente público do quadro aprovado antes da nota; não atribuir falha individual ao responsável da avaliação original.')
   return {analysis,messages:prepared.messages,status:analysis.factor==='inconclusivo'&&!analysis.service_assessment?.some(c=>c.result!=='nao_observavel')?'inconclusive':'analyzed',model}
 }
 export async function processCx(start:string,end:string,teamId:string|null=null,budgetMs=210000) {
@@ -131,7 +137,7 @@ export async function processCx(start:string,end:string,teamId:string|null=null,
         completed++
       }catch(error){
         const code=error instanceof ApiError?(error.status===429?'source_rate_limit':'source_unavailable'):cxErrorCode(error)
-        console.warn('CX360 analysis retry', { code, validation:cxValidationDetail(error) })
+        console.warn('CX360 analysis retry', { ticket:row.number, code, validation:cxValidationDetail(error) })
         const retry=cxRetry(code,row.attempts)
         const limited=retry.temporary
         if(limited)throttled=true

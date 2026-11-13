@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { readCxResponse, withCxDeadline } from '@/lib/cx360-client'
-import { d1, factorLabels, serviceLabels, serviceVerdict, type DiagnosticRow, type Evidence } from '@/lib/cx360-diagnostics'
+import { d1, factorLabels, serviceLabels, serviceVerdict, serviceTextNeedsReview, type DiagnosticRow, type Evidence } from '@/lib/cx360-diagnostics'
 
 type Source={team_id:string;display_name:string;source_name:string}
 type Review={id:string;analysis_hash:string;decision:string;notes:string;created_at:string}
@@ -19,7 +19,8 @@ export default function CxDiagnostics({onCaseCreated}:{onCaseCreated:()=>void}){
  const [data,setData]=useState<Payload|null>(null),[detail,setDetail]=useState<Detail|null>(null)
  const [busy,setBusy]=useState(false),[message,setMessage]=useState('Carregando a cobertura das avaliações…'),[state,setState]=useState('all')
  const [notes,setNotes]=useState(''),[confirm,setConfirm]=useState(false),[owner,setOwner]=useState('')
- const version=useRef(0),detailVersion=useRef(0),pollUntil=useRef(0)
+ const version=useRef(0),detailVersion=useRef(0),loading=useRef(0)
+ const [checkedAt,setCheckedAt]=useState<string|null>(null)
  const api=useCallback(async(path:string,body?:unknown)=>{
    const {data:{session}}=await withCxDeadline(supabase.auth.getSession())
    if(!session)throw new Error('Sua sessão terminou. Entre novamente no painel.')
@@ -27,15 +28,17 @@ export default function CxDiagnostics({onCaseCreated}:{onCaseCreated:()=>void}){
    return await withCxDeadline((async()=>readCxResponse(await fetch(`/api/gestao-inteligente/diagnosticos${path}`,{method:body?'POST':'GET',body:body?JSON.stringify(body):undefined,cache:'no-store',signal:controller.signal,headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.access_token}`}})))(),body?180000:20000,()=>controller.abort())
  },[])
  const load=useCallback(async(showBusy=true)=>{
+   if(!showBusy&&loading.current)return
+   loading.current++
    const request=++version.current
    if(showBusy)setBusy(true)
    try{
     const query=new URLSearchParams({start,end,...(team?{team_id:team}:{})})
     const payload=await api(`?${query}`) as Payload
     if(request!==version.current)return
-    setData(payload)
+    setData(payload);setCheckedAt(new Date().toISOString())
     if(showBusy)setMessage(payload.sync?.status==='complete'?'Fonte consultada. Confira a cobertura antes de interpretar os padrões.':'Este período ainda não tem uma sincronização completa. Use “Sincronizar e analisar”.')
-   }catch(error){if(request===version.current)setMessage((error as Error).message)}finally{if(request===version.current&&showBusy)setBusy(false)}
+   }catch(error){if(request===version.current)setMessage((error as Error).message)}finally{loading.current--;if(request===version.current&&showBusy)setBusy(false)}
  },[api,start,end,team])
  useEffect(()=>{
    const requests=version,details=detailVersion
@@ -43,11 +46,17 @@ export default function CxDiagnostics({onCaseCreated}:{onCaseCreated:()=>void}){
    const timer=setTimeout(()=>{setData(null);setDetail(null);setOwner('');void load()},0)
    return()=>{clearTimeout(timer);++requests.current;++details.current}
  },[load])
- useEffect(()=>{const timer=setInterval(()=>{if(Date.now()<pollUntil.current)void load(false)},10000);return()=>clearInterval(timer)},[load])
+ useEffect(()=>{
+   if(!data?.coverage.pending)return
+   const poll=()=>{if(document.visibilityState==='visible'&&!busy)void load(false)}
+   const timer=setInterval(poll,30000)
+   document.addEventListener('visibilitychange',poll)
+   return()=>{clearInterval(timer);document.removeEventListener('visibilitychange',poll)}
+ },[load,data?.coverage.pending,busy])
  async function work(action:string){
    setBusy(true);setMessage(action==='sync'?'Conferindo todas as páginas na fonte ClickDesk…':'Solicitando processamento dos casos pendentes…')
    try{
-     await api('',{action,start,end,team_id:team||null});pollUntil.current=Date.now()+240000
+     await api('',{action,start,end,team_id:team||null})
      await load(false);setMessage('Solicitação aceita. A fila continua no servidor; a cobertura será atualizada nesta tela. Fechar a página não cancela o processamento.')
    }catch(error){setMessage((error as Error).message)}finally{setBusy(false)}
  }
@@ -78,7 +87,7 @@ export default function CxDiagnostics({onCaseCreated}:{onCaseCreated:()=>void}){
    <label>Equipe da análise<select className={input} value={team} onChange={e=>setTeam(e.target.value)}><option value="">ERP e Fiscal</option>{data?.sources.map(s=><option key={s.team_id} value={s.team_id}>{s.display_name}</option>)}</select></label>
    <button className={button}>Atualizar cobertura</button>
   </fieldset></form>
-  <p role="status" aria-live="polite" className={box}>{message}</p>
+  <div className={box}><p role="status" aria-live="polite">{message}</p>{checkedAt&&<p className="mt-2 text-xs text-slate-400">Última consulta: {date(checkedAt)}.{!!data?.coverage.pending&&' Atualiza a cada 30 segundos enquanto houver pendências e esta aba estiver visível.'}</p>}</div>
   {data&&<>
    <div className={box}><h3 className="text-lg font-semibold">Cobertura do período {data.scope.start} a {data.scope.end}</h3><div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-5">{[['No recorte aprovado',data.coverage.eligible],['Analisados',data.coverage.analyzed],['Conduta não avaliável',data.coverage.inconclusive],['Pendentes / em análise',data.coverage.pending],['Com erro',data.coverage.failed]].map(([label,value])=><div key={label} className="rounded-lg bg-slate-800 p-3"><strong className="block text-2xl">{value}</strong><span className="text-sm text-slate-300">{label}</span></div>)}</div>
     <p className="mt-3 text-sm text-slate-300">{data.total} avaliações negativas de suporte importadas neste recorte; {data.excluded} fora do quadro individual aprovado, incluindo aprendizes, IA e sem responsável. Excluídos não entram nos padrões individuais.</p>
@@ -90,13 +99,15 @@ export default function CxDiagnostics({onCaseCreated}:{onCaseCreated:()=>void}){
    <div className={box}><h3 className="text-lg font-semibold">Duas leituras independentes</h3><p className="mt-2 text-sm text-slate-300">Conduta não avaliável: faltam evidências para avaliar o atendimento humano. Motivo desconhecido: o atendimento pode ser avaliado, mas a causa da nota não foi demonstrada.</p><p className="mt-2">Motivo da nota desconhecido: <strong>{unknownCause} de {assessed.length}</strong> leituras disponíveis, sem incluir rejeitadas.</p>{causeReviewAlert&&<p role="status" className="mt-3 rounded-lg border border-amber-500/40 p-3 text-sm text-amber-100">Revisão recomendada: pelo menos 25% das causas permanecem desconhecidas em uma amostra de dez ou mais leituras. Confira histórico, transferências, anexos e possíveis condutas recorrentes. Este alerta não comprova falha humana.</p>}</div>
    <div className={box}><h3 className="text-lg font-semibold">Padrões observados nas análises disponíveis</h3><p className="mt-2 text-sm text-slate-300">Contagens de hipóteses da IA no recorte, sujeitas à revisão. Não equivalem a percentuais comprovados de causas das notas. A leitura é parcial enquanto houver pendentes ou erros.</p><ul className="mt-3 grid gap-2 sm:grid-cols-3">{Object.entries(factorLabels).map(([key,label])=><li key={key}>{label}: <strong>{data.rows.filter(r=>r.analysis?.factor===key&&r.review_decision!=='rejected').length}</strong></li>)}</ul></div>
    <div className={box}><div className="flex flex-wrap gap-3"><label>Estado da leitura<select className={input} value={state} onChange={e=>setState(e.target.value)}><option value="all">Todos</option><option value="analyzed">Analisados</option><option value="inconclusive">Conduta não avaliável</option><option value="pending">Pendentes / em análise</option><option value="failed">Com erro</option></select></label><label>Pessoa avaliada na fonte<select className={input} value={owner} onChange={e=>setOwner(e.target.value)}><option value="">Todas do quadro aprovado</option>{[...new Set(data.rows.map(r=>r.owner_name))].sort().map(name=><option key={name}>{name}</option>)}</select></label></div>
-    <p className="my-3 text-sm text-slate-300">{rows.length} de {data.coverage.eligible} avaliações do quadro aprovado. A pessoa exibida é a avaliada na fonte; não prova autoria de todas as mensagens ou causa da nota.</p>
+    <p className="my-3 text-sm text-slate-300">{rows.length} de {data.coverage.eligible} avaliações do quadro aprovado. A lista preserva a pessoa da avaliação original. Nas novas leituras, a referência humana é o último analista que atendeu antes da nota; isso não comprova culpa.</p>
     <div className="max-h-[560px] space-y-2 overflow-auto">{rows.map(row=><button key={row.id} disabled={busy} onClick={()=>void open(row)} className="block w-full rounded-lg border border-slate-600 p-3 text-left hover:border-cyan-500"><strong>#{row.number} · {row.subject}</strong><span className="mt-1 block text-sm text-slate-300">{row.owner_name} · {row.source_team} · {date(row.rated_at)} · {row.label}</span><span className="mt-1 block text-sm text-cyan-200">{statusLabels[row.status]}{row.analysis?` · ${serviceVerdict(row.analysis)} · Motivo da nota: ${factorLabels[row.analysis.factor]}`:''}</span></button>)}{!rows.length&&<p>Nenhuma avaliação exibida neste filtro. Confira a sincronização e a cobertura acima.</p>}</div>
    </div>
   </>}
   {detail&&<article className={`${box} space-y-4`} aria-label="Leitura do atendimento">
    <header><h3 className="text-xl font-semibold">#{detail.row.number} · {detail.row.subject}</h3><p className="mt-2 text-sm text-slate-300">Avaliado em {date(detail.row.rated_at)} · {statusLabels[detail.row.status]}. Histórico limitado às mensagens anteriores ao minuto da nota.</p></header>
    {analysis?<>
+    <p className="text-sm text-cyan-200">{analysis.attribution?`Referência humana da análise: ${analysis.attribution.reason==='identified'?analysis.attribution.owner:'não identificada no quadro aprovado'}. Avaliação original: ${detail.row.owner_name}.`:'Leitura anterior à regra do último atendente. A pessoa exibida corresponde à avaliação original; confira a autoria antes de validar.'}</p>
+    {serviceTextNeedsReview(analysis)&&<p role="alert" className="rounded-lg border border-amber-500/40 p-3 text-sm text-amber-100">Texto sinalizado para revisão: um critério de melhoria usa linguagem de possível falha. Não interpretar como falha comprovada; confira as mensagens antes de validar.</p>}
     <section className="space-y-3"><h4 className="font-semibold text-cyan-200">Avaliação do atendimento humano</h4><p>{serviceVerdict(analysis)}</p><p className="text-sm text-slate-300">O motivo da nota pode permanecer desconhecido mesmo quando a conduta pode ser avaliada. Boas práticas sujeitas à validação da gestão.</p>{analysis.service_assessment?.map(c=><div key={c.criterion} className="rounded-lg bg-slate-800 p-3"><strong>{serviceLabels[c.criterion]} · {({adequado:'Adequado',melhoria:'Oportunidade de melhoria',falha:'Falha demonstrada',nao_observavel:'Não observável'})[c.result]}</strong><p className="mt-1">{c.finding}</p>{evidence.filter(e=>c.evidence_ids.includes(e.id)).map(e=><blockquote key={e.id} className="mt-2 border-l-2 border-cyan-700 pl-3 text-sm"><p>Mensagem {e.id} · {date(e.at)} · {e.author||e.role}</p><p>{e.text}</p></blockquote>)}</div>)}</section>
     <p className="text-cyan-200">Hipótese sobre o motivo da nota: {factorLabels[analysis.factor]} · sustentação {analysis.confidence}</p>
     <dl className="grid gap-4 md:grid-cols-2">{[['Fato observado',analysis.observation],['Hipótese da avaliação',analysis.hypothesis],['Impacto na experiência',analysis.impact],['Condução humana observada',analysis.behavior],['Prática para manter ou desenvolver',analysis.practice],['Exemplo de comunicação',analysis.suggested_phrase],['Como conferir nos próximos atendimentos',analysis.verification]].map(([title,text])=><div key={title}><dt className="font-semibold text-cyan-200">{title}</dt><dd className="mt-1 whitespace-pre-wrap text-slate-200">{text}</dd></div>)}</dl>

@@ -20,6 +20,7 @@ export function cxValidationDetail(error: unknown): string | null {
   'Critério humano sem evidência verificável.':'service_criterion_shape_or_references',
   'Conduta sem mensagem pública da pessoa avaliada.':'service_criterion_authorship',
   'Falha humana sem prova específica para revisão crítica.':'human_gap_support',
+  'Critério de melhoria contém afirmação de falha não revisada.':'service_unreviewed_assertion',
  }
  return labels[message]??null
 }
@@ -39,6 +40,7 @@ export function cxErrorCode(error: unknown): string {
   'Histórico extenso: requer leitura específica, sem truncamento silencioso.':'source_history_too_large',
  }
  if(sourceErrors[failure.message])return sourceErrors[failure.message]
+ if(cxValidationDetail(error))return 'provider_evidence_invalid'
  if(/^(Análise inválida\.|Classificação inválida\.|Análise incompleta\.|Análise sem referências verificáveis no histórico anterior à nota\.|Limitações ausentes\.|Avaliação humana incompleta: seis critérios obrigatórios\.|Critério humano sem evidência verificável\.|Conduta sem mensagem pública da pessoa avaliada\.|Falha humana sem prova específica para revisão crítica\.)$/.test(failure.message))return 'provider_evidence_invalid'
  return 'analysis_unavailable'
 }
