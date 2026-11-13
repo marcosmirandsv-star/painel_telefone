@@ -64,6 +64,7 @@ async function clickDesk(
   accountId: string,
 ) {
   const response = await fetch(`${CLICKDESK_BASE_URL}${path}`, {
+    signal: AbortSignal.timeout(90000),
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'X-Account-Id': accountId,
@@ -181,43 +182,30 @@ Deno.serve(async (req) => {
     if (!registry.length) throw new Error('Official owner registry is empty')
 
     const ownerIds = registry.map((owner) => owner.clickdesk_owner_id)
-    const agentsPayload = await clickDesk(
-      `/support/reports/agents?${query({ from: start, to: end, department_ids: REPORT_DEPARTMENTS, owner_ids: ownerIds })}`,
-      apiKey,
-      accountId,
-    )
-    const agentRows = Array.isArray(asRecord(agentsPayload).agents)
-      ? asRecord(agentsPayload).agents as unknown[]
-      : []
-
-    // Preserve historical captures; the coordinator's received-volume rule starts in November.
+    // Independent reports are fetched together so the monthly capture fits the edge deadline.
     const useReceived = start >= '2026-11-01'
-    const receivedByOwner = new Map<number, number>()
-    if (useReceived) {
-      // Bounded concurrency keeps the reporting API from receiving a request burst.
-      for (let offset = 0; offset < ownerIds.length; offset += 3) {
-        const batch = ownerIds.slice(offset, offset + 3)
-        const values = await Promise.all(batch.map(async ownerId => {
-          const payload = await clickDesk(
-            `/support/reports/agents?${query({ from: start, to: end, department_ids: REPORT_DEPARTMENTS, owner_ids: [ownerId] })}`,
-            apiKey, accountId,
-          )
-          return [ownerId, receivedForOwner(payload, ownerId)] as const
-        }))
-        for (const [ownerId, value] of values) receivedByOwner.set(ownerId, value)
-      }
-      const groupReceived = receivedCount(agentsPayload)
-      if ([...receivedByOwner.values()].reduce((n, value) => n + value, 0) !== groupReceived) {
-        throw new Error('Individual received counts do not reconcile with the owner-group report')
-      }
+    const [agentsPayload, receivedByOwner, ratingsByTeam] = await Promise.all([
+      clickDesk(`/support/reports/agents?${query({ from: start, to: end, department_ids: REPORT_DEPARTMENTS, owner_ids: ownerIds })}`, apiKey, accountId),
+      (async () => {
+        const counts = new Map<number, number>()
+        if (useReceived) {
+          for (let offset = 0; offset < ownerIds.length; offset += 3) {
+            const values = await Promise.all(ownerIds.slice(offset, offset + 3).map(async ownerId => {
+              const payload = await clickDesk(`/support/reports/agents?${query({ from: start, to: end, department_ids: REPORT_DEPARTMENTS, owner_ids: [ownerId] })}`, apiKey, accountId)
+              return [ownerId, receivedForOwner(payload, ownerId)] as const
+            }))
+            for (const [ownerId, count] of values) counts.set(ownerId, count)
+          }
+        }
+        return counts
+      })(),
+      Promise.all(REPORT_DEPARTMENTS.map(departmentId => ratingPages(departmentId, start, end, apiKey, accountId))),
+    ])
+    const agentRows = Array.isArray(asRecord(agentsPayload).agents) ? asRecord(agentsPayload).agents as unknown[] : []
+    if (useReceived && [...receivedByOwner.values()].reduce((n, value) => n + value, 0) !== receivedCount(agentsPayload)) {
+      throw new Error('Individual received counts do not reconcile with the owner-group report')
     }
-
-    const [erpRatings, fiscalRatings] = await Promise.all(
-      REPORT_DEPARTMENTS.map((departmentId) =>
-        ratingPages(departmentId, start, end, apiKey, accountId),
-      ),
-    )
-    const ratings = [...erpRatings, ...fiscalRatings]
+    const ratings = ratingsByTeam.flat()
 
     const known = new Map(registry.map((owner) => [owner.source_owner_key, owner]))
     const aggregate = new Map<string, Aggregate>()
