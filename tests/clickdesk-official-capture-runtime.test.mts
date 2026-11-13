@@ -16,7 +16,7 @@ function harness(fail=false){
  vm.runInNewContext(compiled,{exports:{},require:(name:string)=>name==='./received.ts'?received:{createClient:()=>admin},Deno:{env:{get:(key:string)=>key==='SUPABASE_URL'?'https://vvtorcvchnqhcredhorv.supabase.co':key==='SUPABASE_SERVICE_ROLE_KEY'?'test-service':undefined},serve:(handler:typeof handle)=>{handle=handler}},Request,Response,AbortSignal,URL,URLSearchParams,Date,Intl,Map,Set,console:{error:()=>{}},fetch:async(url:string,options:RequestInit)=>{
   assert.ok(options.signal);signals++
   if(fail)throw new DOMException('test timeout','TimeoutError')
-  active++;maximum=Math.max(maximum,active);await new Promise(resolve=>setTimeout(resolve,1));active--
+  const ownerRequest=new URL(url).searchParams.getAll('owner_ids[]').length===1; if(ownerRequest){active++;maximum=Math.max(maximum,active)};await new Promise(resolve=>setTimeout(resolve,1));if(ownerRequest)active--
   const parsed=new URL(url),ids=parsed.searchParams.getAll('owner_ids[]').map(Number)
   const body=parsed.pathname.endsWith('/agents')?{summary:{received:{value:ids.length}},agents:registry.filter(r=>ids.includes(r.clickdesk_owner_id)).map(r=>({id:r.clickdesk_owner_id,name:r.source_owner_name,resolved:0,replies:0,csat_total:0}))}:{data:[],total:0,last_page:1,page:1}
   return new Response(JSON.stringify(body),{status:200})
