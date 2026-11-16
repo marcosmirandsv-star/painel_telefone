@@ -61,7 +61,7 @@ export default function AnalystReviews({start,end,analystId,onAnalyze,loadingTic
         <div className="flex flex-wrap gap-2"><button type="button" className="small-button" aria-expanded={open===item.ticket_id} onClick={()=>{setConversation('');setOpening(true);setOpen(value=>value===item.ticket_id?null:item.ticket_id)}}>{open===item.ticket_id?'Fechar conversa':'Abrir ticket'}</button><button type="button" className="small-button" disabled={!item.can_analyze||Boolean(loadingTicketId)} onClick={()=>onAnalyze(item.ticket_id)}>{loadingTicketId===item.ticket_id?'Analisando...':'Analisar com IA'}</button></div></div>
         {!item.can_analyze&&<p className="mt-2 text-xs text-slate-500">A análise aguarda a conferência de autoria deste ticket.</p>}
         {open===item.ticket_id&&<div className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-950/60 p-3 text-sm text-slate-300" role="region" aria-label={'Conversa do ticket '+item.ticket_number}>{opening?'Carregando conversa...':conversation}</div>}
-        {renderAnalysis(item.ticket_id)}
+        {renderAnalysis(item.ticket_id) && <div className="mt-3"><button type="button" className="small-button" onClick={()=>onAnalyze(item.ticket_id)}>Fechar análise</button>{renderAnalysis(item.ticket_id)}</div>}
       </div>)}</div>}
       {filtered.length>20&&<div className="mt-4 flex items-center gap-3 text-sm"><button type="button" className="small-button" disabled={page===0} onClick={()=>setPage(value=>value-1)}>Anterior</button><span>Página {page+1} de {Math.ceil(filtered.length/20)}</span><button type="button" className="small-button" disabled={(page+1)*20>=filtered.length} onClick={()=>setPage(value=>value+1)}>Próxima</button></div>}
     </>}

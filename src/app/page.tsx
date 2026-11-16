@@ -3987,6 +3987,7 @@ function ChatAnalystPortal({
   const [selectedRoutineDate, setSelectedRoutineDate] = useState<string | null>(null)
   const [dailyTickets, setDailyTickets] = useState<ClickDeskDailyTicketResponse | null>(null)
   const [dailyTicketsLoading, setDailyTicketsLoading] = useState(false)
+  const dailyTicketRequest = useRef(0)
   const [qualitativeByTicket, setQualitativeByTicket] = useState<Record<string, ClickDeskQualitativeResponse>>({})
   const [qualitativeLoadingTicketId, setQualitativeLoadingTicketId] = useState('')
   const [openQualitativeTicketId, setOpenQualitativeTicketId] = useState<string | null>(null)
@@ -4112,7 +4113,12 @@ function ChatAnalystPortal({
   }
 
   async function analyzeQualitativeTicket(ticketId: string, force = false) {
+    if (!force && openQualitativeTicketId === ticketId) {
+      setOpenQualitativeTicketId(null)
+      return
+    }
     setOpenQualitativeTicketId(ticketId)
+    if (!force && qualitativeByTicket[ticketId]) return
     setQualitativeLoadingTicketId(ticketId)
 
     try {
@@ -4160,8 +4166,14 @@ function ChatAnalystPortal({
 
   async function loadDailyTickets(date: string) {
     if (!analyst?.id) return
+    const requestId = ++dailyTicketRequest.current
 
     setOpenQualitativeTicketId(null)
+    if (selectedRoutineDate === date) {
+      setSelectedRoutineDate(null)
+      setDailyTickets(null)
+      return
+    }
     setSelectedRoutineDate(date)
     setDailyTicketsLoading(true)
 
@@ -4189,11 +4201,11 @@ function ChatAnalystPortal({
         data.erro = data.erro || 'Não foi possível carregar os tickets desse dia.'
       }
 
-      setDailyTickets(data)
+      if (requestId === dailyTicketRequest.current) setDailyTickets(data)
     } catch (error) {
-      setDailyTickets({ erro: getErrorMessage(error) })
+      if (requestId === dailyTicketRequest.current) setDailyTickets({ erro: getErrorMessage(error) })
     } finally {
-      setDailyTicketsLoading(false)
+      if (requestId === dailyTicketRequest.current) setDailyTicketsLoading(false)
     }
   }
 
@@ -4300,6 +4312,7 @@ function ChatAnalystPortal({
               </div>
             </div>
 
+            {!loading && metrics && !metrics.erro && !podiumContext && <p className="text-sm text-slate-400" role="status">Comparação do time aguardando a conferência deste período.</p>}
             {podiumContext && podiumCriteria && (
               <div
                 className={`rounded-xl border px-4 py-3 sm:min-w-60 ${
@@ -4336,7 +4349,7 @@ function ChatAnalystPortal({
                   <div className="text-right">
                     <span className="block text-xs text-slate-500">Média do time</span>
                     <strong className="text-sm text-slate-200">
-                      {formatChatCount(podiumContext.team_average_attendances)}
+                      {formatPercentNumber(podiumContext.team_average_attendances)}
                     </strong>
                   </div>
                 </div>
@@ -4398,7 +4411,7 @@ function ChatAnalystPortal({
                     </h4>
                   </div>
                   <p className="text-xs text-slate-500">
-                    Média do time: {formatChatCount(podiumContext.team_average_attendances)} atendimentos
+                    Média do time: {formatPercentNumber(podiumContext.team_average_attendances)} atendimentos
                   </p>
                 </div>
 
@@ -4497,6 +4510,7 @@ function ChatAnalystPortal({
                 <button
                   key={item.date}
                   type="button"
+                  aria-expanded={selected}
                   onClick={() => void loadDailyTickets(item.date)}
                   className={`rounded-lg border px-4 py-3 text-left transition ${
                     selected
