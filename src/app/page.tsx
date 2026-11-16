@@ -4118,7 +4118,7 @@ function ChatAnalystPortal({
       return
     }
     setOpenQualitativeTicketId(ticketId)
-    if (!force && qualitativeByTicket[ticketId]) return
+    if (!force && qualitativeByTicket[ticketId]?.analysis) return
     setQualitativeLoadingTicketId(ticketId)
 
     try {
