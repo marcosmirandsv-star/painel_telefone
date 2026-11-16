@@ -4666,7 +4666,7 @@ function ChatAnalystPortal({
         </p>
         <h3 className="mt-2 text-2xl font-bold">Histórico ClickDesk</h3>
         <p className="section-subtitle">
-          Meses fechados usam o snapshot oficial. O mês atual permanece vivo até o fechamento.
+          Histórico mensal: não acompanha os filtros de dia, semana ou intervalo acima. O mês atual mostra o acumulado até a última atualização; meses fechados mantêm o resultado aprovado.
         </p>
 
         {history?.erro ? (

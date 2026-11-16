@@ -12,6 +12,8 @@ export default function AnalystReviews({start,end,analystId,onAnalyze,loadingTic
   const [data,setData]=useState<Data|null>(null),[error,setError]=useState(''),[filter,setFilter]=useState('all')
   const [page,setPage]=useState(0),[open,setOpen]=useState<string|null>(null),[conversation,setConversation]=useState(''),[opening,setOpening]=useState(false)
   const [retry,setRetry]=useState(0)
+  const [expanded,setExpanded]=useState(false)
+  const contentId='analyst-reviewed-tickets-'+analystId
   useEffect(()=>{
     let cancelled=false
     void (async()=>{
@@ -49,8 +51,14 @@ export default function AnalystReviews({start,end,analystId,onAnalyze,loadingTic
 
   const filtered=(data?.items??[]).filter(item=>filter==='all'||item.sentiment===filter)
   return <section className="panel" aria-label="Minhas avaliações">
-    <h3 className="text-xl font-bold">Minhas avaliações</h3>
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <h3 className="text-xl font-bold">Minhas avaliações</h3>
+      <button type="button" className="small-button" aria-expanded={expanded} aria-controls={contentId} onClick={()=>setExpanded(value=>!value)}>{expanded?'Recolher tickets':'Expandir tickets avaliados'}</button>
+    </div>
     <p className="mt-1 text-sm text-slate-400">Boas e ruins do período selecionado. Abra uma conversa ou peça uma análise da IA.</p>
+    {data&&<p className="mt-2 text-sm text-slate-300">{data.totals.total} avaliações · {data.totals.positive} boas · {data.totals.negative} ruins</p>}
+    {!expanded&&error&&<p role="status" className="mt-2 text-sm text-amber-100">Não foi possível carregar as avaliações. Expanda para tentar novamente.</p>}
+    <div id={contentId} hidden={!expanded}>
     {error?<div role="status" className="mt-4 text-sm text-amber-100">{error} <button type="button" className="small-button" onClick={()=>{setData(null);setError('');setRetry(value=>value+1)}}>Tentar novamente</button></div>:!data?<p role="status" className="mt-4 text-sm text-slate-400">Carregando avaliações...</p>:<>
       <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="Filtrar avaliações">
         {[['all','Todas',data.totals.total],['positive','Boas',data.totals.positive],['negative','Ruins',data.totals.negative]].map(([value,label,count])=><button key={value} type="button" aria-pressed={filter===value} onClick={()=>{setFilter(String(value));setPage(0);setOpen(null)}} className={`rounded-lg border px-4 py-2 text-sm ${filter===value?'border-cyan-300/50 bg-cyan-300/10 text-cyan-100':'border-white/10 text-slate-300'}`}>{label} <strong>{count}</strong></button>)}
@@ -65,5 +73,6 @@ export default function AnalystReviews({start,end,analystId,onAnalyze,loadingTic
       </div>)}</div>}
       {filtered.length>20&&<div className="mt-4 flex items-center gap-3 text-sm"><button type="button" className="small-button" disabled={page===0} onClick={()=>setPage(value=>value-1)}>Anterior</button><span>Página {page+1} de {Math.ceil(filtered.length/20)}</span><button type="button" className="small-button" disabled={(page+1)*20>=filtered.length} onClick={()=>setPage(value=>value+1)}>Próxima</button></div>}
     </>}
+    </div>
   </section>
 }
