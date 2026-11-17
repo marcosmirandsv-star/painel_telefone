@@ -65,6 +65,35 @@ test('fila de origem é preservada mas acompanhamento segue o time cadastrado do
 const service_assessment=core.serviceCriteria.map(criterion=>({criterion,result:'nao_observavel',finding:'Autoria pública da pessoa avaliada não verificável neste recorte.',evidence_ids:[]}))
 const analysis={service_assessment,factor:'produto',confidence:'media',observation:'Cliente relata erro na emissão.',hypothesis:'Hipótese: erro ainda não resolvido contribuiu para a nota.',impact:'A emissão pode ter permanecido pendente.',behavior:'O analista verificou a rejeição relatada.',practice:'Combinar o próximo retorno de acompanhamento.',suggested_phrase:'Vou conferir o resultado deste teste com você.',verification:'Conferir o próximo passo registrado no histórico.',limitations:['Anexos não inspecionados.'],evidence_ids:['10']}
 const job={id:'rating-1',ticket_id:'123',owner_name:'Carlos Henrique',rated_at:'2026-10-05T13:00:00Z',label:'Ruim',source_team:'Suporte - Fiscal',comment:'',source_hash:'source-v1',lease_token:'lease-1',attempts:1}
+
+test('último autor fora do quadro restringe geração sem relaxar validação nem trocar titular',async()=>{
+ let generated=false
+ const h=harness((url,options)=>{
+  if(url.includes('googleapis')){
+   generated=true
+   const request=JSON.parse(String(options.body))
+   assert.deepEqual(request.generationConfig.responseJsonSchema.properties.service_assessment.items.properties.result.enum,['nao_observavel'])
+   const input=JSON.parse(request.contents[0].parts[0].text)
+   assert.equal(input.evaluated_owner,null)
+   assert.equal(input.source_owner,'Diego Machado')
+   const output={...analysis,factor:'inconclusivo',confidence:'baixa',behavior:'Não há referência individual autorizada no quadro aprovado.',human_gap:null,human_gap_evidence_ids:[]}
+   return {candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify(output)}]}}]}
+  }
+  return {messages:[{id:10,created_at:'2026-10-05T12:59:00Z',author_type:'agent',author:'Arthur Silva',visibility:'public',body:'Vou verificar a informação solicitada.'}]}
+ },[[{...job,owner_name:'Diego Machado'}],[]])
+ const result=await h.api.processCx('2026-10-01','2026-10-31',null,151000)
+ assert.equal(generated,true)
+ assert.equal(result.completed,1)
+ const saved=h.calls.flatMap(c=>c.kind==='table'?c.args:[]).find(a=>Array.isArray(a)&&a[0]==='update'&&(a[1] as {analysis?:unknown})?.analysis) as unknown[]
+ const update=saved[1] as {status:string;analysis:core.Diagnosis;owner_name?:string}
+ assert.equal(update.status,'inconclusive')
+ assert.equal(update.analysis.attribution?.reason,'outside_approved_roster')
+ assert.equal(update.analysis.attribution?.source_owner,'Diego Machado')
+ assert.equal(update.owner_name,undefined)
+ assert.ok(update.analysis.service_assessment?.every(c=>c.result==='nao_observavel'))
+ const allowed=schema.diagnosisSchema([],true).properties.service_assessment.items.properties.result.enum
+ assert.ok(allowed.includes('adequado')&&allowed.includes('falha'))
+})
 test('processamento cita mensagens anteriores à nota e salva com trava da fonte e da concessão',async()=>{
  const h=harness(url=>url.includes('googleapis')?{candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify(analysis)}]}}]}:{messages:[{id:10,created_at:'2026-10-05T12:59:00Z',author_type:'agent',visibility:'public',body:'Vou verificar a rejeição informada.',attachments:[]},{id:11,created_at:'2026-10-05T13:01:00Z',author_type:'agent',visibility:'public',body:'Esta resposta veio depois da nota.',attachments:[]}]},[[job],[]])
  const result=await h.api.processCx('2026-10-01','2026-10-31',null,151000)
