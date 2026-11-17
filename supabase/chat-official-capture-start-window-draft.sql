@@ -135,4 +135,3 @@ begin
  update public.clickdesk_official_capture_jobs j set status='published',published_at=clock_timestamp() where j.id=p_job_id;
  return true;
 end $$;
-
