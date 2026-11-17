@@ -18,6 +18,7 @@ import { clickDeskDailyAvailable, clickDeskPublicationDay, publishedClickDeskEnd
 import { sumChatVoteRows } from '@/lib/clickdesk-csat'
 import ChatTimeFilter from '@/components/chat/ChatTimeFilter'
 import ChatNeutralReviews from '@/components/chat/ChatNeutralReviews'
+import AnalystReviews from '@/components/chat/AnalystReviews'
 import { chatTimeRange, type ChatTimeMode } from '@/lib/chat-time-filter'
 import ClickDeskSourceReport from '@/components/chat/ClickDeskSourceReport'
 
@@ -3986,6 +3987,7 @@ function ChatAnalystPortal({
   const [selectedRoutineDate, setSelectedRoutineDate] = useState<string | null>(null)
   const [dailyTickets, setDailyTickets] = useState<ClickDeskDailyTicketResponse | null>(null)
   const [dailyTicketsLoading, setDailyTicketsLoading] = useState(false)
+  const dailyTicketRequest = useRef(0)
   const [qualitativeByTicket, setQualitativeByTicket] = useState<Record<string, ClickDeskQualitativeResponse>>({})
   const [qualitativeLoadingTicketId, setQualitativeLoadingTicketId] = useState('')
   const [openQualitativeTicketId, setOpenQualitativeTicketId] = useState<string | null>(null)
@@ -4111,7 +4113,12 @@ function ChatAnalystPortal({
   }
 
   async function analyzeQualitativeTicket(ticketId: string, force = false) {
+    if (!force && openQualitativeTicketId === ticketId) {
+      setOpenQualitativeTicketId(null)
+      return
+    }
     setOpenQualitativeTicketId(ticketId)
+    if (!force && qualitativeByTicket[ticketId]?.analysis) return
     setQualitativeLoadingTicketId(ticketId)
 
     try {
@@ -4159,8 +4166,14 @@ function ChatAnalystPortal({
 
   async function loadDailyTickets(date: string) {
     if (!analyst?.id) return
+    const requestId = ++dailyTicketRequest.current
 
     setOpenQualitativeTicketId(null)
+    if (selectedRoutineDate === date) {
+      setSelectedRoutineDate(null)
+      setDailyTickets(null)
+      return
+    }
     setSelectedRoutineDate(date)
     setDailyTicketsLoading(true)
 
@@ -4188,11 +4201,11 @@ function ChatAnalystPortal({
         data.erro = data.erro || 'Não foi possível carregar os tickets desse dia.'
       }
 
-      setDailyTickets(data)
+      if (requestId === dailyTicketRequest.current) setDailyTickets(data)
     } catch (error) {
-      setDailyTickets({ erro: getErrorMessage(error) })
+      if (requestId === dailyTicketRequest.current) setDailyTickets({ erro: getErrorMessage(error) })
     } finally {
-      setDailyTicketsLoading(false)
+      if (requestId === dailyTicketRequest.current) setDailyTicketsLoading(false)
     }
   }
 
@@ -4299,6 +4312,7 @@ function ChatAnalystPortal({
               </div>
             </div>
 
+            {!loading && metrics && !metrics.erro && !podiumContext && <p className="text-sm text-slate-400" role="status">Comparação do time aguardando a conferência deste período.</p>}
             {podiumContext && podiumCriteria && (
               <div
                 className={`rounded-xl border px-4 py-3 sm:min-w-60 ${
@@ -4335,7 +4349,7 @@ function ChatAnalystPortal({
                   <div className="text-right">
                     <span className="block text-xs text-slate-500">Média do time</span>
                     <strong className="text-sm text-slate-200">
-                      {formatChatCount(podiumContext.team_average_attendances)}
+                      {formatPercentNumber(podiumContext.team_average_attendances)}
                     </strong>
                   </div>
                 </div>
@@ -4397,7 +4411,7 @@ function ChatAnalystPortal({
                     </h4>
                   </div>
                   <p className="text-xs text-slate-500">
-                    Média do time: {formatChatCount(podiumContext.team_average_attendances)} atendimentos
+                    Média do time: {formatPercentNumber(podiumContext.team_average_attendances)} atendimentos
                   </p>
                 </div>
 
@@ -4461,6 +4475,9 @@ function ChatAnalystPortal({
         )}
       </section>
 
+      <AnalystReviews key={`${analyst.id}:${monthStart}:${monthEnd}`} start={monthStart} end={monthEnd} analystId={analyst.id}
+        onAnalyze={(id) => void analyzeQualitativeTicket(id)} loadingTicketId={qualitativeLoadingTicketId}
+        renderAnalysis={(id) => qualitativeByTicket[id] && openQualitativeTicketId === id ? <QualitativeAnalysisCard result={qualitativeByTicket[id]} reanalyzing={qualitativeLoadingTicketId === id} audience="analyst" /> : null} />
       <section id="minha-rotina" className={loading || metrics?.erro ? 'hidden' : 'panel scroll-mt-24'}>
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
@@ -4493,6 +4510,7 @@ function ChatAnalystPortal({
                 <button
                   key={item.date}
                   type="button"
+                  aria-expanded={selected}
                   onClick={() => void loadDailyTickets(item.date)}
                   className={`rounded-lg border px-4 py-3 text-left transition ${
                     selected
@@ -4648,7 +4666,7 @@ function ChatAnalystPortal({
         </p>
         <h3 className="mt-2 text-2xl font-bold">Histórico ClickDesk</h3>
         <p className="section-subtitle">
-          Meses fechados usam o snapshot oficial. O mês atual permanece vivo até o fechamento.
+          Histórico mensal: não acompanha os filtros de dia, semana ou intervalo acima. O mês atual mostra o acumulado até a última atualização; meses fechados mantêm o resultado aprovado.
         </p>
 
         {history?.erro ? (
@@ -4738,6 +4756,7 @@ function ChatAnalystPortal({
                       <div>
                         <p className="text-xs text-slate-500">Atendimentos</p>
                         <strong>{formatChatCount(item.attendances)}</strong>
+                        <p className="mt-2 text-xs text-slate-400">{item.reviews} avaliações · {item.positive_reviews} boas · {item.negative_reviews} ruins</p>
                       </div>
                     </div>
                   </div>

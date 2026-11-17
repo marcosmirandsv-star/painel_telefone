@@ -316,7 +316,12 @@ export async function GET(request: Request) {
     const coverageComplete = coverage.complete
     const timestampSources = { last_public_human_answer: rows.reduce((n,row) => n+row.attendances,0) }
     const dateBasisNeedsValidation = !coverageComplete
-    const selfPodiumContext = null
+    let selfPodiumContext = null
+    if (!access.isManagement && coverageComplete && isOfficialClickDeskSource(metricSource)) {
+      const context = await access.admin.rpc('get_clickdesk_self_official_podium_context', {p_start:filters.start,p_end:filters.end})
+      if (!context.error) selfPodiumContext = context.data
+      else console.warn('clickdesk_self_podium_unavailable', {code:context.error.code})
+    }
     stage = 'completed'
 
     return json({
