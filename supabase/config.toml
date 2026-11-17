@@ -1,0 +1,4 @@
+# HML-only worker: application authentication and the project guard live in durable-index.ts.
+[functions.clickdesk-official-metrics-sync]
+verify_jwt = false
+entrypoint = './functions/clickdesk-official-metrics-sync/durable-index.ts'
