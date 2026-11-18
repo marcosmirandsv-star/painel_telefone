@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx'
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { calculateAverageCsat, calculateChatAverage, calculateTeamPerformance } from '@/lib/indicators'
+import { buildEmbeddedReportPhoto } from '@/lib/report-photo'
 import { comparePhoneCsat, getPreviousPhoneCalendarMonth, getPhoneCsatBenchmark, getPhoneFeedbackFocus, loadPhoneMetricPages, phoneFeedbackActions, phoneFeedbackHeadings, type PhoneCsatBenchmark, type PhoneFeedbackFocus } from '@/lib/phone-report'
 
 type Goal = {
@@ -5203,6 +5204,10 @@ function ReportsView({
 
   const selectedAnalyst =
     reportAnalysts.find((analyst) => analyst.id === selectedAnalystId) ?? reportAnalysts[0] ?? null
+  const selectedAnalystPhoto = getAnalystPhoto(selectedAnalyst?.name ?? '', selectedAnalyst?.photo_url)
+  useEffect(() => {
+    if (selectedAnalystPhoto) void buildEmbeddedReportPhoto(selectedAnalystPhoto).catch(() => {})
+  }, [selectedAnalystPhoto])
   const periodLabel = formatPeriodLabel(periodFilter)
   const previousMonth = getPreviousPhoneCalendarMonth(periodFilter.start, periodFilter.end)
   const previousPeriod: PeriodFilter = previousMonth
@@ -5495,7 +5500,7 @@ function ReportsView({
     try {
       setExportMessage('Preparando relatório e incorporando a foto do analista...')
       const finalPhoneFeedback = cleanChatReportFeedbackText(phoneFeedbackText) || phoneLocalFeedback
-      const fileName = await exportPhoneReport({
+      const { fileName, notice } = await exportPhoneReport({
         format,
         printWindow,
         analystName: selectedAnalyst.name,
@@ -5531,9 +5536,10 @@ function ReportsView({
           : null,
       })
 
-      setExportMessage(format === 'pdf'
+      const exportStatus = format === 'pdf'
         ? 'Na janela de impressão, escolha Salvar como PDF e confirme o salvamento.'
-        : `Relatório gerado: ${fileName}. Verifique a pasta Downloads.`)
+        : `Relatório gerado: ${fileName}. Verifique a pasta Downloads.`
+      setExportMessage([notice, exportStatus].filter(Boolean).join(' '))
     } catch (error) {
       printWindow?.close()
       setExportMessage(`Não foi possível gerar o arquivo. ${getErrorMessage(error)}`)
@@ -8159,54 +8165,6 @@ function formatShortDate(value: string) {
   return `${day}/${month}`
 }
 
-async function buildEmbeddedReportPhoto(photoUrl?: string | null) {
-  if (!photoUrl) return ''
-
-  const resolvedPhotoUrl = new URL(photoUrl, window.location.origin).href
-  const response = await fetch(resolvedPhotoUrl, { cache: 'no-store' })
-  if (!response.ok) {
-    throw new Error('A foto cadastrada não pôde ser carregada. Atualize a foto do analista e tente novamente.')
-  }
-
-  const sourceBlob = await response.blob()
-  const objectUrl = URL.createObjectURL(sourceBlob)
-
-  try {
-    const image = new Image()
-    image.src = objectUrl
-    await image.decode()
-
-    const canvas = document.createElement('canvas')
-    const size = 256
-    const borderWidth = 7
-    canvas.width = size
-    canvas.height = size
-    const context = canvas.getContext('2d')
-    if (!context) throw new Error('O navegador não conseguiu preparar a foto para o relatório.')
-
-    const sourceSize = Math.min(image.naturalWidth, image.naturalHeight)
-    const sourceX = (image.naturalWidth - sourceSize) / 2
-    const sourceY = (image.naturalHeight - sourceSize) / 2
-
-    context.clearRect(0, 0, size, size)
-    context.save()
-    context.beginPath()
-    context.arc(size / 2, size / 2, size / 2 - borderWidth, 0, Math.PI * 2)
-    context.clip()
-    context.drawImage(image, sourceX, sourceY, sourceSize, sourceSize, borderWidth, borderWidth, size - borderWidth * 2, size - borderWidth * 2)
-    context.restore()
-    context.strokeStyle = '#0891b2'
-    context.lineWidth = borderWidth
-    context.beginPath()
-    context.arc(size / 2, size / 2, size / 2 - borderWidth / 2, 0, Math.PI * 2)
-    context.stroke()
-
-    return canvas.toDataURL('image/png')
-  } finally {
-    URL.revokeObjectURL(objectUrl)
-  }
-}
-
 async function exportChatIndividualReport({
   metric,
   periodLabel,
@@ -8812,10 +8770,18 @@ async function exportPhoneReport({
   comparison: { periodLabel: string; csat: number; delta: number } | null
 }) {
   const safeName = escapeHtml(analystName)
-  const embeddedPhotoUrl = await buildEmbeddedReportPhoto(photoUrl)
+  let embeddedPhotoUrl = ''
+  let notice = ''
+  try {
+    embeddedPhotoUrl = await buildEmbeddedReportPhoto(photoUrl)
+  } catch (error) {
+    if (format === 'word') throw error
+    notice = 'A foto está indisponível nesta exportação. O PDF usa as iniciais do analista.'
+  }
+  const initials = analystName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase()
   const photoHtml = embeddedPhotoUrl
     ? `<img class="profile-photo" src="${embeddedPhotoUrl}" alt="Foto de ${safeName}" width="76" height="76" style="width:76px;height:76px;max-width:76px;max-height:76px;display:block;" />`
-    : ''
+    : format === 'pdf' ? `<span class="profile-initials" aria-label="Iniciais de ${safeName}">${escapeHtml(initials)}</span>` : ''
   const firstEvolution = weeklyEvolution[0] ?? null
   const lastEvolution = weeklyEvolution.at(-1) ?? null
   const bestEvolution = weeklyEvolution.reduce<WeeklyIndividualTrend | null>(
@@ -9008,10 +8974,15 @@ async function exportPhoneReport({
     const printStyles = `
       @page { size: A4; margin: 14mm; }
       body { margin: 0; padding: 20px; }
+      .profile-initials { display: flex; width: 76px; height: 76px; flex: 0 0 76px; align-items: center; justify-content: center; border: 2px solid #0891b2; border-radius: 50%; background: #ecfeff; color: #0f172a; font: bold 26px Arial, sans-serif; }
+      .pdf-actions { display: flex; align-items: center; gap: 14px; padding: 12px; margin-bottom: 20px; background: #f1f5f9; }
+      .pdf-actions button { cursor: pointer; padding: 10px 16px; border: 0; border-radius: 6px; background: #0f766e; color: white; font: bold 14px Arial, sans-serif; }
+      .pdf-actions span { font-size: 13px; color: #475569; }
       p { orphans: 3; widows: 3; }
       h1, h2, h3, .trend-title { break-after: avoid; page-break-after: avoid; }
       .header, .box, .insight-grid, .weekly-volume, .evolution-row, tr { break-inside: avoid; page-break-inside: avoid; }
       @media print {
+        .pdf-actions { display: none; }
         body { padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       }
     `
@@ -9019,12 +8990,31 @@ async function exportPhoneReport({
     printWindow.document.write(documentHtml.replace('</style>', `${printStyles}</style>`))
     printWindow.document.close()
     printWindow.document.title = `${fileBase}.pdf`
+    const actions = printWindow.document.createElement('div')
+    actions.className = 'pdf-actions'
+    const saveButton = printWindow.document.createElement('button')
+    saveButton.textContent = 'Salvar como PDF'
+    saveButton.onclick = () => {
+      printWindow.focus()
+      printWindow.print()
+    }
+    actions.appendChild(saveButton)
+    if (notice) {
+      const message = printWindow.document.createElement('span')
+      message.textContent = notice
+      actions.appendChild(message)
+    }
+    printWindow.document.body.prepend(actions)
     await printWindow.document.fonts.ready
     await Promise.all(Array.from(printWindow.document.images, (image) => image.decode().catch(() => {})))
     if (printWindow.closed) throw new Error('A janela do PDF foi fechada. Clique em Exportar PDF para abrir novamente.')
-    printWindow.focus()
-    printWindow.print()
-    return `${fileBase}.pdf`
+    printWindow.setTimeout(() => {
+      if (!printWindow.closed) {
+        printWindow.focus()
+        printWindow.print()
+      }
+    }, 0)
+    return { fileName: `${fileBase}.pdf`, notice }
   }
   const blob = new Blob(['\ufeff', documentHtml], {
     type: 'application/msword;charset=utf-8',
@@ -9044,7 +9034,7 @@ async function exportPhoneReport({
     URL.revokeObjectURL(url)
   }, 5000)
 
-  return fileName
+  return { fileName, notice }
 }
 
 function escapeHtml(value: string) {
