@@ -8833,7 +8833,7 @@ function ChatModuleDashboard({
             </div>
             {sharedIndividualSelection.ambiguous && <p className="mt-3 text-sm text-amber-200">Mais de uma fila encontrada para o analista. Resumo indisponível até a conferência; nenhuma soma automática foi realizada.</p>}
             <ChatSharedPerformanceSummary metric={sharedIndividualSelection.row} csatGoal={Number(sharedIndividualPerson?.csat_goal ?? 90)} dailyAvailable={clickDeskDailyAvailable(clickDeskPersistedMetrics) && chat2D1InRange} />
-            {isOfficialClickDeskSource(clickDeskPersistedMetrics?.source) && chat2SelectedPeriod.start>='2026-11-01' && <ChatNeutralReviews start={chat2SelectedPeriod.start} end={chat2SelectedPeriod.end} teamId={selectedTeamId==='all'?null:selectedTeamId} />}
+            {isOfficialClickDeskSource(clickDeskPersistedMetrics?.source) && chat2SelectedPeriod.start>='2026-11-01' && <ChatNeutralReviews start={chat2SelectedPeriod.start} end={chat2SelectedPeriod.end} analystId={chat2SelectedPersistedAnalyst?.analyst_id} teamId={selectedTeamId==='all'?null:selectedTeamId} />}
           </section>
           {sharedIndividualPerson && sharedIndividualSelection.row && (
             <details className="rounded-xl border border-white/10 p-4">
@@ -19166,3 +19166,4 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
