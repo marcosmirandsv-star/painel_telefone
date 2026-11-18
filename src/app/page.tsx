@@ -5268,7 +5268,12 @@ function ReportsView({
     benchmarkGap: phoneCsatBenchmark?.gap,
     csatDelta,
   }) : 'maintenance'
-  const phoneFocusLabels = { csat: 'Elevar o CSAT', reviews: 'Ampliar as avaliações', volume: 'Aumentar os atendimentos', maintenance: 'Sustentar os resultados' }
+  const phoneFocusLabels = {
+    csat: 'Elevar o CSAT',
+    reviews: 'Ampliar as avaliações',
+    volume: 'Aumentar os atendimentos',
+    maintenance: 'Sustentar os resultados',
+  }
   const supervisorVolumeGap = analystResult ? analystResult.totalTickets - supervisorAverageTickets : 0
   const supervisorReviewGap = analystResult ? round(analystResult.reviewPercentage - reviewGoal) : 0
   const supervisorCsatGap = analystResult ? round(analystResult.averageCsat - podiumCsatGoal) : 0
@@ -8688,20 +8693,15 @@ function buildPhoneFeedbackText({
       : `${rankingPosition}ª posição no ranking, fora dos três primeiros lugares`
     : 'sem posição calculada no ranking'
   const volumeDifference = round(analystResult.totalTickets - averageTickets)
-  const podiumGap = round(analystResult.averageCsat - podiumCsatGoal)
-  const reviewGap = round(analystResult.reviewPercentage - reviewGoal)
-  const priority =
-    focus === 'csat'
-      ? benchmark
-        ? `elevar o CSAT para reduzir a diferença de ${formatDelta(benchmark.gap, ' p.p.').replace('+', '')} frente aos ${formatPercent(benchmark.csat)} do 3º colocado elegível`
-        : `elevar o CSAT do período, atualmente em ${formatPercent(analystResult.averageCsat)}, acompanhando a meta individual de ${formatPercent(analystResult.individualGoal)} e a referência de pódio de ${formatPercent(podiumCsatGoal)}`
-      : podiumGap < 0
-      ? `compreender o que influenciou o CSAT, que ficou ${formatDelta(Math.abs(podiumGap), ' p.p.').replace('+', '')} abaixo da referência`
-      : reviewGap < 0
-        ? `ampliar a participação nas avaliações, que ficou ${formatDelta(Math.abs(reviewGap), ' p.p.').replace('+', '')} abaixo da meta`
-        : volumeDifference < 0
-          ? `entender o contexto do volume, que ficou ${Math.abs(volumeDifference)} atendimentos abaixo da média do time`
-          : 'sustentar os indicadores que atingiram as referências no próximo ciclo'
+  const priorities = {
+    csat: benchmark
+      ? `elevar o CSAT para reduzir a diferença de ${formatDelta(benchmark.gap, ' p.p.').replace('+', '')} frente aos ${formatPercent(benchmark.csat)} do 3º colocado elegível`
+      : `elevar o CSAT do período, atualmente em ${formatPercent(analystResult.averageCsat)}, acompanhando a meta individual de ${formatPercent(analystResult.individualGoal)} e a referência de pódio de ${formatPercent(podiumCsatGoal)}`,
+    reviews: `ampliar a taxa de avaliações de ${formatPercent(analystResult.reviewPercentage)} para atingir a referência de ${formatPercent(reviewGoal)}`,
+    volume: `aumentar os atendimentos para reduzir a diferença de ${formatChatCount(Math.abs(volumeDifference))} frente à média de ${formatChatCount(averageTickets)} da equipe`,
+    maintenance: 'sustentar os indicadores que atingiram as referências no próximo ciclo',
+  }
+  const priority = priorities[focus]
   const contextToVerify = volumeDifference < 0
     ? 'Pausas, ausências, duração dos atendimentos e atuação em outras atividades podem ser verificados, mas os números não demonstram sozinhos a causa da diferença de volume.'
     : 'Os indicadores não comprovam comportamentos específicos. Use exemplos reais da operação ou observações do gestor antes de relacionar o resultado a uma conduta.'
@@ -8750,8 +8750,14 @@ function buildPhoneLocalFeedback({
     : ''
   const impact = `Você ficou em ${rankingPosition}º no ranking. ${comparisonText}${benchmarkText}`
   const actions = phoneFeedbackActions[focus]
+  let csatExpectation = `No próximo fechamento mensal, eleve o CSAT em relação aos atuais ${formatPercent(result.averageCsat)}.`
+  if (benchmark) {
+    csatExpectation += ` Use os ${formatPercent(benchmark.csat)} do 3º colocado deste período como referência de evolução.`
+  } else if (result.averageCsat < Math.max(result.individualGoal, podiumCsatGoal)) {
+    csatExpectation += ` Alcance pelo menos ${formatPercent(Math.max(result.individualGoal, podiumCsatGoal))}.`
+  }
   const expectations = {
-    csat: `No próximo fechamento mensal, eleve o CSAT em relação aos atuais ${formatPercent(result.averageCsat)}.${benchmark ? ` Use os ${formatPercent(benchmark.csat)} do 3º colocado deste período como referência de evolução.` : result.averageCsat < Math.max(result.individualGoal, podiumCsatGoal) ? ` Alcance pelo menos ${formatPercent(Math.max(result.individualGoal, podiumCsatGoal))}.` : ''}`,
+    csat: csatExpectation,
     reviews: `Alcance uma taxa de avaliações de pelo menos ${formatPercent(reviewGoal)} e confira a evolução semanal das respostas recebidas.`,
     volume: 'Aumente os atendimentos registrados no próximo ciclo e acompanhe sua posição em relação à média da equipe, considerando os dias trabalhados.',
     maintenance: `Sustente CSAT acima de ${formatPercent(Math.max(result.individualGoal, podiumCsatGoal))} e avaliações em pelo menos ${formatPercent(reviewGoal)} no próximo ciclo.`,
