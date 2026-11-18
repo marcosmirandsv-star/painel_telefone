@@ -4,7 +4,43 @@ import {
   comparePhoneCsat,
   getPreviousPhoneCalendarMonth,
   loadPhoneMetricPages,
+  getPhoneCsatBenchmark,
+  getPhoneFeedbackFocus,
 } from '../src/lib/phone-report.ts'
+
+test('a referência competitiva respeita a elegibilidade do ranking', () => {
+  const ranking = [
+    { analystName: 'Primeiro', averageCsat: 99.12, eligible: true },
+    { analystName: 'Segundo', averageCsat: 95.88, eligible: true },
+    { analystName: 'Terceiro', averageCsat: 94.68, eligible: true },
+    { analystName: 'Quarto', averageCsat: 94.28, eligible: true },
+    { analystName: 'Quinto', averageCsat: 92.41, eligible: true },
+    { analystName: 'Bruno', averageCsat: 91.71, eligible: true },
+    { analystName: 'Sem volume mínimo', averageCsat: 98.82, eligible: false },
+  ]
+  assert.deepEqual(getPhoneCsatBenchmark(ranking, 6), {
+    analystName: 'Terceiro', csat: 94.68, gap: 2.97,
+  })
+  assert.equal(getPhoneCsatBenchmark(ranking, 1), null)
+  assert.equal(getPhoneCsatBenchmark(ranking, 7), null)
+  assert.equal(getPhoneCsatBenchmark(ranking.slice(0, 2), 6), null)
+})
+
+test('a orientação trata as metas pendentes antes da manutenção e usa a referência competitiva', () => {
+  const met = {
+    csat: 91.71, csatGoal: 90, podiumCsatGoal: 90,
+    reviewPercentage: 33.33, reviewGoal: 25, totalTickets: 399, averageTickets: 325.2,
+  }
+  assert.equal(getPhoneFeedbackFocus({ ...met, benchmarkGap: 2.97, csatDelta: -0.48 }), 'csat')
+  assert.equal(getPhoneFeedbackFocus({ ...met, benchmarkGap: 2.97, csatDelta: 1 }), 'csat')
+  assert.equal(getPhoneFeedbackFocus({ ...met, csat: 89, reviewPercentage: 20 }), 'csat')
+  assert.equal(getPhoneFeedbackFocus({ ...met, csat: 0, reviewPercentage: 0 }), 'reviews')
+  assert.equal(getPhoneFeedbackFocus({ ...met, csat: 88, csatGoal: 86 }), 'csat')
+  assert.equal(getPhoneFeedbackFocus({ ...met, reviewGoal: 40, benchmarkGap: 2.97 }), 'reviews')
+  assert.equal(getPhoneFeedbackFocus({ ...met, totalTickets: 200, benchmarkGap: 2.97 }), 'volume')
+  assert.equal(getPhoneFeedbackFocus({ ...met, csatDelta: -0.48 }), 'csat')
+  assert.equal(getPhoneFeedbackFocus({ ...met, csatDelta: 0.5 }), 'maintenance')
+})
 
 test('a competência de outubro compara com setembro inteiro', () => {
   assert.deepEqual(getPreviousPhoneCalendarMonth('2026-10-01', '2026-10-31'), {

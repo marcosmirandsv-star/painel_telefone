@@ -6,7 +6,7 @@ import * as XLSX from 'xlsx'
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { calculateAverageCsat, calculateChatAverage, calculateTeamPerformance } from '@/lib/indicators'
-import { comparePhoneCsat, getPreviousPhoneCalendarMonth, loadPhoneMetricPages, phoneFeedbackHeadings } from '@/lib/phone-report'
+import { comparePhoneCsat, getPreviousPhoneCalendarMonth, getPhoneCsatBenchmark, getPhoneFeedbackFocus, loadPhoneMetricPages, phoneFeedbackActions, phoneFeedbackHeadings, type PhoneCsatBenchmark, type PhoneFeedbackFocus } from '@/lib/phone-report'
 
 type Goal = {
   id: string
@@ -5231,6 +5231,7 @@ function ReportsView({
   const selectedRankingPosition = analystResult
     ? podium.findIndex((item) => item.analystId === analystResult.analystId) + 1
     : 0
+  const phoneCsatBenchmark = getPhoneCsatBenchmark(podium, selectedRankingPosition)
   const strongestResult = podium[0] ?? null
   const attentionResults = podium.filter((item) => !item.eligible).slice(0, 3)
   const csatComparisons = podium.flatMap((item) => {
@@ -5256,27 +5257,27 @@ function ReportsView({
   const supervisorAverageTickets = podium.length
     ? round(podium.reduce((sum, item) => sum + item.totalTickets, 0) / podium.length)
     : 0
+  const phoneFeedbackFocus = analystResult ? getPhoneFeedbackFocus({
+    csat: analystResult.averageCsat,
+    csatGoal: analystResult.individualGoal,
+    podiumCsatGoal,
+    reviewPercentage: analystResult.reviewPercentage,
+    reviewGoal,
+    totalTickets: analystResult.totalTickets,
+    averageTickets: supervisorAverageTickets,
+    benchmarkGap: phoneCsatBenchmark?.gap,
+    csatDelta,
+  }) : 'maintenance'
+  const phoneFocusLabels = { csat: 'Elevar o CSAT', reviews: 'Ampliar as avaliações', volume: 'Aumentar os atendimentos', maintenance: 'Sustentar os resultados' }
   const supervisorVolumeGap = analystResult ? analystResult.totalTickets - supervisorAverageTickets : 0
   const supervisorReviewGap = analystResult ? round(analystResult.reviewPercentage - reviewGoal) : 0
   const supervisorCsatGap = analystResult ? round(analystResult.averageCsat - podiumCsatGoal) : 0
-  const supervisorCaseStatus = analystResult
-    ? analystResult.eligible
-      ? selectedRankingPosition > 0 && selectedRankingPosition <= 3
-        ? 'Caso de reconhecimento e preservação'
-        : 'Caso elegível para desenvolvimento competitivo'
-      : 'Caso de acompanhamento ativo'
-    : 'Sem leitura disponível'
+  const supervisorCaseStatus = analystResult ? phoneFocusLabels[phoneFeedbackFocus] : 'Sem leitura disponível'
   const supervisorDecisionText = analystResult
-    ? analystResult.eligible
-      ? selectedRankingPosition > 0 && selectedRankingPosition <= 3
-        ? 'Reconhecer o resultado, registrar as praticas que sustentaram o desempenho e combinar como proteger o padrao ate o fechamento.'
-        : 'Manter elegibilidade, comparar com o top 3 e escolher um ganho objetivo em CSAT, avaliações ou volume para disputar posição.'
-      : `Tratar os critérios pendentes antes de falar em pódio: ${analystResult.reasons.join(', ') || 'revisar indicadores'}.`
+    ? phoneFeedbackActions[phoneFeedbackFocus]
     : 'Selecione um analista com lançamento no período para liberar recomendação.'
   const supervisorOneToOneText = analystResult
-    ? analystResult.eligible
-      ? 'Use a conversa 1:1 para perguntar quais comportamentos ajudaram o resultado, quais atendimentos devem virar referência e qual rotina precisa ser repetida.'
-      : 'Use a conversa 1:1 para identificar causa raiz: qualidade do atendimento, encerramento sem pedido de avaliação, volume abaixo da média ou contexto operacional.'
+    ? 'Apresente o indicador prioritário, explique a referência utilizada e deixe claro qual conduta deve ser aplicada no próximo ciclo.'
     : 'Aguardando dados para sugerir roteiro de conversa.'
   const supervisorFollowUpText = analystResult
     ? `No próximo ciclo, acompanhar CSAT ${formatPercent(analystResult.averageCsat)} (${formatDelta(supervisorCsatGap, ' p.p.')} vs pódio), avaliações ${formatPercent(analystResult.reviewPercentage)} (${formatDelta(supervisorReviewGap, ' p.p.')} vs meta) e volume ${formatChatCount(analystResult.totalTickets)} (${formatDelta(supervisorVolumeGap, '')} vs média ${formatChatCount(supervisorAverageTickets)}).`
@@ -5316,7 +5317,7 @@ function ReportsView({
     },
     {
       label: 'Acao recomendada',
-      title: analystResult?.eligible ? 'Preservar ou competir' : 'Corrigir impeditivos',
+      title: phoneFocusLabels[phoneFeedbackFocus],
       text: supervisorDecisionText,
     },
     {
@@ -5331,9 +5332,7 @@ function ReportsView({
     },
   ]
   const feedbackSummary = analystResult
-    ? analystResult.eligible
-      ? `${selectedAnalyst?.name ?? 'Analista'} está elegível ao pódio no período. O foco recomendado e preservar consistencia, volume de avaliações e acompanhamento semanal.`
-      : `${selectedAnalyst?.name ?? 'Analista'} ainda nao sustenta elegibilidade ao pódio neste período. O foco recomendado e atuar sobre: ${analystResult.reasons.join(', ')}.`
+    ? `${selectedAnalyst?.name ?? 'Analista'} tem como foco ${phoneFocusLabels[phoneFeedbackFocus].toLowerCase()}.${phoneCsatBenchmark && phoneFeedbackFocus === 'csat' ? ` O CSAT atual é ${formatPercent(analystResult.averageCsat)} e a referência do 3º colocado elegível foi ${formatPercent(phoneCsatBenchmark.csat)}, uma diferença de ${formatDelta(phoneCsatBenchmark.gap, ' p.p.').replace('+', '')}.` : ''} ${phoneFeedbackActions[phoneFeedbackFocus]}`
     : ''
   const phoneFeedbackFacts = selectedAnalyst && analystResult
     ? buildPhoneFeedbackText({
@@ -5349,6 +5348,8 @@ function ReportsView({
         averageTickets: supervisorAverageTickets,
         comparison: analystComparison,
         previousPeriodLabel,
+        benchmark: phoneCsatBenchmark,
+        focus: phoneFeedbackFocus,
       })
     : ''
   const phoneLocalFeedback = analystResult
@@ -5361,6 +5362,8 @@ function ReportsView({
         podiumCsatGoal,
         comparison: analystComparison,
         previousPeriodLabel,
+        benchmark: phoneCsatBenchmark,
+        focus: phoneFeedbackFocus,
       })
     : ''
   const phoneFeedbackText = phoneFeedbackDraft ?? phoneLocalFeedback
@@ -5414,6 +5417,7 @@ function ReportsView({
           managerNotes: phoneManagerNotes,
           fallbackText: generationMode === 'improve' ? phoneFeedbackText.trim() || phoneLocalFeedback : phoneLocalFeedback,
           factualContext: phoneFeedbackFacts,
+          phoneBenchmark: phoneCsatBenchmark,
           phoneComparison: analystComparison
             ? { periodLabel: previousPeriodLabel, csat: analystComparison.csat, delta: analystComparison.delta }
             : undefined,
@@ -5427,6 +5431,7 @@ function ReportsView({
             totalTickets: analystResult.totalTickets,
             reviews: analystResult.totalReviews,
             csatGoal: analystResult.individualGoal,
+            podiumCsatGoal,
             reviewGoal,
             status: analystResult.eligible ? 'Elegível ao pódio' : 'Em acompanhamento',
             teamPerformance,
@@ -5886,7 +5891,7 @@ function ReportsView({
               </p>
               <p>
                 <span className="text-slate-500">Foco recomendado: </span>
-                {analystResult ? buildDevelopmentFocus(analystResult, csatDelta ?? 0) : 'registrar dados para liberar leitura.'}
+                {analystResult ? phoneFeedbackActions[phoneFeedbackFocus] : 'registrar dados para liberar leitura.'}
               </p>
             </div>
           </div>
@@ -8658,6 +8663,8 @@ function buildPhoneFeedbackText({
   averageTickets,
   comparison,
   previousPeriodLabel,
+  benchmark,
+  focus,
 }: {
   analystName: string
   periodLabel: string
@@ -8671,6 +8678,8 @@ function buildPhoneFeedbackText({
   averageTickets: number
   comparison?: { csat: number; delta: number }
   previousPeriodLabel: string
+  benchmark: PhoneCsatBenchmark | null
+  focus: PhoneFeedbackFocus
 }) {
   const isTopThree = rankingPosition > 0 && rankingPosition <= 3
   const rankingText = rankingPosition
@@ -8682,13 +8691,17 @@ function buildPhoneFeedbackText({
   const podiumGap = round(analystResult.averageCsat - podiumCsatGoal)
   const reviewGap = round(analystResult.reviewPercentage - reviewGoal)
   const priority =
-    podiumGap < 0
+    focus === 'csat'
+      ? benchmark
+        ? `elevar o CSAT para reduzir a diferença de ${formatDelta(benchmark.gap, ' p.p.').replace('+', '')} frente aos ${formatPercent(benchmark.csat)} do 3º colocado elegível`
+        : `elevar o CSAT do período, atualmente em ${formatPercent(analystResult.averageCsat)}, acompanhando a meta individual de ${formatPercent(analystResult.individualGoal)} e a referência de pódio de ${formatPercent(podiumCsatGoal)}`
+      : podiumGap < 0
       ? `compreender o que influenciou o CSAT, que ficou ${formatDelta(Math.abs(podiumGap), ' p.p.').replace('+', '')} abaixo da referência`
       : reviewGap < 0
         ? `ampliar a participação nas avaliações, que ficou ${formatDelta(Math.abs(reviewGap), ' p.p.').replace('+', '')} abaixo da meta`
         : volumeDifference < 0
           ? `entender o contexto do volume, que ficou ${Math.abs(volumeDifference)} atendimentos abaixo da média do time`
-          : 'identificar as práticas reais que ajudaram a equilibrar os indicadores e decidir como mantê-las'
+          : 'sustentar os indicadores que atingiram as referências no próximo ciclo'
   const contextToVerify = volumeDifference < 0
     ? 'Pausas, ausências, duração dos atendimentos e atuação em outras atividades podem ser verificados, mas os números não demonstram sozinhos a causa da diferença de volume.'
     : 'Os indicadores não comprovam comportamentos específicos. Use exemplos reais da operação ou observações do gestor antes de relacionar o resultado a uma conduta.'
@@ -8699,6 +8712,7 @@ function buildPhoneFeedbackText({
       ? `Comparativo de CSAT: ${formatPercent(comparison.csat)} em ${previousPeriodLabel}, com variação de ${formatDelta(comparison.delta, ' p.p.')} no período atual.`
       : 'Sem base de avaliações para comparar o CSAT entre os períodos.',
     `Ponto prioritário: ${priority}.`,
+    `Condutas recomendadas para o próximo ciclo: ${phoneFeedbackActions[focus]}`,
     `Contexto a verificar: ${contextToVerify}`,
     managerNotes.trim() ? `Observação registrada pelo gestor: ${managerNotes.trim()}` : 'Observação do gestor: não informada.',
   ].join('\n\n')
@@ -8713,6 +8727,8 @@ function buildPhoneLocalFeedback({
   podiumCsatGoal,
   comparison,
   previousPeriodLabel,
+  benchmark,
+  focus,
 }: {
   style: keyof typeof phoneFeedbackHeadings
   periodLabel: string
@@ -8722,19 +8738,28 @@ function buildPhoneLocalFeedback({
   podiumCsatGoal: number
   comparison?: { csat: number; delta: number }
   previousPeriodLabel: string
+  benchmark: PhoneCsatBenchmark | null
+  focus: PhoneFeedbackFocus
 }) {
   const situation = `Em ${periodLabel}, você registrou ${formatChatCount(result.totalTickets)} atendimentos e recebeu ${formatChatCount(result.totalReviews)} avaliações (${formatPercent(result.reviewPercentage)} dos atendimentos). ${result.totalReviews > 0 ? `Seu CSAT foi de ${formatPercent(result.averageCsat)}, com meta individual de ${formatPercent(result.individualGoal)}.` : 'O período ficou sem avaliações para medir o CSAT.'}`
   const comparisonText = comparison
     ? `Em ${previousPeriodLabel}, o CSAT foi de ${formatPercent(comparison.csat)}. A variação foi de ${formatDelta(comparison.delta, ' p.p.')}.`
     : 'Sem base de avaliações para comparar o CSAT com o período anterior.'
-  const impact = `Você ficou em ${rankingPosition}º no ranking. ${comparisonText}`
-  const focus = result.eligible
-    ? 'Vamos escolher um atendimento bem avaliado e identificar uma prática que você possa repetir no próximo ciclo.'
-    : 'Vamos revisar exemplos da operação para entender os indicadores pendentes e combinar uma ação para o próximo ciclo.'
-  const expectation = `No próximo acompanhamento, vamos revisar a ação combinada e conferir a taxa de avaliações frente à meta de ${formatPercent(reviewGoal)} e o CSAT frente à referência de ${formatPercent(podiumCsatGoal)} do pódio.`
+  const benchmarkText = benchmark
+    ? ` O 3º colocado elegível registrou ${formatPercent(benchmark.csat)} de CSAT, uma diferença de ${formatDelta(benchmark.gap, ' p.p.').replace('+', '')} em relação ao seu resultado.`
+    : ''
+  const impact = `Você ficou em ${rankingPosition}º no ranking. ${comparisonText}${benchmarkText}`
+  const actions = phoneFeedbackActions[focus]
+  const expectations = {
+    csat: `No próximo fechamento mensal, eleve o CSAT em relação aos atuais ${formatPercent(result.averageCsat)}.${benchmark ? ` Use os ${formatPercent(benchmark.csat)} do 3º colocado deste período como referência de evolução.` : result.averageCsat < Math.max(result.individualGoal, podiumCsatGoal) ? ` Alcance pelo menos ${formatPercent(Math.max(result.individualGoal, podiumCsatGoal))}.` : ''}`,
+    reviews: `Alcance uma taxa de avaliações de pelo menos ${formatPercent(reviewGoal)} e confira a evolução semanal das respostas recebidas.`,
+    volume: 'Aumente os atendimentos registrados no próximo ciclo e acompanhe sua posição em relação à média da equipe, considerando os dias trabalhados.',
+    maintenance: `Sustente CSAT acima de ${formatPercent(Math.max(result.individualGoal, podiumCsatGoal))} e avaliações em pelo menos ${formatPercent(reviewGoal)} no próximo ciclo.`,
+  }
+  const expectation = expectations[focus]
   const sections = style === 'mimo'
-    ? [situation, impact, focus, expectation]
-    : [`${situation} ${impact}`, `Proposta para o próximo alinhamento. ${focus}`, expectation, 'No próximo 1:1, vamos conferir os exemplos revistos e decidir qual prática levar para os próximos atendimentos.']
+    ? [situation, impact, actions, expectation]
+    : [`${situation} ${impact}`, `Orientação para o próximo ciclo. ${actions}`, expectation, 'Aplique essas condutas em cada atendimento e acompanhe semanalmente o indicador prioritário até o próximo fechamento mensal.']
 
   return phoneFeedbackHeadings[style].map((heading, index) => `${heading}:\n${sections[index]}`).join('\n\n')
 }
@@ -9715,9 +9740,9 @@ function formatDelta(value: number, suffix = '') {
 }
 
 function getTrendText(delta: number) {
-  if (delta > 1) return 'crescimento frente ao período anterior'
-  if (delta < -1) return 'queda frente ao período anterior'
-  return 'estabilidade frente ao período anterior'
+  if (delta > 0) return 'aumento do CSAT frente ao período anterior'
+  if (delta < 0) return 'redução do CSAT frente ao período anterior'
+  return 'CSAT igual ao período anterior'
 }
 
 function buildDevelopmentFocus(result: MonthlyPodiumResult, delta: number) {
