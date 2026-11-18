@@ -1,11 +1,12 @@
 'use client'
 
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import * as XLSX from 'xlsx'
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { calculateAverageCsat, calculateChatAverage, calculateTeamPerformance } from '@/lib/indicators'
+import { comparePhoneCsat, getPreviousPhoneCalendarMonth, loadPhoneMetricPages, phoneFeedbackHeadings } from '@/lib/phone-report'
 
 type Goal = {
   id: string
@@ -455,7 +456,7 @@ export default function Home() {
       .from('weekly_individual_metrics')
       .select('id, analyst_id, week_start, week_end, csat, total_reviews, positive_reviews, negative_reviews, review_percentage, total_tickets, evidence_url, notes, analysts(name, photo_url)')
       .order('week_start', { ascending: false })
-      .limit(52)
+      .order('id')
 
     if (loadedRole === 'analyst') {
       if (loadedProfileAnalystId) individualQuery = individualQuery.eq('analyst_id', loadedProfileAnalystId)
@@ -463,12 +464,13 @@ export default function Home() {
     }
 
     const [individualResult, teamResult] = await Promise.all([
-      individualQuery,
-      supabase
+      loadPhoneMetricPages((from, to) => individualQuery.range(from, to)),
+      loadPhoneMetricPages((from, to) => supabase
         .from('weekly_team_metrics')
         .select('id, week_start, week_end, answered_calls, abandoned_calls, total_calls, performance_percentage, overall_csat, evidence_url, notes')
         .order('week_start', { ascending: false })
-        .limit(52),
+        .order('id')
+        .range(from, to)),
     ])
 
     if (individualResult.error) setMessage(getSupabaseMessage(individualResult.error.message))
@@ -5169,11 +5171,13 @@ function ReportsView({
   const [selectedAnalystId, setSelectedAnalystId] = useState('')
   const [exportMessage, setExportMessage] = useState('')
   const [phoneManagerNotes, setPhoneManagerNotes] = useState('')
-  const [phoneFeedbackDraft, setPhoneFeedbackDraft] = useState('')
-  const [phoneFeedbackStyle, setPhoneFeedbackStyle] = useState<ChatFeedbackStyle>('mimo')
+  const [phoneFeedbackDraft, setPhoneFeedbackDraft] = useState<string | null>(null)
+  const [phoneFeedbackStyle, setPhoneFeedbackStyle] = useState<keyof typeof phoneFeedbackHeadings>('mimo')
   const [phoneFeedbackGoal, setPhoneFeedbackGoal] = useState<FeedbackGoal>('development')
   const [phoneAiSaving, setPhoneAiSaving] = useState(false)
-  const [phoneAiStatus, setPhoneAiStatus] = useState<'idle' | 'success' | 'fallback' | 'error'>('idle')
+  const [phoneAiStatus, setPhoneAiStatus] = useState<'idle' | 'success' | 'fallback'>('idle')
+  const [showPhoneFacts, setShowPhoneFacts] = useState(false)
+  const phoneAiRequest = useRef<AbortController | null>(null)
   const isManagementUser = role !== 'analyst'
   const reportAnalysts = useMemo(
     () => (analysts.length ? analysts : buildAnalystsFromMetrics(individualMetrics)),
@@ -5188,16 +5192,23 @@ function ReportsView({
   }, [reportAnalysts, selectedAnalystId])
 
   useEffect(() => {
-    setPhoneFeedbackDraft('')
+    setPhoneFeedbackDraft(null)
     setExportMessage('')
     setPhoneAiStatus('idle')
+    setShowPhoneFacts(false)
+    return () => {
+      phoneAiRequest.current?.abort()
+    }
   }, [periodFilter.start, periodFilter.end, selectedAnalystId, phoneFeedbackStyle])
 
 
   const selectedAnalyst =
     reportAnalysts.find((analyst) => analyst.id === selectedAnalystId) ?? reportAnalysts[0] ?? null
   const periodLabel = formatPeriodLabel(periodFilter)
-  const previousPeriod = getPreviousPeriod(periodFilter)
+  const previousMonth = getPreviousPhoneCalendarMonth(periodFilter.start, periodFilter.end)
+  const previousPeriod: PeriodFilter = previousMonth
+    ? { ...previousMonth, mode: 'month' }
+    : getPreviousPeriod(periodFilter)
   const podiumCsatGoal = getGoalValue(goals, 'podium_csat_minimum', 90)
   const reviewGoal = getGoalValue(goals, 'review_percentage', 25)
   const teamPerformanceGoal = getTeamPerformanceGoal(goals)
@@ -5206,17 +5217,13 @@ function ReportsView({
   const analystMetrics = selectedAnalyst
     ? periodIndividualMetrics.filter((metric) => metric.analyst_id === selectedAnalyst.id)
     : []
-  const previousAnalystMetrics = selectedAnalyst
-    ? filterIndividualMetricsByPeriod(individualMetrics, previousPeriod).filter(
-        (metric) => metric.analyst_id === selectedAnalyst.id,
-      )
+  const previousIndividualMetrics = periodFilter.start && periodFilter.end && periodFilter.start <= periodFilter.end
+    ? filterIndividualMetricsByPeriod(individualMetrics, previousPeriod)
     : []
   const podium = buildPeriodPodium(periodIndividualMetrics, reportAnalysts, podiumCsatGoal, reviewGoal)
   const analystResult = selectedAnalyst
     ? podium.find((item) => item.analystId === selectedAnalyst.id) ?? null
     : null
-  const previousCsat = calculateAverageCsat(previousAnalystMetrics)
-  const csatDelta = analystResult ? round(analystResult.averageCsat - previousCsat) : 0
   const teamPerformance = calculateTeamPerformance(periodTeamMetrics)
   const teamStatus =
     teamPerformance >= teamPerformanceGoal
@@ -5227,18 +5234,15 @@ function ReportsView({
     : 0
   const strongestResult = podium[0] ?? null
   const attentionResults = podium.filter((item) => !item.eligible).slice(0, 3)
-  const growthResults = podium
-    .map((item) => {
-      const previous = filterIndividualMetricsByPeriod(individualMetrics, previousPeriod).filter(
-        (metric) => metric.analyst_id === item.analystId,
-      )
-
-      return {
-        ...item,
-        delta: round(item.averageCsat - calculateAverageCsat(previous)),
-      }
-    })
-    .sort((a, b) => b.delta - a.delta)
+  const csatComparisons = podium.flatMap((item) => {
+    const previous = previousIndividualMetrics.filter((metric) => metric.analyst_id === item.analystId)
+    const comparison = comparePhoneCsat({ csat: item.averageCsat, reviews: item.totalReviews }, previous)
+    return comparison ? [{ ...comparison, analystId: item.analystId, analystName: item.analystName }] : []
+  })
+  const analystComparison = csatComparisons.find((item) => item.analystId === selectedAnalyst?.id)
+  const csatDelta = analystComparison?.delta ?? null
+  const csatDeltaLabel = csatDelta === null ? 'Sem comparativo' : formatDelta(csatDelta, ' p.p.')
+  const growthResults = csatComparisons.sort((a, b) => b.delta - a.delta)
   const bestGrowth = growthResults[0] ?? null
   const riskResults = podium
     .filter((item) => !item.eligible || item.averageCsat < item.individualGoal + 2)
@@ -5294,11 +5298,14 @@ function ReportsView({
         : periodFilter.mode === 'week'
           ? 'A semana representa o recorte selecionado para acompanhamento.'
           : 'O resultado segue exatamente o intervalo escolhido.'
-  const supervisorComparisonText = `Comparativo contra período anterior equivalente: ${formatPeriodLabel(previousPeriod)}.`
+  const previousPeriodLabel = formatPeriodLabel(previousPeriod)
+  const supervisorComparisonText = analystComparison
+    ? `CSAT de ${formatPercent(analystComparison.csat)} no período anterior.`
+    : 'São necessárias avaliações de CSAT nos dois períodos.'
   const supervisorContextCards = [
     { label: 'Recorte analisado', value: periodLabel, detail: supervisorPeriodTypeText },
     { label: 'Base da leitura', value: selectedAnalyst?.name ?? 'Sem analista', detail: supervisorPeriodStatusText },
-    { label: 'Comparativo usado', value: formatPeriodLabel(previousPeriod), detail: supervisorComparisonText },
+    { label: 'Período de referência', value: previousPeriodLabel, detail: supervisorComparisonText },
   ]
   const supervisorActionCards = [
     {
@@ -5324,28 +5331,12 @@ function ReportsView({
       text: supervisorFollowUpText,
     },
   ]
-  const situationText = selectedAnalyst && analystResult
-    ? `${selectedAnalyst.name} fechou ${periodLabel} com CSAT de ${formatPercent(analystResult.averageCsat)}, ${formatChatCount(analystResult.totalReviews)} avaliações e ${formatChatCount(analystResult.totalTickets)} atendimentos registrados. A meta individual e ${analystResult.individualGoal}% e a referência para pódio e ${podiumCsatGoal}%. A variação contra o período anterior foi de ${formatDelta(csatDelta, ' p.p.')}.`
-    : ''
-  const actionText = analystResult
-    ? analystResult.eligible
-      ? 'Foram alinhadas a manutencao das praticas atuais, a preservação do volume de avaliações e o acompanhamento semanal de qualquer oscilação antes do fechamento do ciclo.'
-      : `Foram alinhadas a priorização dos pontos: ${analystResult.reasons.join(', ')}. A recomendação inicial e revisar atendimentos de menor satisfação, reforcar o convite para avaliação e acompanhar o indicador semanalmente.`
-    : ''
-  const resultText = analystResult
-    ? analystResult.eligible
-      ? `Resultado esperado: manter CSAT acima de ${podiumCsatGoal}%, preservar elegibilidade ao pódio e sustentar volume de avaliações igual ou superior a ${reviewGoal}% dos atendimentos.`
-      : `Resultado esperado: recuperar os pontos impeditivos para apróximar o desempenho da referência de pódio (${podiumCsatGoal}%) e elevar a consistencia do indicador no próximo ciclo.`
-    : ''
-  const evolutionText = analystResult
-    ? `Expectativa e plano de desenvolvimento: ${buildDevelopmentFocus(analystResult, csatDelta)} Perguntas sugeridas para 1:1: o que ajudou ou atrapalhou o CSAT no período? quais atendimentos merecem revisao? qual ação simples pode aumentar avaliações na próxima semana?`
-    : ''
   const feedbackSummary = analystResult
     ? analystResult.eligible
       ? `${selectedAnalyst?.name ?? 'Analista'} está elegível ao pódio no período. O foco recomendado e preservar consistencia, volume de avaliações e acompanhamento semanal.`
       : `${selectedAnalyst?.name ?? 'Analista'} ainda nao sustenta elegibilidade ao pódio neste período. O foco recomendado e atuar sobre: ${analystResult.reasons.join(', ')}.`
     : ''
-  const phoneFeedbackSuggestion = selectedAnalyst && analystResult
+  const phoneFeedbackFacts = selectedAnalyst && analystResult
     ? buildPhoneFeedbackText({
         analystName: selectedAnalyst.name,
         periodLabel,
@@ -5357,8 +5348,23 @@ function ReportsView({
         rankingPosition: selectedRankingPosition,
         managerNotes: phoneManagerNotes,
         averageTickets: supervisorAverageTickets,
+        comparison: analystComparison,
+        previousPeriodLabel,
       })
     : ''
+  const phoneLocalFeedback = analystResult
+    ? buildPhoneLocalFeedback({
+        style: phoneFeedbackStyle,
+        periodLabel,
+        result: analystResult,
+        rankingPosition: selectedRankingPosition,
+        reviewGoal,
+        podiumCsatGoal,
+        comparison: analystComparison,
+        previousPeriodLabel,
+      })
+    : ''
+  const phoneFeedbackText = phoneFeedbackDraft ?? phoneLocalFeedback
 
   const hasSelectedAnalyst = Boolean(selectedAnalyst)
   const hasAnalystLaunch = Boolean(analystResult)
@@ -5368,7 +5374,7 @@ function ReportsView({
     {
       label: 'Analista selecionado',
       done: hasSelectedAnalyst,
-      detail: selectedAnalyst ? selectedAnalyst.name : 'Selecione um analista para gerar o SARE.',
+      detail: selectedAnalyst ? selectedAnalyst.name : 'Selecione um analista para gerar o relatório.',
     },
     {
       label: 'Lancamento individual no período',
@@ -5387,45 +5393,32 @@ function ReportsView({
     setPeriodFilter(createPeriodFilter(mode))
   }
 
-  function handleGeneratePhoneFeedbackDraft() {
-    if (!selectedAnalyst || !analystResult) {
-      setExportMessage('Selecione um analista e um período com lançamento antes de gerar o feedback.')
-      return
-    }
+  async function handlePhoneFeedbackWithAi(generationMode: 'generate' | 'improve') {
+    if (!selectedAnalyst || !analystResult || phoneAiRequest.current) return
 
-    setPhoneFeedbackDraft(phoneFeedbackSuggestion)
-    setPhoneAiStatus('idle')
-    setExportMessage('Base factual gerada. Use a IA para transformar os dados em um feedback personalizado.')
-  }
-
-  async function handleGeneratePhoneFeedbackWithAi() {
-    if (!selectedAnalyst || !analystResult) {
-      setExportMessage('Selecione um analista e um período com lançamento antes de acionar a IA.')
-      return
-    }
-
+    const request = new AbortController()
+    phoneAiRequest.current = request
     setPhoneAiSaving(true)
     setExportMessage('')
 
     try {
-      const averageTickets =
-        podium.length > 0
-          ? round(podium.reduce((sum, item) => sum + item.totalTickets, 0) / podium.length)
-          : 0
       const response = await fetch('/api/chat-feedback', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
+        signal: request.signal,
         body: JSON.stringify({
           serviceModule: 'phone',
           feedbackStyle: phoneFeedbackStyle,
           feedbackGoal: phoneFeedbackGoal,
-          generationMode: 'generate',
+          generationMode,
           periodLabel,
           managerNotes: phoneManagerNotes,
-          fallbackText: phoneFeedbackSuggestion,
-          averageTickets,
+          fallbackText: generationMode === 'improve' ? phoneFeedbackText.trim() || phoneLocalFeedback : phoneLocalFeedback,
+          factualContext: phoneFeedbackFacts,
+          phoneComparison: analystComparison
+            ? { periodLabel: previousPeriodLabel, csat: analystComparison.csat, delta: analystComparison.delta }
+            : undefined,
+          averageTickets: supervisorAverageTickets,
           podiumPosition: selectedRankingPosition,
           metric: {
             analystName: selectedAnalyst.name,
@@ -5451,105 +5444,24 @@ function ReportsView({
         }),
       })
       const data = await response.json()
+      if (request.signal.aborted) return
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Não foi possível gerar texto com IA.')
+      if (!response.ok || data.source === 'local-fallback' || typeof data.feedback !== 'string' || !data.feedback.trim()) {
+        throw new Error('Texto assistido indisponível.')
       }
 
-      if (data.source === 'local-fallback') {
-        setPhoneAiStatus('fallback')
-        setExportMessage(data.warning || 'A IA não respondeu. A base factual foi mantida sem reescrita.')
-      } else {
-        setPhoneFeedbackDraft(cleanChatReportFeedbackText(data.feedback ?? ''))
-        setPhoneAiStatus('success')
-        setExportMessage('Texto personalizado gerado pela IA. Revise antes de exportar.')
-      }
-    } catch (error) {
-      setPhoneFeedbackDraft(phoneFeedbackSuggestion)
-      setPhoneAiStatus('error')
-      setExportMessage(`A IA externa nao gerou um texto valido agora. Usei a sugestão local do telefone. Motivo: ${getErrorMessage(error)}`)
+      setPhoneFeedbackDraft(cleanChatReportFeedbackText(data.feedback))
+      setPhoneAiStatus('success')
+      setExportMessage('Texto gerado pela IA. Revise antes de exportar.')
+    } catch {
+      if (request.signal.aborted) return
+      if (!phoneFeedbackDraft?.trim()) setPhoneFeedbackDraft(null)
+      setPhoneAiStatus('fallback')
+      setExportMessage(generationMode === 'improve' || phoneFeedbackDraft?.trim()
+        ? 'A IA está indisponível. O texto atual foi preservado.'
+        : 'A IA está indisponível. A versão do painel está disponível para revisão e exportação.')
     } finally {
-      setPhoneAiSaving(false)
-    }
-  }
-
-  async function handleImprovePhoneFeedbackWithAi() {
-    if (!selectedAnalyst || !analystResult) {
-      setExportMessage('Selecione um analista e um período com lançamento antes de acionar a IA.')
-      return
-    }
-
-    const baseFeedback = phoneFeedbackDraft.trim() || phoneFeedbackSuggestion
-
-    if (!baseFeedback.trim()) {
-      setExportMessage('Gere uma sugestão ou escreva um texto antes de pedir melhoria com IA.')
-      return
-    }
-
-    setPhoneAiSaving(true)
-    setExportMessage('Melhorando texto com IA...')
-
-    try {
-      const averageTickets =
-        podium.length > 0
-          ? round(podium.reduce((sum, item) => sum + item.totalTickets, 0) / podium.length)
-          : 0
-      const response = await fetch('/api/chat-feedback', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          serviceModule: 'phone',
-          feedbackStyle: phoneFeedbackStyle,
-          feedbackGoal: phoneFeedbackGoal,
-          generationMode: 'improve',
-          periodLabel,
-          managerNotes: phoneManagerNotes,
-          fallbackText: baseFeedback,
-          averageTickets,
-          podiumPosition: selectedRankingPosition,
-          metric: {
-            analystName: selectedAnalyst.name,
-            teamName: 'Telefone',
-            csat: analystResult.averageCsat,
-            reviewPercentage: analystResult.reviewPercentage,
-            totalTickets: analystResult.totalTickets,
-            reviews: analystResult.totalReviews,
-            csatGoal: analystResult.individualGoal,
-            reviewGoal,
-            status: analystResult.eligible ? 'Elegível ao pódio' : 'Em acompanhamento',
-            teamPerformance,
-            teamAnsweredCalls,
-            teamTotalCalls,
-          },
-          monthlyHistory: weeklyEvolution.map((item) => ({
-            monthLabel: item.label,
-            csat: item.csat,
-            reviewPercentage: item.totalTickets ? round((item.totalReviews / item.totalTickets) * 100) : 0,
-            sendingPercentage: 0,
-            totalTickets: item.totalTickets,
-          })),
-        }),
-      })
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Não foi possível melhorar texto com IA.')
-      }
-
-      if (data.source === 'local-fallback') {
-        setPhoneAiStatus('fallback')
-        setExportMessage(data.warning || 'A IA não respondeu. O texto atual foi mantido sem alterações.')
-      } else {
-        setPhoneFeedbackDraft(cleanChatReportFeedbackText(data.feedback ?? ''))
-        setPhoneAiStatus('success')
-        setExportMessage('Texto reorganizado e corrigido pela IA. Revise antes de exportar.')
-      }
-    } catch (error) {
-      setPhoneAiStatus('error')
-      setExportMessage('A IA externa não melhorou o texto agora. Mantive o texto atual. Motivo: ' + getErrorMessage(error))
-    } finally {
+      phoneAiRequest.current = null
       setPhoneAiSaving(false)
     }
   }
@@ -5562,7 +5474,7 @@ function ReportsView({
 
     try {
       setExportMessage('Preparando relatório e incorporando a foto do analista...')
-      const finalPhoneFeedback = normalizePhoneReportFeedback(phoneFeedbackDraft, phoneFeedbackSuggestion, phoneFeedbackStyle)
+      const finalPhoneFeedback = cleanChatReportFeedbackText(phoneFeedbackText) || phoneLocalFeedback
       const fileName = await exportWordReport({
         analystName: selectedAnalyst.name,
         photoUrl: getAnalystPhoto(selectedAnalyst.name, selectedAnalyst.photo_url),
@@ -5591,6 +5503,10 @@ function ReportsView({
         },
         weeklyEvolution,
         assistedFeedback: finalPhoneFeedback,
+        feedbackStyle: phoneFeedbackStyle,
+        comparison: analystComparison
+          ? { periodLabel: previousPeriodLabel, csat: analystComparison.csat, delta: analystComparison.delta }
+          : null,
       })
 
       setExportMessage(`Relatorio gerado: ${fileName}. Verifique a pasta Downloads.`)
@@ -5666,7 +5582,7 @@ function ReportsView({
       <div className="grid gap-4 md:grid-cols-4">
         <MetricCard label="Analista" value={selectedAnalyst?.name ?? 'Sem analista'} />
         <MetricCard label="CSAT do período" value={`${formatPercent(analystResult?.averageCsat ?? 0)}`} />
-        <MetricCard label="Variação vs período anterior" value={formatDelta(csatDelta, '%')} />
+        <MetricCard label="Variação vs período anterior" value={csatDeltaLabel} />
         <MetricCard label="Performance equipe" value={formatPercent(teamPerformance)} />
       </div>
 
@@ -5759,6 +5675,7 @@ function ReportsView({
             <textarea
               className="form-input min-h-24"
               value={phoneManagerNotes}
+              disabled={phoneAiSaving}
               onChange={(event) => setPhoneManagerNotes(event.target.value)}
               placeholder="Inclua contexto do período, combinados, reconhecimento ou pontos de atenção para orientar a IA."
             />
@@ -5770,8 +5687,7 @@ function ReportsView({
                 className="form-input"
                 value={phoneFeedbackStyle}
                 onChange={(event) => {
-                  setPhoneFeedbackStyle(event.target.value as ChatFeedbackStyle)
-                  setPhoneFeedbackDraft('')
+                  setPhoneFeedbackStyle(event.target.value as keyof typeof phoneFeedbackHeadings)
                 }}
               >
                 <option value="mimo">MIMO</option>
@@ -5779,7 +5695,7 @@ function ReportsView({
               </select>
             </Field>
             <Field label="Objetivo">
-              <select className="form-input" value={phoneFeedbackGoal} onChange={(event) => setPhoneFeedbackGoal(event.target.value as FeedbackGoal)}>
+              <select className="form-input" value={phoneFeedbackGoal} disabled={phoneAiSaving} onChange={(event) => setPhoneFeedbackGoal(event.target.value as FeedbackGoal)}>
                 <option value="development">Desenvolver comportamento</option>
                 <option value="courseCorrection">Corrigir rota</option>
                 <option value="recognition">Reconhecer e manter</option>
@@ -5793,43 +5709,50 @@ function ReportsView({
               className="btn-secondary disabled:cursor-not-allowed disabled:opacity-60"
               disabled={!selectedAnalyst || !analystResult}
               type="button"
-              onClick={handleGeneratePhoneFeedbackDraft}
+              onClick={() => setShowPhoneFacts(!showPhoneFacts)}
+              aria-expanded={showPhoneFacts}
             >
-              Gerar base factual
+              {showPhoneFacts ? 'Ocultar base factual' : 'Ver base factual'}
             </button>
             <button
               className="btn-primary disabled:cursor-not-allowed disabled:opacity-60"
               disabled={!selectedAnalyst || !analystResult || phoneAiSaving}
               type="button"
-              onClick={handleGeneratePhoneFeedbackWithAi}
+              onClick={() => handlePhoneFeedbackWithAi('generate')}
             >
               {phoneAiSaving ? 'Gerando...' : 'Gerar texto assistido'}
             </button>
             <button
               className="btn-secondary disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={!selectedAnalyst || !analystResult || phoneAiSaving || !phoneFeedbackDraft.trim()}
+              disabled={!selectedAnalyst || !analystResult || phoneAiSaving || !phoneFeedbackText.trim()}
               type="button"
-              onClick={handleImprovePhoneFeedbackWithAi}
+              onClick={() => handlePhoneFeedbackWithAi('improve')}
             >
               Melhorar texto atual
             </button>
             <p className="text-sm text-slate-300">
-              A base factual reúne os números sem criar uma redação pronta. A IA usa esses fatos, o objetivo e suas observações para escrever um feedback personalizado.
+              A IA usa os dados do período, o objetivo e suas observações para personalizar o feedback.
             </p>
           </div>
 
+          {showPhoneFacts && <p className="whitespace-pre-wrap rounded-lg bg-slate-900 p-4 text-sm text-slate-300">{phoneFeedbackFacts}</p>}
+
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm text-slate-300">Texto final assistido</p>
+            <p className="text-sm text-slate-300">Texto do relatório</p>
             {phoneAiStatus === 'success' && <span className="rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-300">Gerado pela IA</span>}
-            {phoneAiStatus === 'fallback' && <span className="rounded-full bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-200">IA não respondeu · base mantida</span>}
-            {phoneAiStatus === 'error' && <span className="rounded-full bg-rose-400/10 px-3 py-1 text-xs font-semibold text-rose-300">Falha ao acessar a IA</span>}
+            {phoneAiStatus === 'fallback' && <span className="rounded-full bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-200">IA indisponível</span>}
           </div>
           <Field label="">
             <textarea
               className="form-input min-h-48"
-              value={phoneFeedbackDraft}
-              onChange={(event) => setPhoneFeedbackDraft(event.target.value)}
-              placeholder="Gere a base factual, use a IA ou escreva aqui o texto final que irá para o relatório."
+              aria-label="Texto do relatório"
+              value={phoneFeedbackText}
+              disabled={phoneAiSaving}
+              onChange={(event) => {
+                setPhoneFeedbackDraft(event.target.value)
+                setPhoneAiStatus('idle')
+              }}
+              placeholder="Selecione um analista e um período com lançamentos para preparar o relatório."
             />
           </Field>
         </div>
@@ -5837,7 +5760,7 @@ function ReportsView({
         <div className="no-print mt-4">
           <button
             className="primary-button disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={!selectedAnalyst || !analystResult}
+            disabled={!selectedAnalyst || !analystResult || phoneAiSaving || !phoneFeedbackText.trim()}
             type="button"
             onClick={handleExportWordReport}
           >
@@ -5855,8 +5778,8 @@ function ReportsView({
               </div>
               <div className="report-summary-card">
                 <p>Variação</p>
-                <strong className={csatDelta >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
-                  {formatDelta(csatDelta, ' p.p.')}
+                <strong className={csatDelta === null ? 'text-slate-300' : csatDelta >= 0 ? 'text-emerald-300' : 'text-rose-300'}>
+                  {csatDeltaLabel}
                 </strong>
               </div>
               <div className="report-summary-card">
@@ -5864,7 +5787,7 @@ function ReportsView({
                 <strong>{analystResult.totalReviews}</strong>
               </div>
               <div className="report-summary-card">
-                <p>Podio</p>
+                <p>Posição no ranking</p>
                 <strong>{selectedRankingPosition || '-'}</strong>
               </div>
             </div>
@@ -5890,7 +5813,7 @@ function ReportsView({
                           <div className={`report-evolution-bar ${barClass}`} style={{ width: `${width}%` }} />
                         </div>
                         <strong>
-                          {formatPercent(item.csat)} <span>{formatDelta(delta, ' p.p.')}</span>
+                          {formatPercent(item.csat)} {previous && <span>{formatDelta(delta, ' p.p.')}</span>}
                         </strong>
                       </div>
                     )
@@ -5899,24 +5822,7 @@ function ReportsView({
               </div>
             )}
 
-            <div className="grid gap-4 lg:grid-cols-2">
-              <ReportBlock
-                title="S - Situação"
-                text={situationText}
-              />
-              <ReportBlock
-                title="A - Alinhamentos Realizados"
-                text={actionText}
-              />
-              <ReportBlock
-                title="R - Resultado Esperado"
-                text={resultText}
-              />
-              <ReportBlock
-                title="E - Expectativa e Plano de Desenvolvimento"
-                text={evolutionText}
-              />
-            </div>
+            <div className="hidden whitespace-pre-wrap print:block">{phoneFeedbackText}</div>
           </div>
         ) : (
           <EmptyState text="Selecione um analista e um período com lançamento individual para liberar a exportação." />
@@ -5951,11 +5857,11 @@ function ReportsView({
               </p>
               <p>
                 <span className="text-slate-500">Tendencia: </span>
-                {getTrendText(csatDelta)}.
+                {csatDelta === null ? 'sem dados de CSAT para comparar os períodos' : getTrendText(csatDelta)}.
               </p>
               <p>
                 <span className="text-slate-500">Foco recomendado: </span>
-                {analystResult ? buildDevelopmentFocus(analystResult, csatDelta) : 'registrar dados para liberar leitura.'}
+                {analystResult ? buildDevelopmentFocus(analystResult, csatDelta ?? 0) : 'registrar dados para liberar leitura.'}
               </p>
             </div>
           </div>
@@ -6041,15 +5947,6 @@ function ReportsView({
           </div>
         </div>
       </section>
-    </div>
-  )
-}
-
-function ReportBlock({ title, text }: { title: string; text: string }) {
-  return (
-    <div className="rounded-lg bg-slate-900 p-5">
-      <h3 className="text-lg font-bold">{title}</h3>
-      <p className="mt-3 text-sm leading-6 text-slate-300">{text}</p>
     </div>
   )
 }
@@ -8734,6 +8631,8 @@ function buildPhoneFeedbackText({
   rankingPosition,
   managerNotes,
   averageTickets,
+  comparison,
+  previousPeriodLabel,
 }: {
   analystName: string
   periodLabel: string
@@ -8745,6 +8644,8 @@ function buildPhoneFeedbackText({
   rankingPosition: number
   managerNotes: string
   averageTickets: number
+  comparison?: { csat: number; delta: number }
+  previousPeriodLabel: string
 }) {
   const isTopThree = rankingPosition > 0 && rankingPosition <= 3
   const rankingText = rankingPosition
@@ -8769,14 +8670,48 @@ function buildPhoneFeedbackText({
 
   return [
     `Base factual do ciclo: ${analystName}, em ${periodLabel}, registrou CSAT de ${formatPercent(analystResult.averageCsat)} (referência ${podiumCsatGoal}%), ${formatChatCount(analystResult.totalReviews)} avaliações, taxa de avaliações de ${formatPercent(analystResult.reviewPercentage)} (meta ${reviewGoal}%) e ${formatChatCount(analystResult.totalTickets)} atendimentos. A média do time foi ${formatChatCount(averageTickets)}. Posição: ${rankingText}. Performance da equipe: ${formatPercent(teamPerformance)} diante da referência de ${teamPerformanceGoal}%.`,
+    comparison
+      ? `Comparativo de CSAT: ${formatPercent(comparison.csat)} em ${previousPeriodLabel}, com variação de ${formatDelta(comparison.delta, ' p.p.')} no período atual.`
+      : 'Sem base de avaliações para comparar o CSAT entre os períodos.',
     `Ponto prioritário: ${priority}.`,
     `Contexto a verificar: ${contextToVerify}`,
     managerNotes.trim() ? `Observação registrada pelo gestor: ${managerNotes.trim()}` : 'Observação do gestor: não informada.',
   ].join('\n\n')
 }
 
-function normalizePhoneReportFeedback(text: string, fallbackText: string, style: ChatFeedbackStyle) {
-  return normalizeChatReportFeedback(text, fallbackText, style)
+function buildPhoneLocalFeedback({
+  style,
+  periodLabel,
+  result,
+  rankingPosition,
+  reviewGoal,
+  podiumCsatGoal,
+  comparison,
+  previousPeriodLabel,
+}: {
+  style: keyof typeof phoneFeedbackHeadings
+  periodLabel: string
+  result: MonthlyPodiumResult
+  rankingPosition: number
+  reviewGoal: number
+  podiumCsatGoal: number
+  comparison?: { csat: number; delta: number }
+  previousPeriodLabel: string
+}) {
+  const situation = `Em ${periodLabel}, você registrou ${formatChatCount(result.totalTickets)} atendimentos e recebeu ${formatChatCount(result.totalReviews)} avaliações (${formatPercent(result.reviewPercentage)} dos atendimentos). ${result.totalReviews > 0 ? `Seu CSAT foi de ${formatPercent(result.averageCsat)}, com meta individual de ${formatPercent(result.individualGoal)}.` : 'O período ficou sem avaliações para medir o CSAT.'}`
+  const comparisonText = comparison
+    ? `Em ${previousPeriodLabel}, o CSAT foi de ${formatPercent(comparison.csat)}. A variação foi de ${formatDelta(comparison.delta, ' p.p.')}.`
+    : 'Sem base de avaliações para comparar o CSAT com o período anterior.'
+  const impact = `Você ficou em ${rankingPosition}º no ranking. ${comparisonText}`
+  const focus = result.eligible
+    ? 'Vamos escolher um atendimento bem avaliado e identificar uma prática que você possa repetir no próximo ciclo.'
+    : 'Vamos revisar exemplos da operação para entender os indicadores pendentes e combinar uma ação para o próximo ciclo.'
+  const expectation = `No próximo acompanhamento, vamos revisar a ação combinada e conferir a taxa de avaliações frente à meta de ${formatPercent(reviewGoal)} e o CSAT frente à referência de ${formatPercent(podiumCsatGoal)} do pódio.`
+  const sections = style === 'mimo'
+    ? [situation, impact, focus, expectation]
+    : [`${situation} ${impact}`, `Proposta para o próximo alinhamento. ${focus}`, expectation, 'No próximo 1:1, vamos conferir os exemplos revistos e decidir qual prática levar para os próximos atendimentos.']
+
+  return phoneFeedbackHeadings[style].map((heading, index) => `${heading}:\n${sections[index]}`).join('\n\n')
 }
 
 async function exportWordReport({
@@ -8787,6 +8722,8 @@ async function exportWordReport({
   achieved,
   weeklyEvolution,
   assistedFeedback,
+  feedbackStyle,
+  comparison,
 }: {
   analystName: string
   photoUrl?: string | null
@@ -8811,6 +8748,8 @@ async function exportWordReport({
   }
   weeklyEvolution: WeeklyIndividualTrend[]
   assistedFeedback: string
+  feedbackStyle: keyof typeof phoneFeedbackHeadings
+  comparison: { periodLabel: string; csat: number; delta: number } | null
 }) {
   const safeName = escapeHtml(analystName)
   const embeddedPhotoUrl = await buildEmbeddedReportPhoto(photoUrl)
@@ -8828,15 +8767,8 @@ async function exportWordReport({
     null,
   )
   const hasWeeklyComparison = weeklyEvolution.length > 1
-  const csatDelta = hasWeeklyComparison && firstEvolution && lastEvolution ? round(lastEvolution.csat - firstEvolution.csat) : 0
-  const csatTrendLabel = !hasWeeklyComparison
-    ? 'Sem comparativo'
-    : csatDelta > 0
-      ? 'Melhorou'
-      : csatDelta < 0
-        ? 'Piorou'
-        : 'Estavel'
-  const csatTrendClass = !hasWeeklyComparison ? 'neutral' : csatDelta >= 0 ? 'positive' : 'negative'
+  const weeklyCsatDelta = hasWeeklyComparison && firstEvolution && lastEvolution ? round(lastEvolution.csat - firstEvolution.csat) : 0
+  const csatTrendClass = !comparison ? 'neutral' : comparison.delta >= 0 ? 'positive' : 'negative'
   const goalGap = round(achieved.csat - expected.csat)
   const goalGapText = goalGap >= 0
     ? `${formatDelta(goalGap, ' p.p.')} acima da referência`
@@ -8948,8 +8880,8 @@ async function exportWordReport({
             <p>CSAT: ${formatPercent(achieved.csat)} (${goalGapText})</p>
             <p>Avaliações: ${formatPercent(achieved.reviewPercentage)} (${achieved.reviewCount} respondidas, ${reviewGapText})</p>
             <p>Atendimentos: ${achieved.answeredTickets}</p>
-            <p>Media por colaborador: ${achieved.averageTickets}</p>
-            <p>Posição pódio: ${achieved.rankingPosition || '-'}</p>
+            <p>Média por colaborador de ${formatChatCount(achieved.averageTickets)} atendimentos</p>
+            <p>Posição no ranking em ${achieved.rankingPosition ? `${achieved.rankingPosition}º lugar` : 'apuração'}</p>
           </div>
         </div>
 
@@ -8965,9 +8897,9 @@ async function exportWordReport({
             <div class="insight-note">${goalGapText}</div>
           </div>
           <div class="insight">
-            <div class="insight-label">Tendencia</div>
-            <div class="insight-value ${csatTrendClass}">${csatTrendLabel}</div>
-            <div class="insight-note">${hasWeeklyComparison ? formatDelta(csatDelta, ' p.p.') : 'precisa de mais semanas'}</div>
+            <div class="insight-label">Variação vs período anterior</div>
+            <div class="insight-value ${csatTrendClass}">${comparison ? formatDelta(comparison.delta, ' p.p.') : 'Sem comparativo'}</div>
+            <div class="insight-note">${comparison ? `${formatPercent(comparison.csat)} em ${escapeHtml(comparison.periodLabel)}` : 'São necessárias avaliações nos dois períodos.'}</div>
           </div>
           <div class="insight">
             <div class="insight-label">Melhor semana</div>
@@ -8983,6 +8915,7 @@ async function exportWordReport({
         <div class="trend-panel">
           <div class="trend-title">Evolução semanal do CSAT</div>
           <div class="goal-badge">Referência para o pódio: ${expected.csat}%</div>
+          ${hasWeeklyComparison && firstEvolution && lastEvolution ? `<p class="muted">Da primeira à última semana do recorte, de ${escapeHtml(firstEvolution.label)} a ${escapeHtml(lastEvolution.label)}, o CSAT variou ${formatDelta(weeklyCsatDelta, ' p.p.')}.</p>` : ''}
           ${evolutionBars}
         </div>
         <p class="muted">Menor ponto do período: ${worstEvolution ? `${worstEvolution.label} - ${formatPercent(worstEvolution.csat)}` : '-'}.</p>
@@ -9002,7 +8935,7 @@ async function exportWordReport({
         <p>Performance da equipe no período: ${formatPercent(achieved.teamPerformance)}.</p>
         <p>Ligações atendidas pela equipe: ${achieved.teamAnsweredCalls}. Total processado: ${achieved.teamTotalCalls}.</p>
 
-        <h2>Feedback</h2>
+        <h2>Feedback ${getChatFeedbackStyleLabel(feedbackStyle)}</h2>
         <div class="callout">${formatChatFeedbackForReport(assistedFeedback)}</div>
       </body>
     </html>
