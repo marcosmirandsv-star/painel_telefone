@@ -5501,6 +5501,10 @@ function ReportsView({
         },
         weeklyEvolution,
         assistedFeedback: finalPhoneFeedback,
+        feedbackStyle: phoneFeedbackStyle,
+        comparison: analystComparison
+          ? { periodLabel: previousPeriodLabel, csat: analystComparison.csat, delta: analystComparison.delta }
+          : null,
       })
 
       setExportMessage(`Relatorio gerado: ${fileName}. Verifique a pasta Downloads.`)
@@ -8716,6 +8720,8 @@ async function exportWordReport({
   achieved,
   weeklyEvolution,
   assistedFeedback,
+  feedbackStyle,
+  comparison,
 }: {
   analystName: string
   photoUrl?: string | null
@@ -8740,6 +8746,8 @@ async function exportWordReport({
   }
   weeklyEvolution: WeeklyIndividualTrend[]
   assistedFeedback: string
+  feedbackStyle: keyof typeof phoneFeedbackHeadings
+  comparison: { periodLabel: string; csat: number; delta: number } | null
 }) {
   const safeName = escapeHtml(analystName)
   const embeddedPhotoUrl = await buildEmbeddedReportPhoto(photoUrl)
@@ -8757,15 +8765,8 @@ async function exportWordReport({
     null,
   )
   const hasWeeklyComparison = weeklyEvolution.length > 1
-  const csatDelta = hasWeeklyComparison && firstEvolution && lastEvolution ? round(lastEvolution.csat - firstEvolution.csat) : 0
-  const csatTrendLabel = !hasWeeklyComparison
-    ? 'Sem comparativo'
-    : csatDelta > 0
-      ? 'Melhorou'
-      : csatDelta < 0
-        ? 'Piorou'
-        : 'Estavel'
-  const csatTrendClass = !hasWeeklyComparison ? 'neutral' : csatDelta >= 0 ? 'positive' : 'negative'
+  const weeklyCsatDelta = hasWeeklyComparison && firstEvolution && lastEvolution ? round(lastEvolution.csat - firstEvolution.csat) : 0
+  const csatTrendClass = !comparison ? 'neutral' : comparison.delta >= 0 ? 'positive' : 'negative'
   const goalGap = round(achieved.csat - expected.csat)
   const goalGapText = goalGap >= 0
     ? `${formatDelta(goalGap, ' p.p.')} acima da referência`
@@ -8877,8 +8878,8 @@ async function exportWordReport({
             <p>CSAT: ${formatPercent(achieved.csat)} (${goalGapText})</p>
             <p>Avaliações: ${formatPercent(achieved.reviewPercentage)} (${achieved.reviewCount} respondidas, ${reviewGapText})</p>
             <p>Atendimentos: ${achieved.answeredTickets}</p>
-            <p>Media por colaborador: ${achieved.averageTickets}</p>
-            <p>Posição pódio: ${achieved.rankingPosition || '-'}</p>
+            <p>Média por colaborador de ${formatChatCount(achieved.averageTickets)} atendimentos</p>
+            <p>Posição no ranking em ${achieved.rankingPosition ? `${achieved.rankingPosition}º lugar` : 'apuração'}</p>
           </div>
         </div>
 
@@ -8894,9 +8895,9 @@ async function exportWordReport({
             <div class="insight-note">${goalGapText}</div>
           </div>
           <div class="insight">
-            <div class="insight-label">Tendencia</div>
-            <div class="insight-value ${csatTrendClass}">${csatTrendLabel}</div>
-            <div class="insight-note">${hasWeeklyComparison ? formatDelta(csatDelta, ' p.p.') : 'precisa de mais semanas'}</div>
+            <div class="insight-label">Variação vs período anterior</div>
+            <div class="insight-value ${csatTrendClass}">${comparison ? formatDelta(comparison.delta, ' p.p.') : 'Sem comparativo'}</div>
+            <div class="insight-note">${comparison ? `${formatPercent(comparison.csat)} em ${escapeHtml(comparison.periodLabel)}` : 'São necessárias avaliações nos dois períodos.'}</div>
           </div>
           <div class="insight">
             <div class="insight-label">Melhor semana</div>
@@ -8912,6 +8913,7 @@ async function exportWordReport({
         <div class="trend-panel">
           <div class="trend-title">Evolução semanal do CSAT</div>
           <div class="goal-badge">Referência para o pódio: ${expected.csat}%</div>
+          ${hasWeeklyComparison && firstEvolution && lastEvolution ? `<p class="muted">Da primeira à última semana do recorte, de ${escapeHtml(firstEvolution.label)} a ${escapeHtml(lastEvolution.label)}, o CSAT variou ${formatDelta(weeklyCsatDelta, ' p.p.')}.</p>` : ''}
           ${evolutionBars}
         </div>
         <p class="muted">Menor ponto do período: ${worstEvolution ? `${worstEvolution.label} - ${formatPercent(worstEvolution.csat)}` : '-'}.</p>
@@ -8931,7 +8933,7 @@ async function exportWordReport({
         <p>Performance da equipe no período: ${formatPercent(achieved.teamPerformance)}.</p>
         <p>Ligações atendidas pela equipe: ${achieved.teamAnsweredCalls}. Total processado: ${achieved.teamTotalCalls}.</p>
 
-        <h2>Feedback</h2>
+        <h2>Feedback ${getChatFeedbackStyleLabel(feedbackStyle)}</h2>
         <div class="callout">${formatChatFeedbackForReport(assistedFeedback)}</div>
       </body>
     </html>
