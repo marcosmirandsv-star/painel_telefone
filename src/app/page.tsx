@@ -5,6 +5,7 @@ import Link from 'next/link'
 import * as XLSX from 'xlsx'
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { createSessionIdentityGuard } from '@/lib/session-identity'
 import { scheduleSupabase } from '@/lib/schedule-supabase'
 import { isHomologationBrowserRuntime } from '@/lib/runtime-environment'
 import { calculateAverageCsat, calculateChatAverage, calculateTeamPerformance } from '@/lib/indicators'
@@ -1452,9 +1453,14 @@ export default function Home() {
       recoveryFromHash.get('type') === 'recovery' ||
       recoveryFromSearch.get('type') === 'recovery'
 
+    const identityChanged = createSessionIdentityGuard()
     async function loadSession() {
       try {
         const { data } = await supabase.auth.getUser()
+        if (identityChanged(data.user)) {
+          window.location.reload()
+          return
+        }
         setUser(data.user)
         if (cameFromRecoveryLink) {
           setIsPasswordRecovery(true)
@@ -1473,10 +1479,13 @@ export default function Home() {
 
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
+        identityChanged(session?.user)
         setUser(session?.user ?? null)
         setIsPasswordRecovery(true)
         setMessage('Digite uma nova senha para concluir a recuperação.')
+        return
       }
+      if (identityChanged(session?.user)) window.location.reload()
     })
 
     return () => {
