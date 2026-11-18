@@ -3762,7 +3762,7 @@ function ChatSharedPerformanceSummary({ metric, csatGoal, dailyAvailable = true 
               {metric.csat_original!==undefined&&<details className="mt-2 text-xs text-slate-400"><summary className="cursor-pointer">CSAT original e ajustes</summary><p className="mt-2">Original: {metric.csat_original===null?'—':formatChatPercent(metric.csat_original)} · {metric.excluded_neutrals??0} neutro(s) externo(s) retirado(s) apenas do CSAT ajustado. As {metric.reviews} avaliações permanecem na participação; {metric.neutral_pending??0} neutro(s) aguardam revisão.</p></details>}
               <div className="mt-3 grid gap-4 lg:grid-cols-3">
                 <div className="rounded-xl border border-white/10 bg-slate-950/40 p-5">
-                  <p className="text-sm text-slate-400">Atendimentos <ChatMetricHelp text="Um recebimento por ticket e analista, na data em que foi assumido. Transferências podem gerar uma entrada para cada pessoa." /></p>
+                  <p className="text-sm text-slate-400">Atendimentos <ChatMetricHelp text="Total de Recebidos no cabeçalho do relatório ClickDesk, filtrado por este analista, pelas filas ERP/Fiscal e pelo intervalo selecionado." /></p>
                   <strong className="mt-2 block text-3xl tabular-nums text-slate-100">
                     {formatChatCount(accumulated?.attendances ?? 0)}
                   </strong>
@@ -3932,7 +3932,7 @@ function ManagementDailyFeedback({
   return (
     <section id="minha-rotina" className="workspace-content-section rounded-xl border border-white/10 p-5">
       <h3 className="text-xl font-bold">Régua diária · selecionar tickets para feedback</h3>
-      <p className="mt-2 text-sm text-slate-400">Abra um dia e escolha os casos positivos ou negativos que deseja levar ao feedback. Nenhuma escolha é obrigatória e os KPIs não dependem dela.</p>
+      <p className="mt-2 text-sm text-slate-400">{days.length ? "Abra um dia e escolha os casos positivos ou negativos que deseja levar ao feedback. A seleção é opcional e não altera os indicadores." : "Os totais deste período estão disponíveis, mas a seleção de tickets por dia ainda aguarda uma base diária conciliada."}</p>
       <div className="mt-4 flex flex-wrap gap-2">
         {days.map(day => (
           <button key={day.date} type="button" className="small-button" disabled={Boolean(busyTicket)}
@@ -4306,6 +4306,7 @@ function ChatAnalystPortal({
                   <ClickDeskSyncStatus
                     latestSyncAt={metrics?.latest_sync?.finished_at}
                     schedule={metrics?.sync_schedule}
+                    historical={monthKey.replace(/-(\d)$/, '-0$1') < businessToday.slice(0, 7)}
                     compact
                   />
                 </div>
@@ -8221,6 +8222,7 @@ function ChatModuleDashboard({
           <ClickDeskSyncStatus
             latestSyncAt={clickDeskPersistedMetrics?.latest_sync?.finished_at}
             schedule={clickDeskPersistedMetrics?.sync_schedule}
+            historical={chatFilterMonth.replace(/-(\d)$/, '-0$1') < chatBusinessDate().slice(0, 7)}
           />
         </div>
       </section>
@@ -9914,6 +9916,7 @@ function ChatModuleDashboard({
           </div>
 
           <div className="space-y-4">
+            {chat2HasPreviousComparison && <p className="text-xs leading-5 text-slate-400">Comparação com a base disponível do mês anterior. {chatFilterMonth === chatBusinessDate().slice(0, 7) ? 'O mês atual está em andamento; os volumes correspondem a períodos de duração diferente.' : 'Confira a cobertura e a fonte de ambos os meses antes de interpretar a variação como mudança de desempenho.'}</p>}
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <div className="executive-card">
                 <p>CSAT vs mês anterior</p>
@@ -10137,7 +10140,7 @@ function ChatModuleDashboard({
               <h3 className="mt-1 text-xl font-bold">Como estão as equipes do Chat?</h3>
             </div>
             <span className="text-xs text-slate-500">{isOfficialClickDeskSource(clickDeskPersistedMetrics?.source) ? 'Relatório ERP/Fiscal · time de lotação · até última atualização' : 'Autoria humana final · equipe cadastrada · cobertura parcial'}</span>
-            <p className="mt-1 text-xs text-slate-500">{isOfficialClickDeskSource(clickDeskPersistedMetrics?.source) ? 'Recebimentos por evento e avaliações são agrupados pelo time de lotação. Atendimento em outra fila acompanha o time de lotação; o total da fila não equivale ao total do time.' : 'Renovação, Suporte N3 e fila não comprovada são históricos de roteamento, não equipes. O ticket permanece creditado à equipe cadastrada do último autor humano.'}</p>
+            <p className="mt-1 text-xs text-slate-500">{isOfficialClickDeskSource(clickDeskPersistedMetrics?.source) ? 'Os Recebidos do relatório individual e as avaliações são agrupados pelo time de lotação do analista. A fila do atendimento pode ser diferente do time; por isso, o total da fila pode diferir do total do time.' : 'Renovação, Suporte N3 e fila não comprovada são históricos de roteamento, não equipes. O ticket permanece creditado à equipe cadastrada do último autor humano.'}</p>
           </div>
 
           {chat2OperationTeams.length > 0 ? (
@@ -16219,10 +16222,12 @@ function getGoalImpactText(goal: Goal) {
 function ClickDeskSyncStatus({
   latestSyncAt,
   schedule,
+  historical = false,
   compact = false,
 }: {
   latestSyncAt?: string | null
   schedule?: ClickDeskPersistedMetrics['sync_schedule']
+  historical?: boolean
   compact?: boolean
 }) {
   const [now, setNow] = useState(() => Date.now())
@@ -16281,8 +16286,9 @@ function ClickDeskSyncStatus({
   void countdown
   return <p className="text-xs leading-5 text-slate-400" role="status">
     Atualizado: <strong>{latestSyncAt ? formatDateTime(latestSyncAt) : 'em preparação'}</strong>
-    {' '}· Próxima: {nextSyncTime ?? 'aguardando agenda'}
-    {isOverdue&&<span className="ml-2 text-amber-200">Atualização pendente</span>}
+    {!historical && <> · Próxima captura prevista: {nextSyncTime ?? 'aguardando agenda'}</>}
+    {historical && <span> · Período histórico · data da última captura</span>}
+    {!historical && isOverdue&&<span className="ml-2 text-amber-200">Atualização pendente</span>}
   </p>
 }
 

@@ -20,7 +20,7 @@ export default function ChatNeutralReviews({start,end,analystId,teamId}:{start:s
   return()=>{active=false;controller.abort()}
  },[start,end,analystId,teamId,refresh])
  return <div className="mt-3 text-sm">
-  {data?.alerts.map((alert,index)=><p key={index} role="status" className="mb-2 rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-amber-100">{alert.message} {alert.tickets.length>0&&<span className="text-xs">Tickets: {alert.tickets.map(ticket=>'#'+ticket).join(', ')}</span>}</p>)}
+  {data?.alerts.map((alert,index)=><div key={index} className="mb-2 rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-amber-100"><p role="status">{alert.message}</p>{alert.tickets.length>0&&<details className="mt-2 text-xs"><summary className="cursor-pointer">Ver tickets em revisão ({alert.tickets.length})</summary><p className="mt-2 break-words">{alert.tickets.map(ticket=>'#'+ticket).join(', ')}</p></details>}</div>)}
   <details className="rounded-lg border border-white/10 p-3"><summary className="cursor-pointer text-slate-300">{data?`Neutros${analystId?'':' da equipe'}: ${data.summary.human} humanos/mistos · ${data.summary.external} externos · ${data.summary.pending} em revisão`:'Conferir avaliações neutras'}</summary>
    <p className="mt-3 text-xs leading-5 text-slate-400">Falha humana ou causa mista permanece negativa. Fator externo comprovado sai apenas do CSAT ajustado e continua nas avaliações recebidas. Casos em revisão não geram exclusão automática.</p>
    {error&&<p role="status" className="mt-3 text-amber-200">{error}</p>}
