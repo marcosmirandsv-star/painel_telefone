@@ -5453,6 +5453,7 @@ function ReportsView({
       setExportMessage('Texto gerado pela IA. Revise antes de exportar.')
     } catch {
       if (request.signal.aborted) return
+      if (!phoneFeedbackDraft?.trim()) setPhoneFeedbackDraft(null)
       setPhoneAiStatus('fallback')
       setExportMessage(generationMode === 'improve' || phoneFeedbackDraft?.trim()
         ? 'A IA está indisponível. O texto atual foi preservado.'
