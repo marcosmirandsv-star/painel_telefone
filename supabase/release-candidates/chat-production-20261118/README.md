@@ -3,7 +3,7 @@
 **Preparado para revisão. Nada deste diretório foi aplicado ou ativado em produção.**
 
 Destino único: `qmetbydkepfdgfqkdkai`, aplicação `painel-telefone.vercel.app`.
-Base da aplicação: `222b577696a02d378a6a43ad9053995e91427d70` (inclui CX360 PR88).
+Base atualizada: `55410d007c0a53a16fdc524409a884ad09c22932` (inclui CX360 PR88 e Telefone PR91/92).
 Não mesclar a branch homologacao inteira. Este candidato isola o Chat em `/chat`.
 
 ## Evidências disponíveis
@@ -13,7 +13,7 @@ Não mesclar a branch homologacao inteira. Este candidato isola o Chat em `/chat
 - Outubro em HML: 5395 Recebidos / 1374 avaliações (1094/280), conferido anteriormente para os 15 responsáveis.
 - Backup local de produção de 18/11 17:43:57 UTC: nove tabelas, incluindo perfis e fechamento. Não contém senhas ou valores do Vault; não é um backup completo de todo o projeto.
 - Ensaio SQL em PostgreSQL embarcado/PGlite: 43 tabelas novas, dados anteriores preservados, 15 identidades mapeadas, RLS, privilégios, enqueue idempotente e claims distintos. Analista de teste vê um cadastro próprio, uma métrica própria e zero métricas legadas alheias. Auth/Vault/Cron/HTTP são simulados; não substitui teste no Supabase hospedado.
-- TypeScript, build, 49 testes CX360, 12 testes de integrações, 10 testes de liberação/acesso Chat e cinco testes da entrada Edge passaram. A revisão ampla de lint também deve acompanhar a promoção: o código herdado possui alertas de atualização de estado em efeitos; não considerar lint integral aprovado.
+- TypeScript, build, 49 testes CX360, 12 testes de integrações, 10 testes de liberação/acesso Chat e três testes dos relatórios de Telefone e cinco testes da entrada Edge passaram. A revisão ampla de lint também deve acompanhar a promoção: o código herdado possui alertas de atualização de estado em efeitos; não considerar lint integral aprovado.
 
 Os backups e relatórios com dados ficam apenas em `output/chat-production-package-20261118` no computador do usuário. Não publicar esses arquivos no Git.
 
@@ -49,3 +49,4 @@ As tabelas novas e a coluna opcional podem permanecer sem uso. Não restaurar to
 ## Condições ainda executáveis somente na produção
 
 Este preparo não prova captura no banco de produção, provisionamento de analistas, credenciais, cron real ou UI nova em produção. Esses itens são os passos da release após aprovação, com validação antes da exposição. Nenhuma reanálise CX360 ou envio adicional ao Gemini faz parte desta promoção.
+
