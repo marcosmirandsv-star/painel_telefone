@@ -5,6 +5,7 @@ import Link from 'next/link'
 import * as XLSX from 'xlsx'
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { createSessionIdentityGuard } from '@/lib/session-identity'
 import { scheduleSupabase } from '@/lib/schedule-supabase'
 import { isHomologationBrowserRuntime } from '@/lib/runtime-environment'
 import { calculateAverageCsat, calculateChatAverage, calculateTeamPerformance } from '@/lib/indicators'
@@ -1452,9 +1453,14 @@ export default function Home() {
       recoveryFromHash.get('type') === 'recovery' ||
       recoveryFromSearch.get('type') === 'recovery'
 
+    const identityChanged = createSessionIdentityGuard()
     async function loadSession() {
       try {
         const { data } = await supabase.auth.getUser()
+        if (identityChanged(data.user)) {
+          window.location.reload()
+          return
+        }
         setUser(data.user)
         if (cameFromRecoveryLink) {
           setIsPasswordRecovery(true)
@@ -1473,10 +1479,13 @@ export default function Home() {
 
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
+        identityChanged(session?.user)
         setUser(session?.user ?? null)
         setIsPasswordRecovery(true)
         setMessage('Digite uma nova senha para concluir a recuperação.')
+        return
       }
+      if (identityChanged(session?.user)) window.location.reload()
     })
 
     return () => {
@@ -8824,7 +8833,7 @@ function ChatModuleDashboard({
             </div>
             {sharedIndividualSelection.ambiguous && <p className="mt-3 text-sm text-amber-200">Mais de uma fila encontrada para o analista. Resumo indisponível até a conferência; nenhuma soma automática foi realizada.</p>}
             <ChatSharedPerformanceSummary metric={sharedIndividualSelection.row} csatGoal={Number(sharedIndividualPerson?.csat_goal ?? 90)} dailyAvailable={clickDeskDailyAvailable(clickDeskPersistedMetrics) && chat2D1InRange} />
-            {isOfficialClickDeskSource(clickDeskPersistedMetrics?.source) && chat2SelectedPeriod.start>='2026-11-01' && <ChatNeutralReviews start={chat2SelectedPeriod.start} end={chat2SelectedPeriod.end} teamId={selectedTeamId==='all'?null:selectedTeamId} />}
+            {isOfficialClickDeskSource(clickDeskPersistedMetrics?.source) && chat2SelectedPeriod.start>='2026-11-01' && <ChatNeutralReviews start={chat2SelectedPeriod.start} end={chat2SelectedPeriod.end} analystId={chat2SelectedPersistedAnalyst?.analyst_id} teamId={selectedTeamId==='all'?null:selectedTeamId} />}
           </section>
           {sharedIndividualPerson && sharedIndividualSelection.row && (
             <details className="rounded-xl border border-white/10 p-4">
@@ -19157,3 +19166,4 @@ function getSupabaseMessage(message: string) {
   if (message.toLowerCase().includes('jwt issued at future')) return ''
   return message
 }
+
