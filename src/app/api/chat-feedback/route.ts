@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
+import { phoneFeedbackHeadings } from '../../../lib/phone-report.ts'
 
 export const runtime = 'nodejs'
+export const maxDuration = 60
 
 type ChatFeedbackRequest = {
   serviceModule?: 'chat' | 'phone'
@@ -10,6 +12,8 @@ type ChatFeedbackRequest = {
   periodLabel?: string
   managerNotes?: string
   fallbackText?: string
+  factualContext?: string
+  phoneComparison?: { periodLabel: string; csat: number; delta: number }
   averageTickets?: number
   podiumPosition?: number
   metric?: {
@@ -81,13 +85,14 @@ function classifyFeedbackCase(body: ChatFeedbackRequest) {
   const averageTickets = Number(body.averageTickets)
   const history = body.monthlyHistory ?? []
   const previous = history.length > 1 ? history.at(-2) : null
-  const hasRelevantDrop = Boolean(previous)
-    && (csat <= Number(previous?.csat) - 2 || reviews <= Number(previous?.reviewPercentage) - 5)
+  const hasRelevantDrop = body.serviceModule === 'phone'
+    ? (body.phoneComparison?.delta ?? 0) <= -2
+    : Boolean(previous) && (csat <= Number(previous?.csat) - 2 || reviews <= Number(previous?.reviewPercentage) - 5)
 
   if (hasRelevantDrop) {
     return {
       label: 'Mudança recente relevante',
-      guidance: 'Priorize a mudança em relação ao mês anterior, preserve os pontos ainda positivos e proponha verificar o que mudou sem inventar causas.',
+      guidance: 'Priorize a mudança em relação ao período anterior, preserve os pontos ainda positivos e proponha verificar o que mudou sem inventar causas.',
     }
   }
   if (csat >= csatGoal && reviews >= reviewGoal && (!averageTickets || tickets >= averageTickets)) {
@@ -168,6 +173,15 @@ function buildPrompt(body: ChatFeedbackRequest) {
     : '- Quando o volume estiver abaixo da média, informe a diferença em atendimentos e proponha verificar juntos o contexto operacional, como pausas, ausências, duração dos atendimentos ou atuação em outras atividades. Nunca afirme que existe um método de distribuição de chamados nem atribua a diferença à pessoa sem evidência.'
   const caseProfile = classifyFeedbackCase(body)
   const managerHasContext = Boolean(body.managerNotes?.trim())
+  const phoneComparison = body.phoneComparison
+  const comparisonRule = serviceModule === 'phone'
+    ? phoneComparison
+      ? `- Comparativo de CSAT válido: ${phoneComparison.csat}% em ${phoneComparison.periodLabel}, variação de ${phoneComparison.delta} p.p. no período atual. A série semanal contém apenas recortes dentro do período atual.`
+      : '- O comparativo de CSAT com o período anterior está indisponível. A série semanal contém apenas recortes dentro do período atual.'
+    : '- Não mencione variação contra período anterior quando não houver um valor anterior real no histórico recebido.'
+  const volumeBaseRule = serviceModule === 'phone'
+    ? '- A taxa de avaliações do telefone é calculada sobre os atendimentos registrados.'
+    : '- Diferencie atendimentos totais de atendimentos válidos. A taxa de avaliações é calculada sobre os válidos; não associe essa porcentagem diretamente ao total.'
 
   return `
 Você é um coach sênior de atendimento ao cliente e editor de relatórios de performance. Sua tarefa é escrever uma devolutiva individual, específica e natural a partir de fatos calculados pelo sistema e do contexto fornecido pelo gestor.
@@ -190,12 +204,12 @@ ${cadenceRule}
 - Traduza os indicadores: depois de cada número importante, explique em linguagem simples o que ele significa para a pessoa.
 - A taxa de avaliações mede o tamanho da amostra; ela não prova que clientes quiseram elogiar o analista.
 - CSAT alto indica satisfação registrada, mas não comprova sozinho empatia, clareza, agilidade ou qualquer comportamento que não esteja nas observações do gestor.
-- Diferencie atendimentos totais de atendimentos válidos. A taxa de avaliações é calculada sobre os válidos; não associe essa porcentagem diretamente ao total.
+${volumeBaseRule}
 - Não use expressões abstratas como "confiança da gestão", "sustentar elegibilidade" ou "proteger o indicador" sem explicar o comportamento concreto esperado.
 - Escolha um foco principal por vez. Reconheça o que está bom, indique o maior impedimento e proponha no máximo duas ações realizáveis.
 ${volumeRule}
 - Só chame uma colocação de pódio quando ela estiver entre o primeiro e o terceiro lugar. Nas demais, diga "posição no ranking".
-- Não mencione variação contra período anterior quando não houver um valor anterior real no histórico recebido.
+${comparisonRule}
 - Não invente a causa de um resultado. Quando a causa não estiver nos dados ou nas observações, registre que gestor e analista vão verificá-la juntos.
 - Não comece com parabéns genérico. Comece pelo aspecto que torna este caso diferente dos demais.
 - A base do sistema é uma ficha factual, não um modelo de redação. Não copie sua ordem, frases ou cadência. Use-a somente para preservar fatos e limites da análise.
@@ -229,17 +243,18 @@ Avaliacoes recebidas: ${metric?.reviews}
 Positivas: ${metric?.positiveReviews}
 Negativas: ${metric?.negativeReviews}
 Media de atendimentos da operacao: ${body.averageTickets}
-Posição no pódio: ${body.podiumPosition && body.podiumPosition > 0 ? `${body.podiumPosition}o lugar` : 'fora do pódio'}
+Posição no ranking: ${body.podiumPosition && body.podiumPosition > 0 ? `${body.podiumPosition}º lugar` : 'indisponível'}
 
-Historico mensal:
+${serviceModule === 'phone' ? 'Evolução semanal no período' : 'Histórico mensal'}:
 ${JSON.stringify(body.monthlyHistory ?? [], null, 2)}
 
 Observacoes do gestor:
 ${body.managerNotes?.trim() || 'Sem observações adicionais.'}
 Contexto específico fornecido pelo gestor: ${managerHasContext ? 'sim; ele deve orientar a personalização do texto' : 'não; limite-se aos indicadores e sinalize hipóteses como pontos a verificar'}
 
-Base factual do sistema. Preserve os fatos, mas não copie a redação nem a estrutura:
-${body.fallbackText ?? ''}
+Base factual do sistema:
+${body.factualContext ?? body.fallbackText ?? ''}
+${generationMode === 'improve' && body.factualContext ? `\nTexto atual a revisar:\n${body.fallbackText ?? ''}` : ''}
 
 Saida esperada:
 Entregue apenas o feedback final, sem introdução, sem comentários sobre a tarefa e sem Markdown.
@@ -264,6 +279,7 @@ function extractGeminiText(data: unknown) {
       content?: {
         parts?: {
           text?: string
+          thought?: boolean
         }[]
       }
       finishReason?: string
@@ -271,10 +287,10 @@ function extractGeminiText(data: unknown) {
   }
 
   const candidate = response.candidates?.[0]
-  const text = candidate?.content?.parts?.map((part) => part.text ?? '').join('').trim() ?? ''
-
-
-  return text
+  if (candidate?.finishReason && candidate.finishReason !== 'STOP') {
+    throw new Error(`Resposta Gemini incompleta (${candidate.finishReason}).`)
+  }
+  return candidate?.content?.parts?.filter((part) => !part.thought).map((part) => part.text ?? '').join('').trim() ?? ''
 }
 
 function cleanFeedbackText(text: string) {
@@ -307,9 +323,10 @@ function normalizeChatQueueLanguage(text: string) {
     .trim()
 }
 
-function assertCompleteFeedback(text: string, style: ChatFeedbackRequest['feedbackStyle']) {
+function assertCompleteFeedback(text: string, body: ChatFeedbackRequest) {
   const cleanText = cleanFeedbackText(text)
   const minLength = 260
+  const style = body.feedbackStyle
   const requiredSections =
     style === 'sare'
       ? ['Situacao', 'Alinhamentos', 'Resultado', 'Expectativa']
@@ -319,7 +336,12 @@ function assertCompleteFeedback(text: string, style: ChatFeedbackRequest['feedba
 
   const normalizedText = cleanText.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
   const matchedSections = requiredSections.filter((section) => normalizedText.includes(section.toLowerCase())).length
-  const hasSections = matchedSections >= 2 || cleanText.length >= 380
+  const phoneHeadings = style === 'mimo' || style === 'sare' ? phoneFeedbackHeadings[style] : null
+  const normalizedHeading = (heading: string) => heading.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  const headingLines = normalizedText.split('\n').map((line) => line.trim().replace(/^[a-z]\s*[-–.)]\s*/, ''))
+  const hasSections = body.serviceModule === 'phone' && phoneHeadings
+    ? phoneHeadings.every((heading) => headingLines.some((line) => line.startsWith(`${normalizedHeading(heading)}:`)))
+    : matchedSections >= 2 || cleanText.length >= 380
 
   if (cleanText.length < minLength || !hasSections) {
     throw new Error(`A IA devolveu um feedback curto ou incompleto (${cleanText.length} caracteres, ${matchedSections}/${requiredSections.length} seções reconhecidas). Usei a sugestão local para preservar a qualidade do relatório.`)
@@ -328,72 +350,83 @@ function assertCompleteFeedback(text: string, style: ChatFeedbackRequest['feedba
   return cleanText
 }
 
-async function generateWithGemini(prompt: string, style: ChatFeedbackRequest['feedbackStyle']) {
+async function generateWithGemini(prompt: string, body: ChatFeedbackRequest, signal: AbortSignal) {
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY
 
   if (!apiKey) {
-    throw new Error('GEMINI_API_KEY não configurada. Adicione a chave da Gemini nas variaveis de ambiente da Vercel.')
+    throw new Error('GEMINI_API_KEY não configurada.')
   }
 
-  const configuredModel = process.env.GEMINI_MODEL?.trim()
-  const models = Array.from(
-    new Set(
-      [
-        configuredModel,
-        'gemini-3.6-flash',
-        'gemini-3.5-flash',
-        'gemini-3.5-flash-lite',
-        'gemini-2.5-flash',
-        'gemini-2.5-flash-lite',
-        'gemini-2.0-flash',
-        'gemini-1.5-flash',
-      ].filter(Boolean) as string[],
-    ),
-  )
+  const models = [...new Set([
+    process.env.GEMINI_MODEL?.trim() || 'gemini-3.5-flash-lite',
+    'gemini-3.5-flash-lite',
+    'gemini-3.8-flash',
+    'gemini-3.1-flash-lite',
+  ])]
+  const requestBody = JSON.stringify({
+    systemInstruction: {
+      parts: [{
+        text: 'Você escreve devolutivas mensais individualizadas, com voz humana de liderança. Varie a construção conforme o caso e nunca deduza comportamentos apenas dos indicadores.',
+      }],
+    },
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: { maxOutputTokens: 4096 },
+  })
+  const retryableStatuses = new Set([408, 429, 500, 502, 503, 504])
+  const deadline = Date.now() + 45_000
   const errors: string[] = []
+  let retryModel: string | undefined
 
-  for (const model of models) {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        systemInstruction: {
-          parts: [
-            {
-              text: 'Você escreve devolutivas mensais individualizadas, com voz humana de liderança. Varie a construção conforme o caso e nunca deduza comportamentos apenas dos indicadores.',
-            },
-          ],
-        },
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: prompt }],
-          },
-        ],
-        generationConfig: {
-          maxOutputTokens: 4096,
-          temperature: 0.65,
-        },
-      }),
-    })
-    const data = await response.json()
+  for (let attempt = 0; attempt <= models.length; attempt++) {
+    signal.throwIfAborted()
+    const isRetry = attempt === models.length
+    const model = isRetry ? retryModel : models[attempt]
+    if (!model) break
 
-    if (!response.ok) {
-      const code = data?.error?.status || data?.error?.code || response.status
-      const message = data?.error?.message || data?.message || 'Não foi possível gerar feedback com Gemini.'
-      errors.push(`${model}: HTTP ${response.status} / ${code} - ${sanitizeProviderMessage(message)}`)
-
-      if (response.status === 404 || /not found|model/i.test(message)) {
-        continue
-      }
-
-      throw new Error(`Gemini ${model} respondeu HTTP ${response.status}: ${sanitizeProviderMessage(message)}`)
+    if (isRetry) {
+      if (deadline - Date.now() < 2_000) break
+      await new Promise((resolve) => setTimeout(resolve, 1_000 + Math.random() * 250))
     }
 
-    return assertCompleteFeedback(normalizeManagerVoice(extractGeminiText(data)), style)
+    const timeout = Math.min(12_000, deadline - Date.now())
+    if (timeout <= 0) break
+    const attemptSignal = AbortSignal.any([signal, AbortSignal.timeout(timeout)])
+
+    let response: Response
+    let data
+    try {
+      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        body: requestBody,
+        signal: attemptSignal,
+      })
+      data = await response.json().catch(() => null)
+      attemptSignal.throwIfAborted()
+    } catch (error) {
+      signal.throwIfAborted()
+      retryModel ??= model
+      errors.push(`${model}: ${sanitizeProviderMessage(getErrorText(error))}`)
+      continue
+    }
+
+    if (!response.ok) {
+      const message = sanitizeProviderMessage(data?.error?.message || data?.message || response.statusText)
+      const detail = `${model}: HTTP ${response.status} - ${message}`
+      if (retryableStatuses.has(response.status)) {
+        retryModel ??= model
+      } else if (response.status !== 404) {
+        throw new Error(detail)
+      }
+      errors.push(detail)
+      continue
+    }
+
+    try {
+      return assertCompleteFeedback(normalizeManagerVoice(extractGeminiText(data)), body)
+    } catch (error) {
+      errors.push(`${model}: ${sanitizeProviderMessage(getErrorText(error))}`)
+    }
   }
 
   throw new Error(`Nenhum modelo Gemini disponível respondeu para gerar o feedback. Tentativas: ${errors.join(' | ')}`)
@@ -440,12 +473,12 @@ async function generateWithGitHubModels(prompt: string) {
   return extractChatCompletionText(data).trim()
 }
 
-async function generateExternalFeedback(prompt: string, style: ChatFeedbackRequest['feedbackStyle']) {
+async function generateExternalFeedback(prompt: string, body: ChatFeedbackRequest, signal: AbortSignal) {
   if (process.env.CHAT_AI_PROVIDER === 'github-models') {
-    return { feedback: assertCompleteFeedback(normalizeManagerVoice(await generateWithGitHubModels(prompt)), style), source: 'github-models' }
+    return { feedback: assertCompleteFeedback(normalizeManagerVoice(await generateWithGitHubModels(prompt)), body), source: 'github-models' }
   }
 
-  return { feedback: await generateWithGemini(prompt, style), source: 'gemini' }
+  return { feedback: await generateWithGemini(prompt, body, signal), source: 'gemini' }
 }
 
 export async function POST(request: Request) {
@@ -471,25 +504,23 @@ export async function POST(request: Request) {
 
     try {
       const prompt = buildPrompt(body)
-      const result = await generateExternalFeedback(prompt, body.feedbackStyle ?? 'coach')
+      const result = await generateExternalFeedback(prompt, body, request.signal)
 
       if (result.feedback) {
         const feedback = normalizeChatQueueLanguage(result.feedback)
         return NextResponse.json({ feedback, source: result.source })
       }
     } catch (providerError) {
-      const publicReason = getPublicProviderError(providerError)
-      console.warn('Chat feedback external AI unavailable:', getErrorText(providerError))
+      console.warn('Feedback external AI unavailable:', sanitizeProviderMessage(getErrorText(providerError)))
 
-      const fallbackSource = body.serviceModule === 'phone'
-        ? 'Usei a sugestão local baseada nos lançamentos do telefone e nas regras do painel.'
-        : 'Usei a sugestão local baseada nos números do ClickDesk e nas regras do painel.'
+      const warning = body.serviceModule === 'phone'
+        ? 'A IA está indisponível. Os dados e o texto do relatório continuam disponíveis.'
+        : `A IA externa não gerou um texto válido agora. Motivo: ${getPublicProviderError(providerError)} Usei a sugestão local baseada nos números do ClickDesk e nas regras do painel.`
 
       return NextResponse.json({
         feedback: fallbackFeedback,
         source: 'local-fallback',
-        warning:
-          `A IA externa não gerou um texto válido agora. Motivo: ${publicReason} ${fallbackSource}`,
+        warning,
       })
     }
   } catch (error) {
