@@ -5327,7 +5327,7 @@ function ReportsView({
     },
     {
       label: 'Conversa 1:1',
-      title: 'Pergunta que destrava ação',
+      title: 'Conduta esperada',
       text: supervisorOneToOneText,
     },
     {
@@ -8743,7 +8743,7 @@ function buildPhoneLocalFeedback({
 }) {
   const situation = `Em ${periodLabel}, você registrou ${formatChatCount(result.totalTickets)} atendimentos e recebeu ${formatChatCount(result.totalReviews)} avaliações (${formatPercent(result.reviewPercentage)} dos atendimentos). ${result.totalReviews > 0 ? `Seu CSAT foi de ${formatPercent(result.averageCsat)}, com meta individual de ${formatPercent(result.individualGoal)}.` : 'O período ficou sem avaliações para medir o CSAT.'}`
   const comparisonText = comparison
-    ? `Em ${previousPeriodLabel}, o CSAT foi de ${formatPercent(comparison.csat)}. A variação foi de ${formatDelta(comparison.delta, ' p.p.')}.`
+    ? `Em ${previousPeriodLabel}, o CSAT foi de ${formatPercent(comparison.csat)}. A variação foi de ${formatDelta(comparison.delta, ' p.p.')}`
     : 'Sem base de avaliações para comparar o CSAT com o período anterior.'
   const benchmarkText = benchmark
     ? ` O 3º colocado elegível registrou ${formatPercent(benchmark.csat)} de CSAT, uma diferença de ${formatDelta(benchmark.gap, ' p.p.').replace('+', '')} em relação ao seu resultado.`
