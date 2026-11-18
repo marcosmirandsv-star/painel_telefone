@@ -4306,7 +4306,7 @@ function ChatAnalystPortal({
                   <ClickDeskSyncStatus
                     latestSyncAt={metrics?.latest_sync?.finished_at}
                     schedule={metrics?.sync_schedule}
-                    historical={monthKey < businessToday.slice(0, 7)}
+                    historical={monthKey.replace(/-(\d)$/, '-0$1') < businessToday.slice(0, 7)}
                     compact
                   />
                 </div>
@@ -8222,7 +8222,7 @@ function ChatModuleDashboard({
           <ClickDeskSyncStatus
             latestSyncAt={clickDeskPersistedMetrics?.latest_sync?.finished_at}
             schedule={clickDeskPersistedMetrics?.sync_schedule}
-            historical={chatFilterMonth < chatBusinessDate().slice(0, 7)}
+            historical={chatFilterMonth.replace(/-(\d)$/, '-0$1') < chatBusinessDate().slice(0, 7)}
           />
         </div>
       </section>
