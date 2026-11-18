@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { supabase } from '@/lib/supabase'
+import { createSessionIdentityGuard } from '@/lib/session-identity'
 import { calculateAverageCsat, calculateChatAverage, calculateTeamPerformance } from '@/lib/indicators'
 import {
   buildChatPerformanceDiagnostic,
@@ -11695,8 +11696,8 @@ function ChatProductionContent(){
  const [refresh,setRefresh]=useState(0),[state,setState]=useState<{role:UserRole;chatId:string|null;teams:ChatTeam[];analysts:ChatAnalyst[];metrics:ChatMonthlyMetric[];manual:ChatPodiumManual[];excluded:ChatPodiumExclusion[]}|null>(null),[error,setError]=useState('')
  const [tab,setTab]=useState<ChatActiveTab>('overview')
  const enabled=process.env.NEXT_PUBLIC_CHAT_OFFICIAL_ENABLED==='true'&&process.env.NEXT_PUBLIC_SUPABASE_URL==='https://qmetbydkepfdgfqkdkai.supabase.co'
- useEffect(()=>{if(!enabled)return;let cancelled=false;void(async()=>{try{
-  const auth=await supabase.auth.getUser();if(!auth.data.user)throw Error('Entre no sistema para acessar o Chat.')
+ useEffect(()=>{if(!enabled)return;let cancelled=false;const identityChanged=createSessionIdentityGuard();const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{if(identityChanged(session?.user))window.location.reload()});void(async()=>{try{
+  const auth=await supabase.auth.getUser();if(identityChanged(auth.data.user)){window.location.reload();return}if(!auth.data.user)throw Error('Entre no sistema para acessar o Chat.')
   const profile=await supabase.from('profiles').select('role,chat_analyst_id').eq('id',auth.data.user.id).single();if(profile.error)throw Error('Perfil indisponível.')
   const role=normalizeUserRole(profile.data.role),chatId=profile.data.chat_analyst_id
   if(role==='analyst'&&!chatId)throw Error('Seu acesso ainda não tem vínculo com um analista do Chat.')
@@ -11706,7 +11707,7 @@ function ChatProductionContent(){
    supabase.from('chat_podium_manual').select('*'),supabase.from('chat_podium_exclusions').select('*')])
   if([teams,analysts,metrics,manual,excluded].some(r=>r.error))throw Error('Não foi possível carregar o cadastro do Chat.')
   if(!cancelled)setState({role,chatId,teams:teams.data??[],analysts:analysts.data??[],metrics:metrics.data??[],manual:manual.data??[],excluded:excluded.data??[]})
- }catch(e){if(!cancelled)setError(e instanceof Error?e.message:'Chat indisponível.')}})();return()=>{cancelled=true}},[enabled,refresh])
+ }catch(e){if(!cancelled)setError(e instanceof Error?e.message:'Chat indisponível.')}})();return()=>{cancelled=true;subscription.unsubscribe()}},[enabled,refresh])
  if(!enabled)return <main className="page-shell"><p>O novo Chat ainda não foi habilitado em produção.</p><Link href="/">Voltar à Central</Link></main>
  if(error)return <main className="page-shell"><p role="status">{error}</p><Link href="/">Voltar à Central</Link></main>
  if(!state)return <main className="page-shell"><p role="status">Carregando Chat...</p></main>
@@ -11715,4 +11716,5 @@ function ChatProductionContent(){
 }
 
 export default function ChatProductionPage(){return <div className="chat-production-shell"><ChatProductionContent/></div>}
+
 
