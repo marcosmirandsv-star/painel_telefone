@@ -1,0 +1,418 @@
+import {isChatProductionEnabled} from '@/lib/chat-production-gate'
+import {
+  ApiError,
+  authorizeClickDeskSessionClient,
+  handle,
+  json,
+} from '@/lib/chat-integration-server'
+import { getServerSupabaseConfig } from '@/lib/runtime-environment'
+import { readFinalLedger, readLedgerCoverage, scopeLedgerCoverage } from '@/lib/clickdesk-ledger-server'
+import { normalizeQualitativeAnalysis, qualitativeAnalysisVersion, QUALITATIVE_ANALYSIS_VERSION } from '@/lib/clickdesk-qualitative'
+
+export const runtime = 'nodejs'
+
+type AttendanceRow = {
+  clickdesk_ticket_id: string
+  analyst_id: string | null
+  assignee_name: string
+  satisfaction_label: string | null
+  occurred_date: string
+  occurred_at: string
+  area: string
+}
+
+type AnalysisRow = {
+  clickdesk_ticket_id: string
+  analyst_id: string
+  satisfaction_label: string | null
+  analysis: unknown
+  validation_status: 'pending' | 'approved' | 'rejected'
+  updated_at: string
+}
+
+function validDate(value: string) {
+  return (
+    /^20\d{2}-\d{2}-\d{2}$/.test(value) &&
+    Number.isFinite(Date.parse(value)) &&
+    new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value
+  )
+}
+
+function validUuid(value: string) {
+  return /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i.test(value)
+}
+
+function countValues(items: string[]) {
+  const counts: Record<string, number> = {}
+
+  for (const item of items) {
+    counts[item] = (counts[item] ?? 0) + 1
+  }
+
+  return Object.keys(counts)
+    .map((key) => ({ key, count: counts[key] }))
+    .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key))
+}
+
+function percentage(part: number, total: number) {
+  return total > 0 ? Math.round((part / total) * 10000) / 100 : 0
+}
+
+function pickDistributedAcrossDates(items: AttendanceRow[], limit: number) {
+  if (items.length <= limit) {
+    return [...items].sort((a, b) => a.occurred_at.localeCompare(b.occurred_at))
+  }
+
+  const sorted = [...items].sort((a, b) => a.occurred_at.localeCompare(b.occurred_at))
+  const byDate = new Map<string, AttendanceRow[]>()
+
+  for (const item of sorted) {
+    const bucket = byDate.get(item.occurred_date) ?? []
+    bucket.push(item)
+    byDate.set(item.occurred_date, bucket)
+  }
+
+  const dates = Array.from(byDate.keys()).sort()
+  const selected: AttendanceRow[] = []
+  const selectedIds = new Set<string>()
+
+  const add = (item?: AttendanceRow) => {
+    if (!item || selectedIds.has(item.clickdesk_ticket_id)) return
+    selected.push(item)
+    selectedIds.add(item.clickdesk_ticket_id)
+  }
+
+  if (dates.length >= limit) {
+    for (let index = 0; index < limit; index += 1) {
+      const position = Math.round((index * (dates.length - 1)) / (limit - 1))
+      const bucket = byDate.get(dates[position]) ?? []
+      add(bucket[Math.floor((bucket.length - 1) / 2)])
+    }
+  } else {
+    for (const date of dates) {
+      const bucket = byDate.get(date) ?? []
+      add(bucket[Math.floor((bucket.length - 1) / 2)])
+    }
+  }
+
+  if (selected.length < limit) {
+    const remaining = sorted.filter((item) => !selectedIds.has(item.clickdesk_ticket_id))
+    const missing = limit - selected.length
+
+    for (let index = 0; index < missing; index += 1) {
+      const position =
+        missing <= 1
+          ? Math.floor((remaining.length - 1) / 2)
+          : Math.round((index * (remaining.length - 1)) / (missing - 1))
+      add(remaining[position])
+    }
+  }
+
+  return selected
+    .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at))
+    .slice(0, limit)
+}
+
+async function officialGET(request: Request) {
+  return handle(async () => {
+    const { environment } = getServerSupabaseConfig()
+    if (!isChatProductionEnabled()) {
+      throw new ApiError(404, 'Resumo qualitativo disponível somente na homologação.')
+    }
+
+    const access = await authorizeClickDeskSessionClient(request)
+    if (!access.isManagement) {
+      throw new ApiError(403, 'Resumo qualitativo disponível somente para a gestão.')
+    }
+
+    const params = new URL(request.url).searchParams
+    const allowed = new Set(['start', 'end', 'team_id', 'analyst_id'])
+
+    for (const key of params.keys()) {
+      if (!allowed.has(key) || params.getAll(key).length !== 1) {
+        throw new ApiError(400, 'Parâmetro desconhecido ou repetido.')
+      }
+    }
+
+    const start = params.get('start')?.trim() ?? ''
+    const end = params.get('end')?.trim() ?? ''
+    const teamId = params.get('team_id')?.trim() || null
+    const analystId = params.get('analyst_id')?.trim() || null
+
+    if (!validDate(start) || !validDate(end) || start > end) {
+      throw new ApiError(400, 'Informe start e end válidos no formato AAAA-MM-DD.')
+    }
+    if (teamId && !validUuid(teamId)) throw new ApiError(400, 'team_id inválido.')
+    if (analystId && !validUuid(analystId)) throw new ApiError(400, 'analyst_id inválido.')
+
+    const [ledger, roster, ledgerCoverage] = await Promise.all([
+      readFinalLedger(access.admin, { start, end, analystId, teamId }),
+      access.admin.from('chat_analysts').select('id,name,active'),
+      readLedgerCoverage(access.admin).then(value => scopeLedgerCoverage(value,{start,end})),
+    ])
+    if (roster.error) throw new ApiError(503, 'Cadastro de analistas indisponível.')
+    const nameById = new Map((roster.data ?? []).map(item => [item.id, item.name]))
+    const activeIds = new Set((roster.data ?? []).filter(item => item.active).map(item => item.id))
+    // Ao consultar um ex-integrante explicitamente, a gestão acessa o histórico.
+    // Na análise geral, colaboradores inativos não distorcem o retrato atual.
+    const evaluated: AttendanceRow[] = ledger
+      .filter(item => Boolean(analystId) || activeIds.has(item.analyst_id))
+      .filter(item => item.satisfaction_label === 'positive' || item.satisfaction_label === 'negative')
+      .map(item => ({
+        clickdesk_ticket_id: item.ticket_id,
+        analyst_id: item.analyst_id,
+        assignee_name: nameById.get(item.analyst_id) ?? 'Analista',
+        satisfaction_label: item.satisfaction_label,
+        occurred_date: item.occurred_date,
+        occurred_at: item.last_public_at,
+        area: item.area ?? 'Fila histórica não comprovada',
+      }))
+    const evaluatedTicketIds = new Set(evaluated.map((item) => item.clickdesk_ticket_id))
+    const analystNames = new Map<string, string>()
+
+    for (const item of evaluated) {
+      if (item.analyst_id && !analystNames.has(item.analyst_id)) {
+        analystNames.set(item.analyst_id, item.assignee_name)
+      }
+    }
+
+    const allAnalyses: AnalysisRow[] = []
+    for(let offset=0;offset<10000;offset+=500) {
+      let analysisQuery=access.admin.from('clickdesk_qualitative_analyses')
+        .select('clickdesk_ticket_id,analyst_id,satisfaction_label,analysis,validation_status,updated_at')
+        .gte('occurred_date',start).lte('occurred_date',end)
+        .order('clickdesk_ticket_id',{ascending:true}).range(offset,offset+499)
+      if(analystId)analysisQuery=analysisQuery.eq('analyst_id',analystId)
+      const result=await analysisQuery
+      if(result.error)throw new ApiError(503,'Não foi possível carregar as análises qualitativas preservadas.')
+      const page=(result.data??[]) as AnalysisRow[]
+      allAnalyses.push(...page)
+      if(page.length<500)break
+      if(offset+500>=10000)throw new ApiError(422,'Análises excederam o limite seguro de consulta.')
+    }
+    const currentOwner = new Map(evaluated.map(item => [item.clickdesk_ticket_id, item]))
+    const analyses = allAnalyses.filter(item => {
+      if (!evaluatedTicketIds.has(item.clickdesk_ticket_id) || qualitativeAnalysisVersion(item.analysis) < QUALITATIVE_ANALYSIS_VERSION) return false
+      const owner = currentOwner.get(item.clickdesk_ticket_id)
+      return Boolean(owner && item.analyst_id === owner.analyst_id
+        && item.satisfaction_label === owner.satisfaction_label)
+    })
+
+    const evaluatedPositive = evaluated.filter((item) => item.satisfaction_label === 'positive').length
+    const evaluatedNegative = evaluated.filter((item) => item.satisfaction_label === 'negative').length
+    const analyzedPositive = analyses.filter((item) => item.satisfaction_label === 'positive').length
+    const analyzedNegative = analyses.filter((item) => item.satisfaction_label === 'negative').length
+
+    const normalized = analyses.map((item) => ({
+      ...item,
+      normalized: normalizeQualitativeAnalysis(item.analysis),
+    }))
+    const approved = normalized.filter((item) => item.validation_status === 'approved')
+    const pending = normalized.filter((item) => item.validation_status === 'pending')
+    const rejected = normalized.filter((item) => item.validation_status === 'rejected')
+
+    const analystAggregation = new Map<
+      string,
+      {
+        analyst_id: string
+        analyst_name: string
+        evaluated: number
+        evaluated_positive: number
+        evaluated_negative: number
+        analyzed: number
+        analyzed_positive: number
+        analyzed_negative: number
+        approved: number
+        pending: number
+        rejected: number
+        coaching_signals: number
+        causes: string[]
+      }
+    >()
+
+    for (const item of evaluated) {
+      if (!item.analyst_id) continue
+      const current = analystAggregation.get(item.analyst_id) ?? {
+        analyst_id: item.analyst_id,
+        analyst_name: item.assignee_name || analystNames.get(item.analyst_id) || 'Analista',
+        evaluated: 0,
+        evaluated_positive: 0,
+        evaluated_negative: 0,
+        analyzed: 0,
+        analyzed_positive: 0,
+        analyzed_negative: 0,
+        approved: 0,
+        pending: 0,
+        rejected: 0,
+        coaching_signals: 0,
+        causes: [],
+      }
+      current.evaluated += 1
+      if (item.satisfaction_label === 'positive') current.evaluated_positive += 1
+      if (item.satisfaction_label === 'negative') current.evaluated_negative += 1
+      analystAggregation.set(item.analyst_id, current)
+    }
+
+    for (const item of normalized) {
+      const current = analystAggregation.get(item.analyst_id) ?? {
+        analyst_id: item.analyst_id,
+        analyst_name: analystNames.get(item.analyst_id) ?? 'Analista',
+        evaluated: 0,
+        evaluated_positive: 0,
+        evaluated_negative: 0,
+        analyzed: 0,
+        analyzed_positive: 0,
+        analyzed_negative: 0,
+        approved: 0,
+        pending: 0,
+        rejected: 0,
+        coaching_signals: 0,
+        causes: [],
+      }
+
+      current.analyzed += 1
+      if (item.satisfaction_label === 'positive') current.analyzed_positive += 1
+      if (item.satisfaction_label === 'negative') current.analyzed_negative += 1
+
+      if (item.validation_status === 'approved') {
+        current.approved += 1
+        if (item.normalized.coaching_signal.available) current.coaching_signals += 1
+        current.causes.push(item.normalized.primary_cause.category)
+      } else if (item.validation_status === 'pending') {
+        current.pending += 1
+      } else if (item.validation_status === 'rejected') {
+        current.rejected += 1
+      }
+
+      analystAggregation.set(item.analyst_id, current)
+    }
+
+    const analysts = Array.from(analystAggregation.values())
+      .map((item) => ({
+        analyst_id: item.analyst_id,
+        analyst_name: item.analyst_name,
+        evaluated: item.evaluated,
+        evaluated_positive: item.evaluated_positive,
+        evaluated_negative: item.evaluated_negative,
+        analyzed: item.analyzed,
+        analyzed_positive: item.analyzed_positive,
+        analyzed_negative: item.analyzed_negative,
+        coverage_percentage: percentage(item.analyzed, item.evaluated),
+        approved: item.approved,
+        pending: item.pending,
+        rejected: item.rejected,
+        coaching_signals: item.coaching_signals,
+        top_causes: countValues(item.causes).slice(0, 3),
+      }))
+      .sort(
+        (a, b) =>
+          b.pending - a.pending ||
+          a.coverage_percentage - b.coverage_percentage ||
+          a.analyst_name.localeCompare(b.analyst_name),
+      )
+
+    const analyzedTicketIds = new Set(analyses.map((item) => item.clickdesk_ticket_id))
+    const pendingReviews = pending.slice(0, 12).map((item) => ({
+      ticket_id: item.clickdesk_ticket_id,
+      analyst_id: item.analyst_id,
+      analyst_name: analystNames.get(item.analyst_id) ?? 'Analista',
+      satisfaction_label: item.satisfaction_label,
+      analysis: item.normalized,
+    }))
+
+    const negativeValidationQueue = pickDistributedAcrossDates(
+      evaluated.filter(
+        (item) =>
+          item.satisfaction_label === 'negative' &&
+          !analyzedTicketIds.has(item.clickdesk_ticket_id),
+      ),
+      5,
+    ).map((item) => ({
+        ticket_id: item.clickdesk_ticket_id,
+        analyst_id: item.analyst_id,
+        analyst_name: item.assignee_name,
+        occurred_date: item.occurred_date,
+        occurred_at: item.occurred_at,
+        area: item.area,
+        satisfaction_label: item.satisfaction_label,
+      }))
+
+    const positiveValidationQueue = pickDistributedAcrossDates(
+      evaluated.filter(
+        (item) =>
+          item.satisfaction_label === 'positive' &&
+          !analyzedTicketIds.has(item.clickdesk_ticket_id),
+      ),
+      5,
+    ).map((item) => ({
+        ticket_id: item.clickdesk_ticket_id,
+        analyst_id: item.analyst_id,
+        analyst_name: item.assignee_name,
+        occurred_date: item.occurred_date,
+        occurred_at: item.occurred_at,
+        area: item.area,
+        satisfaction_label: item.satisfaction_label,
+      }))
+
+    return json({
+      source: 'clickdesk_qualitative_cache',
+      period: { start, end },
+      scope: { team_id: teamId, analyst_id: analystId },
+      source_coverage: {
+        status: ledgerCoverage.complete ? 'complete' : 'audit_sample_only',
+        verified_at: ledgerCoverage.verified_at,
+        note: ledgerCoverage.complete
+          ? 'Atendimentos com autoria final confirmada.'
+          : 'Outubro ClickDesk em conciliação: alguns tickets ainda não têm autoria final comprovada. A análise 360º pendente NÃO impede a nota positiva ou negativa de compor o CSAT.',
+      },
+      totals: {
+        evaluated: evaluated.length,
+        positive: evaluatedPositive,
+        negative: evaluatedNegative,
+        analyzed: analyses.length,
+        analyzed_positive: analyzedPositive,
+        analyzed_negative: analyzedNegative,
+        approved: approved.length,
+        pending: pending.length,
+        rejected: rejected.length,
+      },
+      coverage: {
+        evaluated_percentage: percentage(analyses.length, evaluated.length),
+        positive_percentage: percentage(analyzedPositive, evaluatedPositive),
+        negative_percentage: percentage(analyzedNegative, evaluatedNegative),
+      },
+      causes: countValues(
+        approved.map((item) => item.normalized.primary_cause.category),
+      ),
+      human_influence: countValues(
+        approved.map((item) => item.normalized.human_influence.classification),
+      ),
+      controllability: countValues(
+        approved.map((item) => item.normalized.controllability.classification),
+      ),
+      sentiment_change: countValues(
+        approved.map(
+          (item) =>
+            `${item.normalized.initial_sentiment}->${item.normalized.final_sentiment}`,
+        ),
+      ),
+      coaching_signals: approved.filter(
+        (item) => item.normalized.coaching_signal.available,
+      ).length,
+      analyst_takeaways: countValues(
+        approved.map((item) => item.normalized.analyst_takeaway.kind),
+      ),
+      analysts,
+      pending_reviews: pendingReviews,
+      validation_queue: negativeValidationQueue,
+      sample_rule: {
+        negative_limit: 5,
+        positive_limit: 5,
+        strategy: 'distributed_across_dates',
+      },
+      positive_validation_queue: positiveValidationQueue,
+    })
+  })
+}
+
+export async function GET(request:Request){if(!isChatProductionEnabled())return Response.json({erro:'Chat oficial ainda não habilitado.'},{status:404});return officialGET(request)}

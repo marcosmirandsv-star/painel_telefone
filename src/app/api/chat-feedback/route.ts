@@ -1,12 +1,19 @@
+import {isChatProductionEnabled} from '@/lib/chat-production-gate'
+import * as legacy from '@/lib/chat-production-legacy/chat-feedback'
+import { ApiError, authorizeManagerSessionClient } from '@/lib/chat-integration-server'
+import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 import { NextResponse } from 'next/server'
+import { normalizeQualitativeAnalysis } from '@/lib/clickdesk-qualitative'
 
 export const runtime = 'nodejs'
 
 type ChatFeedbackRequest = {
   serviceModule?: 'chat' | 'phone'
+  dataSourceLabel?: string
   feedbackStyle?: 'coach' | 'sare' | 'mimo'
   feedbackGoal?: 'recognition' | 'courseCorrection' | 'maintenance' | 'development'
   generationMode?: 'generate' | 'improve'
+  periodStatus?: 'open' | 'closed'
   periodLabel?: string
   managerNotes?: string
   fallbackText?: string
@@ -38,6 +45,19 @@ type ChatFeedbackRequest = {
     sendingPercentage: number
     totalTickets: number
   }[]
+  qualitativeContext?: {
+    analyzedCount?: number
+    negativeAnalyzed?: number
+    positiveAnalyzed?: number
+    negativeTotal?: number
+    positiveTotal?: number
+    findings?: {
+      ticketId?: string
+      satisfactionLabel?: string | null
+      occurredDate?: string | null
+      analysis?: unknown
+    }[]
+  }
 }
 
 const styleInstructions = {
@@ -62,9 +82,11 @@ const goalInstructions = {
 
 function classifyFeedbackCase(body: ChatFeedbackRequest) {
   const metric = body.metric
-  const hasUsableVolume = body.serviceModule === 'phone'
-    ? Number(metric?.totalTickets) > 0
-    : Number(metric?.validTickets) > 0
+  const serviceModule = body.serviceModule ?? 'chat'
+  const hasUsableVolume =
+    serviceModule === 'phone'
+      ? Number(metric?.totalTickets) > 0
+      : Number(metric?.validTickets) > 0
 
   if (!metric || !hasUsableVolume) {
     return {
@@ -81,8 +103,10 @@ function classifyFeedbackCase(body: ChatFeedbackRequest) {
   const averageTickets = Number(body.averageTickets)
   const history = body.monthlyHistory ?? []
   const previous = history.length > 1 ? history.at(-2) : null
-  const hasRelevantDrop = Boolean(previous)
-    && (csat <= Number(previous?.csat) - 2 || reviews <= Number(previous?.reviewPercentage) - 5)
+  const hasRelevantDrop =
+    Boolean(previous) &&
+    (csat <= Number(previous?.csat) - 2 ||
+      reviews <= Number(previous?.reviewPercentage) - 5)
 
   if (hasRelevantDrop) {
     return {
@@ -90,6 +114,37 @@ function classifyFeedbackCase(body: ChatFeedbackRequest) {
       guidance: 'Priorize a mudança em relação ao mês anterior, preserve os pontos ainda positivos e proponha verificar o que mudou sem inventar causas.',
     }
   }
+
+  if (serviceModule === 'chat') {
+    if (csat >= csatGoal && reviews >= reviewGoal) {
+      return {
+        label: 'Reconhecimento integral',
+        guidance: 'Reconheça o equilíbrio entre qualidade percebida e participação nas avaliações. O combinado deve identificar uma prática real que mereça ser mantida, sem criar um problema artificial e sem comparar o volume individual com o de colegas.',
+      }
+    }
+
+    if (csat < csatGoal && reviews >= reviewGoal) {
+      return {
+        label: 'Qualidade abaixo da meta com amostra adequada',
+        guidance: 'Concentre a devolutiva na experiência percebida pelo cliente e use avaliações negativas ou outras evidências reais para orientar a conversa.',
+      }
+    }
+
+    if (csat >= csatGoal && reviews < reviewGoal) {
+      return {
+        label: 'Qualidade positiva com baixa amostra de avaliações',
+        guidance: 'Reconheça o CSAT, mas explique que a quantidade de respostas ainda limita a representatividade da leitura. Foque no encerramento e no convite natural para avaliação.',
+      }
+    }
+
+    return {
+      label: body.podiumPosition && body.podiumPosition <= 3
+        ? 'Resultado em posição de pódio'
+        : 'Qualidade e participação em atenção',
+      guidance: 'Escolha somente o indicador que mais limita o resultado, preserve explicitamente o que já está funcionando e não use comparação de volume com colegas na devolutiva individual.',
+    }
+  }
+
   if (csat >= csatGoal && reviews >= reviewGoal && (!averageTickets || tickets >= averageTickets)) {
     return {
       label: 'Reconhecimento integral',
@@ -115,7 +170,9 @@ function classifyFeedbackCase(body: ChatFeedbackRequest) {
     }
   }
   return {
-    label: body.podiumPosition && body.podiumPosition <= 3 ? 'Resultado em posição de pódio' : 'Resultado misto fora do pódio',
+    label: body.podiumPosition && body.podiumPosition <= 3
+      ? 'Resultado em posição de pódio'
+      : 'Resultado misto fora do pódio',
     guidance: 'Escolha somente o indicador que mais limita o resultado e preserve explicitamente o que já está funcionando.',
   }
 }
@@ -142,14 +199,14 @@ function getPublicProviderError(error: unknown) {
   }
 
   if (/curto|incompleto|truncado|MAX_TOKENS/i.test(message)) {
-    return `a Gemini respondeu, mas o texto foi rejeitado pelo controle de qualidade. Detalhe: ${message.slice(0, 260)}`
+    return `a IA externa respondeu, mas o texto foi rejeitado pelo controle de qualidade. Detalhe: ${message.slice(0, 260)}`
   }
 
-  if (/Nenhum modelo Gemini/i.test(message)) {
+  if (/Nenhum modelo Gemini|AI Gateway|GitHub Models/i.test(message)) {
     return message.slice(0, 420)
   }
 
-  return `Gemini respondeu: ${message.slice(0, 320)}`
+  return `IA externa respondeu: ${message.slice(0, 320)}`
 }
 
 function buildPrompt(body: ChatFeedbackRequest) {
@@ -159,15 +216,33 @@ function buildPrompt(body: ChatFeedbackRequest) {
   const generationMode = body.generationMode ?? 'generate'
   const serviceModule = body.serviceModule ?? 'chat'
   const moduleName = serviceModule === 'phone' ? 'telefone' : 'chat'
-  const sourceName = serviceModule === 'phone' ? 'lançamentos do painel de telefone' : 'dados do ClickDesk'
+  const sourceName =
+    body.dataSourceLabel?.trim() ||
+    (serviceModule === 'phone'
+      ? 'lançamentos do painel de telefone'
+      : 'dados do histórico do chat')
   const cadenceRule = serviceModule === 'phone'
     ? '- O módulo telefone é alimentado semanalmente, mas a devolutiva final é mensal. Pode orientar acompanhamento semanal quando isso ajudar o fechamento.'
     : '- Não diga para acompanhar semanalmente, porque o módulo do chat é analisado mensalmente.'
   const volumeRule = serviceModule === 'chat'
-    ? '- No chat, os tickets entram em uma fila comum e não existe distribuição de chamados pela liderança ou pelo sistema. Cada analista puxa o próximo ticket conforme sua disponibilidade e carga. Nunca mencione "fluxo de distribuição", "distribuição da fila" ou garantia de volume regular. Para investigar volume abaixo da média, proponha observar juntos disponibilidade para puxar novos tickets, tempo dos atendimentos, pausas, ausências e atuação em outras atividades.'
+    ? '- No relatório individual do chat, trate o total de atendimentos apenas como dado factual do período. Não compare o volume do analista com média, ranking de volume ou colegas e não transforme essa diferença em orientação individual. Comparações operacionais de volume pertencem à visão gerencial.'
     : '- Quando o volume estiver abaixo da média, informe a diferença em atendimentos e proponha verificar juntos o contexto operacional, como pausas, ausências, duração dos atendimentos ou atuação em outras atividades. Nunca afirme que existe um método de distribuição de chamados nem atribua a diferença à pessoa sem evidência.'
   const caseProfile = classifyFeedbackCase(body)
   const managerHasContext = Boolean(body.managerNotes?.trim())
+  const qualitativeContext = body.qualitativeContext
+  const qualitativeFindings = (qualitativeContext?.findings ?? [])
+    .map((item) => ({
+      ticket_id: item.ticketId ?? null,
+      satisfaction: item.satisfactionLabel ?? 'sem classificação',
+      date: item.occurredDate ?? 'data não informada',
+      analysis: normalizeQualitativeAnalysis(item.analysis, item.satisfactionLabel),
+    }))
+  const selectedNegativeCount = qualitativeFindings.filter((item) => item.satisfaction === 'negative').length
+  const selectedPositiveCount = qualitativeFindings.filter((item) => item.satisfaction === 'positive').length
+  const qualitativeCoverage =
+    qualitativeContext && Number(qualitativeContext.analyzedCount) > 0
+      ? `${Number(qualitativeContext.analyzedCount)} tickets selecionados para feedback; ${Number(qualitativeContext.negativeAnalyzed ?? 0)} de ${Number(qualitativeContext.negativeTotal ?? 0)} negativas e ${Number(qualitativeContext.positiveAnalyzed ?? 0)} de ${Number(qualitativeContext.positiveTotal ?? 0)} positivas.`
+      : 'Nenhum ticket qualitativo analisado para este ciclo.'
 
   return `
 Você é um coach sênior de atendimento ao cliente e editor de relatórios de performance. Sua tarefa é escrever uma devolutiva individual, específica e natural a partir de fatos calculados pelo sistema e do contexto fornecido pelo gestor.
@@ -197,11 +272,19 @@ ${volumeRule}
 - Só chame uma colocação de pódio quando ela estiver entre o primeiro e o terceiro lugar. Nas demais, diga "posição no ranking".
 - Não mencione variação contra período anterior quando não houver um valor anterior real no histórico recebido.
 - Não invente a causa de um resultado. Quando a causa não estiver nos dados ou nas observações, registre que gestor e analista vão verificá-la juntos.
+- Quando houver evidências qualitativas, trate-as explicitamente como amostra dos tickets analisados. Nunca generalize um padrão da amostra para todos os atendimentos do mês.
+- Nunca use evidências de tickets positivos para explicar notas negativas ou o CSAT abaixo da meta. Um ponto de melhoria em ticket positivo não demonstra o motivo de outra avaliação.
+- Se não houver tickets negativos selecionados, diga que a causa das negativas ainda precisa ser investigada. Proíba conclusões como "isso explica as notas desfavoráveis", mesmo quando houver orientação prospectiva de CX.
+- Ao afirmar comportamento observado, cite o número de pelo menos um ticket selecionado que contenha essa evidência. Separe impacto possível de percepção explicitamente relatada pelo cliente. Não transforme correlação ou hipótese em causa comprovada.
+- Respeite o nível de confiança da análise qualitativa. Confiança baixa deve aparecer como hipótese ou ponto a validar, nunca como conclusão.
+- Só afirme uma falha comportamental quando coaching_signal.available for verdadeiro ou quando as observações do gestor trouxerem o mesmo comportamento de forma explícita. A seleção editorial não comprova culpa. Quando houver cx_coaching.practice_to_improve, você pode propor essa prática para o próximo caso, com exemplo e verificação, deixando claro que é orientação prospectiva e preservando attribution_caution.
+- Uma causa classificada como empresa, sistema, processo, cliente ou fator externo não deve ser convertida em culpa individual do analista.
 - Não comece com parabéns genérico. Comece pelo aspecto que torna este caso diferente dos demais.
 - A base do sistema é uma ficha factual, não um modelo de redação. Não copie sua ordem, frases ou cadência. Use-a somente para preservar fatos e limites da análise.
 - Se houver observações do gestor, trate-as como principal fonte de personalização e conecte-as ao combinado. Se não houver, não invente comportamento observado nem contexto operacional.
 - Revise ortografia, concordância e clareza das observações do gestor antes de incorporá-las. Preserve o sentido, mas não copie erros nem apresente a observação como uma nota solta.
-- Preserve os números necessários para sustentar a conclusão, mas não enumere todos os campos recebidos quando eles não contribuírem para o foco principal.
+- Preserve somente os números necessários para sustentar a conclusão. Não reabra o feedback enumerando CSAT, avaliações, respostas, atendimentos e pódio como se fosse outro resumo estatístico; esses indicadores já aparecem no relatório.
+- Na devolutiva, prefira explicar o significado do resultado e o próximo passo. Use no máximo um ou dois números quando forem realmente necessários ao foco principal.
 - Não use Markdown, asteriscos, bullets soltos ou titulos decorativos. Escreva em texto limpo, com nomes de seções seguidos de dois-pontos.
 - Mantenha os nomes das seções do modelo escolhido, mas varie abertura, extensão, ritmo e construção. Não repita a mesma fórmula em todas as seções.
 - O feedback deve ser completo e útil. Se for direto, ainda assim precisa conter leitura do ciclo, orientação prática e expectativa para o próximo fechamento.
@@ -212,9 +295,11 @@ ${volumeRule}
 - Evite frases prontas como "patamar de reconhecimento", "excelência na resolução", "grande confiabilidade" e "manter consistência" quando não houver uma explicação concreta adequada ao caso.
 - Em modo de melhoria, reorganize e reescreva de verdade; não faça apenas substituições de palavras.
 - Não termine frase pela metade. Entregue um texto completo, pronto para colar no relatório.
-- Mantenha entre 150 e 260 palavras. Prefira especificidade e naturalidade em vez de texto longo.
+- Quando a competência estiver em andamento, use presente e qualifique os indicadores como parciais. Diga "até agora", "neste acompanhamento" ou equivalente. Não escreva "fechou outubro", "fechamos outubro", "encerrou a competência", "CSAT fechou" ou equivalente para o mês atual.
+- Mantenha entre 120 e 190 palavras. Prefira especificidade, naturalidade e direção prática em vez de repetir o painel em texto.
 - ${styleInstructions[feedbackStyle]}
 
+Situação da competência: ${body.periodStatus === 'open' ? 'EM ANDAMENTO. Use dados parciais até agora. Não escreva que o mês fechou, encerrou ou foi concluído. Não use passado de fechamento para a competência atual.' : 'Siga o período informado, sem presumir um fechamento não demonstrado.'}
 Periodo: ${body.periodLabel ?? 'Periodo não informado'}
 Analista: ${metric?.analystName}
 Equipe: ${metric?.teamName ?? 'Equipe não informada'}
@@ -228,8 +313,7 @@ Atendimentos válidos: ${metric?.validTickets}
 Avaliacoes recebidas: ${metric?.reviews}
 Positivas: ${metric?.positiveReviews}
 Negativas: ${metric?.negativeReviews}
-Media de atendimentos da operacao: ${body.averageTickets}
-Posição no pódio: ${body.podiumPosition && body.podiumPosition > 0 ? `${body.podiumPosition}o lugar` : 'fora do pódio'}
+${serviceModule === 'phone' ? `Media de atendimentos da operacao: ${body.averageTickets}\n` : ''}Posição no pódio: ${body.podiumPosition && body.podiumPosition > 0 ? `${body.podiumPosition}o lugar` : 'fora do pódio'}
 
 Historico mensal:
 ${JSON.stringify(body.monthlyHistory ?? [], null, 2)}
@@ -237,6 +321,13 @@ ${JSON.stringify(body.monthlyHistory ?? [], null, 2)}
 Observacoes do gestor:
 ${body.managerNotes?.trim() || 'Sem observações adicionais.'}
 Contexto específico fornecido pelo gestor: ${managerHasContext ? 'sim; ele deve orientar a personalização do texto' : 'não; limite-se aos indicadores e sinalize hipóteses como pontos a verificar'}
+
+Tickets selecionados pela gestão para compor o feedback:
+${qualitativeCoverage}
+Escopo efetivamente recebido neste pedido: ${selectedNegativeCount} ticket(s) negativo(s) e ${selectedPositiveCount} positivo(s). ${selectedNegativeCount === 0 ? 'Nenhum transcript negativo foi fornecido: não atribua causa às negativas nem ligue o CSAT a comportamentos observados apenas em positivas.' : 'Restrinja qualquer hipótese sobre notas negativas aos tickets negativos identificados; a amostra não comprova a causa de todas as notas.'}
+
+Evidências qualitativas estruturadas dos tickets já analisados:
+${qualitativeFindings.length ? JSON.stringify(qualitativeFindings, null, 2) : 'Nenhuma evidência qualitativa disponível.'}
 
 Base factual do sistema. Preserve os fatos, mas não copie a redação nem a estrutura:
 ${body.fallbackText ?? ''}
@@ -339,14 +430,11 @@ async function generateWithGemini(prompt: string, style: ChatFeedbackRequest['fe
   const models = Array.from(
     new Set(
       [
+        'gemini-3.8-flash',
         configuredModel,
         'gemini-3.6-flash',
         'gemini-3.5-flash',
         'gemini-3.5-flash-lite',
-        'gemini-2.5-flash',
-        'gemini-2.5-flash-lite',
-        'gemini-2.0-flash',
-        'gemini-1.5-flash',
       ].filter(Boolean) as string[],
     ),
   )
@@ -375,7 +463,9 @@ async function generateWithGemini(prompt: string, style: ChatFeedbackRequest['fe
         ],
         generationConfig: {
           maxOutputTokens: 4096,
-          temperature: 0.65,
+          thinkingConfig: {
+            thinkingLevel: 'low',
+          },
         },
       }),
     })
@@ -386,7 +476,12 @@ async function generateWithGemini(prompt: string, style: ChatFeedbackRequest['fe
       const message = data?.error?.message || data?.message || 'Não foi possível gerar feedback com Gemini.'
       errors.push(`${model}: HTTP ${response.status} / ${code} - ${sanitizeProviderMessage(message)}`)
 
-      if (response.status === 404 || /not found|model/i.test(message)) {
+      if (
+        response.status === 404 ||
+        response.status === 429 ||
+        response.status === 503 ||
+        /not found|model|high demand|temporar|overloaded|quota/i.test(message)
+      ) {
         continue
       }
 
@@ -397,6 +492,64 @@ async function generateWithGemini(prompt: string, style: ChatFeedbackRequest['fe
   }
 
   throw new Error(`Nenhum modelo Gemini disponível respondeu para gerar o feedback. Tentativas: ${errors.join(' | ')}`)
+}
+
+async function generateWithVercelGateway(prompt: string) {
+  const token =
+    process.env.AI_GATEWAY_API_KEY?.trim() ||
+    process.env.VERCEL_OIDC_TOKEN?.trim()
+
+  if (!token) {
+    throw new Error('Vercel AI Gateway sem credencial configurada no ambiente.')
+  }
+
+  const model =
+    process.env.CHAT_AI_GATEWAY_MODEL?.trim() ||
+    'google/gemini-3.6-flash'
+
+  const response = await fetch('https://ai-gateway.vercel.sh/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'Você escreve devolutivas mensais individualizadas, com voz humana de liderança. Varie a construção conforme o caso e nunca deduza comportamentos apenas dos indicadores.',
+        },
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+      temperature: 0.65,
+      max_tokens: 1800,
+      stream: false,
+    }),
+  })
+
+  const data = await response.json().catch(() => null)
+
+  if (!response.ok) {
+    const message =
+      data?.error?.message ||
+      data?.message ||
+      `HTTP ${response.status}`
+    throw new Error(
+      `Vercel AI Gateway ${model}: ${sanitizeProviderMessage(String(message)).slice(0, 320)}`,
+    )
+  }
+
+  const text = extractChatCompletionText(data).trim()
+  if (!text) {
+    throw new Error(`Vercel AI Gateway ${model}: resposta vazia.`)
+  }
+
+  return text
 }
 
 async function generateWithGitHubModels(prompt: string) {
@@ -441,15 +594,75 @@ async function generateWithGitHubModels(prompt: string) {
 }
 
 async function generateExternalFeedback(prompt: string, style: ChatFeedbackRequest['feedbackStyle']) {
-  if (process.env.CHAT_AI_PROVIDER === 'github-models') {
-    return { feedback: assertCompleteFeedback(normalizeManagerVoice(await generateWithGitHubModels(prompt)), style), source: 'github-models' }
+  // Homologation may send feedback only to the provider explicitly authorized for this audit.
+  if(getServerSupabaseConfig().environment === 'homologacao'){
+    return {feedback:await generateWithGemini(prompt,style),source:'gemini'}
+  }
+  const provider = process.env.CHAT_AI_PROVIDER?.trim()
+  const errors: string[] = []
+
+  if (provider === 'github-models') {
+    return {
+      feedback: assertCompleteFeedback(
+        normalizeManagerVoice(await generateWithGitHubModels(prompt)),
+        style,
+      ),
+      source: 'github-models',
+    }
   }
 
-  return { feedback: await generateWithGemini(prompt, style), source: 'gemini' }
+  if (provider === 'vercel-ai-gateway') {
+    return {
+      feedback: assertCompleteFeedback(
+        normalizeManagerVoice(await generateWithVercelGateway(prompt)),
+        style,
+      ),
+      source: 'vercel-ai-gateway',
+    }
+  }
+
+  try {
+    if (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY) {
+      return { feedback: await generateWithGemini(prompt, style), source: 'gemini' }
+    }
+  } catch (error) {
+    errors.push(getErrorText(error))
+  }
+
+  try {
+    return {
+      feedback: assertCompleteFeedback(
+        normalizeManagerVoice(await generateWithVercelGateway(prompt)),
+        style,
+      ),
+      source: 'vercel-ai-gateway',
+    }
+  } catch (error) {
+    errors.push(getErrorText(error))
+  }
+
+  if (process.env.GITHUB_MODELS_TOKEN || process.env.GITHUB_TOKEN) {
+    try {
+      return {
+        feedback: assertCompleteFeedback(
+          normalizeManagerVoice(await generateWithGitHubModels(prompt)),
+          style,
+        ),
+        source: 'github-models',
+      }
+    } catch (error) {
+      errors.push(getErrorText(error))
+    }
+  }
+
+  throw new Error(
+    `Nenhum provedor de IA externa conseguiu gerar o feedback. ${errors.join(' | ').slice(0, 700)}`,
+  )
 }
 
-export async function POST(request: Request) {
+async function officialPOST(request: Request) {
   try {
+    if(getServerSupabaseConfig().environment === 'homologacao')await authorizeManagerSessionClient(request)
     const body = (await request.json()) as ChatFeedbackRequest
 
     if (!body.metric?.analystName) {
@@ -481,9 +694,12 @@ export async function POST(request: Request) {
       const publicReason = getPublicProviderError(providerError)
       console.warn('Chat feedback external AI unavailable:', getErrorText(providerError))
 
-      const fallbackSource = body.serviceModule === 'phone'
-        ? 'Usei a sugestão local baseada nos lançamentos do telefone e nas regras do painel.'
-        : 'Usei a sugestão local baseada nos números do ClickDesk e nas regras do painel.'
+      const fallbackSource =
+        body.serviceModule === 'phone'
+          ? 'Usei a sugestão local baseada nos lançamentos do telefone e nas regras do painel.'
+          : body.dataSourceLabel?.trim()
+            ? `Usei a sugestão local baseada em ${body.dataSourceLabel.trim()} e nas regras do painel.`
+            : 'Usei a sugestão local baseada nos dados disponíveis do chat e nas regras do painel.'
 
       return NextResponse.json({
         feedback: fallbackFeedback,
@@ -493,8 +709,11 @@ export async function POST(request: Request) {
       })
     }
   } catch (error) {
+    if(error instanceof ApiError)return NextResponse.json({error:error.message},{status:error.status})
     return NextResponse.json({ error: getErrorText(error) }, { status: 500 })
   }
 }
 
 
+
+export async function POST(request:Request){if(!isChatProductionEnabled())return legacy.POST(request);const body=await request.clone().json().catch(()=>null);if(body?.serviceModule!=='chat')return legacy.POST(request);return officialPOST(request)}

@@ -27,6 +27,7 @@ type Analyst = {
 type UserRole = 'master' | 'coordinator' | 'analyst'
 
 type UserProfile = {
+  chat_analyst_id?: string | null
   id: string
   role?: string | null
   full_name?: string | null
@@ -523,6 +524,7 @@ export default function Home() {
   const podiumCsatGoal = goals.find((goal) => goal.key === 'podium_csat_minimum')?.value ?? 90
   const userRole = normalizeUserRole(profile?.role)
   const isManagementUser = userRole !== 'analyst'
+  useEffect(()=>{if(process.env.NEXT_PUBLIC_CHAT_OFFICIAL_ENABLED==='true'&&profile?.chat_analyst_id&&normalizeUserRole(profile.role)==='analyst')window.location.replace('/chat')},[profile?.chat_analyst_id,profile?.role])
   const profileAnalyst = useMemo(
     () => findProfileAnalyst(profile, analysts, user?.email ?? ''),
     [profile, analysts, user?.email],
@@ -1298,7 +1300,7 @@ export default function Home() {
             <button
               className={activeModule === 'chat' ? 'workspace-card workspace-card-active' : 'workspace-card'}
               type="button"
-              onClick={() => setActiveModule('chat')}
+              onClick={() => { if(process.env.NEXT_PUBLIC_CHAT_OFFICIAL_ENABLED==='true')window.location.assign('/chat');else setActiveModule('chat') }}
             >
               <span className="workspace-icon workspace-icon-violet" aria-hidden="true">◌</span>
               <span className="workspace-kicker">Experiência do cliente</span>

@@ -1,0 +1,1 @@
+export function isChatProductionEnabled(){return process.env.CHAT_OFFICIAL_ENABLED==='true'&&process.env.VERCEL_ENV==='production'&&process.env.NEXT_PUBLIC_SUPABASE_URL==='https://qmetbydkepfdgfqkdkai.supabase.co'}

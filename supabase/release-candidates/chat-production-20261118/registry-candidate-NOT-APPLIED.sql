@@ -1,0 +1,35 @@
+-- REVIEW ONLY. Run after schema phase, never copy HML auth/metrics.
+begin;
+do $guard$ begin if not exists(select 1 from public.chat_analysts where id='4379169f-a693-42d0-b304-9f5fbb05a7f9'::uuid and active and name='Carlos Lemos') then raise exception 'Production analyst identity drift';end if;end $guard$;
+insert into public.clickdesk_official_owner_registry(clickdesk_owner_id,source_owner_name,source_owner_key,source_scope,active) values(23,'Carlos Lemos','carlos lemos','suporte_erp_fiscal',true);
+do $guard$ begin if not exists(select 1 from public.chat_analysts where id='c763a2ae-f48d-4f3e-8912-333e425727bb'::uuid and active and name='Christian Matozinho') then raise exception 'Production analyst identity drift';end if;end $guard$;
+insert into public.clickdesk_official_owner_registry(clickdesk_owner_id,source_owner_name,source_owner_key,source_scope,active) values(24,'Christian Matozinho','christian matozinho','suporte_erp_fiscal',true);
+do $guard$ begin if not exists(select 1 from public.chat_analysts where id='4d0735a2-cb66-4b54-94db-0f63e53e0a9e'::uuid and active and name='Diego Machado') then raise exception 'Production analyst identity drift';end if;end $guard$;
+insert into public.clickdesk_official_owner_registry(clickdesk_owner_id,source_owner_name,source_owner_key,source_scope,active) values(29,'Diego Machado','diego machado','suporte_erp_fiscal',true);
+do $guard$ begin if not exists(select 1 from public.chat_analysts where id='527a3b13-3e20-4967-9e20-8540a25f19a2'::uuid and active and name='Igor Siqueira') then raise exception 'Production analyst identity drift';end if;end $guard$;
+insert into public.clickdesk_official_owner_registry(clickdesk_owner_id,source_owner_name,source_owner_key,source_scope,active) values(39,'Igor Siqueira','igor siqueira','suporte_erp_fiscal',true);
+do $guard$ begin if not exists(select 1 from public.chat_analysts where id='92a297f9-2a5a-4e82-a091-82aa32ed08fc'::uuid and active and name='João Pedro Santana') then raise exception 'Production analyst identity drift';end if;end $guard$;
+insert into public.clickdesk_official_owner_registry(clickdesk_owner_id,source_owner_name,source_owner_key,source_scope,active) values(46,'João Pedro Santana','joao pedro santana','suporte_erp_fiscal',true);
+do $guard$ begin if not exists(select 1 from public.chat_analysts where id='97f0071d-ae22-4d90-8c4d-1545e00b4a7d'::uuid and active and name='João Pedro Vianey') then raise exception 'Production analyst identity drift';end if;end $guard$;
+insert into public.clickdesk_official_owner_registry(clickdesk_owner_id,source_owner_name,source_owner_key,source_scope,active) values(47,'João Pedro Vianey','joao pedro vianey','suporte_erp_fiscal',true);
+do $guard$ begin if not exists(select 1 from public.chat_analysts where id='b25c82c0-50a7-473a-b69d-d49b359add6d'::uuid and active and name='João Vitor Almeida') then raise exception 'Production analyst identity drift';end if;end $guard$;
+insert into public.clickdesk_official_owner_registry(clickdesk_owner_id,source_owner_name,source_owner_key,source_scope,active) values(48,'João Vitor Almeida','joao vitor almeida','suporte_erp_fiscal',true);
+do $guard$ begin if not exists(select 1 from public.chat_analysts where id='66708884-2ba6-4a19-bfa3-3db1276dc82e'::uuid and active and name='Karolyne Moreira') then raise exception 'Production analyst identity drift';end if;end $guard$;
+insert into public.clickdesk_official_owner_registry(clickdesk_owner_id,source_owner_name,source_owner_key,source_scope,active) values(54,'Karolyne Moreira','karolyne moreira','suporte_erp_fiscal',true);
+do $guard$ begin if not exists(select 1 from public.chat_analysts where id='5ab6a01c-49de-4086-b910-0a838e5cea65'::uuid and active and name='Mario Junior') then raise exception 'Production analyst identity drift';end if;end $guard$;
+insert into public.clickdesk_official_owner_registry(clickdesk_owner_id,source_owner_name,source_owner_key,source_scope,active) values(69,'Mario Junior','mario junior','suporte_erp_fiscal',true);
+do $guard$ begin if not exists(select 1 from public.chat_analysts where id='d00a1025-3e10-4316-ba85-36e5be3cad2f'::uuid and active and name='Maycon Oliveira') then raise exception 'Production analyst identity drift';end if;end $guard$;
+insert into public.clickdesk_official_owner_registry(clickdesk_owner_id,source_owner_name,source_owner_key,source_scope,active) values(71,'Maycon Oliveira','maycon oliveira','suporte_erp_fiscal',true);
+do $guard$ begin if not exists(select 1 from public.chat_analysts where id='0a11d1c7-1590-4690-875c-b1e7ae49af8f'::uuid and active and name='Miguel Augusto') then raise exception 'Production analyst identity drift';end if;end $guard$;
+insert into public.clickdesk_official_owner_registry(clickdesk_owner_id,source_owner_name,source_owner_key,source_scope,active) values(72,'Miguel Augusto','miguel augusto','suporte_erp_fiscal',true);
+do $guard$ begin if not exists(select 1 from public.chat_analysts where id='0a559649-f156-4347-9c9a-ae5159193e3a'::uuid and active and name='Paulo Victor') then raise exception 'Production analyst identity drift';end if;end $guard$;
+insert into public.clickdesk_official_owner_registry(clickdesk_owner_id,source_owner_name,source_owner_key,source_scope,active) values(74,'Paulo Victor','paulo victor','suporte_erp_fiscal',true);
+do $guard$ begin if not exists(select 1 from public.chat_analysts where id='e2237961-34c4-4300-ac80-cb83f0f18499'::uuid and active and name='Polliana Santana') then raise exception 'Production analyst identity drift';end if;end $guard$;
+insert into public.clickdesk_official_owner_registry(clickdesk_owner_id,source_owner_name,source_owner_key,source_scope,active) values(76,'Polliana Santana','polliana santana','suporte_erp_fiscal',true);
+do $guard$ begin if not exists(select 1 from public.chat_analysts where id='598d5aec-15c8-4504-85f7-4521c1a040fc'::uuid and active and name='Thiago Reis') then raise exception 'Production analyst identity drift';end if;end $guard$;
+insert into public.clickdesk_official_owner_registry(clickdesk_owner_id,source_owner_name,source_owner_key,source_scope,active) values(85,'Thiago Reis','thiago reis','suporte_erp_fiscal',true);
+do $guard$ begin if not exists(select 1 from public.chat_analysts where id='07190d64-0d13-4cd9-b107-47c58b185725'::uuid and active and name='Vanessa Silva') then raise exception 'Production analyst identity drift';end if;end $guard$;
+insert into public.clickdesk_official_owner_registry(clickdesk_owner_id,source_owner_name,source_owner_key,source_scope,active) values(87,'Vanessa Silva','vanessa silva','suporte_erp_fiscal',true);
+insert into public.clickdesk_registry_revision(singleton) values(true) on conflict do nothing;
+commit;
+
