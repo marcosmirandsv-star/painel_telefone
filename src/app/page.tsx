@@ -5173,6 +5173,7 @@ function ReportsView({
   const [phoneFeedbackStyle, setPhoneFeedbackStyle] = useState<keyof typeof phoneFeedbackHeadings>('mimo')
   const [phoneFeedbackGoal, setPhoneFeedbackGoal] = useState<FeedbackGoal>('development')
   const [phoneAiSaving, setPhoneAiSaving] = useState(false)
+  const [phoneExporting, setPhoneExporting] = useState(false)
   const [phoneAiStatus, setPhoneAiStatus] = useState<'idle' | 'success' | 'fallback'>('idle')
   const [showPhoneFacts, setShowPhoneFacts] = useState(false)
   const phoneAiRequest = useRef<AbortController | null>(null)
@@ -5464,16 +5465,29 @@ function ReportsView({
     }
   }
 
-  async function handleExportWordReport() {
+  async function handleExportPhoneReport(format: 'word' | 'pdf') {
     if (!selectedAnalyst || !analystResult) {
       setExportMessage('Selecione um analista e um período com lançamento antes de exportar.')
       return
     }
 
+    const printWindow = format === 'pdf' ? window.open('', '_blank') : null
+    if (format === 'pdf' && !printWindow) {
+      setExportMessage('Permita a abertura da janela do relatório neste site e clique em Exportar PDF novamente.')
+      return
+    }
+    if (printWindow) {
+      printWindow.opener = null
+      printWindow.document.body.textContent = 'Preparando o relatório para PDF…'
+    }
+    setPhoneExporting(true)
+
     try {
       setExportMessage('Preparando relatório e incorporando a foto do analista...')
       const finalPhoneFeedback = cleanChatReportFeedbackText(phoneFeedbackText) || phoneLocalFeedback
-      const fileName = await exportWordReport({
+      const fileName = await exportPhoneReport({
+        format,
+        printWindow,
         analystName: selectedAnalyst.name,
         photoUrl: getAnalystPhoto(selectedAnalyst.name, selectedAnalyst.photo_url),
         periodLabel,
@@ -5507,9 +5521,14 @@ function ReportsView({
           : null,
       })
 
-      setExportMessage(`Relatorio gerado: ${fileName}. Verifique a pasta Downloads.`)
+      setExportMessage(format === 'pdf'
+        ? 'Na janela de impressão, escolha Salvar como PDF e confirme o salvamento.'
+        : `Relatório gerado: ${fileName}. Verifique a pasta Downloads.`)
     } catch (error) {
+      printWindow?.close()
       setExportMessage(`Não foi possível gerar o arquivo. ${getErrorMessage(error)}`)
+    } finally {
+      setPhoneExporting(false)
     }
   }
 
@@ -5755,14 +5774,22 @@ function ReportsView({
           </Field>
         </div>
 
-        <div className="no-print mt-4">
+        <div className="no-print mt-4 flex flex-wrap gap-3">
           <button
             className="primary-button disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={!selectedAnalyst || !analystResult || phoneAiSaving || !phoneFeedbackText.trim()}
+            disabled={!selectedAnalyst || !analystResult || phoneAiSaving || phoneExporting || !phoneFeedbackText.trim()}
             type="button"
-            onClick={handleExportWordReport}
+            onClick={() => handleExportPhoneReport('word')}
           >
             Exportar relatório Word
+          </button>
+          <button
+            className="primary-button disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={!selectedAnalyst || !analystResult || phoneAiSaving || phoneExporting || !phoneFeedbackText.trim()}
+            type="button"
+            onClick={() => handleExportPhoneReport('pdf')}
+          >
+            Exportar PDF
           </button>
         </div>
         <div className="no-print">{exportMessage && <Feedback message={exportMessage} />}</div>
@@ -8712,7 +8739,9 @@ function buildPhoneLocalFeedback({
   return phoneFeedbackHeadings[style].map((heading, index) => `${heading}:\n${sections[index]}`).join('\n\n')
 }
 
-async function exportWordReport({
+async function exportPhoneReport({
+  format,
+  printWindow,
   analystName,
   photoUrl,
   periodLabel,
@@ -8723,6 +8752,8 @@ async function exportWordReport({
   feedbackStyle,
   comparison,
 }: {
+  format: 'word' | 'pdf'
+  printWindow: Window | null
   analystName: string
   photoUrl?: string | null
   periodLabel: string
@@ -8917,6 +8948,7 @@ async function exportWordReport({
           ${evolutionBars}
         </div>
         <p class="muted">Menor ponto do período: ${worstEvolution ? `${worstEvolution.label} - ${formatPercent(worstEvolution.csat)}` : '-'}.</p>
+        <div class="weekly-volume">
         <h3>Volume semanal</h3>
         <p class="muted">Complemento da evolução: avaliações respondidas e atendimentos registrados em cada semana.</p>
         <table>
@@ -8929,6 +8961,7 @@ async function exportWordReport({
           </thead>
           <tbody>${volumeRows}</tbody>
         </table>
+        </div>
         <h2>Contexto operacional da equipe</h2>
         <p>Performance da equipe no período: ${formatPercent(achieved.teamPerformance)}.</p>
         <p>Ligações atendidas pela equipe: ${achieved.teamAnsweredCalls}. Total processado: ${achieved.teamTotalCalls}.</p>
@@ -8938,12 +8971,36 @@ async function exportWordReport({
       </body>
     </html>
   `
+  const fileBase = `${slugifyFileName(analystName)}-relatório-${slugifyFileName(periodLabel)}`
+  if (format === 'pdf') {
+    if (!printWindow || printWindow.closed) throw new Error('A janela do PDF foi fechada. Clique em Exportar PDF para abrir novamente.')
+    const printStyles = `
+      @page { size: A4; margin: 14mm; }
+      body { margin: 0; padding: 20px; }
+      p { orphans: 3; widows: 3; }
+      h1, h2, h3, .trend-title { break-after: avoid; page-break-after: avoid; }
+      .header, .box, .insight-grid, .weekly-volume, .evolution-row, tr { break-inside: avoid; page-break-inside: avoid; }
+      @media print {
+        body { padding: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      }
+    `
+    printWindow.document.open()
+    printWindow.document.write(documentHtml.replace('</style>', `${printStyles}</style>`))
+    printWindow.document.close()
+    printWindow.document.title = `${fileBase}.pdf`
+    await printWindow.document.fonts.ready
+    await Promise.all(Array.from(printWindow.document.images, (image) => image.decode().catch(() => {})))
+    if (printWindow.closed) throw new Error('A janela do PDF foi fechada. Clique em Exportar PDF para abrir novamente.')
+    printWindow.focus()
+    printWindow.print()
+    return `${fileBase}.pdf`
+  }
   const blob = new Blob(['\ufeff', documentHtml], {
     type: 'application/msword;charset=utf-8',
   })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
-  const fileName = `${slugifyFileName(analystName)}-relatório-${slugifyFileName(periodLabel)}.doc`
+  const fileName = `${fileBase}.doc`
 
   link.href = url
   link.download = fileName
