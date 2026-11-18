@@ -24,7 +24,7 @@ export async function GET(request:Request) {return handle(async()=>{
   if(!analystId) throw new ApiError(403,'Perfil sem vínculo individual.')
   type Item={ticket_id:string;ticket_number:string;rated_at:string;sentiment:string;original_label:string;can_analyze:boolean}
   const items:Item[]=[]
-  if(start>='2026-11-01') {
+  if(start>='2026-10-01') {
     const capture=await access.admin.rpc('get_scoped_clickdesk_official_period_metrics',{p_start:start,p_end:end})
     if(capture.error||!capture.data?.length) throw new ApiError(503,'As avaliações deste intervalo ainda estão em preparação.')
     for(let offset=0;offset<10000;offset+=500) {
@@ -58,12 +58,24 @@ export async function GET(request:Request) {return handle(async()=>{
     if(!items.some(item=>item.ticket_id===ticketId))throw new ApiError(404,'Ticket não encontrado para este acesso e período.')
     const apiKey=process.env.CLICKDESK_API_KEY?.trim(),account=process.env.CLICKDESK_ACCOUNT_ID?.trim()
     if(!apiKey||!account)throw new ApiError(503,'Conversa temporariamente indisponível.')
-    const response=await fetch('https://api.desk.click.app/api/v1/tickets/'+encodeURIComponent(ticketId)+'/transcript',{
-      headers:{Authorization:'Bearer '+apiKey,'X-Account-Id':account,Accept:'application/json'},cache:'no-store',signal:AbortSignal.timeout(20000),
-    }).catch(()=>null)
-    if(!response?.ok)throw new ApiError(503,'Não foi possível abrir a conversa. Tente novamente.')
-    const transcript=extractTranscriptText(await response.json())
-    return json({ticket_id:ticketId,transcript:transcript||'Conversa sem texto disponível.'})
+    const readConversationSource=async(suffix:string)=>{
+      const response=await fetch('https://api.desk.click.app/api/v1/tickets/'+encodeURIComponent(ticketId)+suffix,{
+        headers:{Authorization:'Bearer '+apiKey,'X-Account-Id':account,Accept:'application/json'},cache:'no-store',signal:AbortSignal.timeout(20000),
+      }).catch(()=>null)
+      if(!response?.ok)return ''
+      const text=await response.text().catch(()=> '')
+      if(!text.trim())return ''
+      let payload:unknown
+      try{payload=JSON.parse(text)}catch{
+        if(!response.headers.get('content-type')?.includes('text/plain'))return ''
+        payload=text
+      }
+      return extractTranscriptText(payload)
+    }
+    let transcript=await readConversationSource('/transcript')
+    if(!transcript)transcript=await readConversationSource('')
+    if(!transcript)throw new ApiError(503,'O ClickDesk não disponibilizou texto desta conversa agora. Tente novamente mais tarde.')
+    return json({ticket_id:ticketId,transcript:'Texto disponível da conversa. Anexos não são exibidos nesta leitura.\n\n'+transcript})
   }
   return json({items,totals:{total:items.length,positive:items.filter(item=>item.sentiment==='positive').length,negative:items.filter(item=>item.sentiment==='negative').length}})
 })}

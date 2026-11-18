@@ -7,7 +7,7 @@ import ts from 'typescript'
 const own='97f0071d-ae22-4d90-8c4d-1545e00b4a7d',other='24e897bb-80c4-4710-be3f-b5a71efabe41'
 const source=readFileSync(new URL('../src/app/api/clickdesk/my-reviews/route.ts',import.meta.url),'utf8')
 const compiled=ts.transpileModule(source.replace(/^import[^\r\n]*\r?\n/gm,'').replace(/export /g,''),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText
-function harness({environment='homologacao',capture=true,management=false}={}) {
+function harness({environment='homologacao',capture=true,management=false,emptyTranscript=false,emptyDetail=false}={}) {
   let fetches=0,queries=0
   const rows=[{ticket_id:'100',ticket_number:'111',rated_at:'2026-11-04T15:00:00Z',sentiment:'positive',original_label:'Ótimo',analyst_id:own},{ticket_id:'101',ticket_number:'112',rated_at:'2026-11-05T15:00:00Z',sentiment:'negative',original_label:'Neutro',analyst_id:own},{ticket_id:'102',ticket_number:'113',rated_at:'2026-11-06T15:00:00Z',sentiment:'negative',original_label:'Ruim',analyst_id:other}]
   const db={rpc:async()=>({data:capture?[{}]:[],error:null}),from:(name:string)=>{
@@ -21,10 +21,10 @@ function harness({environment='homologacao',capture=true,management=false}={}) {
   const GET=runInNewContext(compiled+'\nGET',{ApiError,URL,Date,Set,AbortSignal,
     getServerSupabaseConfig:()=>({environment}),authorizeClickDeskSessionClient:async()=>({isManagement:management,chatAnalystId:own,admin:db}),
     handle:async(fn:()=>Promise<Response>)=>{try{return await fn()}catch(error){return Response.json({erro:(error as Error).message},{status:(error as ApiError).status||503})}},json:Response.json,
-    extractTranscriptText:()=> 'Conversa de teste',readFinalLedger:async()=>[],
-    process:{env:{CLICKDESK_API_KEY:'fixture',CLICKDESK_ACCOUNT_ID:'fixture'}},fetch:async()=>{fetches++;return Response.json({fixture:true})},
+    extractTranscriptText:(payload:unknown)=>payload?'Conversa de teste':'',readFinalLedger:async()=>[],
+    process:{env:{CLICKDESK_API_KEY:'fixture',CLICKDESK_ACCOUNT_ID:'fixture'}},fetch:async(url:string)=>{fetches++;return Response.json(url.endsWith('/transcript')&&emptyTranscript||!url.endsWith('/transcript')&&emptyDetail?null:{fixture:true})},
   }) as (r:Request)=>Promise<Response>
-  return {run:(query='')=>GET(new Request('https://example.test/api?start=2026-11-01&end=2026-11-11'+query)),stats:()=>({fetches,queries})}
+  return {runOctober:()=>GET(new Request('https://example.test/api?start=2026-10-01&end=2026-10-31')),run:(query='')=>GET(new Request('https://example.test/api?start=2026-11-01&end=2026-11-11'+query)),stats:()=>({fetches,queries})}
 }
 
 test('notas originais próprias incluem neutro como ruim e preservam elegibilidade de autoria',async()=>{
@@ -40,9 +40,32 @@ test('outro analista e ambiente de produção são recusados antes de consultar 
 })
 test('conversa de ticket alheio não é enviada à API; própria abre sem disparar IA',async()=>{
   const h=harness();assert.equal((await h.run('&ticket_id=102')).status,404);assert.equal(h.stats().fetches,0)
-  const response=await h.run('&ticket_id=100');assert.equal(response.status,200);assert.equal((await response.json()).transcript,'Conversa de teste');assert.equal(h.stats().fetches,1)
+  const response=await h.run('&ticket_id=100');assert.equal(response.status,200);assert.match((await response.json()).transcript,/Conversa de teste$/);assert.equal(h.stats().fetches,1)
 })
 test('captura ausente e datas inválidas não aparecem como zero avaliações',async()=>{
   assert.equal((await harness({capture:false}).run()).status,503)
   assert.equal((await harness().run('&start=2026-11-02')).status,400)
+})
+
+
+test('transcript sem conteúdo consulta o próprio ticket após comprovar autoria',async()=>{
+  const h=harness({emptyTranscript:true}),response=await h.run('&ticket_id=100')
+  assert.equal(response.status,200)
+  assert.match((await response.json()).transcript,/Anexos não são exibidos/)
+  assert.equal(h.stats().fetches,2)
+})
+
+test('duas fontes vazias são indisponibilidade, não prova de conversa inexistente',async()=>{
+  const h=harness({emptyTranscript:true,emptyDetail:true}),response=await h.run('&ticket_id=100')
+  assert.equal(response.status,503)
+  assert.match((await response.json()).erro,/não disponibilizou texto/)
+  assert.equal(h.stats().fetches,2)
+})
+
+
+test('Outubro usa notas originais da captura oficial e não o ledger legado',async()=>{
+  const response=await harness().runOctober(),data=await response.json()
+  assert.equal(response.status,200)
+  assert.deepEqual(data.totals,{total:2,positive:1,negative:1})
+  assert.equal((await harness({capture:false}).runOctober()).status,503)
 })

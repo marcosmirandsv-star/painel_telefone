@@ -4492,7 +4492,7 @@ function ChatAnalystPortal({
           </div>
           <div className="flex flex-wrap gap-2 self-start">
             <span className="rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-xs text-slate-400">
-              {activeRoutineDays.length} {activeRoutineDays.length === 1 ? 'dia com atividade' : 'dias com atividade'}
+              {clickDeskDailyAvailable(metrics) ? `${activeRoutineDays.length} ${activeRoutineDays.length === 1 ? 'dia com atividade' : 'dias com atividade'}` : 'Distribuição diária em conferência'}
             </span>
             <span className="rounded-md border border-amber-300/15 bg-amber-300/5 px-3 py-2 text-xs text-amber-100">
               {formatChatCount(accumulated?.negative_reviews ?? 0)} negativas no intervalo
@@ -4533,7 +4533,7 @@ function ChatAnalystPortal({
             })}
           </div>
         ) : (
-          <EmptyState text="Ainda não há dias com atendimentos persistidos nesta competência." />
+          <EmptyState text={clickDeskDailyAvailable(metrics) ? "Nenhum dia com atendimento no intervalo selecionado." : "Os totais do período estão disponíveis. Os dias serão exibidos quando a distribuição diária estiver conciliada com esses totais."} />
         )}
 
         {selectedRoutineDate && (
@@ -4558,6 +4558,7 @@ function ChatAnalystPortal({
               </button>
             </div>
 
+            <p className="mt-3 text-xs text-slate-400">Esta lista reúne tickets persistidos para consulta. Ela pode diferir dos Recebidos do relatório individual; os indicadores acima continuam usando o relatório ClickDesk conciliado.</p>
             {dailyTicketsLoading ? (
               <p className="mt-4 text-sm text-slate-400">Carregando seus tickets...</p>
             ) : dailyTickets?.erro ? (
