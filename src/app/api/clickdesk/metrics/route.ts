@@ -390,7 +390,7 @@ async function officialGET(request: Request) {
           : metricSource === 'clickdesk_official_period_metrics'
             ? filters.start >= '2026-11-01'
               ? 'ClickDesk: Recebidos por responsável nas filas ERP e Fiscal, avaliações pelo atendente avaliado, time de lotação e atualização a cada 30 minutos. Resolvidos não são somados aos recebidos. O calendário diário exige conciliação com o período.'
-              : 'Fotografia histórica do período ClickDesk: resolvidos por responsável e avaliações pelo atendente avaliado; filas ERP e Fiscal, time de lotação e corte D-1.'
+              : 'Fotografia do período ClickDesk: Recebidos por responsável e avaliações pelo atendente avaliado, nas filas ERP e Fiscal. Resolvidos são preservados separadamente; a distribuição diária exige conciliação com o período.'
             : 'Data operacional: última resposta pública humana, em Brasília. Cobertura validada conforme fontes documentadas.',
       },
     })

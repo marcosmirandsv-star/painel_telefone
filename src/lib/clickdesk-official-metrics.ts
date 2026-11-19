@@ -89,7 +89,7 @@ export async function loadOfficialPeriodRows(
       code: people.error.code,
       message: people.error.message,
     })
-    throw new ApiError(503, 'Cadastro de analistas da homologação indisponível.')
+    throw new ApiError(503, 'Cadastro de analistas do Chat indisponível.')
   }
 
   const roster = new Map(

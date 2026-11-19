@@ -2,7 +2,7 @@ import {isChatProductionEnabled} from '@/lib/chat-production-gate'
 import { randomUUID } from 'node:crypto'
 import { ApiError, authorizeClickDeskSessionClient, handle, json } from '@/lib/chat-integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
-import { homologationReadAdmin, readTicketHistory } from '@/lib/clickdesk-final-owner-server'
+import { productionReadAdmin, readTicketHistory } from '@/lib/clickdesk-final-owner-server'
 import { finalHumanTicket, type FinalTicket, type Person } from '@/lib/clickdesk-final-owner'
 
 export const runtime = 'nodejs'
@@ -16,7 +16,7 @@ type Candidate = { ticket_id: string; version: string }
 type Row = FinalTicket & { source_version: string }
 
 async function sourceCandidates() {
-  const admin = homologationReadAdmin()
+  const admin = productionReadAdmin()
   const candidates = new Map<string, Candidate>()
   for (const [table, idColumn, versionColumn] of [
     ['clickdesk_chat_attendances', 'clickdesk_ticket_id', 'updated_at'],
@@ -123,7 +123,7 @@ async function officialPOST(request: Request) {
     stage='candidate_discovery'
     const all=await sourceCandidates()
     const selection=all.filter(item=>item.ticket_id.localeCompare(cursor,'en')>0).slice(0,limit)
-    const admin=homologationReadAdmin()
+    const admin=productionReadAdmin()
     const roster=await admin.from('chat_analysts').select('id,name,team_id,csat_goal')
     if(roster.error)throw new ApiError(503,'Cadastro de analistas indisponível.')
     const people:Person[]=(roster.data??[]).map(p=>({
