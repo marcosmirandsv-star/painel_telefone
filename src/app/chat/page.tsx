@@ -17,6 +17,7 @@ import { sumChatVoteRows } from '@/lib/clickdesk-csat'
 import ChatTimeFilter from '@/components/chat/ChatTimeFilter'
 import ChatNeutralReviews from '@/components/chat/ChatNeutralReviews'
 import AnalystReviews from '@/components/chat/AnalystReviews'
+import ChatAccessManagement from '@/components/chat/ChatAccessManagement'
 import CxDiagnostics from '@/components/CxDiagnostics'
 import ChatCaseManagement from '@/components/chat/ChatCaseManagement'
 import { chatTimeRange, type ChatTimeMode } from '@/lib/chat-time-filter'
@@ -9351,6 +9352,7 @@ function ChatModuleDashboard({
       </section>
 
 
+      {isManagementUser && chatActiveTab === 'settings' && <ChatAccessManagement analysts={analysts}/>}
       <section className={chatActiveTab === 'settings' ? 'panel' : 'hidden'}>
         <div className="flex flex-col gap-6 xl:flex-row">
           <div className="xl:w-2/5">
