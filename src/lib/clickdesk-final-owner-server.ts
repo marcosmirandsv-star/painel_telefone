@@ -1,6 +1,7 @@
 import 'server-only'
 import { adminClient, ApiError } from './chat-integration-server'
 import { getServerSupabaseConfig } from './runtime-environment.ts'
+import { isChatProductionEnabled } from './chat-production-gate.ts'
 import { createHash } from 'node:crypto'
 import { unstable_cache } from 'next/cache'
 import { finalHumanTicket, object, text, type FinalTicket, type Person } from './clickdesk-final-owner'
@@ -11,11 +12,11 @@ export type FinalSnapshot = { rows: FinalTicket[]; pending: Array<FinalTicket & 
 const cache = new Map<string, { expires: number; promise: Promise<FinalSnapshot> }>()
 const ticketCache = new Map<string, { expires:number; row:FinalTicket }>()
 
-export function homologationReadAdmin() {
+export function productionReadAdmin() {
   const config = getServerSupabaseConfig()
-  if (config.environment !== 'homologacao') throw new ApiError(404, 'Reconciliação exclusiva da homologação.')
-  if (new URL(config.url).hostname !== 'vvtorcvchnqhcredhorv.supabase.co') {
-    throw new ApiError(503, 'Projeto de homologação divergente.')
+  if (!isChatProductionEnabled()) throw new ApiError(404, 'Chat oficial ainda não habilitado.')
+  if (config.environment !== 'producao' || config.url !== 'https://qmetbydkepfdgfqkdkai.supabase.co') {
+    throw new ApiError(503, 'Projeto de produção divergente.')
   }
   return adminClient()
 }
@@ -142,7 +143,7 @@ export async function loadFinalSnapshot(admin: Admin): Promise<FinalSnapshot> {
             row=await unstable_cache(async()=>{
               const evidence=await readTicketHistory(id,get)
               return finalHumanTicket(id,evidence.messages,evidence.events,evidence.ticket,people,evidence.complete)
-            },['hml-final-human-v2',account,ticketKey],{revalidate:300})()
+            },['production-final-human-v1',account,ticketKey],{revalidate:300})()
             ticketCache.set(ticketKey,{expires:Date.now()+300000,row})
           }
         }
