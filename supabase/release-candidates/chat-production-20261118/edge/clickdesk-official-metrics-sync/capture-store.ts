@@ -3,7 +3,11 @@ export type RpcClient={rpc(name:string,args?:Record<string,unknown>):PromiseLike
 export function postgresCaptureStore(client:RpcClient):CaptureStore{
  async function call(name:string,args?:Record<string,unknown>){
   const result=await client.rpc(name,args)
-  if(result.error)throw Error('capture_storage_failed')
+  if(result.error){
+   const code=String((result.error as {code?:unknown}).code??'')
+   console.warn('clickdesk_capture_storage',/^[0-9A-Z]{5}$/.test(code)?code:'unavailable')
+   throw Error('capture_storage_failed')
+  }
   return result.data
  }
  function claimArgs(unit:ClaimedUnit){return {p_job_id:unit.jobId,p_key:unit.key,p_token:unit.token}}
