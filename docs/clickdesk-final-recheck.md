@@ -19,3 +19,5 @@ Se também houver relatórios individuais defasados, a investigação enumera os
 A publicação exige que o total de cada cabeçalho individual corresponda aos seus IDs, que a união dos IDs corresponda ao coletivo e que todos os controles existentes de votos e CSAT continuem passando. A prova, as leituras usadas e a linhagem são preservadas em `clickdesk_capture_cohort_proofs`. Há no máximo duas passagens, sem renovar os trinta minutos originais.
 
 Durante uma verificação, o worker reserva a cota de leitura da origem. Uma captura concorrente ainda incompleta é preservada como falha ao ser substituída por uma prova atual validada, impedindo que atualize os indicadores depois. A investigação histórica continua separada e pode permanecer inconclusiva. Nenhuma mensagem é enviada a modelo de IA e nenhum acesso de usuário é criado.
+
+A coleta avança a cada quinze segundos, respeitando no máximo duas tarefas simultâneas com lease válido. Isso reduz o intervalo entre os relatórios sem elevar a concorrência da origem. Retentativas continuam limitadas.
