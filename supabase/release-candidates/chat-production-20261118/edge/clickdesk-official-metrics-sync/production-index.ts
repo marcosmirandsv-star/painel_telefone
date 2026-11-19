@@ -6,6 +6,7 @@ import {runCaptureUnit} from './capture-worker.ts'
 import {postgresCaptureStore} from './capture-store.ts'
 import {finalizeReadyCapture} from './capture-finalizer.ts'
 import {postgresFinalizationStore} from './capture-finalization-store.ts'
+import {runInvestigation,postgresInvestigationStore,InvestigationSourceError} from './investigation.ts'
 const PRODUCTION='https://qmetbydkepfdgfqkdkai.supabase.co'
 const excluded=[1,12,21,26,57,59,61,77]
 Deno.serve(async req=>{
@@ -36,7 +37,16 @@ Deno.serve(async req=>{
     return await response.json()
    })
    const publication=await finalizeReadyCapture(postgresFinalizationStore(admin,registry))
-   return Response.json({ok:true,unit,publication})
+   const investigation=await runInvestigation(postgresInvestigationStore(admin),async(path,signal)=>{
+    const response=await fetch('https://api.desk.click.app/api/v1'+path,{signal,headers:{Authorization:'Bearer '+apiKey,'X-Account-Id':accountId,Accept:'application/json','Cache-Control':'no-cache'}})
+    if(!response.ok){
+     let retry=Number(response.headers.get('retry-after'))
+     if(response.status===429){try{const body=await response.json();retry=Number(body.retry_after)||retry}catch{/* Fixed error only. */}}
+     throw new InvestigationSourceError(response.status,Number.isFinite(retry)&&retry>0?retry:30)
+    }
+    return await response.json()
+   })
+   return Response.json({ok:true,unit,publication,investigation})
   }
   if(body.action!==undefined)return Response.json({error:'Invalid action'},{status:400})
   const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date())
