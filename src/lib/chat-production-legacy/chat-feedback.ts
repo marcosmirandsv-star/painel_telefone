@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { phoneFeedbackHeadings } from '../phone-report.ts'
+import { getPhoneFeedbackFocus, phoneFeedbackActions, phoneFeedbackHeadings, type PhoneCsatBenchmark } from '../phone-report.ts'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -14,6 +14,7 @@ type ChatFeedbackRequest = {
   fallbackText?: string
   factualContext?: string
   phoneComparison?: { periodLabel: string; csat: number; delta: number }
+  phoneBenchmark?: PhoneCsatBenchmark | null
   averageTickets?: number
   podiumPosition?: number
   metric?: {
@@ -29,6 +30,7 @@ type ChatFeedbackRequest = {
     positiveReviews?: number
     negativeReviews?: number
     csatGoal?: number
+    podiumCsatGoal?: number
     reviewGoal?: number
     status?: string | null
     teamPerformance?: number
@@ -83,11 +85,33 @@ function classifyFeedbackCase(body: ChatFeedbackRequest) {
   const reviewGoal = Number(metric.reviewGoal) || 25
   const tickets = Number(metric.totalTickets)
   const averageTickets = Number(body.averageTickets)
+  if (body.serviceModule === 'phone') {
+    if (!Number.isFinite(csat) || !Number.isFinite(reviews)) {
+      return {
+        label: 'Dados insuficientes',
+        guidance: 'Apresente os fatos disponíveis e informe qual indicador precisa ser registrado para definir a orientação.',
+      }
+    }
+    const focus = getPhoneFeedbackFocus({
+      csat, csatGoal, podiumCsatGoal: Number(metric.podiumCsatGoal) || 90,
+      reviewPercentage: reviews, reviewGoal, totalTickets: tickets, averageTickets,
+      benchmarkGap: body.phoneBenchmark?.gap,
+      csatDelta: body.phoneComparison?.delta,
+    })
+    const labels = {
+      csat: 'Melhoria prioritária do CSAT',
+      reviews: 'Avaliações abaixo da meta',
+      volume: 'Atendimentos abaixo da média',
+      maintenance: 'Reconhecimento e manutenção dos resultados',
+    }
+    return {
+      label: labels[focus],
+      guidance: `Prioridade do ciclo: ${labels[focus]}. Dê uma orientação direta ao analista para o próximo atendimento. ${phoneFeedbackActions[focus]}${body.phoneBenchmark && focus === 'csat' ? ` O 3º colocado elegível teve ${body.phoneBenchmark.csat}% de CSAT, uma diferença de ${body.phoneBenchmark.gap} p.p. Essa é uma referência de evolução deste período.` : ''}`,
+    }
+  }
   const history = body.monthlyHistory ?? []
   const previous = history.length > 1 ? history.at(-2) : null
-  const hasRelevantDrop = body.serviceModule === 'phone'
-    ? (body.phoneComparison?.delta ?? 0) <= -2
-    : Boolean(previous) && (csat <= Number(previous?.csat) - 2 || reviews <= Number(previous?.reviewPercentage) - 5)
+  const hasRelevantDrop = Boolean(previous) && (csat <= Number(previous?.csat) - 2 || reviews <= Number(previous?.reviewPercentage) - 5)
 
   if (hasRelevantDrop) {
     return {
@@ -170,9 +194,26 @@ function buildPrompt(body: ChatFeedbackRequest) {
     : '- Não diga para acompanhar semanalmente, porque o módulo do chat é analisado mensalmente.'
   const volumeRule = serviceModule === 'chat'
     ? '- No chat, os tickets entram em uma fila comum e não existe distribuição de chamados pela liderança ou pelo sistema. Cada analista puxa o próximo ticket conforme sua disponibilidade e carga. Nunca mencione "fluxo de distribuição", "distribuição da fila" ou garantia de volume regular. Para investigar volume abaixo da média, proponha observar juntos disponibilidade para puxar novos tickets, tempo dos atendimentos, pausas, ausências e atuação em outras atividades.'
-    : '- Quando o volume estiver abaixo da média, informe a diferença em atendimentos e proponha verificar juntos o contexto operacional, como pausas, ausências, duração dos atendimentos ou atuação em outras atividades. Nunca afirme que existe um método de distribuição de chamados nem atribua a diferença à pessoa sem evidência.'
+    : '- Quando o volume estiver abaixo da média, informe a diferença em atendimentos. Contextualize pausas, ausências e outras atividades quando houver registro. Oriente ações diretas sobre disponibilidade na fila, registro das ligações e comunicação de impedimentos. Atribua uma causa à diferença de volume somente quando houver evidência.'
   const caseProfile = classifyFeedbackCase(body)
   const managerHasContext = Boolean(body.managerNotes?.trim())
+  const phoneDirection = serviceModule === 'phone'
+    ? `
+- Baseie Melhoria ou manutenção e Orientação na prioridade calculada para o ciclo. Descreva ações que o analista deve aplicar, o momento da ligação em que deve aplicá-las e o indicador a acompanhar.
+- Uma posição fora dos três primeiros lugares acompanhada de CSAT inferior ao 3º colocado exige um plano de evolução de CSAT. Reconheça volume e avaliações adequados e mantenha a orientação voltada a melhorar a satisfação.
+- Descreva com precisão a variação entre meses. Uma subida entre semanas do mês atual representa evolução dentro do mês.
+- Formule orientações como recomendações profissionais para o próximo ciclo. Afirme um comportamento passado ou um acordo realizado somente quando houver registro nas observações do gestor.
+- Use ações diretas como explicar uma etapa, confirmar o resultado, recapitular a solução e informar o próximo passo quando houver pendência.
+- Evite encerrar o plano com pedidos genéricos de conversar com a gestão, analisar resultados juntos, identificar abordagens ou descobrir quais práticas sustentaram a constância.
+- Mantenha o diagnóstico coerente com os dados também nos objetivos de reconhecimento e proteção de padrão.
+`
+    : ''
+  const managerVoiceRule = serviceModule === 'phone'
+    ? '- Na orientação, fale diretamente com o analista usando verbos de ação e condutas observáveis. Apresente a conduta esperada e o resultado que ela deve ajudar a melhorar.'
+    : '- Nunca escreva "converse com sua liderança", "alinhe com seu gestor", "procure seu líder" ou orientação equivalente. Quando a verificação depender da gestão, escreva como compromisso direto: "vamos verificar juntos", "vou observar o contexto operacional" ou "combinamos revisar".'
+  const causeRule = serviceModule === 'phone'
+    ? '- Apresente as condutas do plano como recomendações. Afirme a causa de um resultado somente quando houver evidência nos dados ou nas observações.'
+    : '- Não invente a causa de um resultado. Quando a causa não estiver nos dados ou nas observações, registre que gestor e analista vão verificá-la juntos.'
   const phoneComparison = body.phoneComparison
   const comparisonRule = serviceModule === 'phone'
     ? phoneComparison
@@ -200,7 +241,7 @@ Regras obrigatorias:
 - Escreva em portugues do Brasil.
 ${cadenceRule}
 - Fale diretamente com o analista usando "você". Não escreva como um parecer distante sobre "o colaborador".
-- Nunca escreva "converse com sua liderança", "alinhe com seu gestor", "procure seu líder" ou orientação equivalente. Quando a verificação depender da gestão, escreva como compromisso direto: "vamos verificar juntos", "vou observar o contexto operacional" ou "combinamos revisar".
+${managerVoiceRule}
 - Traduza os indicadores: depois de cada número importante, explique em linguagem simples o que ele significa para a pessoa.
 - A taxa de avaliações mede o tamanho da amostra; ela não prova que clientes quiseram elogiar o analista.
 - CSAT alto indica satisfação registrada, mas não comprova sozinho empatia, clareza, agilidade ou qualquer comportamento que não esteja nas observações do gestor.
@@ -210,7 +251,8 @@ ${volumeBaseRule}
 ${volumeRule}
 - Só chame uma colocação de pódio quando ela estiver entre o primeiro e o terceiro lugar. Nas demais, diga "posição no ranking".
 ${comparisonRule}
-- Não invente a causa de um resultado. Quando a causa não estiver nos dados ou nas observações, registre que gestor e analista vão verificá-la juntos.
+${causeRule}
+${phoneDirection}
 - Não comece com parabéns genérico. Comece pelo aspecto que torna este caso diferente dos demais.
 - A base do sistema é uma ficha factual, não um modelo de redação. Não copie sua ordem, frases ou cadência. Use-a somente para preservar fatos e limites da análise.
 - Se houver observações do gestor, trate-as como principal fonte de personalização e conecte-as ao combinado. Se não houver, não invente comportamento observado nem contexto operacional.
@@ -234,6 +276,7 @@ Analista: ${metric?.analystName}
 Equipe: ${metric?.teamName ?? 'Equipe não informada'}
 Status: ${metric?.status ?? 'Não informado'}
 CSAT: ${metric?.csat}% | Meta CSAT: ${metric?.csatGoal}%
+${body.phoneBenchmark ? `Referência histórica do 3º colocado elegível: ${body.phoneBenchmark.csat}% de CSAT | Diferença para o analista: ${body.phoneBenchmark.gap} p.p.` : ''}
 Avaliações: ${metric?.reviewPercentage}% | Meta avaliações: ${metric?.reviewGoal ?? 25}%
 Envio/sem avaliação: ${metric?.sendingPercentage}%
 Atendimentos totais: ${metric?.totalTickets}
@@ -335,6 +378,14 @@ function assertCompleteFeedback(text: string, body: ChatFeedbackRequest) {
         : ['Leitura', 'Forcas', 'Plano', 'Expectativa']
 
   const normalizedText = cleanText.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  if (body.serviceModule === 'phone') {
+    const hasVaguePlan = /\b(?:vamos|iremos)\s+(?:juntos\s+)?(?:analisar|verificar|identificar|entender|descobrir|observar)\b/.test(normalizedText)
+      || /\b(?:identificar|descobrir)\b[^.\n]{0,100}\b(?:abordagens|praticas)\b/.test(normalizedText)
+    const inventsAgreement = !body.managerNotes?.trim() && /\b(?:combinamos|foi alinhad[oa]|foram alinhad[oa]s)\b/.test(normalizedText)
+    if (hasVaguePlan || inventsAgreement) {
+      throw new Error('A orientação do telefone precisa de ações diretas e acordos sustentados pelas observações do gestor.')
+    }
+  }
   const matchedSections = requiredSections.filter((section) => normalizedText.includes(section.toLowerCase())).length
   const phoneHeadings = style === 'mimo' || style === 'sare' ? phoneFeedbackHeadings[style] : null
   const normalizedHeading = (heading: string) => heading.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
