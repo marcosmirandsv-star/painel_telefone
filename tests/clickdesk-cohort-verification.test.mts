@@ -7,7 +7,7 @@ const vote=(id:number)=>({ticket_id:id,number:id+100,owner:'Carlos Henrique',sen
 function fixture(count=2):State{return {phase:'verify',context:{id:'parent',start:'2026-11-01',end:'2026-11-19',owners:[23],registry:[{id:23,name:'Carlos Lemos'}],parts:{group:report(1),'owner:23':report(1)},times:{group:'2026-11-19T14:00:00Z','owner:23':'2026-11-19T14:01:00Z'},verifyCurrent:true},ownerIndex:1,page:1,pageTotal:null,pageCount:0,seen:[],tickets:Array.from({length:count},(_,i)=>({id:42+i,number:142+i,owner:23,department:3,channel:'whatsapp',created_at:'2026-11-10T12:00:00Z',updated_at:'2026-11-19T14:10:00Z'})),recent:[],events:{},eventIndex:0,lastUpdated:null,freshGroup:null,freshGroupAt:null}}
 function source(count=2,csat=count){return async(path:string)=>{const u=new URL('https://example.test'+path);if(u.pathname.endsWith('/agents'))return report(count,csat);const department=u.searchParams.get('department_id');return {total:department==='3'?count:0,last_page:1,data:department==='3'?Array.from({length:count},(_,i)=>vote(42+i)):[]}}}
 const now=()=> '2026-11-19T14:15:00Z'
-async function ready(s:State,fetchPart=source()){for(let n=0;n<10&&s.phase==='verify'&&s.verification?.stage!=='publish';n++)await advanceCohortVerification(s,fetchPart,now);return s}
+async function ready(s:State,fetchPart=source()){for(let n=0;n<30&&s.phase==='verify'&&s.verification?.stage!=='publish';n++)await advanceCohortVerification(s,fetchPart,now);return s}
 test('fresh owner IDs select real report refreshes; all original source parts stay unchanged',async()=>{
  const s=fixture(),original=JSON.stringify(s.context.parts),paths:string[]=[]
  await ready(s,async p=>{paths.push(p);return source()(p)});assert.equal(s.verification?.stage,'publish')
@@ -38,4 +38,19 @@ test('publication cannot be requested before all fresh source checks finish',asy
 })
 test('a duplicated technical ID cannot validate an otherwise equal total',async()=>{
  const s=fixture();s.tickets[1].id=s.tickets[0].id;await ready(s);assert.equal(s.phase,'owners');assert.equal(s.verification?.cycle,2)
+})
+
+test('a report that catches up is reread without replacing verified IDs or other owners',async()=>{
+ const s=fixture(),original=JSON.stringify(s.context.parts),ids=JSON.stringify(s.tickets),paths:string[]=[];let headers=0
+ await ready(s,async p=>{paths.push(p);const u=new URL('https://example.test'+p);if(u.pathname.endsWith('/agents'))return report(++headers===2?3:2);return source()(p)})
+ assert.equal(s.verification?.stage,'publish');assert.equal(s.verification?.headerRechecks,1)
+ assert.equal(JSON.stringify(s.tickets),ids);assert.equal(JSON.stringify(s.context.parts),original)
+ assert.equal(paths.filter(p=>p.includes('/agents')).length,3)
+ assert.equal(paths.filter(p=>p.includes('/ratings')).length,4)
+})
+
+test('targeted header retries stay bounded and never overwrite the collective reference',async()=>{
+ const s=fixture();let groupReads=0,ownerReads=0
+ await ready(s,async p=>{const u=new URL('https://example.test'+p);if(u.pathname.endsWith('/agents')){if(groupReads){ownerReads++;return report(3)}groupReads++;return report(2)}return source()(p)})
+ assert.equal(s.phase,'owners');assert.equal(s.verification?.cycle,2);assert.equal(groupReads,1);assert.equal(ownerReads,3)
 })

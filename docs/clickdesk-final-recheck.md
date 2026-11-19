@@ -21,3 +21,5 @@ A publicação exige que o total de cada cabeçalho individual corresponda aos s
 Durante uma verificação, o worker reserva a cota de leitura da origem. Uma captura concorrente ainda incompleta é preservada como falha ao ser substituída por uma prova atual validada, impedindo que atualize os indicadores depois. A investigação histórica continua separada e pode permanecer inconclusiva. Nenhuma mensagem é enviada a modelo de IA e nenhum acesso de usuário é criado.
 
 A coleta avança a cada quinze segundos, respeitando no máximo duas tarefas simultâneas com lease válido. Isso reduz o intervalo entre os relatórios sem elevar a concorrência da origem. Retentativas continuam limitadas.
+
+Se um cabeçalho ainda divergir dos IDs ao final das avaliações, somente os responsáveis divergentes recebem até duas releituras adicionais por passagem. A referência coletiva e os IDs ficam intactos; todas as páginas de avaliações são coletadas novamente antes de repetir as mesmas validações. A persistência da divergência impede publicar e não renova o prazo original.

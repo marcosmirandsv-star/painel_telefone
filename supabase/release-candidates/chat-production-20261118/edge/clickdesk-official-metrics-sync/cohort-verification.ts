@@ -20,6 +20,16 @@ export function restartCohortVerification(s:State,reason:string){
  s.verification={cycle:cycle+1,stage:'headers',changed:[],index:0,departmentIndex:0,page:1,pages:1,total:null,count:0,overrides:headers,times,reason}
  s.phase='owners';s.ownerIndex=0;s.page=1;s.pageTotal=null;s.pageCount=0;s.seen=[];s.tickets=[];s.lastUpdated=null
 }
+export function retryChangedCohortHeaders(s:State){
+ const v=s.verification
+ if(!v||!v.overrides.group||(v.headerRechecks??0)>=2)return false
+ const parts=verifiedParts(s),changed=s.context.owners.filter(id=>receivedForOwner(parts['owner:'+id],id)!==s.tickets.filter(t=>t.owner===id).length)
+ if(!changed.length)return false
+ v.headerRechecks=(v.headerRechecks??0)+1;v.changed=changed;v.index=0;v.stage='headers'
+ v.departmentIndex=0;v.page=1;v.pages=1;v.total=null;v.count=0
+ for(const k of Object.keys(v.overrides))if(k.startsWith('ratings:')){delete v.overrides[k];delete v.times[k]}
+ return true
+}
 export async function advanceCohortVerification(s:State,fetchPart:(path:string,signal:AbortSignal)=>Promise<unknown>,now:()=>string){
  const c=s.context
  if(!s.verification||s.verification.stage==='headers'&&s.verification.index===0&&s.verification.changed.length===0&&!s.verification.overrides.group){
@@ -47,7 +57,7 @@ export async function advanceCohortVerification(s:State,fetchPart:(path:string,s
   if(v.page<v.pages)v.page++;else{
    if(v.count!==v.total)throw Error('verification_ratings_incomplete')
    v.departmentIndex++;v.page=1;v.pages=1;v.total=null;v.count=0
-   if(v.departmentIndex===2){try{verifyCohort(s);v.stage='publish'}catch{restartCohortVerification(s,'cohort_source_still_moving')}}
+   if(v.departmentIndex===2){try{verifyCohort(s);v.stage='publish'}catch{if(!retryChangedCohortHeaders(s))restartCohortVerification(s,'cohort_source_still_moving')}}
   }
  }else if(v.stage==='group'){
   const p=new URLSearchParams({from:c.start,to:c.end});[3,12].forEach(d=>p.append('department_ids[]',String(d)));c.owners.forEach(id=>p.append('owner_ids[]',String(id)))
