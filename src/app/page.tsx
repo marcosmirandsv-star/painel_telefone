@@ -383,14 +383,14 @@ export default function Home() {
     const recoveryFromHash = new URLSearchParams(window.location.hash.replace('#', ''))
     const recoveryFromSearch = new URLSearchParams(window.location.search)
     const cameFromRecoveryLink =
-    const cameFromInviteLink = recoveryFromSearch.get('convite') === '1'
       recoveryFromHash.get('type') === 'recovery' ||
       recoveryFromSearch.get('type') === 'recovery'
+    const cameFromInviteLink = recoveryFromSearch.get('convite') === '1'
 
     async function loadSession() {
       const { data } = await supabase.auth.getUser()
       setUser(data.user)
-      if (cameFromRecoveryLink || cameFromInviteLink) {
+      if ((cameFromRecoveryLink || cameFromInviteLink) && data.user) {
         setIsPasswordRecovery(true)
         setMessage(cameFromInviteLink ? 'Convite aceito. Defina sua senha pessoal para ativar o acesso ao Chat.' : 'Digite uma nova senha para concluir a recuperação.')
       }
@@ -400,10 +400,10 @@ export default function Home() {
     loadSession()
 
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && cameFromInviteLink)) {
+      if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && cameFromInviteLink && session?.user)) {
         setUser(session?.user ?? null)
         setIsPasswordRecovery(true)
-        setMessage('Digite uma nova senha para concluir a recuperação.')
+        setMessage(cameFromInviteLink ? 'Convite aceito. Defina sua senha pessoal para ativar o acesso ao Chat.' : 'Digite uma nova senha para concluir a recuperação.')
       }
     })
 
