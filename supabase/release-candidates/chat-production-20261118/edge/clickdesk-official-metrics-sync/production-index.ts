@@ -32,7 +32,9 @@ Deno.serve(async req=>{
   if(body.action==='work'){
    const apiKey=String(auth.data.api_key??''),accountId=String(auth.data.account_id??'')
    if(!apiKey||!accountId)throw Error('missing_source_config')
-   const unit=await runCaptureUnit(postgresCaptureStore(admin),async(path,signal)=>{
+   const priority=await admin.rpc('clickdesk_has_verification_work')
+   if(priority.error)throw Error('verification_priority_unavailable')
+   const unit=priority.data?{status:'idle' as const}:await runCaptureUnit(postgresCaptureStore(admin),async(path,signal)=>{
     const response=await fetch('https://api.desk.click.app/api/v1'+path,{signal,headers:{Authorization:'Bearer '+apiKey,'X-Account-Id':accountId,Accept:'application/json'}})
     if(!response.ok){console.warn('clickdesk_capture_source_http',response.status);throw Error('source_unavailable')}
     return await response.json()
@@ -47,7 +49,7 @@ Deno.serve(async req=>{
      throw new InvestigationSourceError(response.status,Number.isFinite(retry)&&retry>0?retry:30)
     }
     return await response.json()
-   })
+   },true)
    return Response.json({ok:true,unit,publication,recheck,investigation})
   }
   if(body.action!==undefined)return Response.json({error:'Invalid action'},{status:400})
