@@ -11,3 +11,11 @@ Se tudo coincidir, uma captura sucessora explícita reutiliza as partes originai
 O job original permanece `failed`. A investigação por IDs e eventos segue independente, com referência à captura sucessora quando houver. Uma nova coleta concorrente ou mais recente impede recuperar a anterior. Leases, token de operação e publicação idempotente impedem duplicação por retry.
 
 Essa etapa não garante sucesso numa origem que continue divergente. Nesse caso, nenhum indicador é publicado e a investigação mantém o resultado que as evidências sustentarem.
+
+## Verificação da coorte por IDs
+
+Se também houver relatórios individuais defasados, a investigação enumera os IDs atuais de cada responsável, valida os filtros, a paginação e a ausência de duplicidade, e relê somente os cabeçalhos individuais cujas quantidades mudaram. Busca novamente todas as páginas de avaliação e, por último, o coletivo. Nenhum valor é calculado para substituir um cabeçalho: os IDs apenas verificam as quantidades efetivamente retornadas pela origem.
+
+A publicação exige que o total de cada cabeçalho individual corresponda aos seus IDs, que a união dos IDs corresponda ao coletivo e que todos os controles existentes de votos e CSAT continuem passando. A prova, as leituras usadas e a linhagem são preservadas em `clickdesk_capture_cohort_proofs`. Há no máximo duas passagens, sem renovar os trinta minutos originais.
+
+Durante uma verificação, o worker reserva a cota de leitura da origem. Uma captura concorrente ainda incompleta é preservada como falha ao ser substituída por uma prova atual validada, impedindo que atualize os indicadores depois. A investigação histórica continua separada e pode permanecer inconclusiva. Nenhuma mensagem é enviada a modelo de IA e nenhum acesso de usuário é criado.
