@@ -116,3 +116,6 @@ begin
  return created_id;
 end $function$
 
+
+-- Reduce collection skew without increasing the two-request concurrency cap.
+select cron.alter_job(job_id:=(select jobid from cron.job where jobname='clickdesk-official-durable-worker'),schedule:='15 seconds');
