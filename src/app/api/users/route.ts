@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { isChatProductionEnabled } from '@/lib/chat-production-gate'
 
 type ProfileRole = 'master' | 'coordenadora' | 'analista'
 
@@ -75,6 +76,7 @@ export async function POST(request: NextRequest) {
   const password = typeof body?.password === 'string' ? body.password : ''
   const role = normalizeRole(body?.role)
   const analystId = typeof body?.analystId === 'string' && body.analystId ? body.analystId : null
+  const chatAnalystId = typeof body?.chatAnalystId === 'string' && body.chatAnalystId ? body.chatAnalystId : null
 
   if (!fullName || !email || !password || !role || !allowedRoles.includes(role)) {
     return NextResponse.json({ error: 'Preencha nome, e-mail, senha e perfil.' }, { status: 400 })
@@ -87,7 +89,19 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  if (role === 'analista' && !analystId) {
+  if (chatAnalystId) {
+    if (!isChatProductionEnabled()) return NextResponse.json({ error: 'O acesso do Chat ainda não foi liberado neste ambiente.' }, { status: 404 })
+    if (role !== 'analista' || analystId || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(chatAnalystId)) {
+      return NextResponse.json({ error: 'Selecione um vínculo individual válido do Chat.' }, { status: 400 })
+    }
+    const analyst = await admin.from('chat_analysts').select('id,name,active').eq('id', chatAnalystId).maybeSingle()
+    if (analyst.error || !analyst.data?.active) return NextResponse.json({ error: 'Analista do Chat indisponível ou inativo.' }, { status: 400 })
+    const nameKey = String(analyst.data.name).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
+    const registry = await admin.from('clickdesk_official_owner_registry').select('clickdesk_owner_id').eq('source_owner_key', nameKey).eq('source_scope', 'suporte_erp_fiscal').eq('active', true).maybeSingle()
+    if (registry.error || !registry.data) return NextResponse.json({ error: 'O analista ainda não pertence ao quadro oficial do Chat.' }, { status: 400 })
+  }
+
+  if (role === 'analista' && !analystId && !chatAnalystId) {
     return NextResponse.json(
       { error: 'Usuários analistas precisam ser vinculados a um cadastro de analista.' },
       { status: 400 },
@@ -120,6 +134,7 @@ export async function POST(request: NextRequest) {
       role,
       full_name: fullName,
       analyst_id: role === 'analista' ? analystId : null,
+      ...(chatAnalystId ? { chat_analyst_id: chatAnalystId } : {}),
     },
     { onConflict: 'id' },
   )
