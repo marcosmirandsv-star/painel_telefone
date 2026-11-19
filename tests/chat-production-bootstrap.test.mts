@@ -11,7 +11,7 @@ const code = ts.transpileModule(source.replace(/^import[^\n]*\n/gm, '').replace(
 const production = { CHAT_PRODUCTION_BOOTSTRAP_ENABLED: 'true', VERCEL_ENV: 'production', NEXT_PUBLIC_SUPABASE_URL: 'https://qmetbydkepfdgfqkdkai.supabase.co', CLICKDESK_API_KEY: 'source-fixture', CLICKDESK_ACCOUNT_ID: 'account-fixture' }
 function harness(env = production, authenticated = true, conflict = false) {
   const calls: unknown[] = []
-  const post = vm.runInNewContext(code, { process: { env }, json: Response.json, isCxCron: () => authenticated,
+  const post = vm.runInNewContext(code, { process: { env }, json: (body: unknown, status = 200) => Response.json(body, { status }), isCxCron: () => authenticated,
     adminClient: () => ({ rpc: async (name: string, params: unknown) => { calls.push({ name, params }); return { data: !conflict, error: conflict ? {} : null } } }),
   }) as (request: Request) => Promise<Response>
   return { calls, post: () => post(new Request('https://example.test', { method: 'POST' })) }
