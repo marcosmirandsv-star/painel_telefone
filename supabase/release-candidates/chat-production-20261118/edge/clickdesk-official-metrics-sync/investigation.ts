@@ -184,7 +184,8 @@ export async function runInvestigation(store:Omit<ReturnType<typeof postgresInve
   const source=verifyCurrent?bounded:fetchPart
   let outcome=await advanceInvestigation(structuredClone(state),source)
   // Drain cheap ID/pagination work within one bounded lease; never wait a minute per owner.
-  while(verifyCurrent&&outcome.status==='pending'&&['owners','verify'].includes(outcome.state.phase)&&outcome.state.verification?.stage!=='publish'&&Date.now()<deadline){
+  let drained=0
+  while(verifyCurrent&&outcome.status==='pending'&&['owners','verify'].includes(outcome.state.phase)&&outcome.state.verification?.stage!=='publish'&&Date.now()<deadline&&drained++<40){
    state=outcome.state
    outcome=await advanceInvestigation(structuredClone(state),source)
   }
@@ -192,6 +193,7 @@ export async function runInvestigation(store:Omit<ReturnType<typeof postgresInve
   return {status:accepted?outcome.status:'stale',jobId:claim.jobId}
  }catch(error){
   if(error instanceof VerificationBudget){const accepted=await store.save(claim,state,{reason:'verifying_current_ticket_ids',phase:state.phase},'pending');return {status:accepted?'pending':'stale',jobId:claim.jobId}}
+  if(verifyCurrent&&state.phase==='owners'&&error instanceof EvidenceError&&error.message==='duplicate_or_moving_ticket'&&(state.verification?.cycle??1)<2){restartCohortVerification(state,'owner_changed_during_id_read');const accepted=await store.save(claim,state,{reason:'verifying_current_ticket_ids'},'pending');return {status:accepted?'pending':'stale',jobId:claim.jobId}}
   if(verifyCurrent&&state.phase==='owners'&&error instanceof EvidenceError&&['owner_list_incomplete','list_pagination_changed'].includes(error.message)&&(state.ownerReadRetries??0)<2){
    const owner=state.context.owners[state.ownerIndex];state.tickets=state.tickets.filter(t=>t.owner!==owner);state.ownerReadRetries=(state.ownerReadRetries??0)+1;state.page=1;state.pageTotal=null;state.pageCount=0;state.seen=[]
    const accepted=await store.save(claim,state,{reason:'source_list_changed_retry',owner_id:owner},'pending',5)
