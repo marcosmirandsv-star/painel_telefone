@@ -2677,7 +2677,7 @@ function ChatModuleDashboard({
       } = await supabase.auth.getSession()
 
       if (!session?.access_token) {
-        setClickDeskTestResult({ configured: false, error: 'Sua sessão de homologação não está ativa.' })
+        setClickDeskTestResult({ configured: false, error: 'Sua sessão expirou. Entre novamente.' })
         return
       }
 
@@ -2717,7 +2717,7 @@ function ChatModuleDashboard({
       } = await supabase.auth.getSession()
 
       if (!session?.access_token) {
-        setClickDeskAnalystHistory({ erro: 'Sua sessão de homologação não está ativa.' })
+        setClickDeskAnalystHistory({ erro: 'Sua sessão expirou. Entre novamente.' })
         return
       }
 
@@ -2845,7 +2845,7 @@ function ChatModuleDashboard({
       } = await supabase.auth.getSession()
 
       if (!session?.access_token) {
-        setClickDeskConversationDiagnostic({ error: 'Sua sessão de homologação não está ativa.' })
+        setClickDeskConversationDiagnostic({ error: 'Sua sessão expirou. Entre novamente.' })
         return
       }
 
@@ -2929,7 +2929,7 @@ function ChatModuleDashboard({
       } = await supabase.auth.getSession()
 
       if (!session?.access_token) {
-        setClickDeskClosureMessage('Sua sessão de homologação não está ativa.')
+        setClickDeskClosureMessage('Sua sessão expirou. Entre novamente.')
         return
       }
 
@@ -2996,7 +2996,7 @@ function ChatModuleDashboard({
       } = await supabase.auth.getSession()
 
       if (!session?.access_token) {
-        setClickDeskClosureMessage('Sua sessão de homologação não está ativa.')
+        setClickDeskClosureMessage('Sua sessão expirou. Entre novamente.')
         return
       }
 
@@ -3049,7 +3049,7 @@ function ChatModuleDashboard({
       } = await supabase.auth.getSession()
 
       if (!session?.access_token) {
-        setClickDeskAiRoutingDiagnostic({ error: 'Sua sessão de homologação não está ativa.' })
+        setClickDeskAiRoutingDiagnostic({ error: 'Sua sessão expirou. Entre novamente.' })
         return
       }
 
@@ -3095,7 +3095,7 @@ function ChatModuleDashboard({
       } = await supabase.auth.getSession()
 
       if (!session?.access_token) {
-        setClickDeskQualitativeResult({ error: 'Sua sessão de homologação não está ativa.' })
+        setClickDeskQualitativeResult({ error: 'Sua sessão expirou. Entre novamente.' })
         return
       }
 
@@ -3145,7 +3145,7 @@ function ChatModuleDashboard({
       } = await supabase.auth.getSession()
 
       if (!session?.access_token) {
-        setClickDeskQualitativeResult({ error: 'Sua sessão de homologação não está ativa.' })
+        setClickDeskQualitativeResult({ error: 'Sua sessão expirou. Entre novamente.' })
         return
       }
 
@@ -3356,7 +3356,7 @@ function ChatModuleDashboard({
     }
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) throw new Error('Sua sessão de homologação não está ativa.')
+      if (!session?.access_token) throw new Error('Sua sessão expirou. Entre novamente.')
       const [year, month] = chat2PeriodKey.split('-').map(Number)
       const period = getChatMonthPeriod(year, month)
       const params = new URLSearchParams({ start: period.start, end: period.end })
@@ -3385,7 +3385,7 @@ function ChatModuleDashboard({
     setClickDeskOperation360Message('')
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) throw new Error('Sua sessão de homologação não está ativa.')
+      if (!session?.access_token) throw new Error('Sua sessão expirou. Entre novamente.')
       const response = await fetch('/api/clickdesk/operation-360/jobs', {
         method: 'POST', headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ start: chat2SelectedPeriod.start, end: chat2SelectedPeriod.end, team_id: selectedTeamId === 'all' ? null : selectedTeamId, retry_failed: retryFailed }),
@@ -3432,7 +3432,7 @@ function ChatModuleDashboard({
       if (!session?.access_token) {
         setClickDeskOperation360Evidence({
           ticket_id: ticketId,
-          error: 'Sua sessão de homologação não está ativa.',
+          error: 'Sua sessão expirou. Entre novamente.',
         })
         return
       }
@@ -3498,7 +3498,7 @@ function ChatModuleDashboard({
 
         if (!session?.access_token) {
           if (!cancelled) {
-            setClickDeskQualitativeSummary({ error: 'Sua sessão de homologação não está ativa.' })
+            setClickDeskQualitativeSummary({ error: 'Sua sessão expirou. Entre novamente.' })
           }
           return
         }
@@ -5970,7 +5970,7 @@ function ChatModuleDashboard({
         clickDeskPersistedMetrics?.reconciliation?.coverage === 'audit_sample_only' && (
           <div role="status" className="rounded-lg border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-100">
             <strong>AMOSTRA PARCIAL AUDITADA — NÃO É O FECHAMENTO OFICIAL</strong>
-            <p className="mt-2">Os indicadores abaixo representam somente tickets comprovados e gravados no ledger de homologação. Ainda falta validar a descoberta de todos os tickets da competência. Não usar posições no pódio, metas atingidas ou volume comparativo para decisões finais.</p>
+            <p className="mt-2">Os indicadores abaixo representam somente tickets comprovados e registrados na base de evidências. Ainda falta validar a descoberta de todos os tickets da competência. Não usar posições no pódio, metas atingidas ou volume comparativo para decisões finais.</p>
             <p className="mt-2 text-xs">Amostra: {clickDeskPersistedMetrics.reconciliation.coverage_sources?.map(item => `${item.confirmed_count} confirmados / ${item.candidate_count} candidatos · ${item.pending_count} pendentes`).join(' · ') || 'cobertura em conferência'}.</p>
           </div>
         )}
@@ -8049,7 +8049,7 @@ function ChatModuleDashboard({
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-md border border-violet-400/20 bg-violet-400/5 px-3 py-2 text-xs font-semibold text-violet-200">
-                Homologação · seleção para feedback
+                Seleção para feedback
               </span>
               <span className="rounded-md border border-white/10 bg-slate-950/40 px-3 py-2 text-xs font-semibold text-slate-300">
                 Abrir governança qualitativa
