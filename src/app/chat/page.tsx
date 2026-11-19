@@ -17,6 +17,8 @@ import { sumChatVoteRows } from '@/lib/clickdesk-csat'
 import ChatTimeFilter from '@/components/chat/ChatTimeFilter'
 import ChatNeutralReviews from '@/components/chat/ChatNeutralReviews'
 import AnalystReviews from '@/components/chat/AnalystReviews'
+import CxDiagnostics from '@/components/CxDiagnostics'
+import ChatCaseManagement from '@/components/chat/ChatCaseManagement'
 import { chatTimeRange, type ChatTimeMode } from '@/lib/chat-time-filter'
 import ClickDeskSourceReport from '@/components/chat/ClickDeskSourceReport'
 const QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS = true
@@ -2487,6 +2489,7 @@ function ChatModuleDashboard({
   onImportComplete: () => Promise<void>
 }) {
   const isManagementUser = role !== 'analyst'
+  const [chatCaseRefresh,setChatCaseRefresh]=useState(0)
   const periods = useMemo(() => {
     const map = new Map<string, { label: string; year: number; monthNumber: number; start: string }>()
     metrics.forEach((metric) => {
@@ -7244,6 +7247,7 @@ function ChatModuleDashboard({
         </div>
       </section>
       <section className={chatActiveTab === 'operation360' ? 'workspace-content-section' : 'hidden'}>
+        {isManagementUser && chatActiveTab === 'operation360' && <details className="workspace-collapsible"><summary className="cursor-pointer"><h2 className="text-xl font-bold">Critérios do atendimento e evidências preservadas</h2><p className="mt-2 text-sm text-slate-400">Acolhimento, entendimento, clareza, diligência, continuidade e encerramento. Histórico qualitativo até D-1, com cobertura própria; não altera CSAT, volume ou avaliações oficiais.</p></summary><div className="mt-5"><CxDiagnostics diagnosisOnly initialScope={{start:chatAuditPeriod.start,end:chatAuditPeriod.end,teamId:selectedTeamId==='all'?'':selectedTeamId}} key={`diagnosis:${chatAuditPeriod.start}:${chatAuditPeriod.end}:${selectedTeamId}`} onCaseCreated={()=>onChatActiveTabChange('podium')}/></div></details>}
         {clickDeskOperation360Loading && !clickDeskOperation360 ? (
           <div className="rounded-xl border border-white/10 bg-slate-950/30 p-6 text-sm text-slate-400">
             Montando a leitura 360º da operação...
@@ -7879,6 +7883,7 @@ function ChatModuleDashboard({
         </div>
       </section>
 
+      {isManagementUser && chatActiveTab === 'podium' && <details id="chat-action-follow-up" className="workspace-collapsible"><summary className="cursor-pointer"><h2 className="text-xl font-bold">Investigações, decisões e acompanhamento</h2><p className="mt-2 text-sm text-slate-400">Valide as leituras, registre ações com responsável e prazo e acompanhe o resultado. O histórico existente foi preservado.</p></summary><div className="mt-5"><CxDiagnostics initialScope={{start:chatAuditPeriod.start,end:chatAuditPeriod.end,teamId:selectedTeamId==='all'?'':selectedTeamId}} key={`actions:${chatAuditPeriod.start}:${chatAuditPeriod.end}:${selectedTeamId}`} onCaseCreated={()=>setChatCaseRefresh(v=>v+1)}/><ChatCaseManagement initialTeamId={selectedTeamId==='all'?'':selectedTeamId} key={`cases:${selectedTeamId}:${chatCaseRefresh}`}/></div></details>}
       <section id="chat-management-priorities" className={chatActiveTab === 'podium' ? 'workspace-content-section' : 'hidden'}>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -11694,7 +11699,7 @@ function getSupabaseMessage(message: string) {
 
 function ChatProductionContent(){
  const [refresh,setRefresh]=useState(0),[state,setState]=useState<{role:UserRole;chatId:string|null;teams:ChatTeam[];analysts:ChatAnalyst[];metrics:ChatMonthlyMetric[];manual:ChatPodiumManual[];excluded:ChatPodiumExclusion[]}|null>(null),[error,setError]=useState('')
- const [tab,setTab]=useState<ChatActiveTab>('overview')
+ const [tab,setTab]=useState<ChatActiveTab>(()=>typeof window!=='undefined'&&new URLSearchParams(window.location.search).get('view')==='operation360'?'operation360':'overview')
  const enabled=process.env.NEXT_PUBLIC_CHAT_OFFICIAL_ENABLED==='true'&&process.env.NEXT_PUBLIC_SUPABASE_URL==='https://qmetbydkepfdgfqkdkai.supabase.co'
  useEffect(()=>{if(!enabled)return;let cancelled=false;const identityChanged=createSessionIdentityGuard();const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{if(identityChanged(session?.user))window.location.reload()});void(async()=>{try{
   const auth=await supabase.auth.getUser();if(identityChanged(auth.data.user)){window.location.reload();return}if(!auth.data.user)throw Error('Entre no sistema para acessar o Chat.')
