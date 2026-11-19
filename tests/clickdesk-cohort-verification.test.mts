@@ -27,7 +27,7 @@ test('a changed CSAT still blocks publication even when Received and IDs agree',
  const s=fixture();await ready(s,source(2,3));assert.equal(s.phase,'owners');assert.equal(s.verification?.cycle,2)
 })
 test('an independent report that differs from the ID witness is never synthesized',async()=>{
- const s=fixture();await ready(s,source(3));assert.equal(s.phase,'owners');assert.equal(s.verification?.cycle,2)
+ const s=fixture();let reads=0;await ready(s,async p=>p.includes('/agents')?report(++reads===1?2:3):source()(p));assert.equal(s.phase,'owners');assert.equal(s.verification?.cycle,2)
 })
 test('two inconsistent verification passes stop and preserve the investigation',async()=>{
  const s=fixture();await ready(s,source(3));s.phase='verify';s.ownerIndex=1;s.tickets=fixture().tickets
