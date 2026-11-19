@@ -18,6 +18,7 @@ import ChatTimeFilter from '@/components/chat/ChatTimeFilter'
 import ChatNeutralReviews from '@/components/chat/ChatNeutralReviews'
 import AnalystReviews from '@/components/chat/AnalystReviews'
 import ChatAccessManagement from '@/components/chat/ChatAccessManagement'
+import ChatReconciliationStatus from '@/components/chat/ChatReconciliationStatus'
 import CxDiagnostics from '@/components/CxDiagnostics'
 import ChatCaseManagement from '@/components/chat/ChatCaseManagement'
 import { chatTimeRange, type ChatTimeMode } from '@/lib/chat-time-filter'
@@ -5988,6 +5989,7 @@ function ChatModuleDashboard({
         <p className="mt-2">A contagem não inclui tickets ainda não descobertos; consulte a cobertura da captura. Conferência {formatDateTime(clickDeskPersistedMetrics.reconciliation.captured_at)}. Casos inconclusivos não recebem crédito arbitrário nem são tratados como resoluções ou avaliações.</p>
         <ul className="mt-2 space-y-1">{clickDeskPersistedMetrics.reconciliation.pending.map(item => <li key={item.ticket_id}>Ticket {item.ticket_id}: {reconciliationReason(item.reason)}</li>)}</ul>
       </details>}
+      {chatActiveTab === 'overview' && isManagementUser && <ChatReconciliationStatus start={chat2SelectedPeriod.start} end={chat2SelectedPeriod.end} />}
       {chatActiveTab === 'overview' && isManagementUser && <ClickDeskSourceReport key={`${chat2SelectedPeriod.start}:${chat2SelectedPeriod.end}`} start={chat2SelectedPeriod.start} end={chat2SelectedPeriod.end} />}
       {chatActiveTab === 'overview' && chatMetricsReady && (
         <section className="workspace-page-heading">
