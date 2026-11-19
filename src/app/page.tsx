@@ -385,7 +385,7 @@ export default function Home() {
     const cameFromRecoveryLink =
       recoveryFromHash.get('type') === 'recovery' ||
       recoveryFromSearch.get('type') === 'recovery'
-    const cameFromInviteLink = recoveryFromSearch.get('convite') === '1'
+    const cameFromInviteLink = recoveryFromSearch.get('convite') === '1' || recoveryFromHash.get('type') === 'invite'
 
     async function loadSession() {
       const { data } = await supabase.auth.getUser()
@@ -632,7 +632,8 @@ export default function Home() {
     setNewPassword('')
     setIsPasswordRecovery(false)
     setMessage('Senha atualizada com sucesso.')
-    if (new URLSearchParams(window.location.search).get('convite') === '1') {
+    if (new URLSearchParams(window.location.search).get('convite') === '1' ||
+      new URLSearchParams(window.location.hash.replace('#', '')).get('type') === 'invite') {
       window.location.replace('/chat')
     }
   }
