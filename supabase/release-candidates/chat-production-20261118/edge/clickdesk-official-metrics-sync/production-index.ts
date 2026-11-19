@@ -7,6 +7,7 @@ import {postgresCaptureStore} from './capture-store.ts'
 import {finalizeReadyCapture} from './capture-finalizer.ts'
 import {postgresFinalizationStore} from './capture-finalization-store.ts'
 import {runInvestigation,postgresInvestigationStore,InvestigationSourceError} from './investigation.ts'
+import {runGroupRecheck,postgresGroupRecheckStore} from './group-recheck.ts'
 const PRODUCTION='https://qmetbydkepfdgfqkdkai.supabase.co'
 const excluded=[1,12,21,26,57,59,61,77]
 Deno.serve(async req=>{
@@ -37,6 +38,7 @@ Deno.serve(async req=>{
     return await response.json()
    })
    const publication=await finalizeReadyCapture(postgresFinalizationStore(admin,registry))
+   const recheck=await runGroupRecheck(postgresGroupRecheckStore(admin),registry)
    const investigation=await runInvestigation(postgresInvestigationStore(admin),async(path,signal)=>{
     const response=await fetch('https://api.desk.click.app/api/v1'+path,{signal,headers:{Authorization:'Bearer '+apiKey,'X-Account-Id':accountId,Accept:'application/json','Cache-Control':'no-cache'}})
     if(!response.ok){
@@ -46,7 +48,7 @@ Deno.serve(async req=>{
     }
     return await response.json()
    })
-   return Response.json({ok:true,unit,publication,investigation})
+   return Response.json({ok:true,unit,publication,recheck,investigation})
   }
   if(body.action!==undefined)return Response.json({error:'Invalid action'},{status:400})
   const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date())
