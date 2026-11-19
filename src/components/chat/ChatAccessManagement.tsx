@@ -17,6 +17,7 @@ export default function ChatAccessManagement({ analysts }: { analysts: { id: str
   const [invitations, setInvitations] = useState<PendingInvitation[]>([])
   const [inviteLoading, setInviteLoading] = useState(true)
   const [inviteBusy, setInviteBusy] = useState('')
+  const [batchBusy, setBatchBusy] = useState(false)
   const [inviteMessage, setInviteMessage] = useState('')
   async function inviteHeaders() {
     const { data: { session } } = await supabase.auth.getSession()
@@ -66,7 +67,7 @@ export default function ChatAccessManagement({ analysts }: { analysts: { id: str
     const eligible = invitations.filter(i => i.active && ['pending','failed','link_failed'].includes(i.status))
     if (!eligible.length) return
     if (!window.confirm('Enviar convites aos ' + eligible.length + ' analistas pendentes? Cada destinatário poderá definir sua própria senha.')) return
-    setInviteBusy('batch')
+    setBatchBusy(true)
     let sent = 0
     for (const item of eligible) {
       const ok = await sendInvitation(item.analyst_id)
@@ -77,7 +78,7 @@ export default function ChatAccessManagement({ analysts }: { analysts: { id: str
       sent++
     }
     await loadInvitations()
-    setInviteBusy('')
+    setBatchBusy(false)
     if (sent === eligible.length) setInviteMessage(sent + ' convites processados. Confira o recebimento com os analistas.')
   }
   const invitationLabel: Record<PendingInvitation['status'], string> = {
@@ -109,12 +110,12 @@ export default function ChatAccessManagement({ analysts }: { analysts: { id: str
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h2 className="text-xl font-bold">Convites individuais do Chat</h2>
-        <p className="mt-1 text-sm text-slate-400">E-mails conferidos pela gestão. Cada analista define a própria senha pelo convite. Não são criados acessos de forma automática.</p>
+        <p className="mt-1 text-sm text-slate-400">E-mails conferidos pela gestão. Cada analista define sua senha pelo convite. Envie primeiro um convite individual e confirme o recebimento antes de usar o envio em lote.</p>
       </div>
       <div className="flex flex-wrap gap-2">
-        <button type="button" className="secondary-button" disabled={inviteLoading || !!inviteBusy} onClick={() => void loadInvitations()}>Atualizar</button>
-        <button type="button" className="primary-button" disabled={inviteLoading || !!inviteBusy || !invitations.some(i => i.active && ['pending','failed','link_failed'].includes(i.status))}
-          onClick={() => void sendPendingInvitations()}>{inviteBusy ? 'Processando...' : 'Enviar convites pendentes'}</button>
+        <button type="button" className="secondary-button" disabled={inviteLoading || !!inviteBusy || batchBusy} onClick={() => void loadInvitations()}>Atualizar</button>
+        <button type="button" className="primary-button" disabled={inviteLoading || !!inviteBusy || batchBusy || !invitations.some(i => i.status === 'invited') || !invitations.some(i => i.active && ['pending','failed','link_failed'].includes(i.status))}
+          onClick={() => void sendPendingInvitations()}>{batchBusy ? 'Enviando...' : 'Enviar convites pendentes'}</button>
       </div>
     </div>
     {inviteMessage && <p role="status" className="text-sm text-cyan-200">{inviteMessage}</p>}
@@ -127,7 +128,7 @@ export default function ChatAccessManagement({ analysts }: { analysts: { id: str
               <td className="p-2">{item.name}</td>
               <td className="p-2">{item.email}</td>
               <td className="p-2">{invitationLabel[item.status]}{item.last_error && <p className="mt-1 text-xs text-amber-200">{item.last_error}</p>}</td>
-              <td className="p-2"><button type="button" className="small-button" disabled={!!inviteBusy || !item.active || !['pending','failed','link_failed'].includes(item.status)}
+              <td className="p-2"><button type="button" className="small-button" disabled={batchBusy || !!inviteBusy || !item.active || !['pending','failed','link_failed'].includes(item.status)}
                 onClick={() => void sendInvitation(item.analyst_id)}>{item.status === 'link_failed' ? 'Concluir vínculo' : 'Enviar convite'}</button></td>
             </tr>)}
           </tbody>
