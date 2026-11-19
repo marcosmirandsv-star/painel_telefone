@@ -1,17 +1,19 @@
 import {receivedCount,receivedForOwner} from './received.ts'
 import type {RpcClient} from './capture-store.ts'
+import {advanceCohortVerification,publishCohortVerification,restartCohortVerification} from './cohort-verification.ts'
 
 type Obj=Record<string,unknown>
 type Ticket={id:number;number:number;owner:number|null;department:number|null;channel:string;created_at:string;updated_at:string}
 type Event={id:string;field:string;old:string|null;new:string|null;actor:string|null;created_at:string}
-type Context={id:string;start:string;end:string;owners:number[];parts:Record<string,unknown>;times:Record<string,string>;registry:{id:number;name:string}[]}
-type State={phase:'owners'|'recent'|'events'|'group'|'finish';context:Context;ownerIndex:number;page:number;pageTotal:number|null;pageCount:number;seen:number[];tickets:Ticket[];recent:Ticket[];events:Record<string,Event[]>;eventIndex:number;lastUpdated:number|null;freshGroup:number|null;freshGroupAt:string|null}
+export type Context={id:string;start:string;end:string;owners:number[];parts:Record<string,unknown>;times:Record<string,string>;registry:{id:number;name:string}[];verifyCurrent?:boolean}
+export type State={phase:'owners'|'verify'|'recent'|'events'|'group'|'finish';context:Context;ownerIndex:number;page:number;pageTotal:number|null;pageCount:number;seen:number[];tickets:Ticket[];recent:Ticket[];events:Record<string,Event[]>;eventIndex:number;lastUpdated:number|null;freshGroup:number|null;freshGroupAt:string|null;verification?:{cycle:number;stage:'headers'|'ratings'|'group'|'publish'|'done';changed:number[];index:number;departmentIndex:number;page:number;pages:number;total:number|null;count:number;overrides:Record<string,unknown>;times:Record<string,string>;groupAt?:string;recoveredBy?:string;reason?:string}}
 export type Claim={jobId:string;token:string;attempt:number;state:State|Obj}
 type Outcome={state:State;status:'pending'|'explained'|'inconclusive';result:Obj}
 export class InvestigationSourceError extends Error {
  constructor(public status:number,public retryAfter=30){super('investigation_source_unavailable')}
 }
 class EvidenceError extends Error {}
+class VerificationBudget extends Error {}
 function obj(v:unknown):Obj{if(!v||typeof v!=='object'||Array.isArray(v))throw new EvidenceError('invalid_source_shape');return v as Obj}
 function integer(v:unknown):number{if(typeof v!=='number'||!Number.isSafeInteger(v)||v<0)throw new EvidenceError('invalid_source_identifier');return v}
 function timestamp(v:unknown):string{if(typeof v!=='string'||!Number.isFinite(Date.parse(v)))throw new EvidenceError('invalid_source_timestamp');return v}
@@ -127,7 +129,9 @@ export async function advanceInvestigation(s:State,fetchPart:(path:string,signal
   if(p.total>=10000)throw new EvidenceError('owner_list_source_cap')
   for(const t of p.rows){if(t.owner!==owner)throw new EvidenceError('owner_filter_not_applied');if(s.seen.includes(t.id)||s.tickets.some(v=>v.id===t.id))throw new EvidenceError('duplicate_or_moving_ticket');s.seen.push(t.id);if(eligible(t,s.context.owners))s.tickets.push(t)}
   if(s.tickets.length>100000)throw new EvidenceError('investigation_ticket_budget')
-  if(s.page<p.pages)s.page++;else{if(s.pageCount!==p.total)throw new EvidenceError('owner_list_incomplete');s.ownerIndex++;nextPage(s);if(s.ownerIndex===s.context.owners.length)s.phase='recent'}
+  if(s.page<p.pages)s.page++;else{if(s.pageCount!==p.total)throw new EvidenceError('owner_list_incomplete');s.ownerIndex++;nextPage(s);if(s.ownerIndex===s.context.owners.length)s.phase=s.context.verifyCurrent&&s.verification?.stage!=='done'?'verify':'recent'}
+ }else if(s.phase==='verify'){
+  return await advanceCohortVerification(s,fetchPart,now)
  }else if(s.phase==='recent'){
   const p=page(await fetchOne(listPath(s)),s);let past=false
   for(const t of p.rows){const updated=Date.parse(t.updated_at);if(s.lastUpdated!==null&&updated>s.lastUpdated)throw new EvidenceError('recent_list_not_sorted');s.lastUpdated=updated
@@ -151,19 +155,43 @@ export function postgresInvestigationStore(client:RpcClient){
   async claim(){return await rpc('claim_clickdesk_capture_investigation') as Claim|null},
   async context(id:string){return await rpc('load_clickdesk_investigation_context',{p_job_id:id}) as Context},
   async save(claim:Claim,state:Obj|State,result:Obj,status:string,retry=0){return await rpc('save_clickdesk_capture_investigation',{p_job_id:claim.jobId,p_token:claim.token,p_state:state,p_result:result,p_status:status,p_retry_seconds:retry})===true}
+  ,async recover(claim:Claim,rows:unknown[],votes:unknown[]){return await rpc('publish_clickdesk_verified_cohort',{p_job_id:claim.jobId,p_token:claim.token,p_rows:rows,p_votes:votes}) as string|null}
  }
 }
-export async function runInvestigation(store:ReturnType<typeof postgresInvestigationStore>,fetchPart:(path:string,signal:AbortSignal)=>Promise<unknown>){
+export async function runInvestigation(store:Omit<ReturnType<typeof postgresInvestigationStore>,'recover'>&{recover?:ReturnType<typeof postgresInvestigationStore>['recover']},fetchPart:(path:string,signal:AbortSignal)=>Promise<unknown>,verifyCurrent=false){
  const claim=await store.claim();if(!claim)return {status:'idle'}
  if(!claim.jobId||!claim.token||!Number.isInteger(claim.attempt)||claim.attempt<1||claim.attempt>5)throw Error('invalid_investigation_claim')
  // Never persist a partially mutated step after a failed request or validation.
  let state=claim.state as State
  try{
   if(!('phase' in state))state=initial(await store.context(claim.jobId))
-  const outcome=await advanceInvestigation(structuredClone(state),fetchPart)
+  if(verifyCurrent&&['owners','verify'].includes(state.phase)){
+   if(!state.context.verifyCurrent&&state.phase==='owners'){state.ownerIndex=0;state.page=1;state.pageTotal=null;state.pageCount=0;state.seen=[];state.tickets=[]}
+   state.context.verifyCurrent=true
+  }
+  if(state.phase==='verify'&&state.verification?.stage==='publish'&&store.recover){
+   try{const id=await publishCohortVerification(state,(rows,votes)=>store.recover!(claim,rows,votes));if(!id)throw Error('cohort_publication_stale');state.verification.recoveredBy=id;state.verification.stage='done';state.phase='recent'}
+   catch{restartCohortVerification(state,'cohort_verification_rejected')}
+   const accepted=await store.save(claim,state,{reason:'investigating_received_difference',recovered_by:state.verification?.recoveredBy??null},'pending')
+   return {status:accepted?'pending':'stale',jobId:claim.jobId}
+  }
+  const deadline=Date.now()+65000
+  const bounded=async(path:string,signal:AbortSignal)=>{
+   const remaining=deadline-Date.now();if(remaining<1000)throw new VerificationBudget()
+   try{return await fetchPart(path,AbortSignal.any([signal,AbortSignal.timeout(remaining)]))}
+   catch(error){if(Date.now()>=deadline-500)throw new VerificationBudget();throw error}
+  }
+  const source=verifyCurrent?bounded:fetchPart
+  let outcome=await advanceInvestigation(structuredClone(state),source)
+  // Drain cheap ID/pagination work within one bounded lease; never wait a minute per owner.
+  while(verifyCurrent&&outcome.status==='pending'&&['owners','verify'].includes(outcome.state.phase)&&outcome.state.verification?.stage!=='publish'&&Date.now()<deadline){
+   state=outcome.state
+   outcome=await advanceInvestigation(structuredClone(state),source)
+  }
   const accepted=await store.save(claim,outcome.state,outcome.result,outcome.status)
   return {status:accepted?outcome.status:'stale',jobId:claim.jobId}
  }catch(error){
+  if(error instanceof VerificationBudget){const accepted=await store.save(claim,state,{reason:'verifying_current_ticket_ids',phase:state.phase},'pending');return {status:accepted?'pending':'stale',jobId:claim.jobId}}
   const permanent=error instanceof EvidenceError
   const done=permanent||claim.attempt>=5
   const retry=error instanceof InvestigationSourceError?Math.min(600,Math.max(30,Math.ceil(error.retryAfter))):Math.min(600,30*2**(claim.attempt-1))
