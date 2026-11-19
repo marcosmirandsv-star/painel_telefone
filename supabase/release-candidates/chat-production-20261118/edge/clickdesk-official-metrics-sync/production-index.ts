@@ -32,7 +32,7 @@ Deno.serve(async req=>{
    if(!apiKey||!accountId)throw Error('missing_source_config')
    const unit=await runCaptureUnit(postgresCaptureStore(admin),async(path,signal)=>{
     const response=await fetch('https://api.desk.click.app/api/v1'+path,{signal,headers:{Authorization:'Bearer '+apiKey,'X-Account-Id':accountId,Accept:'application/json'}})
-    if(!response.ok)throw Error('source_unavailable')
+    if(!response.ok){console.warn('clickdesk_capture_source_http',response.status);throw Error('source_unavailable')}
     return await response.json()
    })
    const publication=await finalizeReadyCapture(postgresFinalizationStore(admin,registry))
