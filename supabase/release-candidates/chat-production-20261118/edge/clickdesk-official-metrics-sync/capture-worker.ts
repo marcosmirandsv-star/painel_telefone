@@ -16,7 +16,8 @@ export async function runCaptureUnit(store:CaptureStore,fetchPart:(path:string,s
   if(payload===null||typeof payload!=='object')throw Error('invalid_source_payload')
   const accepted=await store.complete(unit,payload)
   return {status:accepted?'checkpointed' as const:'stale' as const,key:unit.key}
- }catch{
+ }catch(error){
+  console.warn('clickdesk_capture_unit',error instanceof Error&&['AbortError','TimeoutError','SyntaxError'].includes(error.name)?error.name:'operation_failed')
   // Persist only a fixed code: upstream errors can contain credentials or customer data.
   const next=unit.attempt<5?new Date(now()+captureRetryDelay(unit.attempt)).toISOString():null
   const accepted=await store.retry(unit,'capture_unit_failed',next)
