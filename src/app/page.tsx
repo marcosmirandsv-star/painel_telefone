@@ -383,15 +383,16 @@ export default function Home() {
     const recoveryFromHash = new URLSearchParams(window.location.hash.replace('#', ''))
     const recoveryFromSearch = new URLSearchParams(window.location.search)
     const cameFromRecoveryLink =
+    const cameFromInviteLink = recoveryFromSearch.get('convite') === '1'
       recoveryFromHash.get('type') === 'recovery' ||
       recoveryFromSearch.get('type') === 'recovery'
 
     async function loadSession() {
       const { data } = await supabase.auth.getUser()
       setUser(data.user)
-      if (cameFromRecoveryLink) {
+      if (cameFromRecoveryLink || cameFromInviteLink) {
         setIsPasswordRecovery(true)
-        setMessage('Digite uma nova senha para concluir a recuperação.')
+        setMessage(cameFromInviteLink ? 'Convite aceito. Defina sua senha pessoal para ativar o acesso ao Chat.' : 'Digite uma nova senha para concluir a recuperação.')
       }
       if (!data.user) setLoading(false)
     }
@@ -399,7 +400,7 @@ export default function Home() {
     loadSession()
 
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY') {
+      if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && cameFromInviteLink)) {
         setUser(session?.user ?? null)
         setIsPasswordRecovery(true)
         setMessage('Digite uma nova senha para concluir a recuperação.')
@@ -611,8 +612,8 @@ export default function Home() {
   async function handleUpdatePassword(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
-    if (newPassword.length < 6) {
-      setMessage('A nova senha precisa ter pelo menos 6 caracteres.')
+    if (newPassword.length < (new URLSearchParams(window.location.search).get('convite') === '1' ? 8 : 6)) {
+      setMessage('A senha precisa ter pelo menos 8 caracteres para convites (6 para recuperação).')
       return
     }
 
@@ -631,6 +632,9 @@ export default function Home() {
     setNewPassword('')
     setIsPasswordRecovery(false)
     setMessage('Senha atualizada com sucesso.')
+    if (new URLSearchParams(window.location.search).get('convite') === '1') {
+      window.location.replace('/chat')
+    }
   }
 
   async function handleLogout() {
@@ -1182,7 +1186,7 @@ export default function Home() {
             Central de Performance
           </p>
           <h1 className="mt-4 text-3xl font-bold">
-            {isPasswordRecovery ? 'Criar nova senha' : 'Entrar no sistema'}
+            {isPasswordRecovery ? 'Definir senha de acesso' : 'Entrar no sistema'}
           </h1>
 
           {isPasswordRecovery ? (
@@ -1194,7 +1198,7 @@ export default function Home() {
                   value={newPassword}
                   onChange={(event) => setNewPassword(event.target.value)}
                   required
-                  minLength={6}
+                  minLength={new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '').get('convite') === '1' ? 8 : 6}
                 />
               </Field>
 
