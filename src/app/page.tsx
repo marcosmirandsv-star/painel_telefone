@@ -527,7 +527,7 @@ export default function Home() {
   const podiumCsatGoal = goals.find((goal) => goal.key === 'podium_csat_minimum')?.value ?? 90
   const userRole = normalizeUserRole(profile?.role)
   const isManagementUser = userRole !== 'analyst'
-  useEffect(()=>{if(process.env.NEXT_PUBLIC_CHAT_OFFICIAL_ENABLED==='true'&&profile?.chat_analyst_id&&normalizeUserRole(profile.role)==='analyst')window.location.replace('/chat')},[profile?.chat_analyst_id,profile?.role])
+  useEffect(()=>{if(process.env.NEXT_PUBLIC_CHAT_OFFICIAL_ENABLED==='true'&&profile?.chat_analyst_id&&!profile.analyst_id&&normalizeUserRole(profile.role)==='analyst')window.location.replace('/chat')},[profile?.chat_analyst_id,profile?.analyst_id,profile?.role])
   const profileAnalyst = useMemo(
     () => findProfileAnalyst(profile, analysts, user?.email ?? ''),
     [profile, analysts, user?.email],
@@ -1247,6 +1247,7 @@ export default function Home() {
 
   return (
     <main className="app-shell min-h-screen px-5 py-6 text-white sm:px-8">
+      {process.env.NEXT_PUBLIC_CHAT_OFFICIAL_ENABLED==='true'&&userRole==='analyst'&&profile?.chat_analyst_id&&profile?.analyst_id&&<Link href="/chat" className="secondary-button">Abrir meu desempenho no Chat</Link>}
       <section className="mx-auto max-w-7xl">
         <header className="app-header flex flex-col gap-5 pb-7 lg:flex-row lg:items-start lg:justify-between">
           <div>
