@@ -88,3 +88,16 @@ test('incomplete captures stop without fetching guessed ticket cohorts',async()=
 test('different report periods are not reconciled',async()=>{
  const f=fixture();f.c.parts['owner:39'].range={...range,to:'2026-11-02T03:00:00+00:00'};await finish(f);assert.equal(f.result.reason,'capture_report_ranges_differ');assert.equal(f.paths.length,0)
 })
+
+test('a changing owner list is reread with a bounded retry, never accepted as complete',async()=>{
+ const f=fixture();let first=true
+ const fetch=async(p:string)=>{if(p.includes('owner_id=23')&&first){first=false;return list([ticket(1,23)],1,2)}if(p.includes('/support/reports/ratings'))return {total:0,last_page:1,data:[]};return f.fetchPart(p)}
+ assert.equal((await runInvestigation(f.store,fetch,true)).status,'retry');assert.equal(f.terminal,'');assert.equal(f.state.ownerReadRetries,1)
+ await runInvestigation(f.store,fetch,true)
+ assert.equal((f.state.verification as Json).stage,'publish');assert.equal((f.state.context as {parts:{group:{summary:{received:{value:number}}}}}).parts.group.summary.received.value,2)
+})
+test('persistently incomplete owner lists stop after the two extra reads',async()=>{
+ const f=fixture(),fetch=async()=>list([ticket(1,23)],1,2)
+ await runInvestigation(f.store,fetch,true);await runInvestigation(f.store,fetch,true);await runInvestigation(f.store,fetch,true)
+ assert.equal(f.terminal,'inconclusive');assert.equal(f.result.reason,'owner_list_incomplete');assert.equal(f.state.ownerReadRetries,2)
+})
