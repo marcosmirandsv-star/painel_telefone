@@ -6,7 +6,7 @@ type Obj=Record<string,unknown>
 type Ticket={id:number;number:number;owner:number|null;department:number|null;channel:string;created_at:string;updated_at:string}
 type Event={id:string;field:string;old:string|null;new:string|null;actor:string|null;created_at:string}
 export type Context={id:string;start:string;end:string;owners:number[];parts:Record<string,unknown>;times:Record<string,string>;registry:{id:number;name:string}[];verifyCurrent?:boolean}
-export type State={phase:'owners'|'verify'|'recent'|'events'|'group'|'finish';context:Context;ownerIndex:number;page:number;pageTotal:number|null;pageCount:number;seen:number[];tickets:Ticket[];recent:Ticket[];events:Record<string,Event[]>;eventIndex:number;lastUpdated:number|null;freshGroup:number|null;freshGroupAt:string|null;verification?:{cycle:number;stage:'headers'|'ratings'|'group'|'publish'|'done';changed:number[];index:number;departmentIndex:number;page:number;pages:number;total:number|null;count:number;overrides:Record<string,unknown>;times:Record<string,string>;groupAt?:string;recoveredBy?:string;reason?:string}}
+export type State={phase:'owners'|'verify'|'recent'|'events'|'group'|'finish';context:Context;ownerIndex:number;ownerReadRetries?:number;page:number;pageTotal:number|null;pageCount:number;seen:number[];tickets:Ticket[];recent:Ticket[];events:Record<string,Event[]>;eventIndex:number;lastUpdated:number|null;freshGroup:number|null;freshGroupAt:string|null;verification?:{cycle:number;stage:'headers'|'ratings'|'group'|'publish'|'done';changed:number[];index:number;departmentIndex:number;page:number;pages:number;total:number|null;count:number;overrides:Record<string,unknown>;times:Record<string,string>;groupAt?:string;recoveredBy?:string;reason?:string}}
 export type Claim={jobId:string;token:string;attempt:number;state:State|Obj}
 type Outcome={state:State;status:'pending'|'explained'|'inconclusive';result:Obj}
 export class InvestigationSourceError extends Error {
@@ -129,7 +129,7 @@ export async function advanceInvestigation(s:State,fetchPart:(path:string,signal
   if(p.total>=10000)throw new EvidenceError('owner_list_source_cap')
   for(const t of p.rows){if(t.owner!==owner)throw new EvidenceError('owner_filter_not_applied');if(s.seen.includes(t.id)||s.tickets.some(v=>v.id===t.id))throw new EvidenceError('duplicate_or_moving_ticket');s.seen.push(t.id);if(eligible(t,s.context.owners))s.tickets.push(t)}
   if(s.tickets.length>100000)throw new EvidenceError('investigation_ticket_budget')
-  if(s.page<p.pages)s.page++;else{if(s.pageCount!==p.total)throw new EvidenceError('owner_list_incomplete');s.ownerIndex++;nextPage(s);if(s.ownerIndex===s.context.owners.length)s.phase=s.context.verifyCurrent&&s.verification?.stage!=='done'?'verify':'recent'}
+  if(s.page<p.pages)s.page++;else{if(s.pageCount!==p.total)throw new EvidenceError('owner_list_incomplete');s.ownerIndex++;s.ownerReadRetries=0;nextPage(s);if(s.ownerIndex===s.context.owners.length)s.phase=s.context.verifyCurrent&&s.verification?.stage!=='done'?'verify':'recent'}
  }else if(s.phase==='verify'){
   return await advanceCohortVerification(s,fetchPart,now)
  }else if(s.phase==='recent'){
@@ -192,6 +192,11 @@ export async function runInvestigation(store:Omit<ReturnType<typeof postgresInve
   return {status:accepted?outcome.status:'stale',jobId:claim.jobId}
  }catch(error){
   if(error instanceof VerificationBudget){const accepted=await store.save(claim,state,{reason:'verifying_current_ticket_ids',phase:state.phase},'pending');return {status:accepted?'pending':'stale',jobId:claim.jobId}}
+  if(verifyCurrent&&state.phase==='owners'&&error instanceof EvidenceError&&['owner_list_incomplete','list_pagination_changed'].includes(error.message)&&(state.ownerReadRetries??0)<2){
+   const owner=state.context.owners[state.ownerIndex];state.tickets=state.tickets.filter(t=>t.owner!==owner);state.ownerReadRetries=(state.ownerReadRetries??0)+1;state.page=1;state.pageTotal=null;state.pageCount=0;state.seen=[]
+   const accepted=await store.save(claim,state,{reason:'source_list_changed_retry',owner_id:owner},'pending',5)
+   return {status:accepted?'retry':'stale',jobId:claim.jobId}
+  }
   const permanent=error instanceof EvidenceError
   const done=permanent||claim.attempt>=5
   const retry=error instanceof InvestigationSourceError?Math.min(600,Math.max(30,Math.ceil(error.retryAfter))):Math.min(600,30*2**(claim.attempt-1))
