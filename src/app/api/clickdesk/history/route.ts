@@ -6,6 +6,7 @@ import {
   json,
 } from '@/lib/chat-integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
+import { adminClient } from '@/lib/integration-server'
 import { readFinalLedger, readLedgerCoverageForAccess } from '@/lib/clickdesk-ledger-server'
 import {loadOfficialPeriodRows} from '@/lib/clickdesk-official-metrics'
 import {clickDeskPublicationDay} from '@/lib/clickdesk-publication'
@@ -164,8 +165,11 @@ async function officialGET(request: Request) {
       .eq('id', analystId)
       .maybeSingle()
 
+    // Authentication was verified above. Only management can read archived
+    // closures through the server-side service client; the client JWT has
+    // no direct SELECT permission on this RLS-protected table.
     const closedHistoryPromise = access.isManagement
-      ? admin
+      ? adminClient()
           .from('integration_closures')
           .select('id,month,team,created_at,payload')
           .eq('channel', 'chat')
