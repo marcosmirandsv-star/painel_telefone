@@ -24,7 +24,7 @@ test('feedback de Telefone continua no comportamento anterior mesmo com Chat lib
  }
 })
 test('auxiliares compartilhados, CX e versão anterior do feedback preservados',()=>{
- const git=(path:string)=>execFileSync('git',['show','55410d007c0a53a16fdc524409a884ad09c22932:'+path],{cwd:new URL('.',root),encoding:'utf8'}).replaceAll('\r\n','\n')
+ const git=(path:string)=>execFileSync('git',['show','d3768863588edc9c2bda722515f91bbddb2aaa9f:'+path],{cwd:new URL('.',root),encoding:'utf8'}).replaceAll('\r\n','\n')
  for(const path of ['src/lib/integration-server.ts','src/lib/cx360-server.ts','src/app/globals.css','src/app/layout.tsx'])assert.equal(read(path).replaceAll('\r\n','\n'),git(path),path)
  assert.equal(read('src/lib/chat-production-legacy/chat-feedback.ts').replaceAll('\r\n','\n'),git('src/app/api/chat-feedback/route.ts').replace("from '../../../lib/phone-report.ts'","from '../phone-report.ts'"))
 })
