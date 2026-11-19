@@ -64,13 +64,14 @@ export async function POST(request: NextRequest) {
     ])
     if (record.error || analyst.error || profile.error) throw new ApiError(503, 'Conferência dos acessos indisponível.')
     const item = record.data as InvitationRow | null
-    if (!item || !analyst.data?.active) throw new ApiError(409, 'Convite indisponível: analista não está ativo ou não foi conferido.')
+    const activeAnalyst = analyst.data
+    if (!item || !activeAnalyst?.active) throw new ApiError(409, 'Convite indisponível: analista não está ativo ou não foi conferido.')
     if (profile.data?.length) throw new ApiError(409, 'Este analista já possui acesso vinculado.')
     if (item.status === 'invited' || item.status === 'sending') {
       throw new ApiError(409, 'Convite já enviado ou em processamento. Não será duplicado.')
     }
 
-    const key = String(analyst.data.name).normalize('NFD')
+    const key = String(activeAnalyst.name).normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
     const registry = await admin.from('clickdesk_official_owner_registry')
       .select('clickdesk_owner_id').eq('source_owner_key', key)
@@ -87,7 +88,7 @@ export async function POST(request: NextRequest) {
         throw new Error('Há um perfil existente incompatível. O acesso precisa de revisão manual.')
       }
       const { error } = await admin.from('profiles').upsert({
-        id: userId, full_name: analyst.data.name, role: 'analista',
+        id: userId, full_name: activeAnalyst.name, role: 'analista',
         analyst_id: null, chat_analyst_id: analystId,
       }, { onConflict: 'id' })
       if (error) throw new Error('Não foi possível vincular o perfil do analista.')
@@ -120,7 +121,7 @@ export async function POST(request: NextRequest) {
 
     const redirectTo = 'https://painel-telefone.vercel.app/?convite=1'
     const { data, error: invitationError } = await admin.auth.admin.inviteUserByEmail(item.email, {
-      redirectTo, data: { full_name: analyst.data.name },
+      redirectTo, data: { full_name: activeAnalyst.name },
     })
     if (invitationError || !data.user?.id) {
       const message = invitationError?.message ?? 'O Supabase não confirmou a criação do convite.'
