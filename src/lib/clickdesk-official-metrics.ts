@@ -51,7 +51,16 @@ export async function loadOfficialPeriodRows(
       p_end: filters.end,
     })
 
-  if(filters.start>='2026-11-01'&&!official.error&&(!official.data?.length||official.data.some((metric:OfficialPeriodMetric)=>!Number.isFinite(Date.parse(metric.captured_at))||Date.now()-Date.parse(metric.captured_at)>=30*60*1000))){
+  // An exact date/week/custom range gets its own verified ClickDesk snapshot.
+  // October's already-approved FULL-MONTH snapshot stays untouched; on-demand
+  // requests are created only for missing custom ranges in that historical month.
+  // From November onward, an existing snapshot may be refreshed every 30 min.
+  const shouldRequestMissing = filters.start >= '2026-10-01' && !official.data?.length
+  const shouldRefreshCurrent = filters.start >= '2026-11-01' &&
+    Boolean(official.data?.some((metric: OfficialPeriodMetric) =>
+      !Number.isFinite(Date.parse(metric.captured_at)) ||
+      Date.now() - Date.parse(metric.captured_at) >= 30 * 60 * 1000))
+  if (!official.error && (shouldRequestMissing || shouldRefreshCurrent)) {
     const requested=await admin.rpc('request_clickdesk_official_period',{p_start:filters.start,p_end:filters.end})
     if(requested.error)throw new ApiError(503,'Não foi possível solicitar a captura deste intervalo do ClickDesk.')
     for(let attempt=0;attempt<15&&!official.data?.length;attempt++){
@@ -59,7 +68,7 @@ export async function loadOfficialPeriodRows(
       official=await admin.rpc('get_scoped_clickdesk_official_period_metrics',{p_start:filters.start,p_end:filters.end})
       if(official.error)break
     }
-    if(!official.error&&!official.data?.length)throw new ApiError(503,'O ClickDesk ainda está preparando este intervalo. Tente novamente em instantes.')
+    if(!official.error&&!official.data?.length)throw new ApiError(503,'O ClickDesk ainda está preparando este intervalo. Os indicadores serão atualizados automaticamente assim que a captura estiver pronta.')
   }
 
   if (official.error) {
