@@ -7935,8 +7935,27 @@ function ChatModuleDashboard({
               )}
             </>
           ) : (
-            <div className="mt-5">
-              <EmptyState text="Ainda não há base diária suficiente para montar a evolução de volume desta competência." />
+            <div className="chat-daily-empty" role="status">
+              <div className="chat-daily-empty-copy">
+                <span className="chat-daily-empty-kicker">Leitura diária · aguardando conciliação</span>
+                <h4>O volume do mês está disponível. A distribuição por dia ainda não.</h4>
+                <p>O ClickDesk já confirmou os atendimentos do período, mas ainda não há uma sequência diária completa e conciliada. Não vamos dividir o volume mensal por dias nem apresentar uma curva estimada.</p>
+                <div className="chat-daily-empty-metrics">
+                  <div><span>Recebidos no período</span><strong>{formatChatCount(chat2ProductivityTickets)}</strong><small>Indicador oficial acumulado</small></div>
+                  <div><span>Série diária conciliada</span><strong>—</strong><small>Não disponível neste recorte</small></div>
+                </div>
+              </div>
+              <div className="chat-daily-empty-canvas">
+                <div className="chat-daily-empty-heading"><span>Atendimentos por dia</span><span>Aguardando dados</span></div>
+                <div className="chat-daily-empty-grid">
+                  <svg viewBox="0 0 470 165" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+                    <path d="M20 20H460 M20 60H460 M20 100H460 M20 140H460" stroke="currentColor" opacity="0.18" strokeWidth="1" strokeDasharray="4 7"/>
+                    <path d="M20 12V140H460" stroke="currentColor" opacity="0.24" fill="none" strokeWidth="1"/>
+                  </svg>
+                  <div className="chat-daily-empty-center"><span className="chat-daily-empty-icon" aria-hidden="true">—</span><strong>Sem série diária consolidada</strong><span>O gráfico aparecerá quando os dias forem confirmados.</span></div>
+                </div>
+                <span className="chat-daily-empty-foot">Sem pontos ou valores estimados.</span>
+              </div>
             </div>
           )}
         </div>
@@ -8837,13 +8856,7 @@ function ChatModuleDashboard({
             />
           </div>
 
-          <TrendLineChart
-            label="Atendimentos mensais"
-            points={monthlyVolumeTrend}
-            singlePointLabel="Apenas uma competência disponível para comparação."
-            latestPointLabel="Última competência"
-            highlightedPointLabel="Competência destacada"
-          />
+          <MonthlyVolumeTrendChart points={monthlyVolumeTrend} />
         </div>
 
         <p className="mt-5 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
