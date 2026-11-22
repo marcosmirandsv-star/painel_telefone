@@ -58,8 +58,9 @@ async function officialGET(request:Request){return handle(async()=>{
  const alerts:Array<{kind:string;message:string;tickets:unknown[]}>=[]
  if(access.isManagement){
   const corrections=await access.admin.rpc('get_clickdesk_event_correction_summary')
-  if(corrections.error)throw new ApiError(503,'Conferência de movimentações indisponível.')
-  if(Number(corrections.data?.historical_changes)>0)alerts.push({kind:'historical_change',message:corrections.data.historical_changes+' movimentação(ões) posteriores foram registradas na base nos últimos 14 dias. Os dias publicados foram preservados e precisam de conferência.',tickets:[]})
+  // A indisponibilidade de uma conferência auxiliar não deve ocultar os votos oficiais.
+  if(corrections.error)alerts.push({kind:'source_check_unavailable',message:'A conferência auxiliar de movimentações está indisponível. Os tickets oficiais permanecem visíveis; confira a fonte antes de finalizar os pareceres.',tickets:[]})
+  else if(Number(corrections.data?.historical_changes)>0)alerts.push({kind:'historical_change',message:corrections.data.historical_changes+' movimentação(ões) posteriores foram registradas na base nos últimos 14 dias. Os dias publicados foram preservados e precisam de conferência.',tickets:[]})
 
   if(inconclusive.length>=5||(completed.length>=5&&inconclusive.length/completed.length>=.2))alerts.push({kind:'inconclusive_volume',message:`${inconclusive.length} de ${completed.length} análises concluídas precisam de revisão da causa.`,tickets:inconclusive.map(row=>row.ticket_number)})
   const groups=new Map<string,typeof mapped>()
