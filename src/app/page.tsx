@@ -2,6 +2,9 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
+import { PerformanceIcon } from '@/components/ui/performance-icons'
+import { PerformanceNavigation, PerformancePageGuide } from '@/components/ui/PerformanceNavigation'
+import { phoneNavigation, phoneAnalystNavigation, phoneHelp, systemHelp } from '@/lib/performance-guides'
 import * as XLSX from 'xlsx'
 import { User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
@@ -271,7 +274,7 @@ type PeriodFilter = {
   end: string
 }
 
-type AppModule = 'phone' | 'chat'
+type AppModule = 'phone' | 'chat' | 'system'
 
 type ChatFeedbackStyle = 'coach' | 'sare' | 'mimo'
 type FeedbackGoal = 'recognition' | 'courseCorrection' | 'maintenance' | 'development'
@@ -1250,9 +1253,31 @@ export default function Home() {
     )
   }
 
+  // Analistas vinculados exclusivamente ao Chat não pertencem ao Telefone.
+  if (process.env.NEXT_PUBLIC_CHAT_OFFICIAL_ENABLED === 'true' &&
+      userRole === 'analyst' && profile?.chat_analyst_id && !profile?.analyst_id) {
+    return <main className="app-shell flex min-h-screen items-center justify-center p-5 text-white">
+      <section className="w-full max-w-xl rounded-2xl border border-white/10 bg-slate-900/70 p-7">
+        <div className="mb-4 inline-flex rounded-xl border border-teal-300/20 bg-teal-300/10 p-3 text-teal-200">
+          <PerformanceIcon name="message" size={28}/>
+        </div>
+        <p className="app-eyebrow">Central de Performance · Chat</p>
+        <h1 className="mt-3 text-3xl font-bold">Seu espaço individual está no Chat</h1>
+        <p className="mt-3 leading-7 text-slate-300">
+          Consulte somente seus indicadores, avaliações, atendimentos por dia e evolução.
+          A operação telefônica é independente e não faz parte do seu acesso.
+        </p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Link href="/chat" className="primary-button">Abrir meu painel do Chat</Link>
+          <button className="secondary-button" onClick={handleLogout} type="button">Sair</button>
+        </div>
+      </section>
+    </main>
+  }
+
   return (
     <main className="app-shell min-h-screen px-5 py-6 text-white sm:px-8">
-      {process.env.NEXT_PUBLIC_CHAT_OFFICIAL_ENABLED==='true'&&userRole==='analyst'&&profile?.chat_analyst_id&&profile?.analyst_id&&<Link href="/chat" className="secondary-button">Abrir meu desempenho no Chat</Link>}
+      {process.env.NEXT_PUBLIC_CHAT_OFFICIAL_ENABLED==='true'&&userRole==='analyst'&&profile?.chat_analyst_id&&<Link href="/chat" className="secondary-button">Abrir meu desempenho no Chat</Link>}
       <section className="mx-auto max-w-7xl">
         <header className="app-header flex flex-col gap-5 pb-7 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -1300,7 +1325,7 @@ export default function Home() {
                 setActiveTab('dashboard')
               }}
             >
-              <span className="workspace-icon" aria-hidden="true">☎</span>
+              <span className="workspace-icon" aria-hidden="true"><PerformanceIcon name="headphones" size={26}/></span>
               <span className="workspace-kicker">Operação</span>
               <strong>Telefone</strong>
               <small>Indicadores, metas, lançamentos, pódio e análises da operação telefônica.</small>
@@ -1311,59 +1336,57 @@ export default function Home() {
               type="button"
               onClick={() => { if(process.env.NEXT_PUBLIC_CHAT_OFFICIAL_ENABLED==='true')window.location.assign('/chat');else setActiveModule('chat') }}
             >
-              <span className="workspace-icon workspace-icon-violet" aria-hidden="true">◌</span>
+              <span className="workspace-icon workspace-icon-violet" aria-hidden="true"><PerformanceIcon name="message" size={26}/></span>
               <span className="workspace-kicker">Experiência do cliente</span>
               <strong>Chat</strong>
-              <small>Dados do Zendesk, importação, ranking, feedbacks e relatórios de atendimento.</small>
+              <small>Indicadores oficiais ClickDesk, experiência do cliente, feedbacks e evolução.</small>
               <em>{activeModule === 'chat' ? 'Área aberta' : 'Abrir experiência'}</em>
             </button>
             {process.env.NEXT_PUBLIC_CHAT_OFFICIAL_ENABLED!=='true'&&<Link className="workspace-card workspace-card-management" href="/gestao-inteligente">
-              <span className="workspace-icon workspace-icon-amber" aria-hidden="true">◎</span>
+              <span className="workspace-icon workspace-icon-amber" aria-hidden="true"><PerformanceIcon name="scan" size={26}/></span>
               <span className="workspace-kicker">Melhoria e desenvolvimento</span>
               <strong>Gestão Inteligente — CX 360º</strong>
               <small>Investigações, evidências, decisões e acompanhamento de ações pela gestão.</small>
               <em>Abrir Gestão Inteligente <span aria-hidden="true">→</span></em>
             </Link>}
             <Link className="workspace-card workspace-card-management" href="/ferias">
-              <span className="workspace-icon workspace-icon-amber" aria-hidden="true">◫</span>
+              <span className="workspace-icon workspace-icon-amber" aria-hidden="true"><PerformanceIcon name="calendar" size={26}/></span>
               <span className="workspace-kicker">Gestão de pessoas</span>
               <strong>Férias e capacidade</strong>
               <small>Planejamento de ausências, cobertura, times, gestores e cadastro de pessoas.</small>
               <em>Abrir gestão de pessoas <span aria-hidden="true">→</span></em>
             </Link>
+            <button
+              type="button"
+              className={activeModule === 'system' ? 'workspace-card workspace-card-active' : 'workspace-card'}
+              onClick={() => { setActiveModule('system'); setActiveTab('users') }}
+            >
+              <span className="workspace-icon" aria-hidden="true"><PerformanceIcon name="shield" size={26}/></span>
+              <span className="workspace-kicker">Administração geral</span>
+              <strong>Sistema</strong>
+              <small>Usuários e acessos, separados dos cadastros do Telefone e do Chat.</small>
+              <em>{activeModule === 'system' ? 'Área aberta' : 'Administrar acessos'}</em>
+            </button>
             </div>
           </section>
         )}
-        {activeModule === 'phone' && (
-          <nav className="app-subnav mt-6 flex flex-wrap gap-2" aria-label="Navegação da operação telefônica">
-          <TabButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')}>
-            Dashboard
-          </TabButton>
-          {isManagementUser && (
-            <TabButton active={activeTab === 'reports'} onClick={() => setActiveTab('reports')}>
-              Relatórios
-            </TabButton>
+        <div className={activeModule === 'phone' ? 'pnav-layout mt-6' : 'pnav-layout pnav-layout-simple mt-6'}>
+          {activeModule === 'phone' && (
+            <PerformanceNavigation
+              groups={isManagementUser ? phoneNavigation : phoneAnalystNavigation}
+              label={isManagementUser ? 'Telefone · Gestão' : 'Meu Telefone'}
+              subtitle={isManagementUser ? 'Indicadores e equipe' : 'Seu desempenho'}
+              activeId={activeTab}
+              onSelect={(id) => setActiveTab(id as ActiveTab)}
+            />
           )}
-          {isManagementUser && (
-            <>
-              <TabButton active={activeTab === 'entries'} onClick={() => setActiveTab('entries')}>
-                Lançamentos
-              </TabButton>
-              <TabButton active={activeTab === 'analysts'} onClick={() => setActiveTab('analysts')}>
-                Analistas
-              </TabButton>
-              <TabButton active={activeTab === 'goals'} onClick={() => setActiveTab('goals')}>
-                Metas
-              </TabButton>
-              <TabButton active={activeTab === 'users'} onClick={() => setActiveTab('users')}>
-                Usuários
-              </TabButton>
-              <Link className="tab-button" href="/integracoes">Fechamentos</Link>
-            </>
-          )}
-          </nav>
-        )}
-
+          <div className="pnav-layout-main">
+            {activeModule === 'phone' && (
+              <PerformancePageGuide help={phoneHelp[activeTab] ?? phoneHelp.dashboard}/>
+            )}
+            {activeModule === 'system' && isManagementUser && (
+              <PerformancePageGuide help={systemHelp}/>
+            )}
         {message && <Feedback message={message} />}
 
         {activeModule === 'chat' && (
@@ -1437,7 +1460,7 @@ export default function Home() {
           />
         )}
 
-        {activeModule === 'phone' && isManagementUser && activeTab === 'users' && (
+        {activeModule === 'system' && isManagementUser && activeTab === 'users' && (
           <UsersView
             profiles={profiles}
             analysts={analysts}
@@ -1466,6 +1489,8 @@ export default function Home() {
             onCancelEdit={handleCancelGoalEdit}
           />
         )}
+          </div>
+        </div>
       </section>
     </main>
   )
