@@ -1670,10 +1670,17 @@ function ManagementDailyFeedback({
 function ChatAnalystPortal({
   analyst,
   team,
+  legacyMetrics,
 }: {
   analyst: ChatAnalyst | null
   team: ChatTeam | null
+  legacyMetrics: ChatMonthlyMetric[]
 }) {
+  // Historical Zendesk imports form their own series, never blended with
+  // ClickDesk's official received/CSAT calculations.
+  const legacySeries = [...legacyMetrics]
+    .filter(item => item.period_start < '2026-10-01')
+    .sort((a,b)=>a.period_start.localeCompare(b.period_start))
   const [metrics, setMetrics] = useState<ClickDeskPersistedMetrics | null>(null)
   const [history, setHistory] = useState<ClickDeskAnalystHistory | null>(null)
   const [loading, setLoading] = useState(false)
@@ -2472,6 +2479,62 @@ function ChatAnalystPortal({
           <EmptyState text="Seu histórico ClickDesk será formado a partir das competências disponíveis." />
         )}
       </section>
+
+      {legacySeries.length > 0 && (
+        <details className="panel chat-legacy-analyst-history">
+          <summary className="cursor-pointer">
+            <span className="chat-legacy-label">Histórico anterior · Zendesk</span>
+            <strong>Minha evolução de janeiro a setembro de 2026</strong>
+            <span>Consultar {legacySeries.length} competências preservadas, sem misturar com o ClickDesk.</span>
+          </summary>
+          <p className="mt-4 text-sm leading-6 text-slate-400">
+            Estes são os fechamentos importados antes da migração. A competência parcial de outubro não é usada para comparar evolução.
+            As taxas e volumes têm origem e metodologia próprias e não alteram seus indicadores oficiais do ClickDesk.
+          </p>
+          <div className="mt-4 grid gap-4 lg:grid-cols-3">
+            <TrendLineChart
+              label="CSAT · histórico anterior"
+              points={legacySeries.map(item=>({label:item.month_label.replace(' de ','/'),value:Number(item.csat)}))}
+              suffix="%"
+              singlePointLabel="Apenas uma competência histórica disponível."
+              latestPointLabel="Última competência anterior"
+              highlightedPointLabel="Competência destacada"
+            />
+            <TrendLineChart
+              label="Avaliações · histórico anterior"
+              points={legacySeries.map(item=>({label:item.month_label.replace(' de ','/'),value:Number(item.review_percentage)}))}
+              suffix="%"
+              goal={25}
+              goalLabel="Referência"
+              singlePointLabel="Apenas uma competência histórica disponível."
+              latestPointLabel="Última competência anterior"
+              highlightedPointLabel="Competência destacada"
+            />
+            <TrendLineChart
+              label="Volume · histórico anterior"
+              points={legacySeries.map(item=>({label:item.month_label.replace(' de ','/'),value:Number(item.total_tickets)}))}
+              singlePointLabel="Apenas uma competência histórica disponível."
+              latestPointLabel="Última competência anterior"
+              highlightedPointLabel="Competência destacada"
+            />
+          </div>
+          <div className="chat-history-table-scroll">
+            <table className="chat-history-comparison-table">
+              <thead><tr><th>Competência</th><th>CSAT</th><th>Avaliações</th><th>Atendimentos</th></tr></thead>
+              <tbody>
+                {[...legacySeries].reverse().map(item=>(
+                  <tr key={item.id}>
+                    <th scope="row">{item.month_label}</th>
+                    <td>{formatChatPercent(Number(item.csat))}</td>
+                    <td>{formatChatPercent(Number(item.review_percentage))}</td>
+                    <td>{formatChatCount(Number(item.total_tickets))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      )}
     </div>
   )
 }
@@ -3751,8 +3814,9 @@ function ChatModuleDashboard({
     .sort((a, b) => Number(a.metric.csat) - Number(b.metric.csat))
     .slice(0, 5)
   const monthlyTrend = buildChatMonthlyTrend(trendMetrics).slice(-7)
-  const monthlyUnifiedTrend = buildChatMonthlyUnifiedTrend(trendMetrics).slice(-7)
-  const monthlyVolumeTrend = buildChatMonthlyVolumeTrend(trendMetrics).slice(-7)
+  const historicalTrendMetrics = trendMetrics.filter(item => item.period_start < '2026-10-01')
+  const monthlyUnifiedTrend = buildChatMonthlyUnifiedTrend(historicalTrendMetrics).slice(-9)
+  const monthlyVolumeTrend = buildChatMonthlyVolumeTrend(historicalTrendMetrics).slice(-9)
   const chatGoalsReachedCount = calculationMetrics.filter(
     (metric) => Number(metric.csat) >= Number(metric.csat_goal) && Number(metric.review_percentage) >= Number(metric.general_review_goal),
   ).length
@@ -8756,7 +8820,7 @@ function ChatModuleDashboard({
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Histórico anterior · Zendesk</p>
           <h2 className="mt-2 text-2xl font-bold">Série preservada dos fechamentos anteriores</h2>
           <p className="section-subtitle">
-            Estes números pertencem ao histórico legado do Zendesk e ficam preservados apenas para comparação histórica. Eles não entram nos cálculos da fotografia ClickDesk exibida acima.
+            Esta série reúne janeiro a setembro de 2026, importados do Zendesk. A importação parcial de outubro permanece preservada, mas não entra nesta evolução. Os dados antigos não integram os indicadores oficiais do ClickDesk.
           </p>
         </div>
 
