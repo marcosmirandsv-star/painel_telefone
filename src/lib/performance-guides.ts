@@ -7,7 +7,6 @@ export const chatManagementNavigation: PerformanceNavGroup[] = [
   ] },
   { label: 'Qualidade e desenvolvimento', items: [
     { id: 'operation360', label: 'Visão 360º', description: 'Evidências e aprendizado por ticket', icon: 'scan' },
-    { id: 'neutralAudit', label: 'Auditoria de neutros', description: 'Tickets, critérios e efeito no CSAT', icon: 'clipboard' },
     { id: 'podium', label: 'Gestão e ações', description: 'Prioridades e acompanhamento', icon: 'clipboard' },
   ] },
   { label: 'Resultados', items: [
@@ -24,11 +23,7 @@ export const chatAnalystNavigation: PerformanceNavGroup[] = [
   { label: 'Meu acompanhamento', items: [
     { id: 'my-result', label: 'Meu resultado', description: 'Metas e indicadores pessoais', icon: 'activity', href: '#meu-resultado' },
     { id: 'my-ratings', label: 'Minhas avaliações', description: 'Notas e leitura dos tickets', icon: 'message', href: '#minhas-avaliacoes' },
-    { id: 'my-days', label: 'Meus dias', description: 'Atendimentos por data', icon: 'calendar', href: '#minha-rotina' },
-    { id: 'my-history', label: 'Minha evolução', description: 'Comparar competências ClickDesk', icon: 'chart', href: '#minha-evolucao' },
-  ] },
-  { label: 'Consulta histórica', items: [
-    { id: 'prior-history', label: 'Histórico anterior', description: 'Zendesk antes da migração', icon: 'history', href: '#historico-anterior' },
+    { id: 'my-history', label: 'Dias e evolução', description: 'Tickets por dia e comparação mensal', icon: 'chart', href: '#minha-rotina' },
   ] },
 ]
 
@@ -82,8 +77,8 @@ export const chatManagementHelp: Record<string, PerformancePageHelp> = {
   },
   operation360: {
     category: 'Qualidade da experiência',
-    title: 'Como usar a Visão 360º',
-    summary: 'Investigue o que o cliente viveu, o comportamento observável do atendimento e o próximo passo de desenvolvimento. A IA não transforma uma nota negativa em culpa automática.',
+    title: 'Visão 360º e auditoria de neutros',
+    summary: 'Investigue o que o cliente viveu e o próximo passo de desenvolvimento. A auditoria de notas 3 está integrada nesta área. A IA não transforma uma nota negativa em culpa automática.',
     howTo: ['Selecione o período e a equipe.', 'Confira se há tickets com autoria humana final e histórico comprovados.', 'Abra a análise de um ticket, examine evidências, limites e sugestões; valide ou conteste antes de usar no feedback.'],
     fields: [
       { label: 'Cobertura', meaning: 'Parcela dos tickets avaliados que já possui leitura qualitativa disponível e verificada.' },
@@ -189,7 +184,7 @@ export const chatAnalystHelp: PerformancePageHelp = {
     { label: 'Visualizar período', meaning: 'Permite consultar um dia, semana, mês ou intervalo personalizado, quando houver captura oficial disponível.' },
     { label: 'CSAT ajustado', meaning: 'Percentual de avaliações positivas entre as consideradas pela regra oficial de apuração.' },
     { label: 'Participação nas avaliações', meaning: 'Percentual de seus atendimentos que recebeu avaliação do cliente.' },
-    { label: 'Minha evolução', meaning: 'Comparação de seus indicadores entre competências ClickDesk; histórico Zendesk fica separado.' },
+    { label: 'Dias e evolução', meaning: 'Abra seus tickets por dia e compare competências ClickDesk no mesmo caminho. Histórico Zendesk fica separado e recolhido.' },
   ],
   caution: 'A IA sugere oportunidades a partir das evidências acessíveis. A nota do cliente não é prova automática de falha, e você não tem acesso aos dados individuais de colegas.',
 }
