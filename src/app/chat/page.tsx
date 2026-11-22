@@ -23,6 +23,7 @@ import CxDiagnostics from '@/components/CxDiagnostics'
 import ChatCaseManagement from '@/components/chat/ChatCaseManagement'
 import { chatTimeRange, type ChatTimeMode } from '@/lib/chat-time-filter'
 import ClickDeskSourceReport from '@/components/chat/ClickDeskSourceReport'
+import ClickDeskVerifiedDailyVolume from '@/components/chat/ClickDeskVerifiedDailyVolume'
 const QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS = true
 
 const OFFICIAL_RESOLUTION_POLICY = 'Campo Recebidos do relatório ClickDesk, nas filas ERP/Fiscal e no intervalo selecionado. A performance inclui somente os analistas do quadro aprovado; o total operacional pode incluir outros responsáveis e atendimentos sem responsável. As capturas são atualizadas a cada 30 minutos. O CSAT ajustado exclui somente neutros externos comprovados; todas as avaliações continuam na participação.'
@@ -7934,29 +7935,19 @@ function ChatModuleDashboard({
                 </div>
               )}
             </>
+          ) : isManagementUser &&
+            isOfficialClickDeskSource(clickDeskPersistedMetrics?.source) &&
+            Boolean(clickDeskPersistedMetrics?.period?.start) &&
+            Boolean(clickDeskPersistedMetrics?.period?.end) &&
+            String(clickDeskPersistedMetrics?.period?.start) >= '2026-10-01' ? (
+              <ClickDeskVerifiedDailyVolume
+                start={String(clickDeskPersistedMetrics?.period?.start)}
+                end={String(clickDeskPersistedMetrics?.period?.end)}
+                teamId={selectedTeamId}
+                periodReceived={chat2ProductivityTickets}
+              />
           ) : (
-            <div className="chat-daily-empty" role="status">
-              <div className="chat-daily-empty-copy">
-                <span className="chat-daily-empty-kicker">Leitura diária · aguardando conciliação</span>
-                <h4>O volume do mês está disponível. A distribuição por dia ainda não.</h4>
-                <p>O ClickDesk já confirmou os atendimentos do período, mas ainda não há uma sequência diária completa e conciliada. Não vamos dividir o volume mensal por dias nem apresentar uma curva estimada.</p>
-                <div className="chat-daily-empty-metrics">
-                  <div><span>Recebidos no período</span><strong>{formatChatCount(chat2ProductivityTickets)}</strong><small>Indicador oficial acumulado</small></div>
-                  <div><span>Série diária conciliada</span><strong>—</strong><small>Não disponível neste recorte</small></div>
-                </div>
-              </div>
-              <div className="chat-daily-empty-canvas">
-                <div className="chat-daily-empty-heading"><span>Atendimentos por dia</span><span>Aguardando dados</span></div>
-                <div className="chat-daily-empty-grid">
-                  <svg viewBox="0 0 470 165" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-                    <path d="M20 20H460 M20 60H460 M20 100H460 M20 140H460" stroke="currentColor" opacity="0.18" strokeWidth="1" strokeDasharray="4 7"/>
-                    <path d="M20 12V140H460" stroke="currentColor" opacity="0.24" fill="none" strokeWidth="1"/>
-                  </svg>
-                  <div className="chat-daily-empty-center"><span className="chat-daily-empty-icon" aria-hidden="true">—</span><strong>Sem série diária consolidada</strong><span>O gráfico aparecerá quando os dias forem confirmados.</span></div>
-                </div>
-                <span className="chat-daily-empty-foot">Sem pontos ou valores estimados.</span>
-              </div>
-            </div>
+              <div className="mt-5"><EmptyState text="Ainda não há uma série diária oficial disponível para esta competência." /></div>
           )}
         </div>
 
