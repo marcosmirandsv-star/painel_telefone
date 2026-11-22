@@ -57,3 +57,9 @@
 5. Revisão visual e gramatical autenticada, segurança dos 15 acessos, qualidade de amostragem/CSAT e encerramento documentado.
 
 **Invariantes:** não inventar horário, autoria, classificação, motivo da nota, dado diário, resultado do teste ou comportamento do cliente; preservar rastreabilidade; no máximo um responsável humano final por ticket; aprendizes fora dos indicadores; telefone não entra no Chat.
+
+## Revisão da experiência e navegação (22/11/2026)
+
+Auditoria separada de todas as telas de gestão/analista, Telefone, Chat, Férias, Sistema e Fechamentos: [Auditoria visual e funcional](./central-performance-auditoria-ux-funcional-2026-11-22.md).
+
+Principais critérios: menu hierárquico com ícones, objetivo e ajuda de campo em cada módulo; segurança dos perfis; teste autenticado em navegador. Importante: o endpoint legado de Fechamentos do Chat lê a base importada Zendesk e não pode aprovar outubro/novembro de 2026 como ClickDesk oficial. A repaginação não encerra automaticamente as pendências de dados diários ou do inventário 360º.
