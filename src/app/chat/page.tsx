@@ -1764,9 +1764,18 @@ function ChatAnalystPortal({
         if (!cancelled) {
           setMetrics(metricData)
           setHistory(historyData)
-          if(metricData.reconciliation?.retry_needed && deadlineRetries<2) {
+          // A new day/week/custom filter may need its own official ClickDesk
+          // capture. Keep the selected interval visible and retry only while
+          // that exact snapshot is being prepared; never show monthly figures.
+          const awaitingOfficialCapture =
+            !metricResponse.ok && metricResponse.status === 503 &&
+            /ClickDesk ainda está preparando este intervalo/i.test(metricData.erro ?? '')
+          if ((awaitingOfficialCapture || metricData.reconciliation?.retry_needed) &&
+              deadlineRetries < (awaitingOfficialCapture ? 12 : 2)) {
             deadlineRetries++
-            retryTimer=window.setTimeout(()=>{if(!cancelled)void loadOwnChatData()},5000)
+            retryTimer = window.setTimeout(() => {
+              if (!cancelled) void loadOwnChatData()
+            }, awaitingOfficialCapture ? 8000 : 5000)
           }
         }
       } catch (error) {
@@ -2779,12 +2788,16 @@ function ChatModuleDashboard({
 
       if (requestVersion !== clickDeskMetricsRequestVersion.current) return
       setClickDeskPersistedMetrics(data)
-      if (data.reconciliation?.retry_needed && deadlineRetry < 2) {
+      const awaitingOfficialCapture =
+        !response.ok && response.status === 503 &&
+        /ClickDesk ainda está preparando este intervalo/i.test(data.erro ?? '')
+      if ((awaitingOfficialCapture || data.reconciliation?.retry_needed) &&
+          deadlineRetry < (awaitingOfficialCapture ? 12 : 2)) {
         window.setTimeout(() => {
           if (requestVersion === clickDeskMetricsRequestVersion.current) {
             void loadClickDeskPersistedMetricsOnly(period, teamId, deadlineRetry + 1)
           }
-        }, 5000)
+        }, awaitingOfficialCapture ? 8000 : 5000)
       }
     } catch (error) {
       if (requestVersion === clickDeskMetricsRequestVersion.current) {
@@ -5946,7 +5959,8 @@ function ChatModuleDashboard({
         <div role="status" aria-live="polite" className="rounded-lg border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-100">
           <strong className="block">
             {clickDeskMetricsLoading ? 'Consultando indicadores ClickDesk...' :
-              clickDeskPersistedMetrics?.erro ? 'Não foi possível consultar a base ClickDesk' :
+              clickDeskPersistedMetrics?.erro ? /ClickDesk ainda está preparando este intervalo/i.test(clickDeskPersistedMetrics.erro)
+                ? 'Preparando indicadores do intervalo selecionado' : 'Não foi possível consultar a base ClickDesk' :
               'Sem atendimentos humanos confirmados neste recorte'}
           </strong>
           <p className="mt-2">
