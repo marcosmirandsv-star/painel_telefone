@@ -310,10 +310,10 @@ export const closuresHelp: PerformancePageHelp = {
   ],
   fields: [
     {label:'Mês',meaning:'Competência de referência do fechamento. A aprovação só deve considerar o período concluído.'},
-    {label:'Canal',meaning:'Fonte de Telefone (alimentação manual) ou Chat (ClickDesk), sem misturar contagens.'},
+    {label:'Canal',meaning:'Telefone usa a base manual. Chat neste módulo usa somente o histórico importado do Zendesk até setembro de 2026; o ClickDesk atual é consultado no módulo Chat.'},
     {label:'Equipe',meaning:'No Chat, limita a captura ao time escolhido. Todas as equipes não cria automaticamente fechamentos individuais.'},
     {label:'Conferir dados atuais',meaning:'Faz leitura dos resultados disponíveis sem preservar ou substituir fechamento.'},
     {label:'Aprovar fechamento',meaning:'Preserva o resultado conferido. A operação exige confirmação e não permite substituição nesta versão.'},
   ],
-  caution:'Uma cópia preservada não se atualiza automaticamente. Não aprove números de uma amostra ou período incompleto.',
+  caution:'Este fluxo antigo não aprova dados ClickDesk de outubro de 2026 em diante. Um resultado preservado não se atualiza automaticamente e não deve ser aprovado com base incompleta.',
 }
