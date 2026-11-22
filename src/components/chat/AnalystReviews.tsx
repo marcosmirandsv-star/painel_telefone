@@ -12,22 +12,45 @@ export default function AnalystReviews({start,end,analystId,onAnalyze,loadingTic
   const [data,setData]=useState<Data|null>(null),[error,setError]=useState(''),[filter,setFilter]=useState('all')
   const [page,setPage]=useState(0),[open,setOpen]=useState<string|null>(null),[conversation,setConversation]=useState(''),[opening,setOpening]=useState(false)
   const [retry,setRetry]=useState(0)
+  const [pendingCapture,setPendingCapture]=useState(false)
   const [expanded,setExpanded]=useState(false)
   const contentId='analyst-reviewed-tickets-'+analystId
   useEffect(()=>{
     let cancelled=false
-    void (async()=>{
+    let timer:ReturnType<typeof setTimeout>|undefined
+    // Never display a previous interval's reviews under the newly selected dates.
+    setData(null)
+    setError('')
+    setPendingCapture(false)
+    setPage(0)
+    setOpen(null)
+    setConversation('')
+    async function load(attempt=0){
       try {
         const {data:{session}}=await supabase.auth.getSession()
         if(!session)throw new Error('Sua sessão expirou. Entre novamente.')
         const params=new URLSearchParams({start,end,analyst_id:analystId})
         const response=await fetch('/api/clickdesk/my-reviews?'+params,{headers:{Authorization:'Bearer '+session.access_token},cache:'no-store'})
         const result=await response.json()
-        if(!response.ok)throw new Error(result.erro||result.error||'Não foi possível carregar suas avaliações.')
-        if(!cancelled)setData(result)
-      }catch(error){if(!cancelled)setError(error instanceof Error?error.message:'Consulta indisponível.')}
-    })()
-    return()=>{cancelled=true}
+        if(cancelled)return
+        if(!response.ok){
+          const reason=String(result.erro||result.error||'Não foi possível carregar suas avaliações.')
+          if(response.status===503&&/avaliações deste intervalo ainda estão em preparação/i.test(reason)&&attempt<12){
+            setPendingCapture(true)
+            timer=setTimeout(()=>{if(!cancelled)void load(attempt+1)},15000)
+            return
+          }
+          throw new Error(reason)
+        }
+        setPendingCapture(false)
+        setError('')
+        setData(result)
+      }catch(error){
+        if(!cancelled){setPendingCapture(false);setError(error instanceof Error?error.message:'Consulta indisponível.')}
+      }
+    }
+    void load()
+    return()=>{cancelled=true;if(timer)clearTimeout(timer)}
   },[start,end,analystId,retry])
 
   // An obsolete conversation request cannot display text under a new period or ticket.
@@ -56,6 +79,7 @@ export default function AnalystReviews({start,end,analystId,onAnalyze,loadingTic
       <button type="button" className="small-button" aria-expanded={expanded} aria-controls={contentId} onClick={()=>setExpanded(value=>!value)}>{expanded?'Recolher tickets':'Expandir tickets avaliados'}</button>
     </div>
     <p className="mt-1 text-sm text-slate-400">Boas e ruins do período selecionado. Abra uma conversa ou peça uma análise da IA.</p>
+    {pendingCapture&&<p className="mt-2 text-sm text-amber-200" role="status">O ClickDesk está preparando as avaliações do período selecionado. A lista será atualizada automaticamente.</p>}
     {data&&<p className="mt-2 text-sm text-slate-300">{data.totals.total} avaliações · {data.totals.positive} boas · {data.totals.negative} ruins</p>}
     {!expanded&&error&&<p role="status" className="mt-2 text-sm text-amber-100">Não foi possível carregar as avaliações. Expanda para tentar novamente.</p>}
     <div id={contentId} hidden={!expanded}>
