@@ -5843,7 +5843,7 @@ function ChatModuleDashboard({
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="workspace-eyebrow">Módulo Chat</p>
-            <h2 className="workspace-title">Central de performance do Chat</h2>
+            <h2 className="workspace-title">Central de Performance do Chat</h2>
             <p className="section-subtitle">
               Indicadores, pessoas, Análise 360º e fechamento com dados do ClickDesk.
             </p>
@@ -5932,11 +5932,11 @@ function ChatModuleDashboard({
         <select className="form-input mt-1" value={chatActiveTab} onChange={(event) => onChatActiveTabChange(event.target.value as ChatActiveTab)}>
           <option value="overview">Operação</option>
           <option value="prototype">Equipe e produtividade</option>
-          <option value="operation360">Análise 360º</option>
+          <option value="operation360">Visão 360º</option>
           <option value="podium">Gestão e ações</option>
-          <option value="reports">Fechamento</option>
-          <option value="analysis">Conferência da base</option>
-          <option value="import">Importação</option>
+          <option value="reports">Relatórios</option>
+          <option value="analysis">Pódio</option>
+          <option value="import">Importar histórico</option>
           <option value="settings">Cadastros</option>
         </select>
       </label>
@@ -7264,6 +7264,21 @@ function ChatModuleDashboard({
             <button type="button" className="secondary-button mt-4" onClick={() => void loadOperation360()}>
               Tentar novamente
             </button>
+          </div>
+        ) : clickDeskOperation360?.source_coverage?.status === 'audit_sample_only' &&
+            (clickDeskOperation360?.totals?.attendances ?? 0) === 0 ? (
+          <div role="status" className="rounded-xl border border-amber-300/30 bg-amber-300/10 p-5 text-amber-100">
+            <h3 className="text-lg font-semibold">Visão 360º: inventário por ticket ainda indisponível</h3>
+            <p className="mt-2 text-sm leading-6">
+              O ClickDesk já fornece indicadores oficiais à aba Operação, mas a base de evidências
+              por ticket necessária à análise qualitativa ainda não foi conciliada neste período.
+              Por isso, não seria correto apresentar atendimentos, avaliações ou CSAT iguais a zero
+              como resultado da Visão 360º.
+            </p>
+            <p className="mt-2 text-sm leading-6">
+              A leitura da IA permanece pendente até a comprovação da autoria e do histórico
+              individual dos tickets. Nenhuma avaliação nem indicador oficial foi alterado.
+            </p>
           </div>
         ) : (
           <div className="space-y-6">
