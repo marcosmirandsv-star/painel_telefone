@@ -148,7 +148,7 @@ function buildQualitativePrompt(input: {
 Você é um analista de qualidade de atendimento. Analise somente o conteúdo fornecido e devolva JSON válido.
 
 OBJETIVO
-Identificar sinais qualitativos úteis para gestão sem transformar hipótese em fato.
+Identificar sinais qualitativos úteis para gestão e analista, com foco na QUALIDADE DA EXPERIÊNCIA e em como melhorar a próxima interação — não premiar volume ou deduzir mérito a partir da nota.
 
 REGRAS OBRIGATÓRIAS
 - Não invente causa, sentimento, responsabilidade ou comportamento.
@@ -187,6 +187,16 @@ REGRAS OBRIGATÓRIAS
 - Em attribution_caution registre o limite causal de maneira específica. Ser coach é orientar boas práticas, não fabricar culpa.
 - limitations deve registrar o que não pode ser concluído com segurança.
 - Não reproduza e-mail, telefone, CPF, CNPJ, IDs ou outros identificadores.
+- Na seção cx_journey, distinga SEMPRE resultado técnico comprovado, encaminhamento, pendência e impossibilidade de verificar o desfecho. Uma despedida cordial ou "sim" não comprova resolução.
+- Em customer_effort, considere número de tentativas, repetição de informações, envio repetido de evidências, tempo de conversa e transferências SOMENTE se esses fatos aparecerem no transcript. Nunca suponha esforço elevado a partir da nota.
+- Em ai_to_human_continuity, confirme se o histórico da IA está presente. Se não estiver, use unclear; se a IA foi comprovadamente preservada ou a cliente precisou repetir etapas, descreva a evidência. Sem etapa anterior, use not_applicable.
+- Em result_validation, confirme se o cliente testou e validou a solução de modo observável; attempted se houve teste sem confirmação; not_shown somente se o transcript completo mostrar encerramento sem teste, sem presumir o que os anexos poderiam comprovar.
+- Em next_step_quality, classifique se houve próximo passo verificável e dentro do escopo do suporte; se não houver evidência suficiente, use unclear.
+- Em analyst_action, indique uma conduta específica sob controle da pessoa no próximo caso. Priorize prática repetível e um critério de resultado, não rótulo de personalidade ou ordem genérica.
+- Em management_action, indique o que a gestão deve VALIDAR antes de agir (amostra de casos similares, causas de produto/processo, orientação de feedback e medição de mudança). Não proponha punição nem classificação individual conclusiva por um ticket.
+- Em evidence_gaps, documente anexos não vistos, histórico de IA ausente, transcrição incompleta ou desfecho não observável. Não transforme ausência de informação em fato negativo.
+- Avaliações Ótimo/Bom também devem gerar boas práticas observáveis; avaliações Neutro/Ruim/Péssimo não provam conduta ruim. Explique limites da causalidade.
+- Qualidade percebida e produtividade são dimensões diferentes: nunca atribua nota de produtividade à seção cx_journey ou trate CSAT isolado como avaliação do comportamento.
 - Responda SOMENTE com JSON, sem Markdown.
 
 VALORES PERMITIDOS
@@ -198,6 +208,11 @@ human_influence.confidence: low | medium | high
 controllability.classification: analyst | company | customer | external | mixed | unclear
 analyst_takeaway.kind: maintain | develop | context | none
 analyst_takeaway.confidence: low | medium | high
+cx_journey.resolution_state: confirmed | partial | forwarded | not_demonstrated | unclear
+cx_journey.customer_effort: low | moderate | high | unclear
+cx_journey.ai_to_human_continuity: preserved | repeated | not_applicable | unclear
+cx_journey.result_validation: confirmed | attempted | not_shown | unclear
+cx_journey.next_step_quality: clear | partial | not_shown | unclear
 
 FORMATO EXATO
 {
@@ -237,6 +252,19 @@ FORMATO EXATO
     "verification_check": "Um item verificável no transcript futuro que a gestão possa conferir.",
     "attribution_caution": "O que impede afirmar que o analista causou a nota, quando não houver prova.",
     "evidence_confidence": "low"
+  },
+  "cx_journey": {
+    "resolution_state": "unclear",
+    "result_evidence": "O que está efetivamente comprovado no encerramento, sem deduzir que cortesia seja solução.",
+    "customer_effort": "unclear",
+    "effort_evidence": "Evidência observável de repetições, tentativas ou transferências; se ausente, descreva a limitação.",
+    "ai_to_human_continuity": "unclear",
+    "continuity_evidence": "Como o humano utilizou ou não utilizou o contexto da IA, se esta etapa estiver acessível.",
+    "result_validation": "unclear",
+    "next_step_quality": "unclear",
+    "analyst_action": "Uma prática concreta a manter ou desenvolver, com base no atendimento, aplicável a caso semelhante.",
+    "management_action": "Uma verificação de padrão e um próximo passo de orientação, com critério de evolução e atenção às causas externas.",
+    "evidence_gaps": ["Anexos ou passos não verificados, se existirem."]
   }
 }
 

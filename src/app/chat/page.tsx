@@ -23,6 +23,7 @@ import CxDiagnostics from '@/components/CxDiagnostics'
 import ChatCaseManagement from '@/components/chat/ChatCaseManagement'
 import { chatTimeRange, type ChatTimeMode } from '@/lib/chat-time-filter'
 import ClickDeskSourceReport from '@/components/chat/ClickDeskSourceReport'
+import ClickDeskVerifiedDailyVolume from '@/components/chat/ClickDeskVerifiedDailyVolume'
 const QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS = true
 
 const OFFICIAL_RESOLUTION_POLICY = 'Campo Recebidos do relatório ClickDesk, nas filas ERP/Fiscal e no intervalo selecionado. A performance inclui somente os analistas do quadro aprovado; o total operacional pode incluir outros responsáveis e atendimentos sem responsável. As capturas são atualizadas a cada 30 minutos. O CSAT ajustado exclui somente neutros externos comprovados; todas as avaliações continuam na participação.'
@@ -806,6 +807,20 @@ type ClickDeskQualitativeResponse = {
       evidence_confidence: 'low' | 'medium' | 'high'
       source: 'generated' | 'contextual_from_existing_analysis'
     }
+    cx_journey?: {
+      resolution_state: 'confirmed' | 'partial' | 'forwarded' | 'not_demonstrated' | 'unclear'
+      result_evidence: string
+      customer_effort: 'low' | 'moderate' | 'high' | 'unclear'
+      effort_evidence: string
+      ai_to_human_continuity: 'preserved' | 'repeated' | 'not_applicable' | 'unclear'
+      continuity_evidence: string
+      result_validation: 'confirmed' | 'attempted' | 'not_shown' | 'unclear'
+      next_step_quality: 'clear' | 'partial' | 'not_shown' | 'unclear'
+      analyst_action: string
+      management_action: string
+      evidence_gaps: string[]
+      source: 'generated' | 'contextual_from_existing_analysis'
+    }
   }
   error?: string
   erro?: string
@@ -1318,6 +1333,70 @@ function QualitativeAnalysisCard({
         </div>
       </div>
 
+      {result.analysis.cx_journey?.source === 'generated' && (
+        <section className="mt-4 rounded-xl border border-teal-300/20 bg-teal-300/[0.035] p-4">
+          <div>
+            <span className="text-xs font-bold uppercase tracking-[0.1em] text-teal-200">Jornada do cliente · leitura de qualidade</span>
+            <p className="mt-1 text-xs leading-5 text-slate-400">
+              Os critérios abaixo descrevem apenas o que a conversa comprova. Uma avaliação não determina a causa da experiência.
+            </p>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg bg-slate-950/40 p-3">
+              <span className="text-xs text-slate-400">Resultado da demanda</span>
+              <strong className="mt-1 block text-sm text-slate-100">
+                {({
+                  confirmed:'Resultado confirmado',partial:'Resultado parcial',forwarded:'Encaminhado',
+                  not_demonstrated:'Resolução não demonstrada',unclear:'Desfecho não verificado',
+                } as Record<string,string>)[result.analysis.cx_journey.resolution_state]}
+              </strong>
+              <p className="mt-2 text-xs leading-5 text-slate-300">{result.analysis.cx_journey.result_evidence}</p>
+            </div>
+            <div className="rounded-lg bg-slate-950/40 p-3">
+              <span className="text-xs text-slate-400">Esforço do cliente</span>
+              <strong className="mt-1 block text-sm text-slate-100">
+                {({low:'Baixo',moderate:'Moderado',high:'Elevado',unclear:'Não verificável'} as Record<string,string>)[result.analysis.cx_journey.customer_effort]}
+              </strong>
+              <p className="mt-2 text-xs leading-5 text-slate-300">{result.analysis.cx_journey.effort_evidence}</p>
+            </div>
+            <div className="rounded-lg bg-slate-950/40 p-3">
+              <span className="text-xs text-slate-400">Continuidade da IA para o atendimento humano</span>
+              <strong className="mt-1 block text-sm text-slate-100">
+                {({preserved:'Contexto aproveitado',repeated:'Repetição observada',
+                  not_applicable:'Não se aplica',unclear:'Não verificável'} as Record<string,string>)[result.analysis.cx_journey.ai_to_human_continuity]}
+              </strong>
+              <p className="mt-2 text-xs leading-5 text-slate-300">{result.analysis.cx_journey.continuity_evidence}</p>
+            </div>
+            <div className="rounded-lg bg-slate-950/40 p-3">
+              <span className="text-xs text-slate-400">Validação e próximo passo</span>
+              <strong className="mt-1 block text-sm text-slate-100">
+                {result.analysis.cx_journey.result_validation === 'confirmed' ? 'Teste confirmado' :
+                  result.analysis.cx_journey.result_validation === 'attempted' ? 'Teste iniciado' :
+                  result.analysis.cx_journey.result_validation === 'not_shown' ? 'Teste não demonstrado' : 'Teste não verificável'}
+                {' · '}
+                {result.analysis.cx_journey.next_step_quality === 'clear' ? 'próximo passo claro' :
+                  result.analysis.cx_journey.next_step_quality === 'partial' ? 'próximo passo parcial' :
+                  result.analysis.cx_journey.next_step_quality === 'not_shown' ? 'próximo passo não demonstrado' :
+                  'próximo passo não verificável'}
+              </strong>
+            </div>
+          </div>
+          <div className="mt-4 rounded-lg border border-cyan-300/15 bg-slate-950/30 p-3 text-sm">
+            <strong className="text-teal-100">{audience === 'analyst' ? 'O que praticar no próximo atendimento' : 'Orientação prática para o analista'}</strong>
+            <p className="mt-1 leading-6 text-slate-300">{result.analysis.cx_journey.analyst_action}</p>
+            {audience === 'management' && <>
+              <strong className="mt-4 block text-amber-100">Próximo passo da gestão</strong>
+              <p className="mt-1 leading-6 text-slate-300">{result.analysis.cx_journey.management_action}</p>
+            </>}
+          </div>
+          {result.analysis.cx_journey.evidence_gaps.length > 0 && (
+            <p className="mt-3 text-xs leading-5 text-slate-400">
+              <strong>Limites da leitura:</strong> {result.analysis.cx_journey.evidence_gaps.join(' · ')}
+            </p>
+          )}
+        </section>
+      )}
+
       <div className="mt-4 rounded-lg border border-white/10 bg-slate-950/30 px-3 py-3 text-sm">
         {audience === 'analyst' ? (
           <>
@@ -1364,10 +1443,12 @@ function QualitativeAnalysisCard({
           <p className="mt-1 leading-6 text-cyan-100">{result.analysis.cx_coaching.practice_to_improve}</p>
           <p className="mt-2 rounded-md bg-slate-950/55 p-3 italic leading-6 text-slate-300">“{result.analysis.cx_coaching.suggested_phrase}”</p>
         </div>
-        <div>
-          <strong className="text-slate-100">O que a gestão deve verificar na próxima amostra</strong>
-          <p className="mt-1 leading-6 text-slate-300">{result.analysis.cx_coaching.verification_check}</p>
-        </div>
+        {audience === 'management' && (
+          <div>
+            <strong className="text-slate-100">O que a gestão deve verificar na próxima amostra</strong>
+            <p className="mt-1 leading-6 text-slate-300">{result.analysis.cx_coaching.verification_check}</p>
+          </div>
+        )}
         <p className="border-t border-white/10 pt-3 text-xs leading-5 text-amber-100">
           {result.analysis.cx_coaching.attribution_caution}
           {result.analysis.cx_coaching.source === 'contextual_from_existing_analysis'
@@ -7934,29 +8015,19 @@ function ChatModuleDashboard({
                 </div>
               )}
             </>
+          ) : isManagementUser &&
+            isOfficialClickDeskSource(clickDeskPersistedMetrics?.source) &&
+            Boolean(clickDeskPersistedMetrics?.period?.start) &&
+            Boolean(clickDeskPersistedMetrics?.period?.end) &&
+            String(clickDeskPersistedMetrics?.period?.start) >= '2026-10-01' ? (
+              <ClickDeskVerifiedDailyVolume
+                start={String(clickDeskPersistedMetrics?.period?.start)}
+                end={String(clickDeskPersistedMetrics?.period?.end)}
+                teamId={selectedTeamId}
+                periodReceived={chat2ProductivityTickets}
+              />
           ) : (
-            <div className="chat-daily-empty" role="status">
-              <div className="chat-daily-empty-copy">
-                <span className="chat-daily-empty-kicker">Leitura diária · aguardando conciliação</span>
-                <h4>O volume do mês está disponível. A distribuição por dia ainda não.</h4>
-                <p>O ClickDesk já confirmou os atendimentos do período, mas ainda não há uma sequência diária completa e conciliada. Não vamos dividir o volume mensal por dias nem apresentar uma curva estimada.</p>
-                <div className="chat-daily-empty-metrics">
-                  <div><span>Recebidos no período</span><strong>{formatChatCount(chat2ProductivityTickets)}</strong><small>Indicador oficial acumulado</small></div>
-                  <div><span>Série diária conciliada</span><strong>—</strong><small>Não disponível neste recorte</small></div>
-                </div>
-              </div>
-              <div className="chat-daily-empty-canvas">
-                <div className="chat-daily-empty-heading"><span>Atendimentos por dia</span><span>Aguardando dados</span></div>
-                <div className="chat-daily-empty-grid">
-                  <svg viewBox="0 0 470 165" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-                    <path d="M20 20H460 M20 60H460 M20 100H460 M20 140H460" stroke="currentColor" opacity="0.18" strokeWidth="1" strokeDasharray="4 7"/>
-                    <path d="M20 12V140H460" stroke="currentColor" opacity="0.24" fill="none" strokeWidth="1"/>
-                  </svg>
-                  <div className="chat-daily-empty-center"><span className="chat-daily-empty-icon" aria-hidden="true">—</span><strong>Sem série diária consolidada</strong><span>O gráfico aparecerá quando os dias forem confirmados.</span></div>
-                </div>
-                <span className="chat-daily-empty-foot">Sem pontos ou valores estimados.</span>
-              </div>
-            </div>
+              <div className="mt-5"><EmptyState text="Ainda não há uma série diária oficial disponível para esta competência." /></div>
           )}
         </div>
 
