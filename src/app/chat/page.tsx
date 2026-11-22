@@ -1980,7 +1980,7 @@ function ChatAnalystPortal({
             onInput={event => changeRoutineMonth(event.currentTarget.value)}
             onChange={event => changeRoutineMonth(event.currentTarget.value)} />
         </label>
-        <ChatTimeFilter month={monthKey} mode={timeMode} reference={timeReference} onChange={(mode,reference)=>{const next=chatTimeRange(monthKey,mode,reference);if(next.start!==monthStart||next.end!==monthEnd){setMetrics(null);setSelectedRoutineDate(null);setDailyTickets(null);setOpenQualitativeTicketId(null)}setTimeMode(mode);setTimeReference(reference)}} />
+        <ChatTimeFilter month={monthKey} mode={timeMode} reference={timeReference} dailyAvailable={clickDeskDailyAvailable(metrics)} onChange={(mode,reference)=>{const next=chatTimeRange(monthKey,mode,reference);if(next.start!==monthStart||next.end!==monthEnd){setMetrics(null);setSelectedRoutineDate(null);setDailyTickets(null);setOpenQualitativeTicketId(null)}setTimeMode(mode);setTimeReference(reference)}} />
         <div className="mt-4 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
             <div className="flex items-center gap-4">
@@ -5915,7 +5915,7 @@ function ChatModuleDashboard({
           </div>
         </div>
 
-        {chatRangeEnabled && <ChatTimeFilter month={chatFilterMonth} mode={chatTimeMode} reference={chatTimeReference} onChange={(mode,reference)=>{const next=chatTimeRange(chatFilterMonth,mode,reference);if(next.start!==chatRange.start||next.end!==chatRange.end){setClickDeskPersistedMetrics(null);setChat2DailyDateFilter('all')}setChatTimeMode(mode);setChatTimeReference(reference)}} />}
+        {chatRangeEnabled && <ChatTimeFilter month={chatFilterMonth} mode={chatTimeMode} reference={chatTimeReference} dailyAvailable={clickDeskDailyAvailable(clickDeskPersistedMetrics)} onChange={(mode,reference)=>{const next=chatTimeRange(chatFilterMonth,mode,reference);if(next.start!==chatRange.start||next.end!==chatRange.end){setClickDeskPersistedMetrics(null);setChat2DailyDateFilter('all')}setChatTimeMode(mode);setChatTimeReference(reference)}} />}
         <div className="mt-4 border-t border-white/10 pt-4">
           <ClickDeskSyncStatus
             latestSyncAt={clickDeskPersistedMetrics?.latest_sync?.finished_at}
