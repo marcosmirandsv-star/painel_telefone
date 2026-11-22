@@ -3208,3 +3208,417 @@
     min-height: 4.5rem;
   }
 }
+
+
+/* Chat workspace: modern identity and a compact information hierarchy.
+   Presentation-only changes: source data and access rules remain unchanged. */
+.chat-production-shell .chat-app-root {
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse 50rem 27rem at 12% -12%, rgba(33, 140, 178, 0.11), transparent 72%),
+    radial-gradient(ellipse 42rem 36rem at 100% 8%, rgba(43, 82, 153, 0.07), transparent 75%),
+    #0d1524;
+}
+.chat-production-shell .chat-page-container {
+  max-width: 1680px;
+  margin: 0 auto;
+  padding: 0 clamp(16px, 2.4vw, 36px) 64px;
+}
+.chat-production-shell .chat-app-topbar {
+  min-height: 86px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  padding: 18px 0;
+}
+.chat-production-shell .chat-app-identity {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+.chat-production-shell .chat-app-monogram {
+  display: grid;
+  flex: 0 0 43px;
+  place-items: center;
+  width: 43px;
+  height: 43px;
+  border-radius: 13px;
+  background: linear-gradient(140deg, #5eead4, #22d3ee);
+  color: #082f49;
+  font-size: 1.4rem;
+  font-weight: 850;
+  letter-spacing: -0.075em;
+  box-shadow: 0 7px 24px rgba(34, 211, 238, 0.16);
+}
+.chat-production-shell .chat-app-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.chat-production-shell .chat-app-brand-kicker {
+  font-size: 0.69rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #91a7bf;
+  font-weight: 700;
+}
+.chat-production-shell .chat-app-brand-text strong {
+  font-size: 1.08rem;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  color: #f8fafc;
+  font-weight: 750;
+}
+.chat-production-shell .chat-brand-divider {color: #3c728d; margin: 0 2px;}
+.chat-production-shell .chat-app-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.chat-production-shell .chat-app-role {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #b9cad9;
+  font-size: 0.78rem;
+  font-weight: 620;
+}
+.chat-production-shell .chat-app-role-dot {
+  height: 7px;
+  width: 7px;
+  border-radius: 50%;
+  background: #5eead4;
+  box-shadow: 0 0 0 4px rgba(94, 234, 212, 0.08);
+}
+.chat-production-shell .chat-app-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(148, 163, 184, 0.19);
+  border-radius: 9px;
+  padding: 10px 13px;
+  color: #d6e4f1;
+  text-decoration: none;
+  font-weight: 650;
+  font-size: 0.78rem;
+  background: rgba(255, 255, 255, 0.024);
+  transition: background 150ms ease, border-color 150ms ease;
+}
+.chat-production-shell .chat-app-back-link:hover {
+  border-color: rgba(94, 234, 212, 0.35);
+  background: rgba(94, 234, 212, 0.07);
+}
+.chat-production-shell .chat-app-navigation {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, .25) transparent;
+  padding: 11px 0 13px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.10);
+}
+.chat-production-shell .chat-app-nav-item {
+  flex: 0 0 auto;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  padding: 11px 16px;
+  color: #a6b9ca;
+  background: transparent;
+  font-size: 0.82rem;
+  font-weight: 630;
+  letter-spacing: -0.01em;
+  transition: color 130ms ease, background 130ms ease;
+}
+.chat-production-shell .chat-app-nav-item:hover {
+  color: #f8fafc;
+  background: rgba(148, 163, 184, 0.09);
+}
+.chat-production-shell .chat-app-nav-item-active {
+  color: #baf9f4;
+  background: rgba(34, 211, 238, 0.11);
+  border-color: rgba(45, 212, 191, 0.18);
+  font-weight: 770;
+}
+.chat-production-shell .chat-app-nav-item:focus-visible,
+.chat-production-shell .chat-app-back-link:focus-visible,
+.chat-production-shell .chat-period-tab:focus-visible,
+.chat-production-shell .chat-historical-action:focus-visible {
+  outline: 2px solid #5eead4;
+  outline-offset: 3px;
+}
+.chat-production-shell .chat-app-content > .mt-8,
+.chat-production-shell .chat-app-content > .analyst-portal {
+  margin-top: 20px;
+}
+.chat-production-shell .chat-overview-hero {
+  border: 1px solid rgba(103, 232, 249, 0.18);
+  border-radius: 18px;
+  padding: clamp(20px, 2.2vw, 31px);
+  background:
+    radial-gradient(ellipse at 100% 0%, rgba(34, 211, 238, 0.075), transparent 55%),
+    linear-gradient(135deg, rgba(19, 39, 59, 0.94), rgba(12, 23, 42, 0.96));
+  box-shadow: 0 18px 40px rgba(2, 6, 23, 0.13);
+}
+.chat-production-shell .chat-overview-hero .workspace-title {
+  margin-top: 8px;
+  font-size: clamp(1.65rem, 2.35vw, 2.25rem);
+  letter-spacing: -0.045em;
+}
+.chat-production-shell .chat-overview-hero .workspace-eyebrow {
+  font-size: 0.69rem;
+  letter-spacing: 0.11em;
+  color: #6ee7dc;
+}
+.chat-production-shell .chat-overview-hero .section-subtitle {
+  max-width: 560px;
+  color: #b5c5d7;
+  line-height: 1.55;
+  margin-top: 9px;
+}
+.chat-production-shell .chat-overview-selectors {
+  width: min(100%, 520px);
+  min-width: 0;
+}
+.chat-production-shell .chat-overview-selectors .form-input {
+  min-height: 43px;
+  border-radius: 10px;
+}
+.chat-production-shell .chat-overview-sync {
+  margin-top: 15px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.10);
+  color: #8ca5bc;
+}
+.chat-production-shell .chat-period-picker {
+  margin-top: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 14px;
+  background: rgba(4, 17, 33, 0.46);
+  padding: 16px 18px;
+}
+.chat-production-shell .chat-period-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+}
+.chat-production-shell .chat-period-eyebrow {
+  font-size: 0.77rem;
+  font-weight: 740;
+  color: #f0f6ff;
+}
+.chat-production-shell .chat-period-caption {
+  margin-top: 5px;
+  color: #9fb5c9;
+  font-size: 0.81rem;
+  font-variant-numeric: tabular-nums;
+}
+.chat-production-shell .chat-period-current {
+  margin-left: 10px;
+  border-radius: 99px;
+  background: rgba(94, 234, 212, 0.09);
+  padding: 4px 9px;
+  color: #99f6e4;
+  font-size: 0.69rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.chat-production-shell .chat-period-actions {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.chat-production-shell .chat-period-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 11px;
+  background: rgba(2, 6, 23, 0.32);
+}
+.chat-production-shell .chat-period-tab {
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: transparent;
+  color: #9fb5c9;
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+.chat-production-shell .chat-period-tab-selected {
+  background: rgba(94, 234, 212, 0.13);
+  color: #ccfbf1;
+  box-shadow: inset 0 0 0 1px rgba(94, 234, 212, 0.15);
+}
+.chat-production-shell .chat-period-tab:not(:disabled):hover {
+  color: #f8fafc;
+  background: rgba(94, 234, 212, 0.07);
+}
+.chat-production-shell .chat-period-tab:disabled {opacity: 0.35;cursor: not-allowed;}
+.chat-production-shell .chat-period-date-control,
+.chat-production-shell .chat-period-custom label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: #9fb5c9;
+  font-size: 0.73rem;
+}
+.chat-production-shell .chat-period-date-control .form-input,
+.chat-production-shell .chat-period-custom .form-input {
+  min-height: 38px;
+  width: 170px;
+  padding: 7px 10px;
+  font-size: 0.8rem;
+}
+.chat-production-shell .chat-period-custom {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+.chat-production-shell .chat-period-helper {
+  margin-top: 12px;
+  max-width: 1000px;
+  border-left: 2px solid rgba(94, 234, 212, 0.28);
+  padding: 2px 0 2px 11px;
+  color: #91a7bb;
+  font-size: 0.74rem;
+  line-height: 1.6;
+}
+.chat-production-shell .chat-historical-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 13px;
+  background: rgba(12, 26, 43, 0.66);
+  padding: 16px 20px;
+}
+.chat-production-shell .chat-historical-banner-copy {
+  max-width: 1050px;
+}
+.chat-production-shell .chat-historical-eyebrow,
+.chat-production-shell .chat-legacy-label {
+  display: block;
+  color: #83e8dd;
+  font-size: 0.69rem;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.chat-production-shell .chat-historical-banner-copy strong {
+  display: block;
+  margin-top: 5px;
+  color: #ecf4fc;
+  font-size: 0.92rem;
+}
+.chat-production-shell .chat-historical-banner-copy p {
+  margin-top: 5px;
+  color: #90a6bc;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+.chat-production-shell .chat-historical-action {
+  flex: 0 0 auto;
+  border: 1px solid rgba(94, 234, 212, 0.28);
+  border-radius: 9px;
+  background: rgba(94, 234, 212, 0.06);
+  padding: 11px 13px;
+  color: #bbf7f0;
+  font-size: 0.79rem;
+  font-weight: 740;
+}
+.chat-production-shell .chat-historical-action:hover {
+  background: rgba(94, 234, 212, 0.12);
+}
+.chat-production-shell .chat-history-details {
+  scroll-margin-top: 18px;
+}
+.chat-production-shell .chat-legacy-analyst-history > summary {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-right: 28px;
+  list-style: none;
+}
+.chat-production-shell .chat-legacy-analyst-history > summary::-webkit-details-marker {display: none;}
+.chat-production-shell .chat-legacy-analyst-history > summary::after {
+  position: absolute;
+  right: 2px;
+  top: 18px;
+  content: "+";
+  color: #8bdedb;
+  font-size: 1.4rem;
+}
+.chat-production-shell .chat-legacy-analyst-history[open] > summary::after {content: "−";}
+.chat-production-shell .chat-legacy-analyst-history > summary strong {
+  color: #f8fafc;
+  font-size: 1.15rem;
+  letter-spacing: -0.02em;
+}
+.chat-production-shell .chat-legacy-analyst-history > summary span:last-of-type {
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+.chat-production-shell .chat-history-table-scroll {
+  margin-top: 18px;
+  overflow-x: auto;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 11px;
+}
+.chat-production-shell .chat-history-comparison-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+.chat-production-shell .chat-history-comparison-table thead {
+  background: rgba(148, 163, 184, 0.055);
+}
+.chat-production-shell .chat-history-comparison-table th,
+.chat-production-shell .chat-history-comparison-table td {
+  padding: 11px 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.11);
+  text-align: right;
+  white-space: nowrap;
+}
+.chat-production-shell .chat-history-comparison-table th:first-child {
+  text-align: left;
+}
+.chat-production-shell .chat-history-comparison-table tbody th {
+  color: #e2e8f0;
+  font-weight: 680;
+}
+.chat-production-shell .chat-history-comparison-table tbody tr:last-child > * {border-bottom: 0;}
+.chat-production-shell .chat-history-comparison-table tbody tr:hover {background: rgba(148, 163, 184, 0.045);}
+@media (max-width: 960px) {
+  .chat-production-shell .chat-overview-selectors {width: 100%;}
+  .chat-production-shell .chat-period-header {align-items: flex-start;}
+  .chat-production-shell .chat-historical-banner {align-items: flex-start;flex-direction: column;}
+}
+@media (max-width: 600px) {
+  .chat-production-shell .chat-page-container {padding-inline: 14px;}
+  .chat-production-shell .chat-app-topbar {min-height: 72px; gap: 12px;}
+  .chat-production-shell .chat-app-monogram {width: 38px;height: 38px;flex-basis: 38px;font-size: 1.2rem;}
+  .chat-production-shell .chat-app-brand-text strong {font-size: 0.94rem;}
+  .chat-production-shell .chat-app-brand-kicker {font-size: 0.61rem;}
+  .chat-production-shell .chat-app-role {display: none;}
+  .chat-production-shell .chat-app-back-link {padding: 8px 10px;}
+  .chat-production-shell .chat-app-nav-item {padding: 10px 12px;font-size: 0.77rem;}
+  .chat-production-shell .chat-overview-hero {padding: 18px;}
+  .chat-production-shell .chat-period-picker {padding: 12px;}
+  .chat-production-shell .chat-period-actions {width: 100%;}
+  .chat-production-shell .chat-period-tabs {width: 100%;}
+  .chat-production-shell .chat-period-tab {flex: 1 1 22%;min-width: 66px;padding-inline: 8px;}
+  .chat-production-shell .chat-period-current {display: inline-block;margin: 7px 0 0;}
+  .chat-production-shell .chat-historical-banner {padding: 14px;}
+}
