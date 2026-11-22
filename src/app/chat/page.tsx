@@ -6040,12 +6040,12 @@ function ChatModuleDashboard({
               label={
                 chatActiveTab === 'reports'
                   ? 'Período do relatório'
-                  : chatActiveTab === 'prototype' || chatActiveTab === 'overview' || chatActiveTab === 'operation360' || chatActiveTab === 'podium' || chatActiveTab === 'analysis'
+                  : chatActiveTab === 'prototype' || chatActiveTab === 'overview' || chatActiveTab === 'operation360' || chatActiveTab === 'neutralAudit' || chatActiveTab === 'podium' || chatActiveTab === 'analysis'
                     ? 'Período ClickDesk'
                     : 'Período'
               }
             >
-              {chatActiveTab === 'prototype' || chatActiveTab === 'overview' || chatActiveTab === 'operation360' || chatActiveTab === 'podium' || chatActiveTab === 'analysis' || chatActiveTab === 'reports' ? (
+              {chatActiveTab === 'prototype' || chatActiveTab === 'overview' || chatActiveTab === 'operation360' || chatActiveTab === 'neutralAudit' || chatActiveTab === 'podium' || chatActiveTab === 'analysis' || chatActiveTab === 'reports' ? (
                 <select
                   className="form-input"
                   value={chat2PeriodKey}
