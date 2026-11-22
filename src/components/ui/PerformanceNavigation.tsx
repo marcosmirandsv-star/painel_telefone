@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { PerformanceIcon, type PerformanceIconName } from './performance-icons'
 
 export type PerformanceNavItem = {
@@ -22,6 +22,7 @@ export function PerformanceNavigation({
   subtitle?: string
   onSelect?: (id: string) => void
 }) {
+  const [collapsedGroups,setCollapsedGroups] = useState<Record<string, boolean>>({})
   return <aside className="pnav-sidebar">
     <div className="pnav-sidebar-title">
       <span className="pnav-sidebar-logo"><PerformanceIcon name="layers" size={20}/></span>
@@ -32,8 +33,14 @@ export function PerformanceNavigation({
     </div>
     <nav className="pnav-menu" aria-label={label}>
       {groups.map(group => <div key={group.label} className="pnav-group">
-        <h2 className="pnav-group-title">{group.label}</h2>
-        <div className="pnav-group-items">
+        <button className="pnav-group-toggle" type="button"
+          aria-expanded={!collapsedGroups[group.label]}
+          onClick={()=>setCollapsedGroups(current=>({...current,[group.label]:!current[group.label]}))}
+          title={collapsedGroups[group.label] ? 'Expandir '+group.label : 'Recolher '+group.label}>
+          <span className="pnav-group-title">{group.label}</span>
+          <PerformanceIcon name="chevron" size={13}/>
+        </button>
+        {!collapsedGroups[group.label] && <div className="pnav-group-items">
           {group.items.map(item => {
             const selected = activeId === item.id
             const contents = <>
@@ -49,7 +56,7 @@ export function PerformanceNavigation({
                 onClick={() => onSelect?.(item.id)} aria-current={selected ? 'page' : undefined}
                 title={item.description}>{contents}</button>
           })}
-        </div>
+        </div>}
       </div>)}
     </nav>
     <div className="pnav-sidebar-foot"><PerformanceIcon name="shield" size={16}/>
