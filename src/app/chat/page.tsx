@@ -807,6 +807,20 @@ type ClickDeskQualitativeResponse = {
       evidence_confidence: 'low' | 'medium' | 'high'
       source: 'generated' | 'contextual_from_existing_analysis'
     }
+    cx_journey?: {
+      resolution_state: 'confirmed' | 'partial' | 'forwarded' | 'not_demonstrated' | 'unclear'
+      result_evidence: string
+      customer_effort: 'low' | 'moderate' | 'high' | 'unclear'
+      effort_evidence: string
+      ai_to_human_continuity: 'preserved' | 'repeated' | 'not_applicable' | 'unclear'
+      continuity_evidence: string
+      result_validation: 'confirmed' | 'attempted' | 'not_shown' | 'unclear'
+      next_step_quality: 'clear' | 'partial' | 'not_shown' | 'unclear'
+      analyst_action: string
+      management_action: string
+      evidence_gaps: string[]
+      source: 'generated' | 'contextual_from_existing_analysis'
+    }
   }
   error?: string
   erro?: string
@@ -1319,6 +1333,70 @@ function QualitativeAnalysisCard({
         </div>
       </div>
 
+      {result.analysis.cx_journey?.source === 'generated' && (
+        <section className="mt-4 rounded-xl border border-teal-300/20 bg-teal-300/[0.035] p-4">
+          <div>
+            <span className="text-xs font-bold uppercase tracking-[0.1em] text-teal-200">Jornada do cliente · leitura de qualidade</span>
+            <p className="mt-1 text-xs leading-5 text-slate-400">
+              Os critérios abaixo descrevem apenas o que a conversa comprova. Uma avaliação não determina a causa da experiência.
+            </p>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="rounded-lg bg-slate-950/40 p-3">
+              <span className="text-xs text-slate-400">Resultado da demanda</span>
+              <strong className="mt-1 block text-sm text-slate-100">
+                {({
+                  confirmed:'Resultado confirmado',partial:'Resultado parcial',forwarded:'Encaminhado',
+                  not_demonstrated:'Resolução não demonstrada',unclear:'Desfecho não verificado',
+                } as Record<string,string>)[result.analysis.cx_journey.resolution_state]}
+              </strong>
+              <p className="mt-2 text-xs leading-5 text-slate-300">{result.analysis.cx_journey.result_evidence}</p>
+            </div>
+            <div className="rounded-lg bg-slate-950/40 p-3">
+              <span className="text-xs text-slate-400">Esforço do cliente</span>
+              <strong className="mt-1 block text-sm text-slate-100">
+                {({low:'Baixo',moderate:'Moderado',high:'Elevado',unclear:'Não verificável'} as Record<string,string>)[result.analysis.cx_journey.customer_effort]}
+              </strong>
+              <p className="mt-2 text-xs leading-5 text-slate-300">{result.analysis.cx_journey.effort_evidence}</p>
+            </div>
+            <div className="rounded-lg bg-slate-950/40 p-3">
+              <span className="text-xs text-slate-400">Continuidade da IA para o atendimento humano</span>
+              <strong className="mt-1 block text-sm text-slate-100">
+                {({preserved:'Contexto aproveitado',repeated:'Repetição observada',
+                  not_applicable:'Não se aplica',unclear:'Não verificável'} as Record<string,string>)[result.analysis.cx_journey.ai_to_human_continuity]}
+              </strong>
+              <p className="mt-2 text-xs leading-5 text-slate-300">{result.analysis.cx_journey.continuity_evidence}</p>
+            </div>
+            <div className="rounded-lg bg-slate-950/40 p-3">
+              <span className="text-xs text-slate-400">Validação e próximo passo</span>
+              <strong className="mt-1 block text-sm text-slate-100">
+                {result.analysis.cx_journey.result_validation === 'confirmed' ? 'Teste confirmado' :
+                  result.analysis.cx_journey.result_validation === 'attempted' ? 'Teste iniciado' :
+                  result.analysis.cx_journey.result_validation === 'not_shown' ? 'Teste não demonstrado' : 'Teste não verificável'}
+                {' · '}
+                {result.analysis.cx_journey.next_step_quality === 'clear' ? 'próximo passo claro' :
+                  result.analysis.cx_journey.next_step_quality === 'partial' ? 'próximo passo parcial' :
+                  result.analysis.cx_journey.next_step_quality === 'not_shown' ? 'próximo passo não demonstrado' :
+                  'próximo passo não verificável'}
+              </strong>
+            </div>
+          </div>
+          <div className="mt-4 rounded-lg border border-cyan-300/15 bg-slate-950/30 p-3 text-sm">
+            <strong className="text-teal-100">{audience === 'analyst' ? 'O que praticar no próximo atendimento' : 'Orientação prática para o analista'}</strong>
+            <p className="mt-1 leading-6 text-slate-300">{result.analysis.cx_journey.analyst_action}</p>
+            {audience === 'management' && <>
+              <strong className="mt-4 block text-amber-100">Próximo passo da gestão</strong>
+              <p className="mt-1 leading-6 text-slate-300">{result.analysis.cx_journey.management_action}</p>
+            </>}
+          </div>
+          {result.analysis.cx_journey.evidence_gaps.length > 0 && (
+            <p className="mt-3 text-xs leading-5 text-slate-400">
+              <strong>Limites da leitura:</strong> {result.analysis.cx_journey.evidence_gaps.join(' · ')}
+            </p>
+          )}
+        </section>
+      )}
+
       <div className="mt-4 rounded-lg border border-white/10 bg-slate-950/30 px-3 py-3 text-sm">
         {audience === 'analyst' ? (
           <>
@@ -1365,10 +1443,12 @@ function QualitativeAnalysisCard({
           <p className="mt-1 leading-6 text-cyan-100">{result.analysis.cx_coaching.practice_to_improve}</p>
           <p className="mt-2 rounded-md bg-slate-950/55 p-3 italic leading-6 text-slate-300">“{result.analysis.cx_coaching.suggested_phrase}”</p>
         </div>
-        <div>
-          <strong className="text-slate-100">O que a gestão deve verificar na próxima amostra</strong>
-          <p className="mt-1 leading-6 text-slate-300">{result.analysis.cx_coaching.verification_check}</p>
-        </div>
+        {audience === 'management' && (
+          <div>
+            <strong className="text-slate-100">O que a gestão deve verificar na próxima amostra</strong>
+            <p className="mt-1 leading-6 text-slate-300">{result.analysis.cx_coaching.verification_check}</p>
+          </div>
+        )}
         <p className="border-t border-white/10 pt-3 text-xs leading-5 text-amber-100">
           {result.analysis.cx_coaching.attribution_caution}
           {result.analysis.cx_coaching.source === 'contextual_from_existing_analysis'
