@@ -6104,19 +6104,7 @@ function ChatModuleDashboard({
         </div>
       )}
 
-      <label className="block text-sm text-slate-400 lg:hidden">
-        Navegar no Chat
-        <select className="form-input mt-1" value={chatActiveTab} onChange={(event) => onChatActiveTabChange(event.target.value as ChatActiveTab)}>
-          <option value="overview">Operação</option>
-          <option value="prototype">Equipe e produtividade</option>
-          <option value="operation360">Visão 360º</option>
-          <option value="podium">Gestão e ações</option>
-          <option value="reports">Relatórios</option>
-          <option value="analysis">Pódio</option>
-          <option value="import">Importar histórico</option>
-          <option value="settings">Cadastros</option>
-        </select>
-      </label>
+
       {['overview', 'prototype', 'podium', 'reports'].includes(chatActiveTab) &&
         (clickDeskMetricsLoading || clickDeskPersistedMetrics?.erro || !clickDeskPersistedMetrics ||
           (clickDeskPersistedMetrics.by_analyst?.length ?? 0) === 0) && (
@@ -12035,7 +12023,10 @@ function ChatProductionContent(){
           label={state.role==='analyst' ? 'Meu Chat' : 'Chat · Gestão'}
           subtitle={state.role==='analyst' ? 'Seu desenvolvimento' : 'Qualidade e operação'}
           activeId={state.role==='analyst' ? undefined : tab}
-          onSelect={(id)=>setTab(id as ChatActiveTab)}
+          onSelect={(id)=>{
+            setTab(id as ChatActiveTab)
+            window.scrollTo({top:0,behavior:'smooth'})
+          }}
         />
         <div className="pnav-layout-main chat-app-content">
           {state.role==='analyst' ? (
