@@ -123,7 +123,7 @@ async function loadRowsFallback(
     readLedgerCoverageForAccess(admin, isManagement, filters),
     admin.from('chat_analysts').select('id,name,team_id,active'),
   ])
-  if (people.error) throw new ApiError(503, 'Cadastro de analistas da homologação indisponível.')
+  if (people.error) throw new ApiError(503, 'Cadastro de analistas do Chat indisponível.')
   const roster = new Map((people.data ?? []).map(person => [person.id, person]))
   let partition: ReturnType<typeof partitionChatLedgerByActiveRoster<typeof tickets[number]>>
   try {
@@ -251,7 +251,7 @@ async function officialGET(request: Request) {
   const response = await handle(async () => {
     const { environment } = getServerSupabaseConfig()
     if (!isChatProductionEnabled()) {
-      throw new ApiError(404, 'Métricas ClickDesk disponíveis somente na homologação.')
+      throw new ApiError(404, 'Métricas do Chat indisponíveis neste ambiente.')
     }
 
     stage = 'authorization'
