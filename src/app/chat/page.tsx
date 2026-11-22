@@ -11983,8 +11983,20 @@ function getSupabaseMessage(message: string) {
 
 function ChatProductionContent(){
  const [refresh,setRefresh]=useState(0),[state,setState]=useState<{role:UserRole;chatId:string|null;teams:ChatTeam[];analysts:ChatAnalyst[];metrics:ChatMonthlyMetric[];manual:ChatPodiumManual[];excluded:ChatPodiumExclusion[]}|null>(null),[error,setError]=useState('')
- const [tab,setTab]=useState<ChatActiveTab>(()=>typeof window!=='undefined'&&new URLSearchParams(window.location.search).get('view')==='operation360'?'operation360':'overview')
+ const [tab,setTab]=useState<ChatActiveTab>(()=>{
+   if(typeof window==='undefined')return 'overview'
+   const requested=new URLSearchParams(window.location.search).get('view')
+   const views:ChatActiveTab[]=['overview','operation360','prototype','podium','analysis','reports','import','settings']
+   return requested&&views.includes(requested as ChatActiveTab)?requested as ChatActiveTab:'overview'
+ })
  const enabled=process.env.NEXT_PUBLIC_CHAT_OFFICIAL_ENABLED==='true'&&process.env.NEXT_PUBLIC_SUPABASE_URL==='https://qmetbydkepfdgfqkdkai.supabase.co'
+ useEffect(()=>{
+   if(!state||state.role==='analyst')return
+   const nextUrl=new URL(window.location.href)
+   if(tab==='overview')nextUrl.searchParams.delete('view')
+   else nextUrl.searchParams.set('view',tab)
+   window.history.replaceState(window.history.state,'',nextUrl.pathname+nextUrl.search+nextUrl.hash)
+ },[state,tab])
  useEffect(()=>{if(!enabled)return;let cancelled=false;const identityChanged=createSessionIdentityGuard();const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{if(identityChanged(session?.user))window.location.reload()});void(async()=>{try{
   const auth=await supabase.auth.getUser();if(identityChanged(auth.data.user)){window.location.reload();return}if(!auth.data.user)throw Error('Entre no sistema para acessar o Chat.')
   const profile=await supabase.from('profiles').select('role,chat_analyst_id').eq('id',auth.data.user.id).single();if(profile.error)throw Error('Perfil indisponível.')
