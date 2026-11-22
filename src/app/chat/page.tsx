@@ -9959,6 +9959,90 @@ function EligibilityFunnel({
   )
 }
 
+function MonthlyVolumeTrendChart({points}:{points:ChartPoint[]}) {
+  const [activeIndex,setActiveIndex]=useState<number|null>(null)
+  const first=points[0]
+  const latest=points.at(-1)
+  const delta=first&&latest?round(latest.value-first.value):0
+  const max=Math.max(...points.map(p=>p.value),1)
+  // Fixed chart geometry, zero-based vertical axis and abbreviated months.
+  // Labels are deliberately sparse, to avoid collisions at 9+ months.
+  const left=46,right=688,top=29,bottom=167
+  const px=(index:number)=>points.length===1?(left+right)/2:left+(right-left)*index/(points.length-1)
+  const py=(value:number)=>bottom-value/max*(bottom-top)
+  const selected=activeIndex===null?latest:points[activeIndex]
+  const path=points.map((point,i)=>(i===0?'M':'L')+px(i).toFixed(2)+' '+py(point.value).toFixed(2)).join(' ')
+  const shortMonth=(label:string)=>label.trim().slice(0,3).replace(/^./,letter=>letter.toUpperCase())
+  return (
+    <div className="chat-monthly-volume-chart">
+      <div className="chat-monthly-volume-top">
+        <div>
+          <p className="chat-monthly-volume-eyebrow">Histórico de volume · Zendesk</p>
+          <h3>Atendimentos mensais</h3>
+          <strong>{latest?formatChatCount(latest.value):'—'}</strong>
+          {first&&latest&&points.length>1&&(
+            <p className="chat-monthly-volume-change">
+              De {first.label} ({formatChatCount(first.value)}) a {latest.label} ({formatChatCount(latest.value)}).
+              <span className={delta<0?'text-amber-200':delta>0?'text-emerald-300':'text-slate-300'}>
+                {' '}Variação: {delta>0?'+':''}{formatChatCount(delta)} atendimentos.
+              </span>
+            </p>
+          )}
+        </div>
+        {selected&&(
+          <div className="chat-monthly-volume-selected">
+            <span>{activeIndex===null?'Última competência':'Competência destacada'}</span>
+            <strong>{selected.label}: {formatChatCount(selected.value)}</strong>
+          </div>
+        )}
+      </div>
+      {points.length>0 ? (
+        <>
+          <div className="chat-monthly-volume-viewport">
+            <svg viewBox="0 0 730 213" role="img"
+              aria-label={'Evolução dos atendimentos mensais: '+points.map(p=>p.label+' '+formatChatCount(p.value)).join(', ')}>
+              <title>Evolução mensal de atendimentos no histórico anterior</title>
+              {[top,(top+bottom)/2,bottom].map(y=>(
+                <path key={y} d={'M'+left+' '+y+'H'+right} stroke="#24354b"
+                  strokeDasharray={y===bottom?'none':'4 8'} strokeWidth="1"/>
+              ))}
+              {points.length>1&&<path d={path} stroke="#67e8f9" fill="none" strokeWidth="3.5"
+                strokeLinejoin="round" strokeLinecap="round"/>}
+              {points.map((point,i)=>{
+                const x=px(i),y=py(point.value)
+                const highlighted=activeIndex===i
+                const showValue=highlighted||(activeIndex===null&&(i===0||i===points.length-1))
+                return (
+                  <g key={point.label+'-'+i} tabIndex={0}
+                    onMouseEnter={()=>setActiveIndex(i)} onMouseLeave={()=>setActiveIndex(null)}
+                    onFocus={()=>setActiveIndex(i)} onBlur={()=>setActiveIndex(null)}
+                    className="chat-monthly-volume-point">
+                    <title>{point.label}: {formatChatCount(point.value)} atendimentos</title>
+                    <circle cx={x} cy={y} r="16" fill="transparent"/>
+                    <circle cx={x} cy={y} r={highlighted?6.5:4.5} fill="#67e8f9"
+                      stroke={highlighted?'#fff':'#0e1b2e'} strokeWidth="2"/>
+                    {showValue&&<text fill="#e2e8f0" fontSize="12" fontWeight="700"
+                      textAnchor="middle" x={x} y={Math.max(14,y-13)}>
+                      {formatChatCount(point.value)}
+                    </text>}
+                    <text fill={highlighted?'#f1f5f9':'#93a7bd'} fontWeight={highlighted?'700':'500'}
+                      fontSize="12" textAnchor="middle" x={x} y="197">
+                      {shortMonth(point.label)}
+                    </text>
+                  </g>
+                )
+              })}
+            </svg>
+          </div>
+          <p className="chat-monthly-volume-hint">Passe o mouse ou use o teclado para consultar cada competência.</p>
+        </>
+      ) : (
+        <p className="chat-monthly-volume-hint">Sem competências históricas disponíveis para comparação.</p>
+      )}
+    </div>
+  )
+}
+
 function TrendLineChart({
   label,
   points,
