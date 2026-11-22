@@ -5852,17 +5852,17 @@ function ChatModuleDashboard({
 
   return (
     <div className="mt-8 space-y-7">
-      <section className="panel workspace-hero">
+      <section className="panel workspace-hero chat-overview-hero">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="workspace-eyebrow">Módulo Chat</p>
-            <h2 className="workspace-title">Central de Performance do Chat</h2>
+            <p className="workspace-eyebrow">Painel operacional · ClickDesk</p>
+            <h2 className="workspace-title">Indicadores do Chat</h2>
             <p className="section-subtitle">
-              Indicadores, pessoas, Análise 360º e fechamento com dados do ClickDesk.
+              Qualidade, produtividade e evolução de cada equipe em uma única visão.
             </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2 chat-overview-selectors">
             <Field label="Equipe">
               <select
                 className="form-input"
@@ -5929,7 +5929,7 @@ function ChatModuleDashboard({
         </div>
 
         {chatRangeEnabled && <ChatTimeFilter month={chatFilterMonth} mode={chatTimeMode} reference={chatTimeReference} dailyAvailable={clickDeskDailyAvailable(clickDeskPersistedMetrics)} onChange={(mode,reference)=>{const next=chatTimeRange(chatFilterMonth,mode,reference);if(next.start!==chatRange.start||next.end!==chatRange.end){setClickDeskPersistedMetrics(null);setChat2DailyDateFilter('all')}setChatTimeMode(mode);setChatTimeReference(reference)}} />}
-        <div className="mt-4 border-t border-white/10 pt-4">
+        <div className="chat-overview-sync">
           <ClickDeskSyncStatus
             latestSyncAt={clickDeskPersistedMetrics?.latest_sync?.finished_at}
             schedule={clickDeskPersistedMetrics?.sync_schedule}
@@ -5937,8 +5937,22 @@ function ChatModuleDashboard({
           />
         </div>
       </section>
-
-
+      {chatActiveTab === 'overview' && (
+        <div className="chat-historical-banner" role="region" aria-label="Evolução histórica do Chat">
+          <div className="chat-historical-banner-copy">
+            <span className="chat-historical-eyebrow">Evolução mensal</span>
+            <strong>Compare resultados sem misturar as fontes.</strong>
+            <p>Janeiro–setembro: histórico anterior (Zendesk). Outubro em diante: capturas oficiais do ClickDesk. Outubro importado parcialmente fica fora da série histórica comparável.</p>
+          </div>
+          <button type="button" className="chat-historical-action" onClick={() => {
+            const history = document.getElementById('chat-history-legacy') as HTMLDetailsElement | null
+            if (history) {
+              history.open = true
+              history.scrollIntoView({behavior:'smooth',block:'start'})
+            }
+          }}>Explorar histórico <span aria-hidden="true">↗</span></button>
+        </div>
+      )}
 
       <label className="block text-sm text-slate-400 lg:hidden">
         Navegar no Chat
@@ -8736,8 +8750,8 @@ function ChatModuleDashboard({
         </div>
       </section>
 
-      <details className={chatActiveTab === 'overview' && chatMetricsReady ? 'panel' : 'hidden'}>
-        <summary className="cursor-pointer text-sm font-semibold text-cyan-100">Histórico Zendesk · consultar meses anteriores</summary>
+      <details id="chat-history-legacy" className={chatActiveTab === 'overview' && chatMetricsReady ? 'panel chat-history-details' : 'hidden'}>
+        <summary className="cursor-pointer text-sm font-semibold text-cyan-100">Histórico anterior · Zendesk (janeiro a setembro de 2026)</summary>
         <div className="mt-4">
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Histórico anterior · Zendesk</p>
           <h2 className="mt-2 text-2xl font-bold">Série preservada dos fechamentos anteriores</h2>
@@ -11750,7 +11764,58 @@ function ChatProductionContent(){
  if(error)return <main className="page-shell"><p role="status">{error}</p><Link href="/">Voltar à Central</Link></main>
  if(!state)return <main className="page-shell"><p role="status">Carregando Chat...</p></main>
  const analyst=state.analysts.find(a=>a.id===state.chatId)??null
- return <main className="page-shell"><header><h1>Performance do Chat</h1><p>{state.role==='analyst'?'Acesso individual · somente seus dados':'Visão de gestão'}</p><Link href="/">Voltar à Central</Link></header>{state.role!=='analyst'&&<nav className="flex flex-wrap gap-2 py-4" aria-label="Navegação do Chat">{([['overview','Operação'],['operation360','Visão 360º'],['prototype','Equipe e produtividade'],['podium','Gestão e ações'],['analysis','Pódio'],['reports','Relatórios'],['import','Importar histórico'],['settings','Cadastros']] as const).map(([key,label])=><button key={key} type="button" className={tab===key?'primary-button':'secondary-button'} aria-pressed={tab===key} onClick={()=>setTab(key)}>{label}</button>)}</nav>}{state.role==='analyst'?<ChatAnalystPortal analyst={analyst} team={state.teams.find(t=>t.id===analyst?.team_id)??null}/>:<ChatModuleDashboard role={state.role} teams={state.teams} analysts={state.analysts} metrics={state.metrics} manualPodium={state.manual} podiumExclusions={state.excluded} loading={false} chatActiveTab={tab} onChatActiveTabChange={setTab} onImportComplete={async()=>setRefresh(v=>v+1)}/>}</main>
+ return (
+  <main className="chat-app-root">
+    <div className="chat-page-container">
+      <header className="chat-app-topbar">
+        <div className="chat-app-identity">
+          <span className="chat-app-monogram" aria-hidden="true">C</span>
+          <div className="chat-app-brand-text">
+            <span className="chat-app-brand-kicker">Central de Performance</span>
+            <strong>Atendimento <span className="chat-brand-divider">/</span> Chat</strong>
+          </div>
+        </div>
+        <div className="chat-app-top-actions">
+          <span className="chat-app-role"><span className="chat-app-role-dot" aria-hidden="true" />{state.role==='analyst'?'Espaço individual':'Área de gestão'}</span>
+          <Link className="chat-app-back-link" href="/">Voltar à Central <span aria-hidden="true">↗</span></Link>
+        </div>
+      </header>
+      {state.role !== 'analyst' && (
+        <nav className="chat-app-navigation" aria-label="Navegação do Chat">
+          {([
+            ['overview','Operação'],
+            ['operation360','Visão 360º'],
+            ['prototype','Equipe e produtividade'],
+            ['podium','Gestão e ações'],
+            ['analysis','Pódio'],
+            ['reports','Relatórios'],
+            ['import','Importar histórico'],
+            ['settings','Cadastros'],
+          ] as const).map(([key,label])=>(
+            <button key={key} type="button" aria-current={tab===key?'page':undefined}
+              className={tab===key?'chat-app-nav-item chat-app-nav-item-active':'chat-app-nav-item'}
+              onClick={()=>setTab(key)}>{label}</button>
+          ))}
+        </nav>
+      )}
+      <div className="chat-app-content">
+        {state.role==='analyst' ? (
+          <ChatAnalystPortal
+            analyst={analyst}
+            team={state.teams.find(t=>t.id===analyst?.team_id)??null}
+            legacyMetrics={state.metrics.filter(item=>item.analyst_id===analyst?.id && item.period_start<'2026-10-01')}
+          />
+        ) : (
+          <ChatModuleDashboard role={state.role} teams={state.teams} analysts={state.analysts}
+            metrics={state.metrics} manualPodium={state.manual} podiumExclusions={state.excluded}
+            loading={false} chatActiveTab={tab} onChatActiveTabChange={setTab}
+            onImportComplete={async()=>setRefresh(v=>v+1)}
+          />
+        )}
+      </div>
+    </div>
+  </main>
+)
 }
 
 export default function ChatProductionPage(){return <div className="chat-production-shell"><ChatProductionContent/></div>}
