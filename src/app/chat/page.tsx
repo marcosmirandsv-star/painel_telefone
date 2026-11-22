@@ -23,6 +23,9 @@ import CxDiagnostics from '@/components/CxDiagnostics'
 import ChatCaseManagement from '@/components/chat/ChatCaseManagement'
 import { chatTimeRange, type ChatTimeMode } from '@/lib/chat-time-filter'
 import ClickDeskSourceReport from '@/components/chat/ClickDeskSourceReport'
+import { PerformanceIcon } from '@/components/ui/performance-icons'
+import { PerformanceNavigation, PerformancePageGuide } from '@/components/ui/PerformanceNavigation'
+import { chatManagementNavigation, chatAnalystNavigation, chatManagementHelp, chatAnalystHelp } from '@/lib/performance-guides'
 import ClickDeskVerifiedDailyVolume from '@/components/chat/ClickDeskVerifiedDailyVolume'
 const QUALITATIVE_ANALYSIS_ENABLED_FOR_ANALYSTS = true
 
@@ -2062,7 +2065,7 @@ function ChatAnalystPortal({
 
   return (
     <div className="analyst-portal mt-6 space-y-5">
-      <section className="panel analyst-portal-hero">
+      <section id="meu-resultado" className="panel analyst-portal-hero">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
             Chat · acesso individual
@@ -2266,9 +2269,11 @@ function ChatAnalystPortal({
         )}
       </section>
 
+      <div id="minhas-avaliacoes" className="scroll-mt-24">
       <AnalystReviews key={`${analyst.id}:${monthStart}:${monthEnd}`} start={monthStart} end={monthEnd} analystId={analyst.id}
         onAnalyze={(id) => void analyzeQualitativeTicket(id)} loadingTicketId={qualitativeLoadingTicketId}
         renderAnalysis={(id) => qualitativeByTicket[id] && openQualitativeTicketId === id ? <QualitativeAnalysisCard result={qualitativeByTicket[id]} reanalyzing={qualitativeLoadingTicketId === id} audience="analyst" /> : null} />
+      </div>
       <section id="minha-rotina" className={loading || metrics?.erro ? 'hidden' : 'panel scroll-mt-24'}>
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
@@ -2452,7 +2457,7 @@ function ChatAnalystPortal({
         )}
       </section>
 
-      <section className={loading ? 'hidden' : 'panel'}>
+      <section id="minha-evolucao" className={loading ? 'hidden' : 'panel'}>
         <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
           Minha evolução
         </p>
@@ -12001,7 +12006,7 @@ function ChatProductionContent(){
     <div className="chat-page-container">
       <header className="chat-app-topbar">
         <div className="chat-app-identity">
-          <span className="chat-app-monogram" aria-hidden="true">C</span>
+          <span className="chat-app-monogram" aria-hidden="true"><PerformanceIcon name="message" size={25}/></span>
           <div className="chat-app-brand-text">
             <span className="chat-app-brand-kicker">Central de Performance</span>
             <strong>Atendimento <span className="chat-brand-divider">/</span> Chat</strong>
@@ -12012,25 +12017,21 @@ function ChatProductionContent(){
           <Link className="chat-app-back-link" href="/">Voltar à Central <span aria-hidden="true">↗</span></Link>
         </div>
       </header>
-      {state.role !== 'analyst' && (
-        <nav className="chat-app-navigation" aria-label="Navegação do Chat">
-          {([
-            ['overview','Operação'],
-            ['operation360','Visão 360º'],
-            ['prototype','Equipe e produtividade'],
-            ['podium','Gestão e ações'],
-            ['analysis','Pódio'],
-            ['reports','Relatórios'],
-            ['import','Importar histórico'],
-            ['settings','Cadastros'],
-          ] as const).map(([key,label])=>(
-            <button key={key} type="button" aria-current={tab===key?'page':undefined}
-              className={tab===key?'chat-app-nav-item chat-app-nav-item-active':'chat-app-nav-item'}
-              onClick={()=>setTab(key)}>{label}</button>
-          ))}
-        </nav>
-      )}
-      <div className="chat-app-content">
+      <div className="pnav-layout">
+        <PerformanceNavigation
+          groups={state.role==='analyst' ? chatAnalystNavigation : chatManagementNavigation}
+          label={state.role==='analyst' ? 'Meu Chat' : 'Chat · Gestão'}
+          subtitle={state.role==='analyst' ? 'Seu desenvolvimento' : 'Qualidade e operação'}
+          activeId={state.role==='analyst' ? undefined : tab}
+          onSelect={(id)=>setTab(id as ChatActiveTab)}
+        />
+        <div className="pnav-layout-main chat-app-content">
+          {state.role==='analyst' ? (
+            <PerformancePageGuide help={chatAnalystHelp}/>
+          ) : (
+            <PerformancePageGuide help={chatManagementHelp[tab] ?? chatManagementHelp.overview}/>
+          )}
+
         {state.role==='analyst' ? (
           <ChatAnalystPortal
             analyst={analyst}
@@ -12044,6 +12045,7 @@ function ChatProductionContent(){
             onImportComplete={async()=>setRefresh(v=>v+1)}
           />
         )}
+        </div>
       </div>
     </div>
   </main>
