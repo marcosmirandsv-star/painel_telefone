@@ -1283,11 +1283,12 @@ export default function Home() {
           <div>
             <p className="app-eyebrow">Central de Performance</p>
             <h1 className="mt-3 text-3xl font-bold sm:text-4xl">
-              Gestão de Performance de Atendimento
+              {isManagementUser ? 'Central de Performance' : 'Meu desempenho no Telefone'}
             </h1>
             <p className="mt-3 max-w-3xl text-slate-300">
-              Painel interno para acompanhar metas, analistas, lançamentos semanais,
-              performance da equipe e próximas análises com IA.
+              {isManagementUser
+                ? 'Acompanhe qualidade, produtividade, experiência do cliente e desenvolvimento das equipes. Cada módulo preserva sua própria fonte de dados.'
+                : 'Consulte seus indicadores telefônicos registrados, metas e evolução. Seu desempenho no Chat, quando disponível, fica em um espaço individual separado.'}
             </p>
             <p className="mt-3 text-sm text-slate-400">
               Perfil: <strong>{getRoleLabel(userRole)}</strong>
