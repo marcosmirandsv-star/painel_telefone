@@ -141,7 +141,7 @@ async function officialGET(request: Request) {
   return handle(async () => {
     const { environment } = getServerSupabaseConfig()
     if (!isChatProductionEnabled()) {
-      throw new ApiError(404, 'Análise 360º disponível somente na homologação.')
+      throw new ApiError(404, 'Visão 360º indisponível neste ambiente.')
     }
 
     const access = await authorizeClickDeskSessionClient(request)
@@ -222,7 +222,7 @@ async function officialGET(request: Request) {
         verified_at: ledgerCoverage.verified_at,
         note: ledgerCoverage.complete
           ? 'Tickets com autoria final confirmada na competência.'
-          : 'OUTUBRO CLICKDESK EM CONCILIAÇÃO: a IA usa tickets avaliados com autoria final confirmada. As avaliações recebidas já entram no CSAT, mesmo sem análise 360º ou aprovação gerencial.',
+          : 'Inventário de tickets ainda em conciliação neste período. A Visão 360º utiliza apenas avaliações com autoria final comprovada; os indicadores oficiais da aba Operação têm uma fonte numérica independente.',
       },
       totals,
       coverage: {
@@ -261,7 +261,7 @@ async function officialGET(request: Request) {
       },
       interpretation_rule: {
         message:
-          'A fila 360º acompanha a qualidade dos atendimentos e não valida notas para o CSAT. A seleção para feedback não altera CSAT nem cobertura técnica. Descartadas não retornam à fila automática; reanálise é uma ação explícita. O recorte considera apenas analistas ativos e tickets de outubro com autoria comprovada.',
+          'A fila 360º acompanha a qualidade dos atendimentos e não valida notas para o CSAT. A seleção para feedback não altera CSAT nem cobertura técnica. Análises descartadas não retornam à fila automática; a reanálise é uma ação explícita. O recorte considera somente analistas ativos e tickets com autoria comprovada no período selecionado.',
         causality:
           'Recorrência não prova causalidade. A leitura deve ser apresentada como padrão observado, com confiança e evidências rastreáveis. A seleção editorial para feedback permanece sob controle da gestão.',
       },
