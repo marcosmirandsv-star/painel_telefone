@@ -38,6 +38,21 @@ export type QualitativeCxCoaching = {
   source: 'generated' | 'contextual_from_existing_analysis'
 }
 
+export type QualitativeCxJourney = {
+  resolution_state: 'confirmed' | 'partial' | 'forwarded' | 'not_demonstrated' | 'unclear'
+  result_evidence: string
+  customer_effort: 'low' | 'moderate' | 'high' | 'unclear'
+  effort_evidence: string
+  ai_to_human_continuity: 'preserved' | 'repeated' | 'not_applicable' | 'unclear'
+  continuity_evidence: string
+  result_validation: 'confirmed' | 'attempted' | 'not_shown' | 'unclear'
+  next_step_quality: 'clear' | 'partial' | 'not_shown' | 'unclear'
+  analyst_action: string
+  management_action: string
+  evidence_gaps: string[]
+  source: 'generated' | 'contextual_from_existing_analysis'
+}
+
 export type ClickDeskQualitativeAnalysis = {
   initial_sentiment: QualitativeSentiment
   final_sentiment: QualitativeSentiment
@@ -67,6 +82,7 @@ export type ClickDeskQualitativeAnalysis = {
   evidence_summary: string[]
   limitations: string[]
   cx_coaching: QualitativeCxCoaching
+  cx_journey?: QualitativeCxJourney
 }
 
 const SENTIMENT = new Set<QualitativeSentiment>([
@@ -110,7 +126,7 @@ const CAUSE = new Set<QualitativeCauseCategory>([
 ])
 
 
-export const QUALITATIVE_ANALYSIS_VERSION = 2
+export const QUALITATIVE_ANALYSIS_VERSION = 3
 export const QUALITATIVE_MIN_TRANSCRIPT_CHARS = 40
 
 export function isQualitativeTranscriptSufficient(
@@ -187,6 +203,7 @@ export function normalizeQualitativeAnalysis(value: unknown, satisfactionLabel?:
   const controllability = record(source.controllability)
   const coaching = record(source.coaching_signal)
   const takeaway = record(source.analyst_takeaway)
+  const journey = record(source.cx_journey)
 
   const initialSentiment = SENTIMENT.has(source.initial_sentiment as QualitativeSentiment)
     ? (source.initial_sentiment as QualitativeSentiment)
@@ -314,6 +331,29 @@ export function normalizeQualitativeAnalysis(value: unknown, satisfactionLabel?:
       ? 'generated' : 'contextual_from_existing_analysis',
   }
 
+  const journeyStatus = new Set(['confirmed','partial','forwarded','not_demonstrated','unclear'])
+  const journeyEffort = new Set(['low','moderate','high','unclear'])
+  const journeyContinuity = new Set(['preserved','repeated','not_applicable','unclear'])
+  const journeyValidation = new Set(['confirmed','attempted','not_shown','unclear'])
+  const journeyStep = new Set(['clear','partial','not_shown','unclear'])
+  const fromJourney = (value: unknown, allowed: Set<string>) =>
+    typeof value === 'string' && allowed.has(value) ? value : 'unclear'
+  const cxJourney: QualitativeCxJourney = {
+    resolution_state: fromJourney(journey.resolution_state, journeyStatus) as QualitativeCxJourney['resolution_state'],
+    result_evidence: shortText(journey.result_evidence, 'Resultado não verificado de forma independente; confira a conversa e os anexos.'),
+    customer_effort: fromJourney(journey.customer_effort, journeyEffort) as QualitativeCxJourney['customer_effort'],
+    effort_evidence: shortText(journey.effort_evidence, 'Não há mensuração suficiente do esforço do cliente nesta análise.'),
+    ai_to_human_continuity: fromJourney(journey.ai_to_human_continuity, journeyContinuity) as QualitativeCxJourney['ai_to_human_continuity'],
+    continuity_evidence: shortText(journey.continuity_evidence, 'Sem evidência suficiente para avaliar a continuidade entre IA e atendimento humano.'),
+    result_validation: fromJourney(journey.result_validation, journeyValidation) as QualitativeCxJourney['result_validation'],
+    next_step_quality: fromJourney(journey.next_step_quality, journeyStep) as QualitativeCxJourney['next_step_quality'],
+    analyst_action: shortText(journey.analyst_action, cxCoaching.practice_to_improve),
+    management_action: shortText(journey.management_action, 'Confira o desfecho e a recorrência em tickets comparáveis antes de orientar feedback; não atribua a nota ao analista sem evidência.'),
+    evidence_gaps: stringArray(journey.evidence_gaps, 4, 240),
+    source: journey.analyst_action && journey.management_action
+      ? 'generated' : 'contextual_from_existing_analysis',
+  }
+
   return {
     initial_sentiment: initialSentiment,
     final_sentiment: finalSentiment,
@@ -357,6 +397,7 @@ export function normalizeQualitativeAnalysis(value: unknown, satisfactionLabel?:
     evidence_summary: stringArray(source.evidence_summary, 3, 350),
     limitations: stringArray(source.limitations, 5, 350),
     cx_coaching: cxCoaching,
+    cx_journey: cxJourney,
   }
 }
 
