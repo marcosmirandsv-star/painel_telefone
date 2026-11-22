@@ -2567,7 +2567,7 @@ function ChatAnalystPortal({
       </section>
 
       {legacySeries.length > 0 && (
-        <details className="panel chat-legacy-analyst-history">
+        <details id="historico-anterior" className="panel chat-legacy-analyst-history">
           <summary className="cursor-pointer">
             <span className="chat-legacy-label">Histórico anterior · Zendesk</span>
             <strong>Minha evolução de janeiro a setembro de 2026</strong>
