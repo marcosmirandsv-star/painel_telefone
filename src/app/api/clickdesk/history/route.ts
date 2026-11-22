@@ -135,7 +135,7 @@ async function officialGET(request: Request) {
   return handle(async () => {
     const { environment } = getServerSupabaseConfig()
     if (!isChatProductionEnabled()) {
-      throw new ApiError(404, 'Histórico ClickDesk disponível somente na homologação.')
+      throw new ApiError(404, 'Histórico do ClickDesk indisponível neste ambiente.')
     }
 
     const access = await authorizeClickDeskSessionClient(request)

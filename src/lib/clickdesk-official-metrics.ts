@@ -76,7 +76,7 @@ export async function loadOfficialPeriodRows(
     const monthEnd=publishedClickDeskEnd(new Date(Date.UTC(year,month,0)).toISOString().slice(0,10))
     if(filters.start.slice(0,7)===filters.end.slice(0,7)&&(filters.start!==monthStart||filters.end!==monthEnd)) {
       const anchor=await loadOfficialPeriodRows(admin,{...filters,start:monthStart,end:monthEnd})
-      if(!anchor?.dailyRows)throw new ApiError(503,'A distribuição diária deste mês ainda não está conciliada com o ClickDesk. O intervalo selecionado não foi substituído pelo total mensal.')
+      if(!anchor?.dailyRows)throw new ApiError(409,'O detalhamento por dia, semana ou intervalo personalizado ainda não está conciliado com o ClickDesk. Consulte a visão Mês; não exibimos números diários estimados.')
       const selected=sliceOfficialDaily(anchor.rows,anchor.dailyRows,filters.start,filters.end)
       return {...anchor,rows:selected.rows,dailyRows:selected.dailyRows}
     }
