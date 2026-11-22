@@ -248,3 +248,72 @@ export const systemHelp: PerformancePageHelp = {
   ],
   caution: 'Nunca conceda acesso coletivo ou a dados de outra equipe para contornar um problema de visualização. Não compartilhe senhas.',
 }
+
+
+export const vacationNavigation: PerformanceNavGroup[] = [
+  { label: 'Planejamento de pessoas', items: [
+    { id: 'history', label: 'Períodos e histórico', description: 'Consulte férias e situação atual', icon: 'calendar' },
+    { id: 'planning', label: 'Planejamento e cobertura', description: 'Programar ausências e conferir sobreposições', icon: 'chart' },
+    { id: 'people', label: 'Pessoas e times', description: 'Lotação, gestores e cadastros', icon: 'users' },
+  ] },
+]
+
+export const vacationHelp: Record<string, PerformancePageHelp> = {
+  history: {
+    category: 'Gestão de pessoas · consulta',
+    title: 'Histórico e situação das férias',
+    summary: 'Encontre períodos planejados, programados, encerrados ou cancelados. A consulta externa ao Gente Gestão é uma fonte separada, somente para leitura.',
+    howTo: ['Filtre time, pessoa, situação e intervalo.', 'Abra um registro antes de alterá-lo ou cancelá-lo.', 'Use Consultar Gente Gestão para confrontar dados externos, sem importar automaticamente períodos.'],
+    fields: [
+      {label:'Planejada',meaning:'Intenção ou previsão de férias ainda não confirmada para a programação.'},
+      {label:'Programada',meaning:'Período registrado como programado na base interna.'},
+      {label:'Concluída',meaning:'Férias cujo período já terminou; permanecem no histórico.'},
+      {label:'Gente Gestão',meaning:'Consulta externa somente leitura; não é substituta automática da base interna.'},
+    ],
+    caution: 'Os períodos são registros de planejamento. Verifique o controle oficial de RH antes de comunicar uma aprovação definitiva.',
+  },
+  planning: {
+    category: 'Gestão de pessoas · programação',
+    title: 'Programar férias e conferir cobertura',
+    summary: 'Organize ausências e identifique pessoas do mesmo time com períodos sobrepostos antes de definir a cobertura operacional.',
+    howTo: ['Selecione o time e a pessoa.', 'Preencha início, fim e situação.', 'Confira os dias corridos e o alerta de sobreposição; confirme o plano antes de salvar.'],
+    fields: [
+      {label:'Início e fim',meaning:'Os dois dias são incluídos no total de dias corridos.'},
+      {label:'Situação',meaning:'Planejada é previsão; Programada é o registro operacional para acompanhar a ausência.'},
+      {label:'Ticket do DP',meaning:'Referência do processo com o departamento responsável por pessoal.'},
+      {label:'Abono pecuniário',meaning:'Quantidade de dias solicitados para conversão, conforme as regras aplicáveis; não é uma aprovação do RH.'},
+    ],
+    caution: 'Sobreposições são alertas de capacidade, não validações automáticas de cobertura. Confirme a disponibilidade dos profissionais antes de aprovar o plano.',
+  },
+  people: {
+    category: 'Gestão de pessoas · estrutura',
+    title: 'Pessoas, lotação e gestores',
+    summary: 'Mantenha a estrutura de times e responsáveis para os controles de férias. O cadastro de analistas originado no Chat ou Telefone preserva seus dados próprios.',
+    howTo: ['Localize uma pessoa do quadro ou crie cadastro para quem ainda não consta.', 'Confira time e gestor e registre as alterações.', 'Antes de criar um time, confirme se já existe um equivalente.'],
+    fields: [
+      {label:'Time',meaning:'Equipe considerada para identificar períodos simultâneos e pessoas disponíveis.'},
+      {label:'Gestor',meaning:'Responsável de referência para acompanhamento.'},
+      {label:'Cadastro de origem',meaning:'Para profissionais do Chat/Telefone, nome, foto e situação podem vir do módulo original.'},
+    ],
+    caution: 'Não altere lotação para corrigir números do ClickDesk. Mudanças de cadastro devem corresponder à organização real.',
+  },
+}
+
+export const closuresHelp: PerformancePageHelp = {
+  category: 'Administração · validação de dados',
+  title: 'Fechamentos oficiais',
+  summary: 'Consulte os resultados disponíveis ou preserve uma fotografia oficial de uma competência já encerrada. Conferir não é aprovar.',
+  howTo: [
+    'Escolha mês, canal e, se for Chat, equipe.',
+    'Use Conferir dados atuais para visualizar sem alterar os números.',
+    'Somente após validar os dados, marque a confirmação e utilize Aprovar fechamento; Ver fechamento oficial apenas consulta registros preservados.',
+  ],
+  fields: [
+    {label:'Mês',meaning:'Competência de referência do fechamento. A aprovação só deve considerar o período concluído.'},
+    {label:'Canal',meaning:'Fonte de Telefone (alimentação manual) ou Chat (ClickDesk), sem misturar contagens.'},
+    {label:'Equipe',meaning:'No Chat, limita a captura ao time escolhido. Todas as equipes não cria automaticamente fechamentos individuais.'},
+    {label:'Conferir dados atuais',meaning:'Faz leitura dos resultados disponíveis sem preservar ou substituir fechamento.'},
+    {label:'Aprovar fechamento',meaning:'Preserva o resultado conferido. A operação exige confirmação e não permite substituição nesta versão.'},
+  ],
+  caution:'Uma cópia preservada não se atualiza automaticamente. Não aprove números de uma amostra ou período incompleto.',
+}
