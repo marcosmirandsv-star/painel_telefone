@@ -3,6 +3,9 @@
 import Link from 'next/link'
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { PerformanceNavigation, PerformancePageGuide } from '@/components/ui/PerformanceNavigation'
+import { PerformanceIcon } from '@/components/ui/performance-icons'
+import { vacationNavigation, vacationHelp } from '@/lib/performance-guides'
 
 type Team = { id: string; name: string; manager_person_id: string | null; active: boolean }
 type Person = {
@@ -32,7 +35,7 @@ type VacationSection = 'planning' | 'people' | 'history'
 type VacationListStatus = 'all' | 'planned' | 'scheduled' | 'completed' | 'cancelled'
 type ExternalRow = Record<string, unknown>
 
-const dateToday = new Date().toISOString().slice(0, 10)
+const dateToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 const emptyPerson = { name: '', team_id: '', manager_person_id: '', photo_url: '', active: true }
 const emptyVacation = {
   person_id: '', start_date: '', end_date: '', status: 'planned', hr_ticket: '', cash_bonus_days: '', thirteenth_advance: false, notes: '',
@@ -292,21 +295,30 @@ export default function VacationPage() {
   async function consultGenteGestao() {
     setLoadingGenteGestao(true)
     setGenteGestaoMessage('')
-    const { data: sessionData } = await supabase.auth.getSession()
-    const accessToken = sessionData.session?.access_token
-    const response = await fetch('/api/gente-gestao/ferias', {
-      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-    })
-    const payload = await response.json().catch(() => null)
-    setLoadingGenteGestao(false)
-    if (!response.ok) {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const accessToken = sessionData.session?.access_token
+      if (!accessToken) throw new Error('Sua sessão expirou. Entre novamente na Central.')
+      const response = await fetch('/api/gente-gestao/ferias', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        cache: 'no-store',
+      })
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(
+        typeof payload?.error === 'string' ? payload.error : 'Não foi possível consultar o Gente Gestão.'
+      )
+      const rows = asExternalRows(payload?.ferias)
+      setGenteGestaoVacations(rows)
+      setGenteGestaoMessage(rows.length
+        ? `${rows.length} período(s) encontrado(s) no Gente Gestão.`
+        : 'A consulta não retornou períodos para seu escopo.')
+    } catch (error) {
       setGenteGestaoVacations([])
-      setGenteGestaoMessage(typeof payload?.error === 'string' ? payload.error : 'Não foi possível consultar o Gente Gestão.')
-      return
+      setGenteGestaoMessage(error instanceof Error
+        ? error.message : 'Não foi possível conectar ao Gente Gestão. Tente novamente.')
+    } finally {
+      setLoadingGenteGestao(false)
     }
-    const rows = asExternalRows(payload?.ferias)
-    setGenteGestaoVacations(rows)
-    setGenteGestaoMessage(rows.length ? `${rows.length} período(s) encontrado(s) no Gente Gestão.` : 'A consulta foi realizada, sem períodos retornados para o seu escopo.')
   }
 
   function closeGenteGestaoConsult() {
@@ -321,17 +333,19 @@ export default function VacationPage() {
     <main className="min-h-screen bg-slate-950 px-4 py-7 text-slate-100 md:px-8">
       <div className="mx-auto max-w-7xl">
         <header className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-700 pb-6">
-          <div><p className="text-sm font-semibold uppercase tracking-[.18em] text-cyan-300">Gestão</p><h1 className="mt-1 text-3xl font-bold">Controle de férias e capacidade</h1><p className="mt-2 max-w-3xl text-slate-300">Planeje períodos, confira a cobertura do time e mantenha a lotação e a gestão de cada pessoa atualizadas.</p></div>
+          <div><p className="text-sm font-semibold uppercase tracking-[.18em] text-cyan-300">Gestão de pessoas</p><h1 className="mt-1 flex items-center gap-3 text-3xl font-bold"><PerformanceIcon name="calendar" size={28}/> Férias e capacidade</h1><p className="mt-2 max-w-3xl text-slate-300">Planeje períodos, confira a cobertura do time e mantenha a lotação e a gestão de cada pessoa atualizadas.</p></div>
           <Link href="/" className="rounded-lg border border-cyan-400/50 px-4 py-2 font-semibold text-cyan-200">Voltar ao painel</Link>
         </header>
 
         {message && <p className="mt-5 rounded-lg border border-cyan-400/30 bg-cyan-400/10 p-3 text-sm text-cyan-100">{message}</p>}
 
-        <nav className="mt-6 flex flex-wrap gap-2 border-b border-slate-700 pb-4" aria-label="Áreas do controle de férias">
-          <button type="button" onClick={() => setActiveSection('history')} className={activeSection === 'history' ? 'rounded-lg bg-cyan-400 px-4 py-2 font-bold text-slate-950' : 'rounded-lg border border-slate-600 px-4 py-2 font-semibold text-slate-200'}>Períodos e histórico</button>
-          <button type="button" onClick={() => setActiveSection('planning')} className={activeSection === 'planning' ? 'rounded-lg bg-cyan-400 px-4 py-2 font-bold text-slate-950' : 'rounded-lg border border-slate-600 px-4 py-2 font-semibold text-slate-200'}>Planejamento e cobertura</button>
-          <button type="button" onClick={() => setActiveSection('people')} className={activeSection === 'people' ? 'rounded-lg bg-cyan-400 px-4 py-2 font-bold text-slate-950' : 'rounded-lg border border-slate-600 px-4 py-2 font-semibold text-slate-200'}>Pessoas e times</button>
-        </nav>
+        <div className="pnav-layout mt-6">
+          <PerformanceNavigation groups={vacationNavigation}
+            label="Férias · Gestão" subtitle="Pessoas e capacidade"
+            activeId={activeSection}
+            onSelect={(id)=>setActiveSection(id as VacationSection)}/>
+          <div className="pnav-layout-main">
+            <PerformancePageGuide help={vacationHelp[activeSection]}/>
 
         {activeSection === 'planning' && <section className="mt-6 grid gap-5 lg:grid-cols-3">
           <form id="programar-ferias" onSubmit={saveVacation} className="rounded-xl border border-slate-700 bg-slate-900 p-5 lg:col-span-2">
@@ -365,6 +379,8 @@ export default function VacationPage() {
         </section>}
 
         {activeSection === 'history' && <section className="mt-6 space-y-5"><div className="rounded-xl border border-indigo-400/25 bg-indigo-400/8 p-5"><div className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-sm font-bold uppercase tracking-[.14em] text-indigo-200">Consulta externa</p><h2 className="mt-1 text-xl font-bold">Férias no Gente Gestão</h2><p className="mt-1 text-sm text-slate-300">Consulta somente leitura, limitada ao seu time e subordinados conforme o escopo do token.</p></div><div className="flex flex-wrap gap-2"><button type="button" disabled={loadingGenteGestao} onClick={consultGenteGestao} className="rounded bg-indigo-300 px-4 py-2 font-bold text-slate-950 disabled:opacity-50">{loadingGenteGestao ? 'Consultando...' : 'Consultar Gente Gestão'}</button>{genteGestaoVacations.length > 0 && <button type="button" onClick={closeGenteGestaoConsult} className="rounded border border-indigo-200/50 px-4 py-2 font-bold text-indigo-100">Fechar consulta</button>}</div></div>{genteGestaoMessage && <p className="mt-4 text-sm text-indigo-100">{genteGestaoMessage}</p>}{genteGestaoVacations.length > 0 && <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[650px] text-left text-sm"><thead className="border-b border-indigo-300/25 text-indigo-100"><tr><th className="p-2">Colaborador</th><th className="p-2">Início</th><th className="p-2">Fim</th><th className="p-2">Situação</th></tr></thead><tbody>{genteGestaoVacations.map((vacation, index) => <tr className="border-b border-indigo-200/10" key={`${externalValue(vacation, ['id', 'codigo'])}-${index}`}><td className="p-2">{externalValue(vacation, ['colaborador', 'funcionario', 'pessoa', 'usuario', 'nome', 'employee', 'name', 'title', 'titulo'])}</td><td className="p-2">{externalValue(vacation, ['inicio', 'start', 'data_inicio', 'date_start', 'dataInicio'])}</td><td className="p-2">{externalValue(vacation, ['fim', 'termino', 'end', 'data_fim', 'date_end', 'dataFim'])}</td><td className="p-2">{externalValue(vacation, ['situacao', 'status', 'tipo'])}</td></tr>)}</tbody></table></div>}</div><div className="rounded-xl border border-slate-700 bg-slate-900 p-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-bold">Períodos e histórico</h2><p className="mt-1 text-sm text-slate-400">Planejadas ficam em vermelho, programadas em verde. Períodos encerrados permanecem no histórico para consulta.</p></div><strong className="rounded bg-slate-800 px-3 py-2 text-sm text-slate-200">{filteredVacations.length} resultado(s)</strong></div><div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5"><label className="text-sm">Time<select className="mt-1 w-full rounded bg-slate-800 p-2" value={periodTeamFilter} onChange={(event) => { setPeriodTeamFilter(event.target.value); setPeriodPersonFilter('') }}><option value="">Todos os times</option>{teams.filter((team) => team.active).map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}</select></label><label className="text-sm">Pessoa<select className="mt-1 w-full rounded bg-slate-800 p-2" value={periodPersonFilter} onChange={(event) => setPeriodPersonFilter(event.target.value)}><option value="">Todas as pessoas</option>{people.filter((person) => !periodTeamFilter || person.team_id === periodTeamFilter).map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label><label className="text-sm">Situação<select className="mt-1 w-full rounded bg-slate-800 p-2" value={periodStatusFilter} onChange={(event) => setPeriodStatusFilter(event.target.value as VacationListStatus)}><option value="all">Todas</option><option value="planned">Planejada</option><option value="scheduled">Programada</option><option value="completed">Concluída</option><option value="cancelled">Cancelada</option></select></label><label className="text-sm">Período a partir de<input type="date" className="mt-1 w-full rounded bg-slate-800 p-2" value={periodStartFilter} onChange={(event) => setPeriodStartFilter(event.target.value)} /></label><label className="text-sm">Período até<input type="date" className="mt-1 w-full rounded bg-slate-800 p-2" value={periodEndFilter} onChange={(event) => setPeriodEndFilter(event.target.value)} /></label></div><div className="mt-5 flex flex-wrap gap-3 text-xs"><span className="rounded-full border border-red-400/45 bg-red-400/10 px-3 py-1 text-red-200">Planejada · aguardando confirmação</span><span className="rounded-full border border-emerald-400/45 bg-emerald-400/10 px-3 py-1 text-emerald-200">Programada · confirmada</span><span className="rounded-full border border-slate-500/55 bg-slate-700/45 px-3 py-1 text-slate-200">Concluída · histórico</span></div><div className="mt-4 overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="border-b border-slate-700 text-slate-400"><tr><th className="p-2">Pessoa</th><th className="p-2">Time</th><th className="p-2">Período</th><th className="p-2">Dias</th><th className="p-2">Situação</th><th className="p-2">DP</th><th className="p-2">Ações</th></tr></thead><tbody>{filteredVacations.map((vacation) => { const person = peopleLookup.get(vacation.person_id); const displayStatus = getVacationListStatus(vacation); return <tr className="border-b border-slate-800" key={vacation.id}><td className="p-2">{person?.name ?? 'Pessoa removida'}</td><td className="p-2">{person?.team_id ? teamLookup.get(person.team_id)?.name : '—'}</td><td className="p-2">{formatDate(vacation.start_date)} a {formatDate(vacation.end_date)}</td><td className="p-2">{vacation.days}</td><td className="p-2"><span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${statusTone(displayStatus)}`}>{statusLabelForList(displayStatus)}</span></td><td className="p-2">{vacation.hr_ticket ?? '—'}</td><td className="p-2 whitespace-nowrap"><button disabled={saving} onClick={() => editVacation(vacation)} className="mr-3 text-cyan-300">Editar</button>{vacation.status !== 'cancelled' && <button disabled={saving} onClick={() => cancelVacation(vacation.id)} className="text-amber-300">Cancelar</button>}</td></tr> })}</tbody></table></div></div></section>}
+          </div>
+        </div>
       </div>
     </main>
   )
