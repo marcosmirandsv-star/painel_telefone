@@ -244,3 +244,32 @@
 @media (prefers-reduced-motion: reduce) {
   .pnav-item,.pnav-guide-more summary svg {transition:none;}
 }
+
+
+/* Hierarquia recolhível: o título do grupo é um controle real, não decorativo. */
+.pnav-group-toggle {
+  display:flex;
+  width:100%;
+  gap:8px;
+  align-items:center;
+  justify-content:space-between;
+  margin:0 0 7px;
+  padding:4px 9px;
+  background:transparent;
+  border:0;
+  border-radius:6px;
+  color:#89a4b9;
+  text-align:left;
+  cursor:pointer;
+}
+.pnav-group-toggle:hover {background:rgba(148,163,184,.05); color:#b4d1df;}
+.pnav-group-toggle:focus-visible {outline:2px solid #5eead4;outline-offset:2px;}
+.pnav-group-toggle .pnav-group-title {margin:0;padding:0;color:inherit;line-height:1.5;}
+.pnav-group-toggle svg {transform:rotate(90deg);transition:transform 150ms ease;}
+.pnav-group-toggle[aria-expanded="false"] svg {transform:none;}
+@media (max-width:820px) {
+  .pnav-group-toggle {padding:3px 5px;margin-bottom:2px;gap:4px;}
+  .pnav-group-toggle .pnav-group-title {font-size:.6rem;}
+  .pnav-group-toggle svg {width:11px;height:11px;}
+}
+@media (prefers-reduced-motion:reduce){.pnav-group-toggle svg{transition:none;}}
