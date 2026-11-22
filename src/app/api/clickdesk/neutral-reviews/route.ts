@@ -44,7 +44,7 @@ async function officialGET(request:Request){return handle(async()=>{
   const analysis=(review.analysis&&typeof review.analysis==='object'?review.analysis:{}) as Record<string,unknown>
   const fresh=review.source_hash===row.source_hash
   const verified=fresh&&review.status==='verified'
-  return {ticket_id:row.ticket_id,ticket_number:row.ticket_number,analyst_id:row.analyst_id,analyst_name:names.get(String(row.analyst_id))??'Analista',team_name:teamNames.get(ownersTeam.get(String(row.analyst_id)))??'Equipe não identificada',date:String(row.occurred_date),
+  return {ticket_id:row.ticket_id,ticket_number:row.ticket_number,analyst_id:row.analyst_id,analyst_name:names.get(String(row.analyst_id))??'Analista',team_name:teamNames.get(ownersTeam.get(String(row.analyst_id))??'')??'Equipe não identificada',date:String(row.occurred_date),
    cause:verified?review.cause:'inconclusive',status:fresh?review.status:'pending',
    excluded:verified&&review.exclusion_eligible===true,
    explanation:typeof analysis.explanation==='string'?analysis.explanation:'Aguardando revisão da conversa.',
