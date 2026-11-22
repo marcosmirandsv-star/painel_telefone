@@ -47,9 +47,9 @@ async function officialGET(request:Request){return handle(async()=>{
   return {ticket_id:row.ticket_id,ticket_number:row.ticket_number,analyst_id:row.analyst_id,analyst_name:names.get(String(row.analyst_id))??'Analista',team_name:teamNames.get(ownersTeam.get(String(row.analyst_id))??'')??'Equipe não identificada',date:String(row.occurred_date),
    cause:verified?review.cause:'inconclusive',status:fresh?review.status:'pending',
    excluded:verified&&review.exclusion_eligible===true,
-   explanation:typeof analysis.explanation==='string'?analysis.explanation:'Aguardando revisão da conversa.',
-   evidence:Array.isArray(analysis.evidence_quotes)?analysis.evidence_quotes:[],
-   pattern:analysis.pattern_supported===true?String(analysis.pattern):'none',reviewed_at:review.reviewed_at}
+   explanation:fresh&&typeof analysis.explanation==='string'?analysis.explanation:'Aguardando revisão da conversa.',
+   evidence:fresh&&Array.isArray(analysis.evidence_quotes)?analysis.evidence_quotes:[],
+   pattern:fresh&&analysis.pattern_supported===true?String(analysis.pattern):'none',reviewed_at:fresh?review.reviewed_at:null}
  })
  const selected=mapped
  const completed=selected.filter(row=>row.status==='verified'||row.status==='needs_review')
