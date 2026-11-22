@@ -7,6 +7,7 @@ export const chatManagementNavigation: PerformanceNavGroup[] = [
   ] },
   { label: 'Qualidade e desenvolvimento', items: [
     { id: 'operation360', label: 'Visão 360º', description: 'Evidências e aprendizado por ticket', icon: 'scan' },
+    { id: 'neutralAudit', label: 'Auditoria de neutros', description: 'Tickets, critérios e efeito no CSAT', icon: 'clipboard' },
     { id: 'podium', label: 'Gestão e ações', description: 'Prioridades e acompanhamento', icon: 'clipboard' },
   ] },
   { label: 'Resultados', items: [
@@ -91,6 +92,24 @@ export const chatManagementHelp: Record<string, PerformancePageHelp> = {
       { label: 'Orientações', meaning: 'Uma ação praticável para o analista e uma verificação específica para a gestão.' },
     ],
     caution: 'Se o inventário por ticket não estiver disponível, a tela deve apontar cobertura pendente, nunca exibir zero como desempenho.',
+  },
+  neutralAudit: {
+    category: 'Qualidade e apuração',
+    title: 'Onde estão os tickets neutros de novembro?',
+    summary: 'Localize cada avaliação nota 3, confira quem atendeu, veja se existe parecer verificado e entenda a decisão sobre o CSAT ajustado. A análise de CX explica a experiência e propõe melhorias, sem presumir culpa pelo resultado.',
+    howTo: [
+      'Selecione novembro de 2026 e a equipe que deseja acompanhar.',
+      'Pesquise pelo número do ticket ou pelo nome do analista. Expanda a linha para ver situação, causa, evidências e tratamento no CSAT.',
+      'Casos pendentes não têm causa comprovada nem podem ser excluídos. Analise a conversa e valide a conclusão antes de utilizar o resultado em feedback.',
+    ],
+    fields: [
+      { label: 'Ticket nota 3', meaning: 'Avaliação Neutro identificada no relatório oficial do ClickDesk, com seu número e último atendente humano atribuído.' },
+      { label: 'Parecer verificado', meaning: 'Análise com conclusão registrada na base de revisão e associada à captura atual do ticket.' },
+      { label: 'Exclusão comprovada', meaning: 'Somente fator externo documentado e sem responsabilidade humana atribuível pode ser retirado do CSAT ajustado.' },
+      { label: 'Análise pendente', meaning: 'A IA ou a validação ainda não concluiu o caso. A avaliação continua no cálculo, e não existe causa atribuída.' },
+      { label: 'Evidência', meaning: 'Mensagens e fatos específicos que sustentam o parecer; anexos ausentes e limitações precisam ser declarados.' },
+    ],
+    caution: 'A ausência de prova de falha humana não é prova de causa externa. Nenhum clique nesta tela altera notas nem autoriza exclusões automaticamente.',
   },
   podium: {
     category: 'Acompanhamento gerencial',

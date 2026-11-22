@@ -30,16 +30,21 @@ async function officialGET(request:Request){return handle(async()=>{
   if(reviews.error)throw new ApiError(503,'Revisões dos neutros indisponíveis.')
   for(const row of batch)row.review=(reviews.data??[]).find(review=>review.ticket_id===row.ticket_id)??null
  }
- const people=await access.admin.from('chat_analysts').select('id,name')
- if(people.error)throw new ApiError(503,'Cadastro de analistas indisponível.')
+ const [people,teams]=await Promise.all([
+  access.admin.from('chat_analysts').select('id,name,team_id'),
+  access.admin.from('chat_teams').select('id,name'),
+ ])
+ if(people.error||teams.error)throw new ApiError(503,'Cadastros do Chat indisponíveis.')
  const names=new Map((people.data??[]).map(person=>[person.id,person.name]))
+ const teamNames=new Map((teams.data??[]).map(team=>[team.id,team.name]))
+ const ownersTeam=new Map((people.data??[]).map(person=>[person.id,person.team_id]))
  const mapped=rows.map(row=>{
   const nested=Array.isArray(row.review)?row.review[0]:row.review
   const review=(nested&&typeof nested==='object'?nested:{}) as Record<string,unknown>
   const analysis=(review.analysis&&typeof review.analysis==='object'?review.analysis:{}) as Record<string,unknown>
   const fresh=review.source_hash===row.source_hash
   const verified=fresh&&review.status==='verified'
-  return {ticket_id:row.ticket_id,ticket_number:row.ticket_number,analyst_id:row.analyst_id,analyst_name:names.get(String(row.analyst_id))??'Analista',date:String(row.occurred_date),
+  return {ticket_id:row.ticket_id,ticket_number:row.ticket_number,analyst_id:row.analyst_id,analyst_name:names.get(String(row.analyst_id))??'Analista',team_name:teamNames.get(ownersTeam.get(String(row.analyst_id))??'')??'Equipe não identificada',date:String(row.occurred_date),
    cause:verified?review.cause:'inconclusive',status:fresh?review.status:'pending',
    excluded:verified&&review.exclusion_eligible===true,
    explanation:typeof analysis.explanation==='string'?analysis.explanation:'Aguardando revisão da conversa.',
@@ -53,8 +58,9 @@ async function officialGET(request:Request){return handle(async()=>{
  const alerts:Array<{kind:string;message:string;tickets:unknown[]}>=[]
  if(access.isManagement){
   const corrections=await access.admin.rpc('get_clickdesk_event_correction_summary')
-  if(corrections.error)throw new ApiError(503,'Conferência de movimentações indisponível.')
-  if(Number(corrections.data?.historical_changes)>0)alerts.push({kind:'historical_change',message:corrections.data.historical_changes+' movimentação(ões) posteriores foram registradas na base nos últimos 14 dias. Os dias publicados foram preservados e precisam de conferência.',tickets:[]})
+  // A indisponibilidade de uma conferência auxiliar não deve ocultar os votos oficiais.
+  if(corrections.error)alerts.push({kind:'source_check_unavailable',message:'A conferência auxiliar de movimentações está indisponível. Os tickets oficiais permanecem visíveis; confira a fonte antes de finalizar os pareceres.',tickets:[]})
+  else if(Number(corrections.data?.historical_changes)>0)alerts.push({kind:'historical_change',message:corrections.data.historical_changes+' movimentação(ões) posteriores foram registradas na base nos últimos 14 dias. Os dias publicados foram preservados e precisam de conferência.',tickets:[]})
 
   if(inconclusive.length>=5||(completed.length>=5&&inconclusive.length/completed.length>=.2))alerts.push({kind:'inconclusive_volume',message:`${inconclusive.length} de ${completed.length} análises concluídas precisam de revisão da causa.`,tickets:inconclusive.map(row=>row.ticket_number)})
   const groups=new Map<string,typeof mapped>()

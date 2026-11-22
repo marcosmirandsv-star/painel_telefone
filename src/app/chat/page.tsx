@@ -16,6 +16,7 @@ import { clickDeskDailyAvailable, clickDeskPublicationDay, publishedClickDeskEnd
 import { sumChatVoteRows } from '@/lib/clickdesk-csat'
 import ChatTimeFilter from '@/components/chat/ChatTimeFilter'
 import ChatNeutralReviews from '@/components/chat/ChatNeutralReviews'
+import NeutralAuditPanel from '@/components/chat/NeutralAuditPanel'
 import AnalystReviews from '@/components/chat/AnalystReviews'
 import ChatAccessManagement from '@/components/chat/ChatAccessManagement'
 import ChatReconciliationStatus from '@/components/chat/ChatReconciliationStatus'
@@ -953,7 +954,7 @@ type ChartPoint = {
   value: number
 }
 
-type ChatActiveTab = 'overview' | 'operation360' | 'prototype' | 'podium' | 'analysis' | 'reports' | 'import' | 'settings'
+type ChatActiveTab = 'overview' | 'operation360' | 'neutralAudit' | 'prototype' | 'podium' | 'analysis' | 'reports' | 'import' | 'settings'
 
 type ChatFeedbackStyle = 'coach' | 'sare' | 'mimo'
 
@@ -7415,6 +7416,24 @@ function ChatModuleDashboard({
           </div>
         </div>
       </section>
+      {chatActiveTab === 'neutralAudit' && isManagementUser && (
+        <section className="workspace-content-section">
+          {chat2SelectedPeriod.start >= '2026-11-01' ? (
+            <NeutralAuditPanel
+              key={chat2SelectedPeriod.start + ':' + chat2SelectedPeriod.end + ':' + selectedTeamId}
+              start={chat2SelectedPeriod.start}
+              end={chat2SelectedPeriod.end}
+              teamId={selectedTeamId === 'all' ? null : selectedTeamId}
+            />
+          ) : (
+            <div className="rounded-xl border border-amber-300/20 bg-amber-300/5 p-5 text-sm leading-6 text-amber-100">
+              A auditoria prioritária está disponível para novembro de 2026 em diante.
+              Selecione novembro no filtro da competência para consultar os tickets nota 3.
+              O histórico anterior permanece preservado para uma etapa posterior.
+            </div>
+          )}
+        </section>
+      )}
       <section className={chatActiveTab === 'operation360' ? 'workspace-content-section' : 'hidden'}>
         {isManagementUser && chatActiveTab === 'operation360' && <details className="workspace-collapsible"><summary className="cursor-pointer"><h2 className="text-xl font-bold">Critérios do atendimento e evidências preservadas</h2><p className="mt-2 text-sm text-slate-400">Acolhimento, entendimento, clareza, diligência, continuidade e encerramento. Histórico qualitativo até D-1, com cobertura própria; não altera CSAT, volume ou avaliações oficiais.</p></summary><div className="mt-5"><CxDiagnostics diagnosisOnly initialScope={{start:chatAuditPeriod.start,end:chatAuditPeriod.end,teamId:selectedTeamId==='all'?'':selectedTeamId}} key={`diagnosis:${chatAuditPeriod.start}:${chatAuditPeriod.end}:${selectedTeamId}`} onCaseCreated={()=>onChatActiveTabChange('podium')}/></div></details>}
         {clickDeskOperation360Loading && !clickDeskOperation360 ? (
@@ -11974,7 +11993,7 @@ function ChatProductionContent(){
  const [tab,setTab]=useState<ChatActiveTab>(()=>{
    if(typeof window==='undefined')return 'overview'
    const requested=new URLSearchParams(window.location.search).get('view')
-   const views:ChatActiveTab[]=['overview','operation360','prototype','podium','analysis','reports','import','settings']
+   const views:ChatActiveTab[]=['overview','operation360','neutralAudit','prototype','podium','analysis','reports','import','settings']
    return requested&&views.includes(requested as ChatActiveTab)?requested as ChatActiveTab:'overview'
  })
  const enabled=process.env.NEXT_PUBLIC_CHAT_OFFICIAL_ENABLED==='true'&&process.env.NEXT_PUBLIC_SUPABASE_URL==='https://qmetbydkepfdgfqkdkai.supabase.co'
