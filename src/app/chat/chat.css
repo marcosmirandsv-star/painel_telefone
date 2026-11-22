@@ -3874,3 +3874,89 @@
   .chat-production-shell .chat-monthly-volume-chart {padding: 17px 14px 13px;}
   .chat-production-shell .chat-monthly-volume-selected {text-align: left;}
 }
+
+
+/* Verified day snapshots from the official ClickDesk report, never inferred */
+.chat-production-shell .verified-daily-wrap {
+  margin-top: 20px; padding: clamp(16px,2vw,24px);
+  border: 1px solid rgba(103,232,249,.17); border-radius: 15px;
+  background: linear-gradient(135deg,rgba(12,28,47,.96),rgba(10,21,38,.97));
+}
+.chat-production-shell .verified-daily-heading {
+  display: flex; align-items:flex-start; justify-content:space-between;
+  gap:16px; flex-wrap:wrap;
+}
+.chat-production-shell .verified-daily-eyebrow {
+  color:#75e5df; font-size:.69rem; font-weight:800;
+  text-transform:uppercase; letter-spacing:.12em;
+}
+.chat-production-shell .verified-daily-heading h4 {
+  color:#f3f8ff; font-size:1.2rem; font-weight:760; margin-top:6px;
+}
+.chat-production-shell .verified-daily-heading p {
+  margin-top:7px; color:#9db2c5; font-size:.79rem; line-height:1.6; max-width:740px;
+}
+.chat-production-shell .verified-daily-actions {display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.chat-production-shell .verified-daily-coverage {
+  background:rgba(94,234,212,.08); color:#99f6e4;
+  border:1px solid rgba(94,234,212,.19);padding:9px 12px;border-radius:9px;font-size:.75rem;font-weight:760;
+}
+.chat-production-shell .verified-daily-error {margin:10px 0;padding:10px 13px;background:rgba(239,68,68,.09);border:1px solid rgba(239,68,68,.18);color:#fecaca;border-radius:9px;}
+.chat-production-shell .verified-daily-kpis {
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:22px 0;
+}
+.chat-production-shell .verified-daily-kpis>div {
+  display:flex;flex-direction:column;gap:4px;padding:14px 16px;
+  background:rgba(2,6,23,.26);border:1px solid rgba(148,163,184,.14);border-radius:11px;min-width:0;
+}
+.chat-production-shell .verified-daily-kpis span,.chat-production-shell .verified-daily-kpis small {color:#9eb2c6;font-size:.73rem;}
+.chat-production-shell .verified-daily-kpis strong {
+  color:#f8fafc;font-size:1.65rem;letter-spacing:-.03em;font-weight:750;font-variant-numeric:tabular-nums;
+}
+.chat-production-shell .verified-daily-chart {
+  display:grid;grid-template-columns:48px minmax(0,1fr);gap:6px;
+  border:1px solid rgba(148,163,184,.12);border-radius:13px;
+  background:rgba(4,13,27,.45);padding:18px 16px 13px;
+}
+.chat-production-shell .verified-daily-axis {
+  display:flex; flex-direction:column; justify-content:space-between;
+  height:170px;color:#748da6;font-size:.69rem;font-variant-numeric:tabular-nums;
+}
+.chat-production-shell .verified-daily-chart-scroll {overflow-x:auto;padding-bottom:8px;scrollbar-width:thin;}
+.chat-production-shell .verified-daily-bars {
+  display:flex;align-items:flex-end;gap:6px;height:195px;min-width:100%;width:max-content;
+  background:repeating-linear-gradient(to bottom,rgba(148,163,184,.05) 0,rgba(148,163,184,.05) 1px,transparent 1px,transparent 42px);
+}
+.chat-production-shell .verified-daily-day {
+  width:30px;min-width:30px;height:195px;display:flex; flex-direction:column;align-items:center;
+  justify-content:flex-end;background:none;color:#99afc4;border:0;padding:0 2px;
+  font-size:.72rem;font-variant-numeric:tabular-nums;
+}
+.chat-production-shell .verified-daily-day:focus-visible {outline:2px solid #5eead4;outline-offset:3px;}
+.chat-production-shell .verified-daily-bar-track {
+  display:flex;flex-direction:column;justify-content:flex-end;flex:1;width:100%;position:relative;
+}
+.chat-production-shell .verified-daily-bar-fill {
+  display:block;width:100%;min-height:3px;border-radius:4px 4px 0 0;
+  background:linear-gradient(to top,#18aebc,#67e8f9);
+}
+.chat-production-shell .verified-daily-day:hover .verified-daily-bar-fill,
+.chat-production-shell .verified-daily-day:focus-visible .verified-daily-bar-fill {
+  background:linear-gradient(to top,#30d5c0,#b0fcf3);
+}
+.chat-production-shell .verified-daily-bar-missing {
+  display:block; width:100%;height:7px;margin-bottom:2px;
+  background:repeating-linear-gradient(90deg,#34445b 0,#34445b 4px,transparent 4px,transparent 8px); opacity:.65;
+}
+.chat-production-shell .verified-daily-day-label {margin-top:7px;}
+.chat-production-shell .verified-daily-loading {align-self:center;color:#9fb3c8;font-size:.8rem;padding:20px;}
+.chat-production-shell .verified-daily-foot {
+  display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  margin-top:13px;font-size:.74rem;color:#91a9bd;line-height:1.6;
+}
+@media (max-width:720px) {
+ .chat-production-shell .verified-daily-kpis {grid-template-columns:1fr;}
+ .chat-production-shell .verified-daily-chart {padding-inline:8px;grid-template-columns:34px minmax(0,1fr);}
+ .chat-production-shell .verified-daily-bars {gap:4px;}
+ .chat-production-shell .verified-daily-day {width:26px;min-width:26px;}
+}
