@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import KeyManager from './key-manager'
+import { PerformanceIcon } from '@/components/ui/performance-icons'
+import { PerformancePageGuide } from '@/components/ui/PerformanceNavigation'
+import { closuresHelp } from '@/lib/performance-guides'
 
 type Preview = { conferencia?: string; tem_dados: boolean; status: string; indicadores: Record<string, number | null>; [key: string]: unknown }
 export default function IntegrationsPage() {
@@ -50,20 +53,20 @@ export default function IntegrationsPage() {
     } catch (error) { setPreview(null); setConfirmed(false); setMessage(error instanceof Error ? error.message : 'Falha na consulta.') }
     finally { setBusy(false) }
   }
-  return <main className="mx-auto max-w-5xl space-y-6 p-6 text-slate-100">
-    <Link href="/" className="text-cyan-300 underline">Voltar ao painel</Link>
-    <h1 className="text-3xl font-bold">Fechamentos</h1>
-    <p>Confira os indicadores de telefone e chat e preserve os resultados mensais aprovados pela gestão.</p>
-    <details className="rounded-xl border border-slate-700 p-4">
-      <summary className="cursor-pointer font-semibold">Como usar esta área</summary>
-      <ol className="mt-3 list-decimal space-y-2 pl-5 text-slate-300">
-        <li>Escolha o mês e o canal. No chat, escolha também a equipe.</li>
-        <li><strong>Conferir dados atuais</strong> consulta os números disponíveis, sem aprovar ou alterar nada. Use esta opção para testar.</li>
-        <li><strong>Aprovar fechamento</strong> guarda uma cópia oficial do resultado conferido, para um mês já encerrado. Nesta versão, essa cópia não pode ser substituída.</li>
-        <li><strong>Ver fechamento oficial</strong> recupera uma cópia já aprovada para o mesmo mês, canal e equipe.</li>
-      </ol>
-      <p className="mt-3 text-slate-300">Aqui você usa seu login de gestão do painel.</p>
-    </details>
+  return <main className="mx-auto max-w-6xl space-y-5 p-5 text-slate-100 md:p-8">
+    <header className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-700/70 pb-5">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-widest text-teal-300">Central de Performance · Administração</p>
+        <h1 className="mt-2 flex items-center gap-3 text-3xl font-bold">
+          <PerformanceIcon name="shield" size={29}/> Fechamentos
+        </h1>
+        <p className="mt-2 max-w-3xl text-sm text-slate-300">
+          Confira e preserve os números por canal e competência, sem misturar resultados de origens diferentes.
+        </p>
+      </div>
+      <Link href="/" className="rounded-lg border border-slate-600 px-4 py-2 text-sm font-semibold text-cyan-200 hover:border-teal-300/40">Voltar à Central</Link>
+    </header>
+    <PerformancePageGuide help={closuresHelp} compact/>
     <p role="status" aria-live="polite">{message}</p>
     {authorized && <>
       <fieldset disabled={busy} className="flex flex-wrap gap-4 rounded-xl border border-slate-700 p-4">
@@ -79,7 +82,7 @@ export default function IntegrationsPage() {
         <h2 className="text-xl font-semibold">{preview.status === 'fechado' ? 'Fechamento oficial' : 'Dados atuais — ainda não aprovados'}</h2>
         {!preview.tem_dados && <p>Não há registros considerados para este período.</p>}
         <dl className="grid gap-3 sm:grid-cols-2">{Object.entries(preview.indicadores).map(([key, value]) => <div key={key} className="rounded bg-slate-800 p-3"><dt>{key.replaceAll('_', ' ')}</dt><dd className="text-xl font-bold">{value === null ? 'Sem base para cálculo' : value.toLocaleString('pt-BR')}</dd></div>)}</dl>
-        {preview.conferencia && preview.tem_dados && <>
+        {preview.status !== 'fechado' && preview.conferencia && preview.tem_dados && <>
           <label className="block"><input type="checkbox" checked={confirmed} disabled={busy} onChange={e => setConfirmed(e.target.checked)} /> Conferi os indicadores e quero preservar este resultado como fechamento oficial. Não será possível substituí-lo nesta versão.</label>
           <button className="rounded bg-cyan-700 px-4 py-2 disabled:opacity-50" disabled={!confirmed || busy} onClick={() => consult(true)}>{busy ? 'Processando…' : 'Aprovar fechamento'}</button>
         </>}
