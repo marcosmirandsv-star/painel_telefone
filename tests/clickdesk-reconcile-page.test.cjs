@@ -3,15 +3,15 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');const vm=require('node:vm');
 const ts=require('typescript');
 const source=fs.readFileSync(__dirname+'/../src/app/api/clickdesk/reconcile/route.ts','utf8');
-function harness({count=20840,role='master',confirmed=false,internal=false,changed=false,complete=true}={}) {
- const calls=[],writes=[];
+function harness({count=20840,role='master',confirmed=false,internal=false,changed=false,complete=true,roster=[]}={}) {
+ const calls=[],writes=[],finalRosters=[],rosterSelections=[];
  const ids=Array.from({length:count},(_,i)=>String(i+1)).sort();
  const admin={rpc:async(name,args)=>{
   calls.push({name,args});
   if(name==='clickdesk_reconcile_candidate_page')return {data:ids.filter(id=>id>args.p_cursor).slice(0,args.p_limit+1).map(id=>({ticket_id:id,version:'2026-11-23T12:00:00.000000Z'})),error:null};
   return {data:[{candidate_count:count,confirmed_count:0,pending_count:0}],error:null};
  },from(table){return {
-  select:async()=>({data:[],error:null}),
+  select:async columns=>{if(table==='chat_analysts')rosterSelections.push(columns);return {data:table==='chat_analysts'?roster:[],error:null}},
   upsert:async(rows)=>{writes.push({table,rows});return {error:null}},
   delete:()=>({in:async()=>({error:null})}),
  }}};
@@ -22,11 +22,11 @@ function harness({count=20840,role='master',confirmed=false,internal=false,chang
   '@/lib/chat-integration-server':{ApiError,authorizeClickDeskSessionClient:async()=>({isManagement:true,role}),
    json:data=>Response.json(data),handle:async f=>{try{return await f()}catch(e){return Response.json({error:e.message},{status:e.status||500})}}},
   '@/lib/clickdesk-final-owner-server':{productionReadAdmin:()=>admin,readTicketHistory:async id=>({messages:[{id:'msg'}],events:[],ticket:{id,updated_at:'2026-11-23T12:00:00Z'},complete})},
-  '@/lib/clickdesk-final-owner':{object:v=>v&&typeof v==='object'?v:{},text:v=>typeof v==='string'||typeof v==='number'?String(v):'',finalHumanTicket:(id,m,e,t,p,historyComplete)=>({ticket_id:id,confirmed:confirmed&&historyComplete,reason:'no_public_human',analyst_id:confirmed?'analyst':null,team_id:confirmed?'team':null,message_id:confirmed?'msg':null,occurred_at:confirmed?'2026-11-23T12:00:00Z':null,occurred_date:confirmed?'2026-11-23':null})},
+  '@/lib/clickdesk-final-owner':{object:v=>v&&typeof v==='object'?v:{},text:v=>typeof v==='string'||typeof v==='number'?String(v):'',finalHumanTicket:(id,m,e,t,p,historyComplete)=>(finalRosters.push(p),{ticket_id:id,confirmed:confirmed&&historyComplete,reason:'no_public_human',analyst_id:confirmed?'analyst':null,team_id:confirmed?'team':null,message_id:confirmed?'msg':null,occurred_at:confirmed?'2026-11-23T12:00:00Z':null,occurred_date:confirmed?'2026-11-23':null})},
  };
  const exports={};vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,
  {exports,AbortSignal,fetch:async url=>Response.json({id:url.split('/').at(-1),updated_at:changed?'2026-11-23T12:01:00Z':'2026-11-23T12:00:00Z'}),require:n=>mocked[n]||require(n),Response,Request,console:{info(){}},process:{env:{CLICKDESK_API_KEY:'test',CLICKDESK_ACCOUNT_ID:'test',VERCEL_GIT_COMMIT_REF:'main'}}});
- return {calls,writes,post:async body=>exports.POST(new Request('https://test/api/clickdesk/reconcile',{method:'POST',body:JSON.stringify(body)}))};
+ return {calls,writes,finalRosters,rosterSelections,post:async body=>exports.POST(new Request('https://test/api/clickdesk/reconcile',{method:'POST',body:JSON.stringify(body)}))};
 }
 test('20840 candidates return bounded page and cursor; no cap or source table download',async()=>{
  const h=harness();const res=await h.post({limit:12,period:'2026-11'});assert.equal(res.status,200);
@@ -69,4 +69,22 @@ test('changed conversation becomes pending and does not enter ledger',async()=>{
 
 test('incomplete history remains pending even if transport returns a message',async()=>{
  const h=harness({confirmed:true,complete:false});const b=await (await h.post({limit:1,dry_run:false})).json();assert.equal(b.confirmed,0);assert.equal(h.writes.some(x=>x.table==='clickdesk_final_ticket_ledger'),false);
+});
+
+test('only explicitly active analysts reach finalHumanTicket attribution',async()=>{
+ const roster=[
+  {id:'active-analyst',name:'Analista Ativo',team_id:'team',csat_goal:90,active:true},
+  {id:'inactive-analyst',name:'Luan Inativo',team_id:'team',csat_goal:90,active:false},
+  {id:'unknown-activity',name:'Status Ausente',team_id:'team',csat_goal:90},
+ ];
+ const h=harness({count:1,roster});
+ const response=await h.post({period:'2026-11',limit:1});
+ assert.equal(response.status,200);
+ assert.equal(h.finalRosters.length,1);
+ assert.match(h.rosterSelections[0],/(^|,)active(,|$)/);
+ for(const received of h.finalRosters){
+  assert.equal(received.length,1);
+  assert.equal(received[0].id,'active-analyst');
+  assert.equal(received.some(person=>person.id==='inactive-analyst'||person.id==='unknown-activity'),false);
+ }
 });
