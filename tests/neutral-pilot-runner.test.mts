@@ -1,6 +1,6 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {readCompleteHistory,runPilot} from '../src/lib/neutral-pilot/pilot-runner.ts'
+import {readCompleteHistory,runPilot,historyShapeSummary} from '../src/lib/neutral-pilot/pilot-runner.ts'
 const message={id:'1',created_at:'2026-11-17T18:00:00Z',author:{name:'Diego Machado',type:'agent'},visibility:'public',body:'O sistema está indisponível neste momento.',attachments:[]}
 const page=(rows:unknown[],current=1,last=1)=>({data:rows,meta:{current_page:current,last_page:last,total:rows.length}})
 const record=(value:unknown):Record<string,unknown>=>value!==null&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:{}
@@ -11,6 +11,35 @@ test('explicit complete pagination covers detail messages and attachments',async
 test('short page without pagination is not complete',async()=>{
  const history=await readCompleteHistory('1098085',async path=>path.includes('?')?[message]:{id:'1098085',updated_at:'2026-11-17T20:00:00Z',messages:[message]})
  assert.equal(history.complete,false);assert.ok(history.gaps.includes('messages_pagination_unverified'))
+ assert.equal(history.messages.length,1)
+})
+
+test('format summaries expose structure and numeric pagination only',()=>{
+ const secret='private-body-and-token'
+ const summary=historyShapeSummary({data:[{body:secret,author:secret}],meta:{page:'1',last_page:2,total:1,next_page:secret,token:secret},token:secret,messages:{data:[{body:secret}],meta:{page:1}}})
+ const serialized=JSON.stringify(summary)
+ assert.ok(!serialized.includes(secret))
+ assert.equal(record(summary.root).kind,'object')
+ assert.deepEqual(record(record(summary.root).arrays),{data:1})
+ assert.equal(record(record(summary.meta).pagination).page,1)
+ assert.equal(record(record(summary.meta).pagination).next_page,'[non_numeric]')
+ assert.deepEqual(record(record(summary.messages).arrays),{data:1})
+})
+
+test('invalid metadata preserves returned rows without asserting missing attendance',async()=>{
+ let provider=0
+ const result=await runPilot({env,ticketIds:['1098085'],fetchImpl:(async input=>{
+  const url=String(input)
+  if(url.includes('googleapis')){provider++;throw Error('unexpected')}
+  if(url.includes('/messages?'))return Response.json({data:[message],meta:{page:1}})
+  if(url.includes('/events?'))return Response.json({data:[],meta:{page:1}})
+  return Response.json({id:'1098085',updated_at:'2026-11-17T20:00:00Z',messages:[message]})
+ }) as typeof fetch})
+ const row=record(result.results[0]);assert.equal(provider,0);assert.equal(row.status,'gap')
+ assert.equal(record(row.returned_records).messages,1)
+ assert.ok(Array.isArray(row.source_format))
+ assert.ok(Array.isArray(row.gaps)&&!row.gaps.includes('detail_messages_not_covered')&&!row.gaps.includes('messages_before_rating_missing'))
+ assert.ok(!JSON.stringify(row).includes(message.body))
 })
 test('missing attachments metadata is a coverage gap',async()=>{
  const without=Object.fromEntries(Object.entries(message).filter(([key])=>key!=='attachments'))
