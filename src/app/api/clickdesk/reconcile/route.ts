@@ -1,48 +1,39 @@
 import {isChatProductionEnabled} from '@/lib/chat-production-gate'
 import { randomUUID } from 'node:crypto'
+import { isCxCron } from '@/lib/cx360-diagnostics-server'
 import { ApiError, authorizeClickDeskSessionClient, handle, json } from '@/lib/chat-integration-server'
-import { getServerSupabaseConfig } from '@/lib/runtime-environment'
 import { productionReadAdmin, readTicketHistory } from '@/lib/clickdesk-final-owner-server'
-import { finalHumanTicket, type FinalTicket, type Person } from '@/lib/clickdesk-final-owner'
+import { finalHumanTicket, object, text, type FinalTicket, type Person } from '@/lib/clickdesk-final-owner'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
 
 const CLICKDESK_BASE = 'https://api.desk.click.app/api/v1'
 const MAX_BATCH = 12
-const MAX_SOURCE_ROWS = 20000
-
 type Candidate = { ticket_id: string; version: string }
-type Row = FinalTicket & { source_version: string }
+type Row = FinalTicket & { source_version: string; conversation_version: string | null }
 
-async function sourceCandidates() {
-  const admin = productionReadAdmin()
-  const candidates = new Map<string, Candidate>()
-  for (const [table, idColumn, versionColumn] of [
-    ['clickdesk_chat_attendances', 'clickdesk_ticket_id', 'updated_at'],
-    ['clickdesk_chat_verified_contributions', 'ticket_id', 'verified_at'],
-    // Descoberta mais ampla da rotina corrente. Done significa processado, não humano confirmado.
-    ['clickdesk_chat_capture_queue', 'ticket_id', 'source_updated_at'],
-  ] as const) {
-    for (let offset = 0; offset < MAX_SOURCE_ROWS; offset += 500) {
-      const { data, error } = await admin.from(table)
-        .select(idColumn + ',' + versionColumn)
-        .order(idColumn, { ascending: true })
-        .range(offset, offset + 499)
-      if (error) throw new ApiError(503, 'Não foi possível consultar candidatos de reconciliação.')
-      const page = data ?? []
-      for (const item of page as unknown as Record<string, unknown>[]) {
-        const id = String(item[idColumn] ?? '').trim()
-        const version = String(item[versionColumn] ?? '')
-        if (!id) continue
-        const previous = candidates.get(id)
-        if (!previous || previous.version < version) candidates.set(id, {ticket_id:id,version})
-      }
-      if (page.length < 500) break
-      if (offset + 500 >= MAX_SOURCE_ROWS) throw new ApiError(422, 'Limite seguro de fonte excedido.')
-    }
+async function sourceCandidates(cursor: string, limit: number, period: string | null) {
+  const {data,error}=await productionReadAdmin().rpc('clickdesk_reconcile_candidate_page',{
+    p_cursor:cursor,p_limit:limit,p_period:period,
+  })
+  if(error || !Array.isArray(data))throw new ApiError(503,'Não foi possível consultar candidatos de reconciliação.')
+  const page=data as Candidate[]
+  if(page.length>limit+1 || page.some(row=>typeof row.ticket_id!=='string'||typeof row.version!=='string')) {
+    throw new ApiError(503,'Página de candidatos inválida.')
   }
-  return [...candidates.values()].sort((a,b)=>a.ticket_id.localeCompare(b.ticket_id,'en'))
+  return {selection:page.slice(0,limit),hasMore:page.length>limit}
+}
+
+async function sourceCoverage(period: string | null) {
+  const {data,error}=await productionReadAdmin().rpc('clickdesk_reconcile_candidate_coverage',{p_period:period})
+  const row=Array.isArray(data)?data[0]:null
+  if(error || !row)throw new ApiError(503,'Falha ao consultar cobertura de candidatos.')
+  const counts=[row.candidate_count,row.confirmed_count,row.pending_count].map(Number)
+  if(counts.some(n=>!Number.isSafeInteger(n)||n<0)||counts[1]+counts[2]>counts[0]) {
+    throw new ApiError(503,'Contagem de candidatos inválida.')
+  }
+  return {candidate_count:counts[0],confirmed_count:counts[1],pending_count:counts[2]}
 }
 
 async function safeGet(path: string, key: string, account: string, deadline: number): Promise<unknown> {
@@ -71,14 +62,22 @@ async function evaluateBatch(
       try {
         const evidence=await readTicketHistory(candidate.ticket_id,path=>safeGet(path,key,account,deadline))
         const row=finalHumanTicket(candidate.ticket_id,evidence.messages,evidence.events,evidence.ticket,people,evidence.complete)
-        results[index]={...row,source_version:candidate.version}
+        // finalHumanTicket is the existing rule for complete public human evidence.
+        // Keep a fail-closed transport assertion without adding attribution rules.
+        const ownPublicPresent=evidence.messages.some(m=>text(object(m).id)===row.message_id)
+        const checked=row.confirmed && (!evidence.complete || !ownPublicPresent)
+          ? finalHumanTicket(candidate.ticket_id,[],[],{},people,false) : row
+        const updated=Date.parse(text(evidence.ticket.updated_at))
+        results[index]={...checked,source_version:candidate.version,
+          conversation_version:Number.isFinite(updated)?new Date(updated).toISOString():null}
+
       } catch(error) {
         const reason=error instanceof Error && (/^clickdesk_http_\d+$/.test(error.message) || error.message==='audit_deadline')
           ? error.message : 'history_read_failed'
         results[index]={
           ticket_id:candidate.ticket_id,analyst_id:null,analyst_name:null,team_id:null,
           occurred_at:null,occurred_date:null,area:null,message_id:null,satisfaction_label:null,
-          confirmed:false,reason,rating_timestamp_warning:false,source_version:candidate.version,
+          confirmed:false,reason,rating_timestamp_warning:false,source_version:candidate.version,conversation_version:null,
         }
       }
     }
@@ -93,15 +92,12 @@ async function officialPOST(request: Request) {
     if (!isChatProductionEnabled()) {
       throw new ApiError(404,'Reconciliação disponível somente na homologação.')
     }
-    const access=await authorizeClickDeskSessionClient(request)
-    if (!access.isManagement || access.role !== 'master') {
-      throw new ApiError(403,'Reconciliação exclusiva do Master.')
-    }
+    const internal=isCxCron(request)
     let body: Record<string,unknown>
     try { const input:unknown=await request.json(); body=input && typeof input==='object' && !Array.isArray(input)
       ? input as Record<string,unknown> : {} }
     catch { throw new ApiError(400,'Envie JSON de reconciliação.') }
-    if (Object.keys(body).some(key=>!['cursor','limit','dry_run'].includes(key))) {
+    if (Object.keys(body).some(key=>!['cursor','limit','dry_run','period'].includes(key))) {
       throw new ApiError(400,'Parâmetro de reconciliação inválido.')
     }
     const dryRun=body.dry_run !== false
@@ -118,11 +114,20 @@ async function officialPOST(request: Request) {
     if (cursor.length>80 || (body.cursor!==undefined && typeof body.cursor!=='string')) {
       throw new ApiError(400,'Cursor inválido.')
     }
+    const period=body.period===undefined ? null : body.period
+    if(period!==null && (typeof period!=='string'||!/^20\d{2}-(0[1-9]|1[0-2])$/.test(period))) {
+      throw new ApiError(400,'Período inválido; use AAAA-MM.')
+    }
+    if(internal) {
+      if(period!=='2026-11')throw new ApiError(403,'Agendamento restrito ao inventário de Novembro de 2026.')
+    } else {
+      const access=await authorizeClickDeskSessionClient(request)
+      if(!access.isManagement || access.role!=='master')throw new ApiError(403,'Reconciliação exclusiva do Master.')
+    }
     const apiKey=process.env.CLICKDESK_API_KEY?.trim(), account=process.env.CLICKDESK_ACCOUNT_ID?.trim()
     if (!apiKey||!account)throw new ApiError(503,'Credenciais de leitura ClickDesk indisponíveis.')
     stage='candidate_discovery'
-    const all=await sourceCandidates()
-    const selection=all.filter(item=>item.ticket_id.localeCompare(cursor,'en')>0).slice(0,limit)
+    const {selection,hasMore}=await sourceCandidates(cursor,limit,period as string|null)
     const admin=productionReadAdmin()
     const roster=await admin.from('chat_analysts').select('id,name,team_id,csat_goal')
     if(roster.error)throw new ApiError(503,'Cadastro de analistas indisponível.')
@@ -131,6 +136,32 @@ async function officialPOST(request: Request) {
     }))
     stage='ticket_history'
     const evaluated=await evaluateBatch(selection,people,apiKey,account)
+    if(!dryRun) {
+      stage='version_verification'
+      // A current detail read immediately before the write prevents crediting a
+      // conversation that changed while its messages/events were being read.
+      const deadline=Date.now()+45000
+      let index=0
+      await Promise.all(Array.from({length:4},async()=>{
+        while(index<evaluated.length) {
+          const row=evaluated[index++]
+          if(!row.confirmed)continue
+          let reason:string|null=null
+          if(!row.conversation_version)reason='history_version_missing'
+          else try {
+            const raw=object(await safeGet('/tickets/'+encodeURIComponent(row.ticket_id),apiKey,account,deadline))
+            const latest=object(raw.ticket||raw.data||raw)
+            const updated=Date.parse(text(latest.updated_at))
+            if(text(latest.id)!==row.ticket_id || !Number.isFinite(updated))reason='history_version_missing'
+            else if(new Date(updated).toISOString()!==row.conversation_version)reason='history_changed_since_read'
+          } catch { reason='history_version_check_failed' }
+          if(reason) {
+            const pending=finalHumanTicket(row.ticket_id,[],[],{},people,false)
+            Object.assign(row,pending,{reason})
+          }
+        }
+      }))
+    }
     const confirmed=evaluated.filter(row=>row.confirmed)
     const pending=evaluated.filter(row=>!row.confirmed)
     stage='validation'
@@ -165,32 +196,27 @@ async function officialPOST(request: Request) {
         if(clean.error)throw new ApiError(503,'Falha ao liberar pendências anteriormente confirmadas.')
       }
       stage='persist_coverage'
-      const [ledgerTotal,pendingTotal]=await Promise.all([
-        admin.from('clickdesk_final_ticket_ledger').select('ticket_id',{count:'exact',head:true}),
-        admin.from('clickdesk_final_ticket_pending').select('ticket_id',{count:'exact',head:true}),
-      ])
-      if(ledgerTotal.error||pendingTotal.error)throw new ApiError(503,'Falha ao atualizar cobertura.')
+      const coverage=await sourceCoverage(period as string|null)
       const coverageWrite=await admin.from('clickdesk_final_coverage').upsert({
-        source_key:'captured_candidates_reconcile',
-        start_date:'2026-09-01',end_date:new Date().toISOString().slice(0,10),
-        candidate_count:all.length,
-        confirmed_count:Math.min(ledgerTotal.count??0,all.length),
-        pending_count:Math.min(pendingTotal.count??0,Math.max(0,all.length-(ledgerTotal.count??0))),
+        source_key:period ? 'inventory_reconcile:'+period : 'captured_candidates_reconcile',
+        start_date:period ? period+'-01' : '2026-09-01',end_date:new Date().toISOString().slice(0,10),
+        ...coverage,
         completeness:'partial',
         verified_at:new Date().toISOString(),
       },{onConflict:'source_key'})
       if(coverageWrite.error)throw new ApiError(503,'Falha ao atualizar cobertura de candidatos.')
     }
+    const coverage=await sourceCoverage(period as string|null)
     stage='completed'
     return json({
       trace_id:traceId,mode:dryRun?'dry_run':'persisted_homologation',
-      source:'stored_candidates_only',candidate_universe:all.length,
+      source:period?'period_inventory_candidates':'stored_candidates_only',period,candidate_universe:coverage.candidate_count,
       examined:selection.length,confirmed:confirmed.length,pending:pending.length,
       pending_reasons:pending.reduce<Record<string,number>>((acc,row)=>{
         const reason=row.reason??'unspecified';acc[reason]=(acc[reason]??0)+1;return acc
       },{}),
       next_cursor:selection.at(-1)?.ticket_id??null,
-      has_more:Boolean(selection.length && all.some(item=>item.ticket_id.localeCompare(selection.at(-1)!.ticket_id,'en')>0)),
+      has_more:hasMore,
       completeness:'partial',
       note:'Um ticket e um último autor humano público confirmado. Não prova descoberta exaustiva do ClickDesk. Nenhum conteúdo de cliente foi retornado.',
     })
