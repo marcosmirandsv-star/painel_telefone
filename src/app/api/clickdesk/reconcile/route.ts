@@ -129,9 +129,9 @@ async function officialPOST(request: Request) {
     stage='candidate_discovery'
     const {selection,hasMore}=await sourceCandidates(cursor,limit,period as string|null)
     const admin=productionReadAdmin()
-    const roster=await admin.from('chat_analysts').select('id,name,team_id,csat_goal')
+    const roster=await admin.from('chat_analysts').select('id,name,team_id,csat_goal,active')
     if(roster.error)throw new ApiError(503,'Cadastro de analistas indisponível.')
-    const people:Person[]=(roster.data??[]).map(p=>({
+    const people:Person[]=(roster.data??[]).filter(p=>p.active===true).map(p=>({
       id:p.id,name:p.name,team_id:p.team_id,csat_goal:Number(p.csat_goal),
     }))
     stage='ticket_history'
