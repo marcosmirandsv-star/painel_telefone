@@ -21,4 +21,3 @@ export async function syntheticAnalysisProbe(env:Record<string,string|undefined>
  const result=await runActivation({ids:['synthetic-ticket'],allowlist:['synthetic-ticket'],store,env:{...env,CLICKDESK_API_KEY:'synthetic-unused',CLICKDESK_ACCOUNT_ID:'synthetic-unused',GEMINI_MODEL:env.CX360_MODEL?.trim()||'gemini-3.5-flash-lite'},fetchImpl})
  return {synthetic:true,customer_data_sent:false,database_mutations:0,result,analysis:preserved,model:selectedModel}
 }
-
