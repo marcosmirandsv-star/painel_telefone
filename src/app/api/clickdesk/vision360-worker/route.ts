@@ -1,7 +1,7 @@
 import {randomUUID} from 'node:crypto'
 import {adminClient} from '@/lib/integration-server'
 import {isCxCron} from '@/lib/cx360-diagnostics-server'
-import {runActivation,type Work,type Store,record} from '@/lib/vision360-activation/runner'
+import {runActivation,activationClaimPlan,type Work,type Store,record} from '@/lib/vision360-activation/runner'
 
 export const runtime='nodejs'
 export const maxDuration=300
@@ -35,12 +35,16 @@ export async function POST(request:Request){
  const store:Store={
   async claim(ticketId){
    if(ticketId!==id)return null
-   const q=await admin.from('clickdesk_360_work_queue').select('*').eq('ticket_id',id).eq('status','pending').eq('attempts',0).is('lease_token',null).single()
+   const q=await admin.from('clickdesk_360_work_queue').select('*').eq('ticket_id',id).single()
    if(q.error||!q.data)return null
+   const plan=activationClaimPlan(id,q.data)
+   if(!plan)return null
    const candidate=q.data as Work
    if(!(await context(candidate)).ledgerMatches)return null
    const now=new Date(),lease=randomUUID()
-   const result=await admin.from('clickdesk_360_work_queue').update({status:'processing',attempts:1,lease_token:lease,lease_until:new Date(now.getTime()+300000).toISOString(),updated_at:now.toISOString()}).eq('ticket_id',id).eq('status','pending').eq('attempts',0).is('lease_token',null).eq('analyst_id',candidate.analyst_id).eq('team_id',candidate.team_id).eq('occurred_date',candidate.occurred_date).eq('satisfaction_label',candidate.satisfaction_label).lte('next_attempt_at',now.toISOString()).select('*').maybeSingle()
+   let claim=admin.from('clickdesk_360_work_queue').update({status:'processing',attempts:plan.nextAttempt,lease_token:lease,lease_until:new Date(now.getTime()+300000).toISOString(),updated_at:now.toISOString()}).eq('ticket_id',id).eq('status',plan.status).eq('attempts',plan.attempts).is('lease_token',null).eq('analyst_id',candidate.analyst_id).eq('team_id',candidate.team_id).eq('occurred_date',candidate.occurred_date).eq('satisfaction_label',candidate.satisfaction_label).lte('next_attempt_at',now.toISOString())
+   if(plan.errorCode)claim=claim.eq('error_code',plan.errorCode)
+   const result=await claim.select('*').maybeSingle()
    if(result.error||!result.data)return null
    return result.data as Work
   },context,
