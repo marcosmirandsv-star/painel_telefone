@@ -116,8 +116,17 @@ test('one503 retry respects five-minute cooldown and cannot repeat',()=>{
  assert.equal(activationClaimPlan('1082449',row,failedAt+300000),null)
  assert.equal(activationClaimPlan('1098006',{...row,attempts:4},failedAt+600000)?.nextAttempt,5)
  assert.equal(activationClaimPlan('1098006',{...row,attempts:5},failedAt+600000),null)
+ assert.equal(activationClaimPlan('1098006',{...row,attempts:5,error_code:'activation_error'},failedAt+600000)?.nextAttempt,6)
+ assert.equal(activationClaimPlan('1098006',{...row,attempts:6,error_code:'activation_error'},failedAt+600000),null)
  assert.equal(activationClaimPlan('1082449',{...row,attempts:4},failedAt+600000),null)
  assert.equal(activationClaimPlan('1098006',{...row,updated_at:'invalid'},failedAt+600000),null)
 })
 
+test('canonical partial-coverage cautions never contradict the unchanged language validator',async()=>{
+ const e=await readEvidence('1098006',context,get)
+ assert.doesNotThrow(()=>rejectFaultLanguage(e.coverage.limitation))
+ const a=validateAnalysis(generated,e.prepared,'positive')
+ assert.doesNotThrow(()=>rejectFaultLanguage(a))
+ assert.throws(()=>rejectFaultLanguage('falha por omissão'),/fault_language/)
+})
 
