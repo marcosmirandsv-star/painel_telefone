@@ -67,7 +67,7 @@ test('retry is exclusively failed1098006 attempt1 reference error without lease'
  assert.equal(activationClaimPlan('1098006',eligible)?.nextAttempt,2)
  for(const [id,row] of [['1082449',eligible],['1098006',{...eligible,attempts:2}],['1098006',{...eligible,error_code:'evidence_gap'}],['1098006',{...eligible,lease_token:'existing'}],['1098006',{...eligible,status:'processing'}]] as const)assert.equal(activationClaimPlan(id,row),null)
 })
-test('third attempt is exclusively1098006 attempt2 provider400; no fourth attempt',()=>{
+test('third attempt is exclusively1098006 attempt2 provider400; no fourth for400',()=>{
  const row={status:'failed',attempts:2,error_code:'provider_http_400',lease_token:null}
  assert.equal(activationClaimPlan('1098006',row)?.nextAttempt,3)
  assert.equal(activationClaimPlan('1082449',row),null)
@@ -106,5 +106,15 @@ test('disagreement retains both verified readings and cannot assert human influe
  assert.equal(combined.analyst_takeaway.kind,'none')
  assert.equal(combined._independent_readings.length,2)
  assert.equal(combined.exclusion_eligible,false)
+})
+
+test('one503 retry respects five-minute cooldown and cannot repeat',()=>{
+ const failedAt=Date.parse('2026-11-24T11:13:00Z')
+ const row={status:'failed',attempts:3,error_code:'provider_http_503',lease_token:null,updated_at:new Date(failedAt).toISOString()}
+ assert.equal(activationClaimPlan('1098006',row,failedAt+299999),null)
+ assert.equal(activationClaimPlan('1098006',row,failedAt+300000)?.nextAttempt,4)
+ assert.equal(activationClaimPlan('1082449',row,failedAt+300000),null)
+ assert.equal(activationClaimPlan('1098006',{...row,attempts:4},failedAt+600000),null)
+ assert.equal(activationClaimPlan('1098006',{...row,updated_at:'invalid'},failedAt+600000),null)
 })
 

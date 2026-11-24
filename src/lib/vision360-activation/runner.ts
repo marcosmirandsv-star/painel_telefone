@@ -17,12 +17,16 @@ export interface Store {
  fail(work:Work,code:string):Promise<void>
 }
 /** One narrowly authorized second attempt; all other failed rows remain untouched. */
-export function activationClaimPlan(id:string,row:unknown){
+export function activationClaimPlan(id:string,row:unknown,now=Date.now()){
  const r=record(row)
  if(r.lease_token!==null)return null
  if(r.status==='pending'&&r.attempts===0)return {status:'pending' as const,attempts:0,errorCode:null,nextAttempt:1}
  if(id==='1098006'&&r.status==='failed'&&r.attempts===1&&r.error_code==='evidence_reference_invalid')return {status:'failed' as const,attempts:1,errorCode:'evidence_reference_invalid',nextAttempt:2}
  if(id==='1098006'&&r.status==='failed'&&r.attempts===2&&r.error_code==='provider_http_400')return {status:'failed' as const,attempts:2,errorCode:'provider_http_400',nextAttempt:3}
+ if(id==='1098006'&&r.status==='failed'&&r.attempts===3&&r.error_code==='provider_http_503'&&typeof r.updated_at==='string'){
+  const failedAt=Date.parse(r.updated_at)
+  if(Number.isFinite(failedAt)&&now>=failedAt+300000)return {status:'failed' as const,attempts:3,errorCode:'provider_http_503',nextAttempt:4}
+ }
  return null
 }
 type Get=(path:string)=>Promise<unknown>
