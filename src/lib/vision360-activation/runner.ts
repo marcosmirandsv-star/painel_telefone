@@ -24,6 +24,8 @@ export function activationClaimPlan(id:string,row:unknown,now=Date.now()){
  if(r.status==='pending'&&r.attempts===0)return {status:'pending' as const,attempts:0,errorCode:null,nextAttempt:1}
  if(id==='1098006'&&r.status==='failed'&&r.attempts===1&&r.error_code==='evidence_reference_invalid')return {status:'failed' as const,attempts:1,errorCode:'evidence_reference_invalid',nextAttempt:2}
  if(id==='1098006'&&r.status==='failed'&&r.attempts===2&&r.error_code==='provider_http_400')return {status:'failed' as const,attempts:2,errorCode:'provider_http_400',nextAttempt:3}
+ // User explicitly requested a real post-failover test on 24 Nov; no reset or sixth attempt.
+ if(id==='1098006'&&r.status==='failed'&&r.attempts===4&&r.error_code==='provider_http_503')return {status:'failed' as const,attempts:4,errorCode:'provider_http_503',nextAttempt:5}
  if(id==='1098006'&&r.status==='failed'&&r.attempts===3&&r.error_code==='provider_http_503'&&typeof r.updated_at==='string'){
   const failedAt=Date.parse(r.updated_at)
   if(Number.isFinite(failedAt)&&now>=failedAt+300000)return {status:'failed' as const,attempts:3,errorCode:'provider_http_503',nextAttempt:4}

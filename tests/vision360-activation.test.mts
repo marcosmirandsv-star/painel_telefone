@@ -114,7 +114,10 @@ test('one503 retry respects five-minute cooldown and cannot repeat',()=>{
  assert.equal(activationClaimPlan('1098006',row,failedAt+299999),null)
  assert.equal(activationClaimPlan('1098006',row,failedAt+300000)?.nextAttempt,4)
  assert.equal(activationClaimPlan('1082449',row,failedAt+300000),null)
- assert.equal(activationClaimPlan('1098006',{...row,attempts:4},failedAt+600000),null)
+ assert.equal(activationClaimPlan('1098006',{...row,attempts:4},failedAt+600000)?.nextAttempt,5)
+ assert.equal(activationClaimPlan('1098006',{...row,attempts:5},failedAt+600000),null)
+ assert.equal(activationClaimPlan('1082449',{...row,attempts:4},failedAt+600000),null)
  assert.equal(activationClaimPlan('1098006',{...row,updated_at:'invalid'},failedAt+600000),null)
 })
+
 
