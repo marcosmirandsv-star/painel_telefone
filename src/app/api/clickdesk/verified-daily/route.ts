@@ -31,12 +31,12 @@ function datesBetween(start: string, end: string) {
   return days
 }
 
-/** Read-only. Manager-only verified daily snapshots, never estimated from the month. */
+/** Read-only. Session-scoped verified daily snapshots, never estimated from the month. */
 export async function GET(request: Request) {
   return handle(async () => {
     if (!isChatProductionEnabled()) throw new ApiError(404, 'Consulta diária indisponível.')
     const access = await authorizeClickDeskSessionClient(request)
-    if (!access.isManagement) throw new ApiError(403, 'Consulta coletiva exclusiva da gestão.')
+    if (!access.isManagement && !access.chatAnalystId) throw new ApiError(403, 'Vínculo individual obrigatório.')
     const params = new URL(request.url).searchParams
     const allowed = ['start', 'end', 'team_id']
     for (const key of params.keys()) {
@@ -45,6 +45,7 @@ export async function GET(request: Request) {
     const start = params.get('start') ?? ''
     const end = params.get('end') ?? ''
     const teamId = params.get('team_id') ?? ''
+    if (!access.isManagement && teamId) throw new ApiError(403, 'Filtro coletivo exclusivo da gestão.')
     const today = new Intl.DateTimeFormat('en-CA', {timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date())
     if (!validDate(start) || !validDate(end) || start > end || end > today ||
         start < '2026-10-01' || start.slice(0, 7) !== end.slice(0, 7)) {
@@ -61,7 +62,7 @@ export async function GET(request: Request) {
       access.admin.rpc('get_scoped_clickdesk_official_daily_metrics', { p_start: start, p_end: end }),
     ])
     if (roster.error || response.error) throw new ApiError(503, 'Não foi possível conferir as capturas diárias oficiais.')
-    const active = (roster.data ?? []) as Analyst[]
+    const active = ((roster.data ?? []) as Analyst[]).filter(a => access.isManagement || a.id === access.chatAnalystId)
     const ownerTeam = new Map(active.map(a => [normalize(a.name), a.team_id]))
     if (active.length === 0) throw new ApiError(503, 'Quadro oficial dos analistas indisponível.')
     if (teamId && !active.some(a => a.team_id === teamId)) throw new ApiError(400, 'Equipe fora do quadro ativo.')
@@ -71,6 +72,7 @@ export async function GET(request: Request) {
     const byDate = new Map<string, DailyRow[]>()
     for (const row of (response.data ?? []) as DailyRow[]) {
       if (!expectedDates.includes(row.occurred_date)) continue
+      if (!access.isManagement && !ownerTeam.has(normalize(row.source_owner_name))) continue
       const entries = byDate.get(row.occurred_date) ?? []
       entries.push(row)
       byDate.set(row.occurred_date, entries)
@@ -80,7 +82,7 @@ export async function GET(request: Request) {
       const keys = new Set(rows.map(r => normalize(r.source_owner_name)))
       const verified = rows.length === active.length && keys.size === active.length &&
         [...keys].every(key => ownerTeam.has(key)) &&
-        rows.every(row => Number.isInteger(Number(row.attendances)) && Number(row.attendances) >= 0)
+        rows.every(row => [row.attendances, row.positive_reviews, row.negative_reviews].every(v => v != null && Number.isInteger(Number(v)) && Number(v) >= 0))
       if (!verified) return { date, verified: false, attendances: null, positive_reviews: null, negative_reviews: null }
       const scoped = teamId ? rows.filter(row => ownerTeam.get(normalize(row.source_owner_name)) === teamId) : rows
       return {
