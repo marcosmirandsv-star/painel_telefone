@@ -3,6 +3,7 @@ import {ApiError, authorizeClickDeskSessionClient, handle, json} from '@/lib/cha
 import {getServerSupabaseConfig} from '@/lib/runtime-environment'
 import {extractTranscriptText} from '@/lib/clickdesk-qualitative'
 import {readFinalLedger} from '@/lib/clickdesk-ledger-server'
+import {qualitativeDisplayStatus} from '@/lib/qualitative-display'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -23,7 +24,7 @@ async function officialGET(request:Request) {return handle(async()=>{
   if(!access.isManagement&&requested&&requested!==access.chatAnalystId) throw new ApiError(403,'Consulta restrita aos próprios tickets.')
   const analystId=access.isManagement?requested:access.chatAnalystId
   if(!analystId) throw new ApiError(403,'Perfil sem vínculo individual.')
-  type Item={ticket_id:string;ticket_number:string;rated_at:string;sentiment:string;original_label:string;can_analyze:boolean}
+  type Item={ticket_id:string;ticket_number:string;rated_at:string;sentiment:string;original_label:string;can_analyze:boolean;analysis_available?:boolean;analysis_status?:string}
   const items:Item[]=[]
   if(start>='2026-10-01') {
     const capture=await access.admin.rpc('get_scoped_clickdesk_official_period_metrics',{p_start:start,p_end:end})
@@ -45,13 +46,20 @@ async function officialGET(request:Request) {return handle(async()=>{
   // Keep the same proven-ownership guard as the existing qualitative endpoint.
   for(let offset=0;offset<items.length;offset+=200) {
     const ids=items.slice(offset,offset+200).map(item=>item.ticket_id)
-    const [ledger,pending]=await Promise.all([
-      access.admin.from('clickdesk_final_ticket_ledger').select('ticket_id').eq('analyst_id',analystId).in('ticket_id',ids),
+    const [ledger,pending,analyses]=await Promise.all([
+      access.admin.from('clickdesk_final_ticket_ledger').select('ticket_id,analyst_id,occurred_date,satisfaction_label').eq('analyst_id',analystId).in('ticket_id',ids),
       access.admin.from('clickdesk_final_ticket_pending').select('ticket_id').in('ticket_id',ids),
+      access.admin.from('clickdesk_qualitative_analyses').select('clickdesk_ticket_id,analyst_id,occurred_date,satisfaction_label,analysis,validation_status').eq('analyst_id',analystId).in('clickdesk_ticket_id',ids),
     ])
-    if(ledger.error||pending.error)throw new ApiError(503,'Não foi possível conferir a autoria dos tickets.')
+    if(ledger.error||pending.error||analyses.error)throw new ApiError(503,'Não foi possível conferir a autoria e as leituras dos tickets.')
     const eligible=new Set((ledger.data??[]).map(row=>row.ticket_id)),blocked=new Set((pending.data??[]).map(row=>row.ticket_id))
-    for(const item of items.slice(offset,offset+200))item.can_analyze=eligible.has(item.ticket_id)&&!blocked.has(item.ticket_id)
+    for(const item of items.slice(offset,offset+200)){
+      item.can_analyze=eligible.has(item.ticket_id)&&!blocked.has(item.ticket_id)
+      const identity=ledger.data?.find(row=>row.ticket_id===item.ticket_id),cache=analyses.data?.find(row=>row.clickdesk_ticket_id===item.ticket_id)
+      const status=item.can_analyze&&identity?qualitativeDisplayStatus(cache??null,identity):'unavailable'
+      item.analysis_available=status==='preliminary'||status==='approved'
+      item.analysis_status=status
+    }
   }
   const ticketId=params.get('ticket_id')
   if(ticketId) {

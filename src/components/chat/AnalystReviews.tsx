@@ -3,7 +3,7 @@
 import {useEffect,useState,type ReactNode} from 'react'
 import {supabase} from '@/lib/supabase'
 
-type Item={ticket_id:string;ticket_number:string;rated_at:string;sentiment:string;original_label:string;can_analyze:boolean}
+type Item={ticket_id:string;ticket_number:string;rated_at:string;sentiment:string;original_label:string;can_analyze:boolean;analysis_available?:boolean;analysis_status?:string}
 type Data={items:Item[];totals:{total:number;positive:number;negative:number}}
 
 export default function AnalystReviews({start,end,analystId,onAnalyze,loadingTicketId,renderAnalysis}:{
@@ -76,9 +76,9 @@ export default function AnalystReviews({start,end,analystId,onAnalyze,loadingTic
   return <section className="panel" aria-label="Minhas avaliações">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <h3 className="text-xl font-bold">Minhas avaliações</h3>
-      <button type="button" className="small-button" aria-expanded={expanded} aria-controls={contentId} onClick={()=>setExpanded(value=>!value)}>{expanded?'Recolher tickets':'Expandir tickets avaliados'}</button>
+      <div className="flex flex-wrap gap-2"><button type="button" className="small-button" onClick={()=>setRetry(value=>value+1)}>Atualizar leituras</button><button type="button" className="small-button" aria-expanded={expanded} aria-controls={contentId} onClick={()=>setExpanded(value=>!value)}>{expanded?'Recolher tickets':'Expandir tickets avaliados'}</button></div>
     </div>
-    <p className="mt-1 text-sm text-slate-400">Boas e ruins do período selecionado. Abra uma conversa ou peça uma análise da IA.</p>
+    <p className="mt-1 text-sm text-slate-400">Boas e ruins do período selecionado. Abra a conversa ou consulte uma leitura da Visão 360º já disponível.</p>
     {pendingCapture&&<p className="mt-2 text-sm text-amber-200" role="status">O ClickDesk está preparando as avaliações do período selecionado. A lista será atualizada automaticamente.</p>}
     {data&&<p className="mt-2 text-sm text-slate-300">{data.totals.total} avaliações · {data.totals.positive} boas · {data.totals.negative} ruins</p>}
     {!expanded&&error&&<p role="status" className="mt-2 text-sm text-amber-100">Não foi possível carregar as avaliações. Expanda para tentar novamente.</p>}
@@ -90,8 +90,10 @@ export default function AnalystReviews({start,end,analystId,onAnalyze,loadingTic
       <p className="mt-2 text-xs text-slate-500">Ruins incluem neutros. A nota original permanece aqui mesmo quando há ajuste no CSAT.</p>
       {!filtered.length?<p className="mt-4 text-sm text-slate-400">Nenhuma avaliação neste filtro.</p>:<div className="mt-4 space-y-3">{filtered.slice(page*20,page*20+20).map(item=><div key={item.ticket_id} className="rounded-lg border border-white/10 bg-slate-950/35 p-3">
         <div className="flex flex-wrap items-center justify-between gap-3"><div><strong>#{item.ticket_number}</strong><span className={`ml-3 text-xs ${item.sentiment==='positive'?'text-emerald-200':'text-amber-100'}`}>{item.sentiment==='positive'?'Boa':'Ruim'} · {item.original_label}</span><p className="mt-1 text-xs text-slate-500">{new Date(item.rated_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'})}</p></div>
-        <div className="flex flex-wrap gap-2"><button type="button" className="small-button" aria-expanded={open===item.ticket_id} onClick={()=>{setConversation('');setOpening(true);setOpen(value=>value===item.ticket_id?null:item.ticket_id)}}>{open===item.ticket_id?'Fechar conversa':'Abrir ticket'}</button><button type="button" className="small-button" disabled={!item.can_analyze||Boolean(loadingTicketId)} onClick={()=>onAnalyze(item.ticket_id)}>{loadingTicketId===item.ticket_id?'Analisando...':'Analisar com IA'}</button></div></div>
+        <div className="flex flex-wrap gap-2"><button type="button" className="small-button" aria-expanded={open===item.ticket_id} onClick={()=>{setConversation('');setOpening(true);setOpen(value=>value===item.ticket_id?null:item.ticket_id)}}>{open===item.ticket_id?'Fechar conversa':'Abrir ticket'}</button><button type="button" className="small-button" disabled={!item.can_analyze||!item.analysis_available||Boolean(loadingTicketId)} onClick={()=>onAnalyze(item.ticket_id)}>{loadingTicketId===item.ticket_id?'Carregando leitura...':'Abrir leitura 360º'}</button></div></div>
         {!item.can_analyze&&<p className="mt-2 text-xs text-slate-500">A análise aguarda a conferência de autoria deste ticket.</p>}
+        {item.can_analyze&&!item.analysis_available&&<p className="mt-2 text-xs text-slate-500">Leitura ainda não disponível. Abrir esta lista não inicia uma nova análise.</p>}
+        {item.analysis_available&&<p className="mt-2 text-xs text-slate-400">{item.analysis_status==='approved'?'Selecionada pela gestão para feedback.':'Leitura preliminar, ainda não selecionada pela gestão para feedback.'}</p>}
         {open===item.ticket_id&&<div className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap rounded-lg bg-slate-950/60 p-3 text-sm text-slate-300" role="region" aria-label={'Conversa do ticket '+item.ticket_number}>{opening?'Carregando conversa...':conversation}</div>}
         {renderAnalysis(item.ticket_id) && <div className="mt-3"><button type="button" className="small-button" onClick={()=>onAnalyze(item.ticket_id)}>Fechar análise</button>{renderAnalysis(item.ticket_id)}</div>}
       </div>)}</div>}

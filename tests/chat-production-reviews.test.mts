@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import {runInNewContext} from 'node:vm'
 import ts from 'typescript'
+import {qualitativeDisplayStatus} from '../src/lib/qualitative-display.ts'
 
 const own='97f0071d-ae22-4d90-8c4d-1545e00b4a7d',other='24e897bb-80c4-4710-be3f-b5a71efabe41'
 const source=readFileSync(new URL('../src/app/api/clickdesk/my-reviews/route.ts',import.meta.url),'utf8')
@@ -21,7 +22,7 @@ function harness({environment='producao',capture=true,management=false,emptyTran
   const GET=runInNewContext(compiled+'\nGET',{ApiError,URL,Date,Set,AbortSignal,Response,isChatProductionEnabled:()=>environment==='producao',
     getServerSupabaseConfig:()=>({environment}),authorizeClickDeskSessionClient:async()=>({isManagement:management,chatAnalystId:own,admin:db}),
     handle:async(fn:()=>Promise<Response>)=>{try{return await fn()}catch(error){return Response.json({erro:(error as Error).message},{status:(error as ApiError).status||503})}},json:Response.json,
-    extractTranscriptText:(payload:unknown)=>payload?'Conversa de teste':'',readFinalLedger:async()=>[],
+    extractTranscriptText:(payload:unknown)=>payload?'Conversa de teste':'',readFinalLedger:async()=>[],qualitativeDisplayStatus,
     process:{env:{CLICKDESK_API_KEY:'fixture',CLICKDESK_ACCOUNT_ID:'fixture'}},fetch:async(url:string)=>{fetches++;return Response.json(url.endsWith('/transcript')&&emptyTranscript||!url.endsWith('/transcript')&&emptyDetail?null:{fixture:true})},
   }) as (r:Request)=>Promise<Response>
   return {runOctober:()=>GET(new Request('https://example.test/api?start=2026-10-01&end=2026-10-31')),run:(query='')=>GET(new Request('https://example.test/api?start=2026-11-01&end=2026-11-11'+query)),stats:()=>({fetches,queries})}
