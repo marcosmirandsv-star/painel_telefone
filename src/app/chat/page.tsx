@@ -760,6 +760,9 @@ type ClickDeskOperation360 = {
 }
 
 type ClickDeskQualitativeResponse = {
+  available?: boolean
+  message?: string
+  display_status?: string
   source?: string
   ticket_id?: string
   analyst_id?: string | null
@@ -1170,7 +1173,7 @@ function QualitativeAnalysisCard({
       <div className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/5 p-3 text-sm text-amber-100">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <strong className="block text-amber-50">Análise não concluída</strong>
+            <strong className="block text-amber-50">{audience === 'analyst' ? 'Leitura indisponível' : 'Análise não concluída'}</strong>
             <p className="mt-1 leading-5">{result.error}</p>
           </div>
           {onReanalyze && (
@@ -1225,7 +1228,7 @@ function QualitativeAnalysisCard({
                   ? 'Selecionada para feedback'
                   : result.validation_status === 'rejected'
                     ? 'Descartada do feedback'
-                    : 'Disponível para seleção de feedback'
+                    : 'Leitura preliminar · aguarda seleção da gestão'
                 : result.validation_status === 'approved'
                   ? 'Selecionada para feedback'
                   : result.validation_status === 'rejected'
@@ -1928,22 +1931,23 @@ function ChatAnalystPortal({
         return
       }
 
-      const response = await fetch('/api/clickdesk/qualitative', {
-        method: 'POST',
+      const response = await fetch('/api/clickdesk/qualitative?'+new URLSearchParams({ticket_id:ticketId}), {
+        method: 'GET',
         headers: {
           Authorization: `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ticket_id: ticketId, force }),
+        cache: 'no-store',
       })
       const data = (await response.json()) as ClickDeskQualitativeResponse
+      if (data.available === false) data.error = data.message || 'A leitura deste atendimento ainda não está disponível.'
       const rawQualitativeError = data.error || data.erro
       data.error = rawQualitativeError
-        ? getQualitativeUserError(rawQualitativeError, response.status)
+        ? (response.status >= 500 ? 'Não foi possível carregar a leitura preservada agora. Tente atualizar mais tarde.' : rawQualitativeError)
         : undefined
 
       if (!response.ok && !data.error) {
-        data.error = getQualitativeUserError('', response.status)
+        data.error = 'Não foi possível carregar a leitura preservada.'
       }
 
       setQualitativeByTicket((current) => ({ ...current, [ticketId]: data }))
@@ -1951,7 +1955,7 @@ function ChatAnalystPortal({
     } catch {
       setQualitativeByTicket((current) => ({
         ...current,
-        [ticketId]: { error: getQualitativeUserError('', 503) },
+        [ticketId]: { error: 'Não foi possível carregar a leitura preservada agora. Tente atualizar mais tarde.' },
       }))
     } finally {
       setQualitativeLoadingTicketId('')
@@ -2418,12 +2422,12 @@ function ChatAnalystPortal({
                               }}
                             >
                               {qualitativeLoading
-                                ? 'Analisando...'
+                                ? 'Carregando leitura...'
                                 : qualitativeResult?.analysis
                                   ? qualitativeOpen
                                     ? 'Fechar análise'
                                     : 'Ver análise'
-                                  : 'Analisar com IA'}
+                                  : 'Consultar leitura 360º'}
                             </button>
                           ) : (
                             <span className="text-xs font-semibold text-violet-200">IA em preparação</span>
@@ -12075,6 +12079,8 @@ function ChatProductionContent(){
 }
 
 export default function ChatProductionPage(){return <div className="chat-production-shell"><ChatProductionContent/></div>}
+
+
 
 
 

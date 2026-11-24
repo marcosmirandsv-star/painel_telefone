@@ -9,6 +9,7 @@ import {
   json,
 } from '@/lib/chat-integration-server'
 import { getServerSupabaseConfig } from '@/lib/runtime-environment'
+import {qualitativeDisplayStatus} from '@/lib/qualitative-display'
 import {
   extractTranscriptText,
   isQualitativeTranscriptSufficient,
@@ -926,3 +927,25 @@ async function officialPOST(request: Request) {
 
 
 export async function POST(request:Request){if(!isChatProductionEnabled())return Response.json({erro:'Chat oficial ainda não habilitado.'},{status:404});return officialPOST(request)}
+
+/** Display only: no ClickDesk request, provider call, mutation, or reanalysis. */
+export async function GET(request:Request){return handle(async()=>{
+ if(!isChatProductionEnabled())throw new ApiError(404,'Chat oficial ainda não habilitado.')
+ const access=await authorizeClickDeskSessionClient(request),params=new URL(request.url).searchParams
+ if([...params.keys()].some(key=>key!=='ticket_id'||params.getAll(key).length!==1))throw new ApiError(400,'Consulta inválida.')
+ const ticketId=params.get('ticket_id')??''
+ if(!validTicketId(ticketId))throw new ApiError(400,'ticket_id inválido.')
+ const [ledger,pending]=await Promise.all([
+  access.admin.from('clickdesk_final_ticket_ledger').select('ticket_id,analyst_id,occurred_date,satisfaction_label').eq('ticket_id',ticketId).maybeSingle(),
+  access.admin.from('clickdesk_final_ticket_pending').select('ticket_id').eq('ticket_id',ticketId).maybeSingle(),
+ ])
+ if(ledger.error||pending.error)throw new ApiError(503,'Não foi possível conferir a autoria deste ticket.')
+ if(!ledger.data||!access.isManagement&&ledger.data.analyst_id!==access.chatAnalystId)throw new ApiError(404,'Leitura não disponível para este acesso.')
+ if(pending.data)throw new ApiError(422,'Ticket em conferência de autoria. A leitura aguarda essa verificação.')
+ const cached=await access.admin.from('clickdesk_qualitative_analyses').select('clickdesk_ticket_id,analyst_id,occurred_date,area,satisfaction_label,analysis,model,transcript_characters,validation_status,validated_at,updated_at').eq('clickdesk_ticket_id',ticketId).maybeSingle()
+ if(cached.error)throw new ApiError(503,'Não foi possível consultar a leitura preservada.')
+ const status=qualitativeDisplayStatus(cached.data,ledger.data,access.isManagement)
+ if(status==='unavailable'||!cached.data)return json({ticket_id:ticketId,available:false,display_status:'unavailable',message:'A leitura deste atendimento ainda não está disponível. Nenhuma nova análise foi iniciada.'})
+ const c=cached.data
+ return json({source:'clickdesk_qualitative_cache',cached:true,available:true,display_status:status,ticket_id:ticketId,analyst_id:c.analyst_id,occurred_date:c.occurred_date,area:c.area,satisfaction_label:c.satisfaction_label,transcript_characters_analyzed:c.transcript_characters,model:c.model,analyzed_at:c.updated_at,validation_status:c.validation_status,validated_at:c.validated_at,analysis:normalizeQualitativeAnalysis(c.analysis,c.satisfaction_label)})
+})}
