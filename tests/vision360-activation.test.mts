@@ -1,4 +1,5 @@
 import {combineReadings} from '../src/lib/vision360-activation/runner.ts'
+import {EvidenceReferenceFailure} from '../src/lib/vision360-activation/runner.ts'
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
 import {readEvidence,runActivation,validateAnalysis,rejectFaultLanguage,evidenceCatalogue,evidenceBoundSchema,hydrateEvidenceReferences,safeProviderError,activationClaimPlan,type Work,type Store,record} from '../src/lib/vision360-activation/runner.ts'
@@ -82,6 +83,25 @@ test('reference adapter resolves selected literal evidence without model-provide
  for(const refs of [[{reference_id:'E999',scope:'context'}],[{reference_id:'E1',scope:'invalid'}],[{reference_id:'E1',scope:'context',quote:'invented'}],[]])assert.throws(()=>hydrateEvidenceReferences({...raw,evidence_refs:refs},e.prepared),/reference_invalid/)
  const other={...e.prepared,messages:[{...e.prepared.messages[0],authorType:'contact'}]}
  assert.throws(()=>hydrateEvidenceReferences(raw,other),/reference_invalid/)
+})
+test('reference diagnostics identify exact failing contract branch without content',async()=>{
+ const e=await readEvidence('1098006',context,get)
+ const cases:Array<[unknown,string]>=[
+  [undefined,'references_not_array'],[[],'reference_count_invalid'],
+  [[{reference_id:'secret-customer-id',scope:'context'}],'unknown_reference'],
+  [[{reference_id:'E1',scope:'secret-customer-scope'}],'scope_forbidden'],
+  [[{reference_id:'E1',scope:'context',quote:'secret-customer-quote'}],'unexpected_reference_fields'],
+  [[null],'reference_not_object'],
+  [[{reference_id:'E1',scope:'context'},{reference_id:'E1',scope:'analyst_behavior'}],'reference_count_invalid'],
+ ]
+ for(const [refs,reason] of cases){
+  assert.throws(()=>hydrateEvidenceReferences({evidence_refs:refs},e.prepared),(error:unknown)=>{
+   assert.ok(error instanceof EvidenceReferenceFailure);assert.equal(error.diagnostic.stage,'hydrate');assert.equal(error.diagnostic.reason,reason)
+   assert.ok(!JSON.stringify(error.diagnostic).includes('secret-customer'));return true
+  })
+ }
+ const catalogue=evidenceCatalogue(e.prepared),schema=evidenceBoundSchema(e.prepared)
+ assert.equal(record(schema.properties.evidence_refs).maxItems,catalogue.length)
 })
 test('provider400 diagnostic excludes freeform errors and secrets',async()=>{
  const result=await safeProviderError(Response.json({error:{code:400,status:'INVALID_ARGUMENT',message:'SECRET email@example.com',details:[{token:'SECRET'}]}},{status:400}))
