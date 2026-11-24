@@ -2188,8 +2188,8 @@ function ChatAnalystPortal({
               {metrics?.date_basis?.status === 'needs_validation' && ` ${metrics.date_basis.note}`}
             </p></details>
             {metrics?.reconciliation && metrics.source!=='clickdesk_event_receipts' && <details className="mt-3 rounded-lg border border-white/10 p-3 text-xs text-slate-400">
-              <summary className="cursor-pointer">Conferência da autoria · {metrics.reconciliation.pending_count} ticket(s) pendente(s)</summary>
-              <p className="mt-2">Um ticket tem um único crédito. Competência definida pela última resposta pública humana em Brasília. Snapshot: {formatDateTime(metrics.reconciliation.captured_at)}. Sem resposta ou cobertura comprovada, o ticket permanece fora dos indicadores.</p>
+              <summary className="cursor-pointer">{isOfficialClickDeskSource(metrics.source) ? 'Autoria para leitura 360º · conferência por ticket' : `Conferência da autoria · ${metrics.reconciliation.pending_count} ticket(s) pendente(s)`}</summary>
+              <p className="mt-2">{isOfficialClickDeskSource(metrics.source) ? 'Os indicadores acima vêm do relatório oficial do ClickDesk por responsável. A leitura 360º exige uma conferência própria da autoria de cada ticket. Consulte a situação em Minhas avaliações: ausência de pendências registradas não significa que todos os tickets já foram conferidos.' : `Um ticket tem um único crédito. Competência definida pela última resposta pública humana em Brasília. Snapshot: ${formatDateTime(metrics.reconciliation.captured_at)}. Sem resposta ou cobertura comprovada, o ticket permanece fora dos indicadores.`}</p>
               <ul className="mt-2 space-y-1">{metrics.reconciliation.pending.map(item => <li key={item.ticket_id}>Ticket {item.ticket_id}: {reconciliationReason(item.reason)}</li>)}</ul>
               <ul className="mt-2 space-y-1">{metrics.reconciliation.excluded?.map(item => <li key={item.ticket_id}>Ticket {item.ticket_id}: {reconciliationReason(item.reason)}</li>)}</ul>
             </details>}

@@ -1,5 +1,13 @@
 import {qualitativeAnalysisVersion,QUALITATIVE_ANALYSIS_VERSION} from './clickdesk-qualitative.ts'
 
+/** Missing authorship is unfinished work, even when no AI job has been queued. */
+export function qualitativeReviewReadiness(items:ReadonlyArray<{can_analyze:boolean;analysis_available?:boolean}>){
+ const available=items.filter(item=>item.can_analyze&&item.analysis_available===true).length
+ const awaitingAuthorship=items.filter(item=>!item.can_analyze).length
+ const awaitingAnalysis=items.length-available-awaitingAuthorship
+ return {available,awaitingAuthorship,awaitingAnalysis,pending:awaitingAuthorship+awaitingAnalysis}
+}
+
 export type QualitativeDisplayIdentity={analyst_id:string|null;occurred_date:string|null;satisfaction_label:string|null}
 export type QualitativeDisplayCache=QualitativeDisplayIdentity&{analysis:unknown;validation_status:string|null}
 /** Read-only policy: a visible analysis never authorizes generation or changes human review. */

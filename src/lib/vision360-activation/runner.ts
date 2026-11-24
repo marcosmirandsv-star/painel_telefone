@@ -106,16 +106,27 @@ export function evidenceCatalogue(prepared:PreparedEvidence){
 export function evidenceBoundSchema(prepared:PreparedEvidence){
  const catalogue=evidenceCatalogue(prepared)
  if(!catalogue.length)throw Error('evidence_reference_invalid')
- return {...analysisSchema,properties:{...analysisSchema.properties,evidence_refs:{type:'array',minItems:1,maxItems:6,items:objectSchema({reference_id:enumeration(catalogue.map(c=>c.reference_id)),scope:enumeration(['context','analyst_behavior'])})}}}
+ return {...analysisSchema,properties:{...analysisSchema.properties,evidence_refs:{type:'array',minItems:1,maxItems:Math.min(6,catalogue.length),items:objectSchema({reference_id:enumeration(catalogue.map(c=>c.reference_id)),scope:enumeration(['context','analyst_behavior'])})}}}
+}
+type EvidenceReason='references_not_array'|'reference_count_invalid'|'reference_not_object'|'unexpected_reference_fields'|'unknown_reference'|'duplicate_reference'|'scope_forbidden'|'message_unknown'|'quote_invalid'|'quote_not_in_message'|'pair_not_catalogued'|'duplicate_pair'|'scope_invalid'|'own_public_required'
+export class EvidenceReferenceFailure extends Error{
+ readonly diagnostic:{stage:'hydrate'|'validate';reason:EvidenceReason;index:number|null;reference_count:number|null;catalogue_count:number}
+ constructor(stage:'hydrate'|'validate',reason:EvidenceReason,index:number|null,count:number|null,catalogueCount:number){super('evidence_reference_invalid');this.diagnostic={stage,reason,index,reference_count:count,catalogue_count:catalogueCount}}
 }
 /** Resolves only evidence explicitly selected by the provider; never invents selections. */
 export function hydrateEvidenceReferences(raw:unknown,prepared:PreparedEvidence){
  const value=record(raw),refs=value.evidence_refs,catalogue=evidenceCatalogue(prepared)
- if(!Array.isArray(refs)||refs.length<1||refs.length>6)throw Error('evidence_reference_invalid')
+ if(!Array.isArray(refs))throw new EvidenceReferenceFailure('hydrate','references_not_array',null,null,catalogue.length)
+ if(refs.length<1||refs.length>Math.min(6,catalogue.length))throw new EvidenceReferenceFailure('hydrate','reference_count_invalid',null,refs.length,catalogue.length)
  const seen=new Set<string>()
- const hydrated=refs.map(ref=>{
+ const hydrated=refs.map((ref,index)=>{
   const r=record(ref),id=text(r.reference_id),item=catalogue.find(c=>c.reference_id===id)
-  if(Object.keys(r).some(key=>key!=='reference_id'&&key!=='scope')||!item||seen.has(id)||!item.allowed_scopes.some(scope=>scope===r.scope))throw Error('evidence_reference_invalid')
+  const fail=(reason:EvidenceReason):never=>{throw new EvidenceReferenceFailure('hydrate',reason,index,refs.length,catalogue.length)}
+  if(!ref||typeof ref!=='object'||Array.isArray(ref))fail('reference_not_object')
+  if(Object.keys(r).some(key=>key!=='reference_id'&&key!=='scope'))fail('unexpected_reference_fields')
+  if(!item)throw new EvidenceReferenceFailure('hydrate','unknown_reference',index,refs.length,catalogue.length)
+  if(seen.has(id))fail('duplicate_reference')
+  if(!item.allowed_scopes.some(scope=>scope===r.scope))fail('scope_forbidden')
   seen.add(id)
   return {message_id:item.message_id,quote:item.quote,scope:r.scope}
  })
@@ -136,12 +147,19 @@ export function validateAnalysis(raw:unknown,prepared:PreparedEvidence,satisfact
  if(!prepared.ready)throw Error('evidence_gap')
  const value=record(raw),refs=value.evidence_refs
  rejectFaultLanguage(value)
- if(!Array.isArray(refs)||refs.length<1||refs.length>6)throw Error('evidence_reference_invalid')
  const catalogue=evidenceCatalogue(prepared)
+ if(!Array.isArray(refs))throw new EvidenceReferenceFailure('validate','references_not_array',null,null,catalogue.length)
+ if(refs.length<1||refs.length>Math.min(6,catalogue.length))throw new EvidenceReferenceFailure('validate','reference_count_invalid',null,refs.length,catalogue.length)
  let own=false
  const unique=new Set<string>()
- for(const ref of refs){const r=record(ref),id=text(r.message_id),quote=text(r.quote),m=prepared.messages.find(m=>m.id===id)
-  if(!m||quote.trim().length<12||quote.length>240||!m.text.includes(quote)||!catalogue.some(c=>c.message_id===id&&c.quote===quote)||unique.has(id+'|'+quote)||!['context','analyst_behavior'].includes(text(r.scope)))throw Error('evidence_reference_invalid')
+ for(const [index,ref] of refs.entries()){const r=record(ref),id=text(r.message_id),quote=text(r.quote),m=prepared.messages.find(m=>m.id===id)
+  const fail=(reason:EvidenceReason):never=>{throw new EvidenceReferenceFailure('validate',reason,index,refs.length,catalogue.length)}
+  if(!m)throw new EvidenceReferenceFailure('validate','message_unknown',index,refs.length,catalogue.length)
+  if(quote.trim().length<12||quote.length>240)fail('quote_invalid')
+  if(!m.text.includes(quote))fail('quote_not_in_message')
+  if(!catalogue.some(c=>c.message_id===id&&c.quote===quote))fail('pair_not_catalogued')
+  if(unique.has(id+'|'+quote))fail('duplicate_pair')
+  if(!['context','analyst_behavior'].includes(text(r.scope)))fail('scope_invalid')
   unique.add(id+'|'+quote)
   if(r.scope==='analyst_behavior'){
    if(m.visibility!=='public'||!['human','agent'].includes(m.authorType)||!sameName(m.authorName,prepared.analystName))throw Error('own_public_evidence_required')
@@ -194,7 +212,7 @@ export async function runActivation(options:{ids:readonly string[];allowlist:rea
    const evaluate=async(pass:number,selectedModel:string)=>{
    const remaining=providerDeadline-Date.now()
    if(remaining<=0)throw Error('provider_timeout')
-   const r=await fetcher('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(selectedModel)+':generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},signal:AbortSignal.timeout(Math.min(60000,remaining)),body:JSON.stringify({contents:[{role:'user',parts:[{text:prompt+'\nLeitura independente '+pass+'. CATÁLOGO DE EVIDÊNCIAS: '+JSON.stringify(catalogue)+'. Em evidence_refs selecione SOMENTE {reference_id,scope}. reference_id deve ser copiado de um item E1/E2/etc deste catálogo; scope deve estar em allowed_scopes desse item. Não gere message_id nem quote: o servidor resolve exatamente a citação previamente verificada selecionada por você. Descreva somente ações registradas e propostas futuras afirmativas. Use a ressalva canônica para limites: leitura parcial; motivo da avaliação indeterminado; outros canais permanecem sem verificação.'}]}],generationConfig:{responseMimeType:'application/json',responseJsonSchema:schema,maxOutputTokens:5000}})})
+   const r=await fetcher('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(selectedModel)+':generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},signal:AbortSignal.timeout(Math.min(60000,remaining)),body:JSON.stringify({contents:[{role:'user',parts:[{text:prompt+'\nLeitura independente '+pass+'. CATÁLOGO DE EVIDÊNCIAS: '+JSON.stringify(catalogue)+'. Em evidence_refs selecione SOMENTE {reference_id,scope}, usando cada referência no máximo uma vez e no máximo '+Math.min(6,catalogue.length)+' itens. reference_id deve ser copiado de um item E1/E2/etc deste catálogo; scope deve estar em allowed_scopes desse item. Não gere message_id nem quote: o servidor resolve exatamente a citação previamente verificada selecionada por você. Descreva somente ações registradas e propostas futuras afirmativas. Use a ressalva canônica para limites: leitura parcial; motivo da avaliação indeterminado; outros canais permanecem sem verificação.'}]}],generationConfig:{responseMimeType:'application/json',responseJsonSchema:schema,maxOutputTokens:5000}})})
    if(!r.ok)throw new ProviderFailure(await safeProviderError(r))
    const payload=record(await r.json()),candidate=record(Array.isArray(payload.candidates)?payload.candidates[0]:null)
    if(candidate.finishReason!=='STOP')throw Error('provider_incomplete')
@@ -215,8 +233,9 @@ export async function runActivation(options:{ids:readonly string[];allowlist:rea
    const hash=createHash('sha256').update(transcript).digest('hex')
    if(!await options.store.finish(work,{...analysis,_source_coverage:evidence.coverage,_model_attempts:selected.attempts},selected.model,hash,transcript.length))throw Error('result_not_saved')
    results.push({ticket_id:id,status:'done',exclusion_eligible:false})
-  }catch(error){const code=error instanceof Error&&error.name==='TimeoutError'?'provider_timeout':error instanceof SyntaxError?'provider_invalid_json':error instanceof Error&&/^(evidence_reference_invalid|own_public_evidence_required|source_changed|result_not_saved|source_unavailable|provider_http_\d{3}|provider_unavailable|provider_incomplete|provider_timeout|partial_coverage_fault_language|partial_coverage_development_judgment|partial_coverage_human_judgment)$/.test(error.message)?error.message:'activation_error';await options.store.fail(work,code);results.push({ticket_id:id,status:'failed',error_code:code,...(error instanceof ProviderFailure?{provider_error:error.diagnostic}:{})})}
+  }catch(error){const code=error instanceof Error&&error.name==='TimeoutError'?'provider_timeout':error instanceof SyntaxError?'provider_invalid_json':error instanceof Error&&/^(evidence_reference_invalid|own_public_evidence_required|source_changed|result_not_saved|source_unavailable|provider_http_\d{3}|provider_unavailable|provider_incomplete|provider_timeout|partial_coverage_fault_language|partial_coverage_development_judgment|partial_coverage_human_judgment)$/.test(error.message)?error.message:'activation_error';await options.store.fail(work,code);results.push({ticket_id:id,status:'failed',error_code:code,...(error instanceof ProviderFailure?{provider_error:error.diagnostic}:{}),...(error instanceof EvidenceReferenceFailure?{evidence_error:error.diagnostic}:{})})}
  }
  return {results,csat_changed:false}
 }
+
 

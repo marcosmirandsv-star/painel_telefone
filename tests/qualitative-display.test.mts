@@ -3,7 +3,17 @@ import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import {runInNewContext} from 'node:vm'
 import ts from 'typescript'
-import {qualitativeDisplayStatus} from '../src/lib/qualitative-display.ts'
+import {qualitativeDisplayStatus,qualitativeReviewReadiness} from '../src/lib/qualitative-display.ts'
+
+test('unconfirmed authorship stays pending even without an AI queue entry',()=>{
+ assert.deepEqual(qualitativeReviewReadiness([
+  {can_analyze:false,analysis_available:false},
+  {can_analyze:false,analysis_available:true},
+  {can_analyze:true,analysis_available:false},
+  {can_analyze:true,analysis_available:true},
+ ]),{available:1,awaitingAuthorship:2,awaitingAnalysis:1,pending:3})
+ assert.deepEqual(qualitativeReviewReadiness([]),{available:0,awaitingAuthorship:0,awaitingAnalysis:0,pending:0})
+})
 
 const identity={analyst_id:'own',occurred_date:'2026-11-17',satisfaction_label:'positive'}
 const cache={...identity,analysis:{_analysis_version:3},validation_status:'pending'}
