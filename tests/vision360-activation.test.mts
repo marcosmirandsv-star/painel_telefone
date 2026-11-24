@@ -1,6 +1,7 @@
 import {test} from 'node:test'
 import assert from 'node:assert/strict'
-import {readEvidence,runActivation,validateAnalysis,rejectFaultLanguage,type Work,type Store,record} from '../src/lib/vision360-activation/runner.ts'
+import {combineReadings} from '../src/lib/vision360-activation/runner.ts'
+import {readEvidence,runActivation,validateAnalysis,rejectFaultLanguage,evidenceCatalogue,evidenceBoundSchema,activationClaimPlan,type Work,type Store,record} from '../src/lib/vision360-activation/runner.ts'
 const msg={id:'m1',created_at:'2026-11-17T18:38:00Z',author:{name:'Thiago Reis',type:'agent'},visibility:'public',body:'Verifiquei o retorno do sistema e expliquei os próximos passos.',attachments:[]}
 const context={analystName:'Thiago Reis',ratedAt:'2026-11-17T18:39:00Z',area:'Fiscal',ledgerMatches:true}
 const detail={id:'1098006',updated_at:'2026-11-17T19:00:00Z',messages:[msg]}
@@ -44,6 +45,42 @@ test('message text is redacted before prompt and references must match redacted 
  assert.ok(!e.prepared.messages[0].text.includes('private'))
  assert.ok(!e.prepared.messages[0].text.includes('123.456'))
  assert.throws(()=>validateAnalysis({...generated,evidence_refs:[{message_id:'m1',quote:'private@example.com',scope:'analyst_behavior'}]},e.prepared,'positive'),/reference_invalid/)
- const a=validateAnalysis(generated,e.prepared,'positive');assert.equal(a._evidence_redacted,true)
+ const a=validateAnalysis({...generated,evidence_refs:[{message_id:'m1',quote:evidenceCatalogue(e.prepared)[0].quote,scope:'analyst_behavior'}]},e.prepared,'positive');assert.equal(a._evidence_redacted,true)
+})
+test('catalogue supplies unique literal snippets and finite schema enums',async()=>{
+ const e=await readEvidence('1098006',context,get)
+ const long='Início literal '.repeat(30)+' Meio literal '.repeat(30)+' Fim literal '.repeat(30)
+ const prepared={...e.prepared,messages:[...e.prepared.messages,{...e.prepared.messages[0],id:'long',text:long},{...e.prepared.messages[0],id:'customer',authorType:'contact',text:'Mensagem pública do cliente com contexto verificável.'}]}
+ const catalogue=evidenceCatalogue(prepared)
+ assert.equal(catalogue.filter(c=>c.message_id==='long').length,3)
+ for(const c of catalogue){assert.ok(c.quote.length>=12&&c.quote.length<=240);assert.ok(prepared.messages.find(m=>m.id===c.message_id)?.text.includes(c.quote))}
+ assert.deepEqual(catalogue.find(c=>c.message_id==='customer')?.allowed_scopes,['context'])
+ const schema=evidenceBoundSchema(prepared),refs=record(schema.properties.evidence_refs),items=record(refs.items),properties=record(items.properties)
+ assert.deepEqual(record(properties.message_id).enum,['m1','long','customer'])
+ assert.deepEqual(record(properties.quote).enum,[...new Set(catalogue.map(c=>c.quote))])
+ const quote=catalogue.find(c=>c.message_id==='customer')!.quote
+ assert.throws(()=>validateAnalysis({...generated,evidence_refs:[{message_id:'invented',quote,scope:'context'}]},prepared,'positive'),/reference_invalid/)
+ assert.throws(()=>validateAnalysis({...generated,evidence_refs:[{message_id:'m1',quote,scope:'context'}]},prepared,'positive'),/reference_invalid/)
+})
+test('retry is exclusively failed1098006 attempt1 reference error without lease',()=>{
+ const eligible={status:'failed',attempts:1,error_code:'evidence_reference_invalid',lease_token:null}
+ assert.equal(activationClaimPlan('1098006',eligible)?.nextAttempt,2)
+ for(const [id,row] of [['1082449',eligible],['1098006',{...eligible,attempts:2}],['1098006',{...eligible,error_code:'evidence_gap'}],['1098006',{...eligible,lease_token:'existing'}],['1098006',{...eligible,status:'processing'}]] as const)assert.equal(activationClaimPlan(id,row),null)
+})
+test('uncorroborated content reports unverified coverage without asserting agreement',async()=>{
+ const e=await readEvidence('1082449',context,async path=>path.endsWith('/messages')?{messages:[{...msg,body:'Divergent body in native messages.'}]}:path.endsWith('/events')?{events:[]}:{...detail,id:'1082449'})
+ assert.equal(e.coverage.mode,'unverified');assert.ok(!e.coverage.limitation.includes('mensagens conferem'))
+})
+
+test('disagreement retains both verified readings and cannot assert human influence',async()=>{
+ const e=await readEvidence('1098006',context,get)
+ const first=validateAnalysis(generated,e.prepared,'positive')
+ const second={...first,human_influence:{classification:'neutral' as const,summary:'A mudança não foi estabelecida.',confidence:'low' as const}}
+ const combined=combineReadings(first,second)
+ assert.equal(combined._readings_agreed,false)
+ assert.equal(combined.human_influence.classification,'unclear')
+ assert.equal(combined.analyst_takeaway.kind,'none')
+ assert.equal(combined._independent_readings.length,2)
+ assert.equal(combined.exclusion_eligible,false)
 })
 
