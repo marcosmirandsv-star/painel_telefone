@@ -9,6 +9,7 @@ export async function POST(request:Request){
  if(process.env.VERCEL_ENV!=='production'||process.env.NEXT_PUBLIC_SUPABASE_URL!=='https://qmetbydkepfdgfqkdkai.supabase.co')return json({error:'production_only'},403)
  let body:unknown
  try{body=await request.json()}catch{return json({error:'invalid_request'},400)}
+ if(JSON.stringify(body)==='{"action":"synthetic_analysis_3_8"}')return json(await syntheticAnalysisProbe({...process.env,CX360_MODEL:'gemini-3.8-flash'}))
  if(JSON.stringify(body)==='{"action":"synthetic_analysis"}')return json(await syntheticAnalysisProbe(process.env))
  if(JSON.stringify(body)!=='{"action":"synthetic_probe"}')return json({error:'invalid_request'},400)
  const key=process.env.GEMINI_API_KEY?.trim(),model=process.env.CX360_MODEL?.trim()||'gemini-3.5-flash-lite'
