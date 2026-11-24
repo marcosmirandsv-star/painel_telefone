@@ -27,11 +27,15 @@ export default function ClickDeskVerifiedDailyVolume({
   end,
   teamId,
   periodReceived,
+  individual = false,
+  onDaySelect,
 }: {
   start: string
   end: string
   teamId: string
   periodReceived: number
+  individual?: boolean
+  onDaySelect?: (date: string) => void
 }) {
   const [data, setData] = useState<DailyResult | null>(null)
   const [error, setError] = useState('')
@@ -74,6 +78,7 @@ export default function ClickDeskVerifiedDailyVolume({
   }, [start, end, teamId, refreshKey])
 
   const confirmed = useMemo(() => (data?.days ?? []).filter(d => d.verified && d.attendances !== null), [data])
+  const dailyTotal = confirmed.reduce((sum, d) => sum + (d.attendances ?? 0), 0)
   const max = Math.max(1, ...confirmed.map(d => d.attendances ?? 0))
   const peak = [...confirmed].sort((a,b) => (b.attendances ?? 0) - (a.attendances ?? 0))[0] ?? null
   const chosen = confirmed.find(d => d.date === highlighted) ?? peak
@@ -86,7 +91,7 @@ export default function ClickDeskVerifiedDailyVolume({
       <div>
         <span className="verified-daily-eyebrow">Evolução diária · ClickDesk</span>
         <h4>Atendimentos por dia</h4>
-        <p>Somente datas com captura oficial completa por analista. Dias ainda não verificados permanecem sem valor.</p>
+        <p>{individual ? 'Suas capturas oficiais diárias, ainda sujeitas à conciliação. Clique em um dia conferido para consultar seus tickets.' : 'Somente datas com captura oficial completa por analista. Dias ainda não verificados permanecem sem valor.'}</p>
       </div>
       <div className="verified-daily-actions">
         {data && <span className="verified-daily-coverage">{data.verified_days} de {data.expected_days} dias conferidos</span>}
@@ -105,6 +110,7 @@ export default function ClickDeskVerifiedDailyVolume({
         <small>{peak ? dateLabel(peak.date) : 'Aguardando capturas'}</small></div>
     </div>
 
+    {data && <p role="status">Soma dos dias conferidos: {count(dailyTotal)} · Diferença (soma diária menos total oficial): {count(dailyTotal - periodReceived)}. {data.verified_days !== data.expected_days ? 'Cobertura parcial; diferença não conclusiva.' : 'Conciliação definitiva ainda em conferência.'}</p>}
     <div className="verified-daily-chart" role="group" aria-label="Atendimentos por data, somente dias confirmados">
       <div className="verified-daily-axis" aria-hidden="true"><span>{count(max)}</span><span>0</span></div>
       <div className="verified-daily-chart-scroll">
@@ -112,6 +118,7 @@ export default function ClickDeskVerifiedDailyVolume({
           {(data?.days ?? []).map(day => (
             <button type="button" key={day.date} className={'verified-daily-day' + (day.verified ? ' is-verified' : ' is-missing')}
               title={day.verified ? dateLabel(day.date) + ': ' + count(day.attendances ?? 0) + ' atendimentos' : dateLabel(day.date) + ': captura pendente'}
+              onClick={() => { if (day.verified) onDaySelect?.(day.date) }}
               onMouseEnter={() => setHighlighted(day.verified ? day.date : null)}
               onMouseLeave={() => setHighlighted(null)}
               onFocus={() => setHighlighted(day.verified ? day.date : null)}
