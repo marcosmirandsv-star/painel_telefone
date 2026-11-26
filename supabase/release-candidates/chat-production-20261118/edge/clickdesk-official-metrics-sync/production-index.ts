@@ -2,7 +2,7 @@
 // Production candidate. NOT DEPLOYED. Requires qmetbydkepfdgfqkdkai schema, credentials and release review.
 import {createClient} from 'npm:@supabase/supabase-js@2'
 import {initialCaptureTasks} from './capture-plan.ts'
-import {runCaptureBatch} from './capture-worker.ts'
+import {runCaptureUnit} from './capture-worker.ts'
 import {postgresCaptureStore} from './capture-store.ts'
 import {finalizeReadyCapture} from './capture-finalizer.ts'
 import {postgresFinalizationStore} from './capture-finalization-store.ts'
@@ -34,15 +34,14 @@ Deno.serve(async req=>{
    if(!apiKey||!accountId)throw Error('missing_source_config')
    const priority=await admin.rpc('clickdesk_has_verification_work')
    if(priority.error)throw Error('verification_priority_unavailable')
-   const units=priority.data?[]:await runCaptureBatch(postgresCaptureStore(admin),async(path,signal)=>{
+   const unit=priority.data?{status:'idle' as const}:await runCaptureUnit(postgresCaptureStore(admin),async(path,signal)=>{
     const response=await fetch('https://api.desk.click.app/api/v1'+path,{signal,headers:{Authorization:'Bearer '+apiKey,'X-Account-Id':accountId,Accept:'application/json'}})
     if(!response.ok){console.warn('clickdesk_capture_source_http',response.status);throw Error('source_unavailable')}
     return await response.json()
    })
-   const unit=units[0]??{status:'idle' as const}
    const publication=await finalizeReadyCapture(postgresFinalizationStore(admin,registry))
    const recheck=await runGroupRecheck(postgresGroupRecheckStore(admin),registry)
-   const investigation=await runInvestigation(postgresInvestigationStore(admin),async(path,signal)=>{
+   const investigation=unit.status!=='idle'?{status:'yielded_to_capture'}:await runInvestigation(postgresInvestigationStore(admin),async(path,signal)=>{
     const response=await fetch('https://api.desk.click.app/api/v1'+path,{signal,headers:{Authorization:'Bearer '+apiKey,'X-Account-Id':accountId,Accept:'application/json','Cache-Control':'no-cache'}})
     if(!response.ok){
      let retry=Number(response.headers.get('retry-after'))
@@ -51,7 +50,7 @@ Deno.serve(async req=>{
     }
     return await response.json()
    },true)
-   return Response.json({ok:true,unit,units,publication,recheck,investigation})
+   return Response.json({ok:true,unit,publication,recheck,investigation})
   }
   if(body.action!==undefined)return Response.json({error:'Invalid action'},{status:400})
   const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date())
