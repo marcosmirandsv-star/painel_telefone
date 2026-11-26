@@ -125,6 +125,5 @@ begin
   lease_token=null,lease_until=null,updated_at=clock_timestamp() where ticket_id=p_ticket;
  return true;
 end;
-$function$
-
+$function$;
 commit;
