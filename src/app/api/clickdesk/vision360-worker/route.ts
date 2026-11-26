@@ -1,14 +1,151 @@
-import {randomUUID} from 'node:crypto'
 import {adminClient} from '@/lib/integration-server'
 import {isCxCron} from '@/lib/cx360-diagnostics-server'
-import {runActivation,activationClaimPlan,type Work,type Store,record} from '@/lib/vision360-activation/runner'
+import {runActivation,type Work,type Store,record} from '@/lib/vision360-activation/runner'
 
 export const runtime='nodejs'
 export const maxDuration=300
 export const dynamic='force-dynamic'
 const SCOPE={
- '1098006':{name:'Thiago Reis',ratedAt:'2026-11-17T18:39:00Z',hash:'ab63b611c58d4af4065212da642afa2cf8d4b67e221c9fd04efdab81c022fea2',lastMessage:'4064774',label:'positive'},
- '1082449':{name:'João Pedro Vianey',ratedAt:'2026-11-03T12:48:00Z',hash:'547c4124df4c459a2a72abf177a52dff499d823cb9ace71ea3a3b680220eeb35',lastMessage:'3822304',label:'negative'},
+ "1083324": {
+  "name": "Thiago Reis",
+  "ratedAt": "2026-11-04T13:17:00.000Z",
+  "hash": "46e05da9bf9a8f642b1d7c82c9abc1df1b77b57661bd1fa501c31000edc9a419",
+  "lastMessage": "3847454",
+  "label": "negative"
+ },
+ "1085038": {
+  "name": "Karolyne Moreira",
+  "ratedAt": "2026-11-04T19:38:00.000Z",
+  "hash": "94336f2ee8cf7bf02f894fcd1ed7d5191193a48508bfc220b2da5ade7f20c0f6",
+  "lastMessage": "3867307",
+  "label": "negative"
+ },
+ "1085727": {
+  "name": "Thiago Reis",
+  "ratedAt": "2026-11-05T18:30:00.000Z",
+  "hash": "d0d4cc9e2f36440df99520df397028e8b7c4fd6b6112d32fc4391cc6596e9d4a",
+  "lastMessage": "3874641",
+  "label": "negative"
+ },
+ "1086522": {
+  "name": "Thiago Reis",
+  "ratedAt": "2026-11-05T14:34:00.000Z",
+  "hash": "4f8e9bdc62acab52b241c99f129b06e81adc82db5b6e80c05421b4b4ceaee5f9",
+  "lastMessage": "3886596",
+  "label": "negative"
+ },
+ "1088556": {
+  "name": "Thiago Reis",
+  "ratedAt": "2026-11-06T14:30:00.000Z",
+  "hash": "5725f758902379c074ddf85014270870af9b4a5d1a87d3631e4a1d3a9ba870f3",
+  "lastMessage": "3919781",
+  "label": "negative"
+ },
+ "1092484": {
+  "name": "Karolyne Moreira",
+  "ratedAt": "2026-11-11T13:17:00.000Z",
+  "hash": "b6fa77fd7665b1c573a06d7308ef1457d8417a1eb64fb70f3f7f09cb30bd5720",
+  "lastMessage": "3979274",
+  "label": "negative"
+ },
+ "1092857": {
+  "name": "Thiago Reis",
+  "ratedAt": "2026-11-12T13:21:00.000Z",
+  "hash": "c8cf622a063ed6feedc55a3642cbaec8a86b0e3c14e3adc862b94a302cb76033",
+  "lastMessage": "3999221",
+  "label": "negative"
+ },
+ "1093401": {
+  "name": "Karolyne Moreira",
+  "ratedAt": "2026-11-16T12:36:00.000Z",
+  "hash": "d5d400262b1d93e2268058c2255137018bc53fe93e6fb51ad9dee9868609cb6f",
+  "lastMessage": "4026434",
+  "label": "negative"
+ },
+ "1094762": {
+  "name": "Karolyne Moreira",
+  "ratedAt": "2026-11-13T14:42:00.000Z",
+  "hash": "652a27e689bd1eec03baa2eab0ae963a77026c45c24be44c605d0ce6a72d705f",
+  "lastMessage": "4020684",
+  "label": "negative"
+ },
+ "1095970": {
+  "name": "Karolyne Moreira",
+  "ratedAt": "2026-11-16T19:00:00.000Z",
+  "hash": "a60db62b032218599df05501b0837baef60adef3ec9a1465331bf77568875f38",
+  "lastMessage": "4048349",
+  "label": "positive"
+ },
+ "1096509": {
+  "name": "Karolyne Moreira",
+  "ratedAt": "2026-11-16T15:59:00.000Z",
+  "hash": "d4a4bb242e4fd48480a6b9cb30b84eaba200a96b626cdf4ae9528a27865977a4",
+  "lastMessage": "4042948",
+  "label": "positive"
+ },
+ "1096736": {
+  "name": "Karolyne Moreira",
+  "ratedAt": "2026-11-16T19:20:00.000Z",
+  "hash": "a549ddb3855b611a93ae82d1c2c00fd0c08de0582b01dc03123acd764536b625",
+  "lastMessage": "4049160",
+  "label": "positive"
+ },
+ "1097337": {
+  "name": "Karolyne Moreira",
+  "ratedAt": "2026-11-17T13:48:00.000Z",
+  "hash": "65f5e7eb0b085364f97a1af7394cde84a22a2578a863c81698baaba9f5e504ad",
+  "lastMessage": "4056943",
+  "label": "positive"
+ },
+ "1097741": {
+  "name": "Karolyne Moreira",
+  "ratedAt": "2026-11-17T16:33:00.000Z",
+  "hash": "ce69a8075d77b58b3f0fe67b8375d4bc9dff27b7b3084b62179d01340cf8e0a8",
+  "lastMessage": "4061517",
+  "label": "positive"
+ },
+ "1097756": {
+  "name": "Karolyne Moreira",
+  "ratedAt": "2026-11-17T20:09:00.000Z",
+  "hash": "03703be06bc09a8504554d115b726dc2233917e7d1b977cb476c83f9229e31f7",
+  "lastMessage": "4063193",
+  "label": "positive"
+ },
+ "1098046": {
+  "name": "Thiago Reis",
+  "ratedAt": "2026-11-18T21:01:00.000Z",
+  "hash": "64328f1881d3e0cc8c3b218f0ef62ff662e7dd5b989139909346f0f4a2c77969",
+  "lastMessage": "4087268",
+  "label": "positive"
+ },
+ "1098236": {
+  "name": "Thiago Reis",
+  "ratedAt": "2026-11-18T20:24:00.000Z",
+  "hash": "bd3ecd72bbfb29e0421f3aea7353b87cef8de048d9a1f2677187386a184320bf",
+  "lastMessage": "4086386",
+  "label": "positive"
+ },
+ "1098478": {
+  "name": "Thiago Reis",
+  "ratedAt": "2026-11-18T12:25:00.000Z",
+  "hash": "79602fdb8e47efa27a8d26b32fc305e2df5fea12e8fe9c1310abdc4c1870f924",
+  "lastMessage": "4071861",
+  "label": "positive"
+ },
+ "1098548": {
+  "name": "Thiago Reis",
+  "ratedAt": "2026-11-18T13:35:00.000Z",
+  "hash": "40e162f98ac682c9d4a774b5f2f7ab2991a4bfe99dafd05ae61040ea9c7d631c",
+  "lastMessage": "4074233",
+  "label": "positive"
+ },
+ "1098557": {
+  "name": "Thiago Reis",
+  "ratedAt": "2026-11-18T13:15:00.000Z",
+  "hash": "5334df14eef8f55b2e1fe8af34e1da753ecc7118e8b7d5293d355981e1b2e67e",
+  "lastMessage": "4073525",
+  "label": "positive"
+ }
 } as const
 type Allowed=keyof typeof SCOPE
 const json=(body:unknown,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}})
@@ -35,18 +172,12 @@ export async function POST(request:Request){
  const store:Store={
   async claim(ticketId){
    if(ticketId!==id)return null
-   const q=await admin.from('clickdesk_360_work_queue').select('*').eq('ticket_id',id).single()
-   if(q.error||!q.data)return null
-   const plan=activationClaimPlan(id,q.data)
-   if(!plan)return null
-   const candidate=q.data as Work
-   if(!(await context(candidate)).ledgerMatches)return null
-   const now=new Date(),lease=randomUUID()
-   let claim=admin.from('clickdesk_360_work_queue').update({status:'processing',attempts:plan.nextAttempt,lease_token:lease,lease_until:new Date(now.getTime()+300000).toISOString(),updated_at:now.toISOString()}).eq('ticket_id',id).eq('status',plan.status).eq('attempts',plan.attempts).is('lease_token',null).eq('analyst_id',candidate.analyst_id).eq('team_id',candidate.team_id).eq('occurred_date',candidate.occurred_date).eq('satisfaction_label',candidate.satisfaction_label).lte('next_attempt_at',now.toISOString())
-   if(plan.errorCode)claim=claim.eq('error_code',plan.errorCode)
-   const result=await claim.select('*').maybeSingle()
-   if(result.error||!result.data)return null
-   return result.data as Work
+   const candidate=await admin.from('clickdesk_360_work_queue').select('*').eq('ticket_id',id).single()
+   if(candidate.error||!candidate.data||!(await context(candidate.data as Work)).ledgerMatches)return null
+   const claimed=await admin.rpc('claim_vision360_batch20_work',{p_ticket:id,p_rating_hash:SCOPE[id].hash})
+   if(claimed.error)throw Error('claim_unavailable')
+   if(!Array.isArray(claimed.data)||claimed.data.length!==1)return null
+   return claimed.data[0] as Work
   },context,
   async finish(work,analysis,model,hash,characters){
    if(!(await context(work)).ledgerMatches)return false
