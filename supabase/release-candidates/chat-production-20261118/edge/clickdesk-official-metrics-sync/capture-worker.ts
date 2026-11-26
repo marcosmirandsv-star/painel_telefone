@@ -24,3 +24,9 @@ export async function runCaptureUnit(store:CaptureStore,fetchPart:(path:string,s
   return {status:accepted?(next?'retry' as const:'exhausted' as const):'stale' as const,key:unit.key}
  }
 }
+
+/** Claim a bounded set atomically through the existing store; never duplicate one unit. */
+export async function runCaptureBatch(store:CaptureStore,fetchPart:(path:string,signal:AbortSignal)=>Promise<unknown>,limit=3){
+ if(!Number.isSafeInteger(limit)||limit<1||limit>3)throw Error('invalid_capture_batch')
+ return await Promise.all(Array.from({length:limit},()=>runCaptureUnit(store,fetchPart)))
+}
