@@ -96,15 +96,15 @@ export function assembleCapture(registry:RegistryOwner[],start:string,end:string
       const row = asRecord(raw)
       const ticketId = String(row.ticket_id ?? '')
       if (!/^\d+$/.test(ticketId)) throw new Error('Rating without technical ClickDesk ticket ID')
+      const ownerName = typeof row.owner === 'string' ? row.owner : ''
+      const registered = known.get(normalized(ownerName))
+      if (!registered) continue
       const signature = JSON.stringify([row.owner, row.sentiment,row.label,row.rated_at])
       if (seenRatings.has(ticketId)) {
         if (seenRatings.get(ticketId) !== signature) throw new Error('Conflicting duplicate rating')
         continue
       }
       seenRatings.set(ticketId, signature)
-      const ownerName = typeof row.owner === 'string' ? row.owner : ''
-      const registered = known.get(normalized(ownerName))
-      if (!registered) continue
       const aggregateRow = ensure(registered.source_owner_name)
       if(useReceived){
        const m=/^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})(?::(\d{2}))?$/.exec(String(row.rated_at))
