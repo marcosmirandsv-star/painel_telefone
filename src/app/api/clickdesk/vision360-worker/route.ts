@@ -191,5 +191,5 @@ export async function POST(request:Request){
    if(result.error)throw Error('result_not_saved')
   },
  }
- try{return json(await runActivation({ids:[id],allowlist:Object.keys(SCOPE),store,env:{...process.env,GEMINI_MODEL:process.env.CX360_MODEL?.trim()||'gemini-3.5-flash-lite'}}))}catch{return json({error:'activation_unavailable'},503)}
+ try{return json(await runActivation({ids:[id],allowlist:Object.keys(SCOPE),store,textOnly:true,env:{...process.env,GEMINI_MODEL:process.env.CX360_MODEL?.trim()||'gemini-3.5-flash-lite'}}))}catch{return json({error:'activation_unavailable'},503)}
 }
