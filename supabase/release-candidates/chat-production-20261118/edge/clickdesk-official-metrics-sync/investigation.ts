@@ -182,13 +182,8 @@ export async function runInvestigation(store:Omit<ReturnType<typeof postgresInve
    catch(error){if(Date.now()>=deadline-500)throw new VerificationBudget();throw error}
   }
   const source=verifyCurrent?bounded:fetchPart
-  let outcome=await advanceInvestigation(structuredClone(state),source)
+  const outcome=await advanceInvestigation(structuredClone(state),source)
   // Drain cheap ID/pagination work within one bounded lease; never wait a minute per owner.
-  let drained=0
-  while(verifyCurrent&&outcome.status==='pending'&&['owners','verify'].includes(outcome.state.phase)&&outcome.state.verification?.stage!=='publish'&&Date.now()<deadline&&drained++<2){
-   state=outcome.state
-   outcome=await advanceInvestigation(structuredClone(state),source)
-  }
   const accepted=await store.save(claim,outcome.state,outcome.result,outcome.status)
   return {status:accepted?outcome.status:'stale',jobId:claim.jobId}
  }catch(error){
