@@ -44,7 +44,7 @@ export async function advanceCohortVerification(s:State,fetchPart:(path:string,s
   v.stage='group'
  }
  if(v.stage==='headers'){
-  const batch=v.changed.slice(v.index,v.index+2)
+  const batch=v.changed.slice(v.index,v.index+1)
   const headers=await Promise.all(batch.map(async id=>{const p=new URLSearchParams({from:c.start,to:c.end});[3,12].forEach(d=>p.append('department_ids[]',String(d)));p.append('owner_ids[]',String(id));return {id,payload:await fetchOne('/support/reports/agents?'+p),at:now()}}))
   for(const h of headers){v.overrides['owner:'+h.id]=h.payload;v.times['owner:'+h.id]=h.at;v.index++}
   if(v.index>=v.changed.length)v.stage='ratings'

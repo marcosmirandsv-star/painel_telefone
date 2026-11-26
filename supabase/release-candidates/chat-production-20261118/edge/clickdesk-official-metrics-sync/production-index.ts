@@ -41,7 +41,7 @@ Deno.serve(async req=>{
    })
    const publication=await finalizeReadyCapture(postgresFinalizationStore(admin,registry))
    const recheck=await runGroupRecheck(postgresGroupRecheckStore(admin),registry)
-   const investigation=await runInvestigation(postgresInvestigationStore(admin),async(path,signal)=>{
+   const investigation=unit.status!=='idle'?{status:'yielded_to_capture'}:await runInvestigation(postgresInvestigationStore(admin),async(path,signal)=>{
     const response=await fetch('https://api.desk.click.app/api/v1'+path,{signal,headers:{Authorization:'Bearer '+apiKey,'X-Account-Id':accountId,Accept:'application/json','Cache-Control':'no-cache'}})
     if(!response.ok){
      let retry=Number(response.headers.get('retry-after'))
