@@ -2303,6 +2303,11 @@ function ChatAnalystPortal({
           </div>
         </div>
 
+        {!clickDeskDailyAvailable(metrics) && monthStart >= '2026-10-01' && monthEnd >= monthStart && (
+          <ClickDeskVerifiedDailyVolume start={monthStart} end={monthEnd} teamId="all"
+            periodReceived={accumulated?.attendances ?? 0} individual
+            onDaySelect={date => void loadDailyTickets(date)} />
+        )}
         {activeRoutineDays.length ? (
           <div className="mt-5 flex flex-wrap gap-2">
             {activeRoutineDays.map((item) => {
@@ -2333,7 +2338,7 @@ function ChatAnalystPortal({
             })}
           </div>
         ) : (
-          <EmptyState text={clickDeskDailyAvailable(metrics) ? "Nenhum dia com atendimento no intervalo selecionado." : "Os totais do período estão disponíveis. Os dias serão exibidos quando a distribuição diária estiver conciliada com esses totais."} />
+          <EmptyState text={clickDeskDailyAvailable(metrics) ? "Nenhum dia com atendimento no intervalo selecionado." : "A consulta acima apresenta as capturas individuais disponíveis, sem substituir os totais oficiais."} />
         )}
 
         {selectedRoutineDate && (
