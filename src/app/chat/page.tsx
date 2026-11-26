@@ -2285,9 +2285,9 @@ function ChatAnalystPortal({
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
               Minha rotina
             </p>
-            <h3 className="mt-2 text-2xl font-bold">Dias com atendimento</h3>
+            <h3 className="mt-2 text-2xl font-bold">Dias e evolução do atendimento</h3>
             <p className="section-subtitle">
-              A visão foi compactada. Clique em um dia para ver os seus tickets persistidos no ClickDesk.
+              Clique em um dia para consultar os tickets. Logo abaixo, compare seus indicadores entre os meses.
             </p>
           </div>
           <div className="flex flex-wrap gap-2 self-start">
@@ -2466,7 +2466,7 @@ function ChatAnalystPortal({
         <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">
           Minha evolução
         </p>
-        <h3 className="mt-2 text-2xl font-bold">Histórico ClickDesk</h3>
+        <h3 className="mt-2 text-2xl font-bold">Comparação mensal · ClickDesk</h3>
         <p className="section-subtitle">
           Histórico mensal: não acompanha os filtros de dia, semana ou intervalo acima. O mês atual mostra o acumulado até a última atualização; meses fechados mantêm o resultado aprovado.
         </p>
@@ -7420,8 +7420,9 @@ function ChatModuleDashboard({
           </div>
         </div>
       </section>
-      {chatActiveTab === 'neutralAudit' && isManagementUser && (
-        <section className="workspace-content-section">
+      {(chatActiveTab === 'operation360' || chatActiveTab === 'neutralAudit') && isManagementUser && (
+        <details className="workspace-content-section workspace-collapsible" open={chatActiveTab === 'neutralAudit'}>
+          <summary className="cursor-pointer"><h2 className="text-xl font-bold">Auditoria de neutros · notas 3</h2><p className="mt-2 text-sm text-slate-400">Confira tickets, critérios e efeito no CSAT ajustado sem sair da Visão 360º.</p></summary>
           {chat2SelectedPeriod.start >= '2026-11-01' ? (
             <NeutralAuditPanel
               key={chat2SelectedPeriod.start + ':' + chat2SelectedPeriod.end + ':' + selectedTeamId}
@@ -7436,7 +7437,7 @@ function ChatModuleDashboard({
               O histórico anterior permanece preservado para uma etapa posterior.
             </div>
           )}
-        </section>
+        </details>
       )}
       <section className={chatActiveTab === 'operation360' ? 'workspace-content-section' : 'hidden'}>
         {isManagementUser && chatActiveTab === 'operation360' && <details className="workspace-collapsible"><summary className="cursor-pointer"><h2 className="text-xl font-bold">Critérios do atendimento e evidências preservadas</h2><p className="mt-2 text-sm text-slate-400">Acolhimento, entendimento, clareza, diligência, continuidade e encerramento. Histórico qualitativo até D-1, com cobertura própria; não altera CSAT, volume ou avaliações oficiais.</p></summary><div className="mt-5"><CxDiagnostics diagnosisOnly initialScope={{start:chatAuditPeriod.start,end:chatAuditPeriod.end,teamId:selectedTeamId==='all'?'':selectedTeamId}} key={`diagnosis:${chatAuditPeriod.start}:${chatAuditPeriod.end}:${selectedTeamId}`} onCaseCreated={()=>onChatActiveTabChange('podium')}/></div></details>}
@@ -7976,8 +7977,9 @@ function ChatModuleDashboard({
                 </details>
               </div>
 
-              <div className="mt-5 rounded-lg border border-white/10 bg-slate-900/45 p-4">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <details className="mt-5 rounded-lg border border-white/10 bg-slate-900/45 p-4">
+                <summary className="cursor-pointer text-sm font-semibold text-slate-200">Consultar números de cada dia e lacunas da captura</summary>
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Dias do período</p>
                     <strong className="mt-1 block text-sm text-slate-200">Volume consolidado por dia</strong>
@@ -8022,7 +8024,7 @@ function ChatModuleDashboard({
                     )
                   })}
                 </div>
-              </div>
+              </details>
 
               {clickDeskPersistedMetrics?.date_basis?.status === 'needs_validation' && (
                 <div className="mt-4 rounded-lg border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-xs leading-5 text-amber-100">
