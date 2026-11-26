@@ -185,7 +185,7 @@ export async function runInvestigation(store:Omit<ReturnType<typeof postgresInve
   let outcome=await advanceInvestigation(structuredClone(state),source)
   // Drain cheap ID/pagination work within one bounded lease; never wait a minute per owner.
   let drained=0
-  while(verifyCurrent&&outcome.status==='pending'&&['owners','verify'].includes(outcome.state.phase)&&outcome.state.verification?.stage!=='publish'&&Date.now()<deadline&&drained++<40){
+  while(verifyCurrent&&outcome.status==='pending'&&['owners','verify'].includes(outcome.state.phase)&&outcome.state.verification?.stage!=='publish'&&Date.now()<deadline&&drained++<2){
    state=outcome.state
    outcome=await advanceInvestigation(structuredClone(state),source)
   }
