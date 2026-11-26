@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { supabase } from '@/lib/supabase'
+import { withRequestDeadline } from '@/lib/request-deadline'
 import { createSessionIdentityGuard } from '@/lib/session-identity'
 import { calculateAverageCsat, calculateChatAverage, calculateTeamPerformance } from '@/lib/indicators'
 import {
@@ -2909,32 +2910,22 @@ function ChatModuleDashboard({
     deadlineRetry = 0,
   ) {
     const requestVersion = ++clickDeskMetricsRequestVersion.current
-    setClickDeskMetricsLoading(true)
+    if (deadlineRetry === 0) setClickDeskMetricsLoading(true)
     // Nunca mantenha números de outra equipe ou competência enquanto a API carrega.
     if (deadlineRetry === 0) setClickDeskPersistedMetrics(null)
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
-
-      if (!session?.access_token) {
-        if (requestVersion === clickDeskMetricsRequestVersion.current) {
-          setClickDeskPersistedMetrics({ erro: 'Sessão indisponível. Entre novamente no painel.' })
-        }
-        return
-      }
-
-      const params = new URLSearchParams({
-        start: period.start,
-        end: period.end,
+      const {response,data}=await withRequestDeadline(async signal=>{
+        const {data:{session}}=await supabase.auth.getSession()
+        if(!session?.access_token)throw new Error('Sessão indisponível. Entre novamente no painel.')
+        const params=new URLSearchParams({start:period.start,end:period.end})
+        if(teamId!=='all')params.set('team_id',teamId)
+        const response=await fetch(`/api/clickdesk/metrics?${params.toString()}`,{
+          headers:{Authorization:`Bearer ${session.access_token}`},
+          cache:'no-store',signal,
+        })
+        const data=(await response.json()) as ClickDeskPersistedMetrics
+        return {response,data}
       })
-      if (teamId !== 'all') params.set('team_id', teamId)
-
-      const response = await fetch(`/api/clickdesk/metrics?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-        cache: 'no-store',
-      })
-      const data = (await response.json()) as ClickDeskPersistedMetrics
 
       if (!response.ok) {
         data.erro = data.erro || 'Não foi possível carregar os indicadores do ClickDesk.'
