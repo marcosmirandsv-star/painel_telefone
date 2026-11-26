@@ -63,11 +63,7 @@ export async function loadOfficialPeriodRows(
   if (!official.error && (shouldRequestMissing || shouldRefreshCurrent)) {
     const requested=await admin.rpc('request_clickdesk_official_period',{p_start:filters.start,p_end:filters.end})
     if(requested.error)throw new ApiError(503,'Não foi possível solicitar a captura deste intervalo do ClickDesk.')
-    for(let attempt=0;attempt<15&&!official.data?.length;attempt++){
-      await new Promise(resolve=>setTimeout(resolve,2000))
-      official=await admin.rpc('get_scoped_clickdesk_official_period_metrics',{p_start:filters.start,p_end:filters.end})
-      if(official.error)break
-    }
+    // Capture runs durably in the background; a read never waits for publication.
     if(!official.error&&!official.data?.length)throw new ApiError(503,'O ClickDesk ainda está preparando este intervalo. Os indicadores serão atualizados automaticamente assim que a captura estiver pronta.')
   }
 
