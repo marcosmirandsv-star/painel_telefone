@@ -99,18 +99,18 @@ export function assembleCapture(registry:RegistryOwner[],start:string,end:string
       const ownerName = typeof row.owner === 'string' ? row.owner : ''
       const registered = known.get(normalized(ownerName))
       if (!registered) continue
-      const signature = JSON.stringify([row.owner, row.sentiment,row.label,row.rated_at])
-      if (seenRatings.has(ticketId)) {
-        if (seenRatings.get(ticketId) !== signature) throw new Error('Conflicting duplicate rating')
+      const m=/^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})(?::(\d{2}))?$/.exec(String(row.rated_at))
+      if(!m)throw Error('Rating timestamp missing')
+      const ratedAt=`${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}:${m[6]||'00'}-03:00`
+      const eventKey=JSON.stringify([ticketId,registered.source_owner_key,ratedAt])
+      const signature=JSON.stringify([row.sentiment,row.label])
+      if(seenRatings.has(eventKey)){
+        if(seenRatings.get(eventKey)!==signature)throw new Error('Conflicting duplicate rating')
         continue
       }
-      seenRatings.set(ticketId, signature)
-      const aggregateRow = ensure(registered.source_owner_name)
-      if(useReceived){
-       const m=/^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})(?::(\d{2}))?$/.exec(String(row.rated_at))
-       if(!m)throw Error('Rating timestamp missing')
-       cohortVotes.push({ticket_id:ticketId,ticket_number:String(row.number??''),source_owner_key:registered.source_owner_key,sentiment:row.sentiment,original_label:String(row.label??''),rated_at:`${m[3]}-${m[2]}-${m[1]}T${m[4]}:${m[5]}:${m[6]||'00'}-03:00`})
-      }
+      seenRatings.set(eventKey,signature)
+      const aggregateRow=ensure(registered.source_owner_name)
+      if(useReceived)cohortVotes.push({ticket_id:ticketId,ticket_number:String(row.number??''),source_owner_key:registered.source_owner_key,sentiment:row.sentiment,original_label:String(row.label??''),rated_at:ratedAt})
       const sentiment = typeof row.sentiment === 'string' ? row.sentiment.toLowerCase() : ''
       if (sentiment === 'positive') aggregateRow.positive_reviews += 1
       if (sentiment === 'negative') aggregateRow.negative_reviews += 1
