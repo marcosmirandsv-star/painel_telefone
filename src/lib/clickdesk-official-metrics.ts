@@ -51,10 +51,17 @@ export async function loadOfficialPeriodRows(
       p_end: filters.end,
     })
 
-  // An exact date/week/custom range gets its own verified ClickDesk snapshot.
-  // October's already-approved FULL-MONTH snapshot stays untouched; on-demand
-  // requests are created only for missing custom ranges in that historical month.
-  // From November onward, an existing snapshot may be refreshed every 30 min.
+  const [year, month] = filters.start.slice(0, 7).split('-').map(Number)
+  const monthStart = filters.start.slice(0, 7) + '-01'
+  const monthEnd = publishedClickDeskEnd(new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10))
+  const isSameMonthRange = filters.start.slice(0, 7) === filters.end.slice(0, 7)
+  const isMonthlyAnchor = filters.start === monthStart && filters.end === monthEnd
+  const canUseReconciledMonthlyDaily = isSameMonthRange && !isMonthlyAnchor
+
+  // Exact ranges still request their own snapshots, but a missing partial-month
+  // snapshot may use daily rows already reconciled against the official month.
+  // October's approved full-month snapshot stays untouched; November snapshots
+  // continue refreshing every 30 minutes when stale.
   const shouldRequestMissing = filters.start >= '2026-10-01' && !official.data?.length
   const shouldRefreshCurrent = filters.start >= '2026-11-01' &&
     Boolean(official.data?.some((metric: OfficialPeriodMetric) =>
@@ -64,7 +71,9 @@ export async function loadOfficialPeriodRows(
     const requested=await admin.rpc('request_clickdesk_official_period',{p_start:filters.start,p_end:filters.end})
     if(requested.error)throw new ApiError(503,'Não foi possível solicitar a captura deste intervalo do ClickDesk.')
     // Capture runs durably in the background; a read never waits for publication.
-    if(!official.error&&!official.data?.length)throw new ApiError(503,'O ClickDesk ainda está preparando este intervalo. Os indicadores serão atualizados automaticamente assim que a captura estiver pronta.')
+    if (!official.error && !official.data?.length && !canUseReconciledMonthlyDaily) {
+      throw new ApiError(503, 'O ClickDesk ainda está preparando este intervalo. Os indicadores serão atualizados automaticamente assim que a captura estiver pronta.')
+    }
   }
 
   if (official.error) {
@@ -76,10 +85,7 @@ export async function loadOfficialPeriodRows(
   }
   if (!official.data?.length) {
     // A day/week can reuse only daily captures reconciled with the same scoped monthly source.
-    const monthStart=filters.start.slice(0,7)+'-01'
-    const [year,month]=filters.start.slice(0,7).split('-').map(Number)
-    const monthEnd=publishedClickDeskEnd(new Date(Date.UTC(year,month,0)).toISOString().slice(0,10))
-    if(filters.start.slice(0,7)===filters.end.slice(0,7)&&(filters.start!==monthStart||filters.end!==monthEnd)) {
+    if (canUseReconciledMonthlyDaily) {
       const anchor=await loadOfficialPeriodRows(admin,{...filters,start:monthStart,end:monthEnd})
       if(!anchor?.dailyRows)throw new ApiError(409,'O detalhamento por dia, semana ou intervalo personalizado ainda não está conciliado com o ClickDesk. Consulte a visão Mês; não exibimos números diários estimados.')
       const selected=sliceOfficialDaily(anchor.rows,anchor.dailyRows,filters.start,filters.end)
