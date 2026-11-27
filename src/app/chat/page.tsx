@@ -7464,21 +7464,26 @@ function ChatModuleDashboard({
           <div className="space-y-6">
             {clickDeskOperation360?.source_coverage?.status === 'audit_sample_only' && (
               <div role="status" className="rounded-lg border border-amber-300/20 bg-amber-300/5 p-4 text-sm text-amber-100">
-                <strong>IA e CSAT em cobertura parcial</strong>
+                <strong>Leitura 360º com cobertura parcial</strong>
                 <p className="mt-2">
-                  A análise percorre somente tickets avaliados com último atendente humano confirmado.
-                  Não há avaliação definitiva da operação até a recuperação do restante do período.
-                  Para processar os pendentes, utilize o comando de análise abaixo.
+                  Os indicadores oficiais de volume e CSAT ficam na aba Operação. Aqui, “tickets
+                  confirmados” conta atendimentos com autoria humana final comprovada; avaliações
+                  e CSAT consideram somente as notas desses tickets. Enquanto a conciliação estiver
+                  parcial, os números podem ser menores e não representam o resultado oficial.
+                </p>
+                <p className="mt-2">
+                  Tickets ainda sem autoria confirmada não entram na fila da IA. A leitura processa
+                  somente os tickets elegíveis já confirmados.
                 </p>
               </div>
             )}
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
               <MetricCard
-                label="Atendimentos"
+                label="Tickets com autoria confirmada"
                 value={formatChatCount(operation360Totals?.attendances ?? 0)}
               />
               <MetricCard
-                label="Avaliações"
+                label="Avaliações da amostra"
                 value={
                   operation360Totals?.review_percentage === null || operation360Totals?.review_percentage === undefined
                     ? formatChatCount(operation360Totals?.evaluated ?? 0)
@@ -7486,7 +7491,7 @@ function ChatModuleDashboard({
                 }
               />
               <MetricCard
-                label="CSAT"
+                label="CSAT da amostra"
                 value={
                   operation360Totals?.csat === null || operation360Totals?.csat === undefined
                     ? '—'
@@ -7495,12 +7500,12 @@ function ChatModuleDashboard({
                 tone={(operation360Totals?.csat ?? 0) >= 90 ? 'success' : (operation360Totals?.csat ?? 0) >= 85 ? 'warning' : 'danger'}
               />
               <MetricCard
-                label="Positivas"
+                label="Positivas na amostra"
                 value={formatChatCount(operation360Totals?.positive ?? 0)}
                 tone="success"
               />
               <MetricCard
-                label="Negativas"
+                label="Negativas na amostra"
                 value={formatChatCount(operation360Totals?.negative ?? 0)}
                 tone={(operation360Totals?.negative ?? 0) > 0 ? 'warning' : 'success'}
               />
@@ -9152,7 +9157,7 @@ function ChatModuleDashboard({
           <p className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-300">Análise detalhada</p>
           <h2 className="section-title">Diagnóstico por analista</h2>
           <p className="section-subtitle">
-            Compare CSAT, avaliações, percentual sem avaliação e volume com as referências do período para localizar destaques e oportunidades.
+            Compare CSAT, avaliações, percentual sem avaliação e volume com as referências do período para localizar destaques e oportunidades. “Meta Superada” indica que CSAT e taxa de avaliações atingiram suas referências; para o pódio também são exigidos CSAT mínimo de 90%, avaliações mínimas de 25% e volume de ao menos a média exibida na tabela.
           </p>
         </div>
 
@@ -9209,7 +9214,7 @@ function ChatModuleDashboard({
             <thead className="text-slate-400">
               <tr>
                 <th className="pb-3 pr-4 font-medium">Analista</th>
-                <th className="pb-3 pr-4 font-medium">Status</th>
+                <th className="pb-3 pr-4 font-medium">Metas de CSAT e avaliações</th>
                 <th className="pb-3 pr-4 font-medium">CSAT</th>
                 <th className="pb-3 pr-4 font-medium">Delta CSAT</th>
                 <th className="pb-3 pr-4 font-medium">Avaliações</th>
